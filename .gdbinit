@@ -8,7 +8,7 @@ monitor arm semihosting enable
 # monitor itm port 0 on
 load
 # tbreak cortex_m_rt::reset_handler
-monitor reset halt
+# monitor reset halt
 
 # cycle counter delta tool, place two bkpts around the section
 define qq

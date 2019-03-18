@@ -49,32 +49,166 @@ mod build_info {
 
 #[entry]
 fn main() -> ! {
-    init_log();
-    info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
-    info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
-    info!("Built on {}", build_info::BUILT_TIME_UTC);
-
     let mut cp = cortex_m::Peripherals::take().unwrap();
+    let dp = stm32::Peripherals::take().unwrap();
+
+    // go to VOS1 voltage scale high perf
+    let pwr = dp.PWR;
+    pwr.pwr_cr3.write(|w|
+        w.sden().set_bit()
+         .ldoen().set_bit()
+         .bypass().clear_bit()
+    );
+    while pwr.pwr_csr1.read().actvosrdy().bit_is_clear() {}
+    pwr.pwr_d3cr.write(|w| unsafe { w.vos().bits(0b11) });  // vos1
+    while pwr.pwr_d3cr.read().vosrdy().bit_is_clear() {}
+
+    let rcc = dp.RCC;
+
+    // Reset all peripherals
+    rcc.ahb1rstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
+    rcc.ahb1rstr.write(|w| unsafe { w.bits(0)});
+    rcc.apb1lrstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
+    rcc.apb1lrstr.write(|w| unsafe { w.bits(0)});
+
+    rcc.ahb2rstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
+    rcc.ahb2rstr.write(|w| unsafe { w.bits(0)});
+    rcc.apb2rstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
+    rcc.apb2rstr.write(|w| unsafe { w.bits(0)});
+
+    /* breaks semihosting
+    rcc.ahb3rstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
+    rcc.ahb3rstr.write(|w| unsafe { w.bits(0)});
+    */
+    rcc.apb3rstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
+    rcc.apb3rstr.write(|w| unsafe { w.bits(0)});
+
+    rcc.ahb4rstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
+    rcc.ahb4rstr.write(|w| unsafe { w.bits(0)});
+    rcc.apb4rstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
+    rcc.apb4rstr.write(|w| unsafe { w.bits(0)});
+
+    // Ensure HSI is on and stable
+    rcc.cr.modify(|_, w| w.hsion().set_bit());
+    while rcc.cr.read().hsirdy().bit_is_clear() {}
+
+    // Set system clock to HSI
+    rcc.cfgr.modify(|_, w| unsafe { w.sw().bits(0) });  // hsi
+    while rcc.cfgr.read().sws().bits() != 0 {}
+
+    // Clear registers to reset value
+    rcc.cr.write(|w| w.hsion().set_bit());
+    rcc.cfgr.reset();
+
+    // Ensure HSE is on and stable
+    rcc.cr.modify(|_, w| w.hseon().set_bit());
+    while rcc.cr.read().hserdy().bit_is_clear() {}
+
+    rcc.pllckselr.modify(|_, w| unsafe {
+        w.pllsrc().bits(0b10)  // hse
+         .divm1().bits(1)  // ref prescaler
+         .divm2().bits(4)  // ref prescaler
+    });
+    // Configure PLL1: 8MHz /1 *100 /2 = 400 MHz
+    rcc.pllcfgr.modify(|_, w| unsafe {
+        w.pll1vcosel().clear_bit()  // 192-836 MHz VCO
+         .pll1rge().bits(0b11)  // 8-16 MHz PFD
+         .pll1fracen().clear_bit()
+         .divp1en().set_bit()
+         .pll2vcosel().set_bit()  // 150-420 MHz VCO
+         .pll2rge().bits(0b01)  // 2-4 MHz PFD
+         .pll2fracen().clear_bit()
+         .divp2en().set_bit()
+         .divq2en().set_bit()
+    });
+    rcc.pll1divr.write(|w| unsafe {
+        w.divn1().bits(100 - 1)  // feebdack divider
+         .divp1().bits(2 - 1)  // p output divider
+    });
+    rcc.cr.modify(|_, w| w.pll1on().set_bit());
+    while rcc.cr.read().pll1rdy().bit_is_clear() {}
+
+    // Configure PLL2: 8MHz /4 * 125 = 250 MHz
+    rcc.pll2divr.write(|w| unsafe {
+        w.divn1().bits(125 - 1)  // feebdack divider
+         .divp1().bits(2 - 1)  // p output divider
+         .divq1().bits(2 - 1)  // q output divider
+    });
+    rcc.cr.modify(|_, w| w.pll2on().set_bit());
+    while rcc.cr.read().pll2rdy().bit_is_clear() {}
+
+    // hclk 200 MHz, pclk 100 MHz
+    rcc.d1cfgr.write(|w| unsafe {
+        w.d1cpre().bits(0)  // sys_ck not divided
+         .d1ppre().bits(0b100) // rcc_pclk3 = rcc_hclk3 / 2
+         .hpre().bits(0b1000)  // rcc_hclk3 = sys_d1cpre_ck / 2
+    });
+    rcc.d2cfgr.write(|w| unsafe {
+        w.d2ppre1().bits(0b100)  // rcc_pclk1 = rcc_hclk3 / 2
+         .d2ppre2().bits(0b100) // rcc_pclk2 = rcc_hclk3 / 2
+    });
+    rcc.d3cfgr.write(|w| unsafe {
+        w.d3ppre().bits(0b100)  // rcc_pclk4 = rcc_hclk3 / 2
+    });
+
+    let flash = dp.FLASH;
+    // 2 wait states, 0b10 programming delay
+    // 185-210 MHz
+    flash.acr.write(|w| unsafe {
+        w.wrhighfreq().bits(2)
+         .latency().bits(2)
+    });
+    while flash.acr.read().latency().bits() != 2 {}
+
+    // Set system clock to HSI
+    rcc.cfgr.modify(|_, w| unsafe { w.sw().bits(0b011) });  // pll1p
+    while rcc.cfgr.read().sws().bits() != 0b011 {}
+
     cp.SCB.enable_icache();
     cp.SCB.enable_dcache(&mut cp.CPUID);
     cp.DWT.enable_cycle_counter();
-    let mut dp = stm32::Peripherals::take().unwrap();
-    /*
-let clocks = dp.RCC.constrain()
-        .cfgr
-        .sysclk(84.mhz())
-        .hclk(84.mhz())
-        .pclk1(16.mhz())
-        .pclk2(32.mhz())
-        .freeze();
-    let gpiod = dp.GPIOD.split();
-    let mut led_fp0 = gpiod.pd5.into_push_pull_output();
-*/
+
+    init_log();
+    // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
+    info!("Built on {}", build_info::BUILT_TIME_UTC);
+    // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
+
+    // FP_LED0
+    let gpiod = dp.GPIOD;
+    rcc.ahb4enr.modify(|_, w| w.gpioden().set_bit());
+    gpiod.otyper.modify(|_, w| w.ot5().push_pull());
+    gpiod.moder.modify(|_, w| w.moder5().output());
+    gpiod.odr.modify(|_, w| w.odr5().set_bit());
+
+    // FP_LED1
+    gpiod.otyper.modify(|_, w| w.ot6().push_pull());
+    gpiod.moder.modify(|_, w| w.moder6().output());
+    gpiod.odr.modify(|_, w| w.odr6().set_bit());
+
+    // LED_FP0
+    let gpiog = dp.GPIOG;
+    rcc.ahb4enr.modify(|_, w| w.gpiogen().set_bit());
+    gpiog.otyper.modify(|_, w| w.ot4().push_pull());
+    gpiog.moder.modify(|_, w| w.moder4().output());
+    gpiog.odr.modify(|_, w| w.odr4().set_bit());
+
+    // LED_FP0
+    gpiod.otyper.modify(|_, w| w.ot12().push_pull());
+    gpiod.moder.modify(|_, w| w.moder12().output());
+    gpiod.odr.modify(|_, w| w.odr12().set_bit());
+
+    rcc.d2ccip1r.modify(|_, w| unsafe {
+        w.spi123src().bits(1)  // pll2_p
+         .spi45src().bits(1)  // pll2_q
+    });
+    rcc.d3ccipr.modify(|_, w| unsafe {
+        w.spi6src().bits(1)  // pll2_q
+    });
 
     cortex_m::interrupt::free(|_cs| {
     });
     loop {
-        cortex_m::asm::wfi();
+        // cortex_m::asm::wfi();
     }
 }
 
