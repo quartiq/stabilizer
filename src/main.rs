@@ -70,16 +70,17 @@ fn main() -> ! {
     rcc.ahb1rstr.write(|w| unsafe { w.bits(0)});
     rcc.apb1lrstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
     rcc.apb1lrstr.write(|w| unsafe { w.bits(0)});
+    rcc.apb1hrstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
+    rcc.apb1hrstr.write(|w| unsafe { w.bits(0)});
 
     rcc.ahb2rstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
     rcc.ahb2rstr.write(|w| unsafe { w.bits(0)});
     rcc.apb2rstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
     rcc.apb2rstr.write(|w| unsafe { w.bits(0)});
 
-    /* breaks semihosting
-    rcc.ahb3rstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
+    // do not reset the cpu
+    rcc.ahb3rstr.write(|w| unsafe { w.bits(0x7FFF_FFFF) });
     rcc.ahb3rstr.write(|w| unsafe { w.bits(0)});
-    */
     rcc.apb3rstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
     rcc.apb3rstr.write(|w| unsafe { w.bits(0)});
 
@@ -185,14 +186,14 @@ fn main() -> ! {
     gpiod.moder.modify(|_, w| w.moder6().output());
     gpiod.odr.modify(|_, w| w.odr6().set_bit());
 
-    // LED_FP0
+    // LED_FP2
     let gpiog = dp.GPIOG;
     rcc.ahb4enr.modify(|_, w| w.gpiogen().set_bit());
     gpiog.otyper.modify(|_, w| w.ot4().push_pull());
     gpiog.moder.modify(|_, w| w.moder4().output());
     gpiog.odr.modify(|_, w| w.odr4().set_bit());
 
-    // LED_FP0
+    // LED_FP3
     gpiod.otyper.modify(|_, w| w.ot12().push_pull());
     gpiod.moder.modify(|_, w| w.moder12().output());
     gpiod.odr.modify(|_, w| w.odr12().set_bit());
@@ -205,9 +206,91 @@ fn main() -> ! {
         w.spi6src().bits(1)  // pll2_q
     });
 
-    cortex_m::interrupt::free(|_cs| {
+    // Set up peripheral clocks
+    rcc.ahb1enr.modify(|_, w|
+        w.dma1en().set_bit()
+         .dma2en().set_bit()
+    );
+    rcc.apb1lenr.modify(|_, w|
+        w.spi2en().set_bit()
+         .spi3en().set_bit()
+    );
+    rcc.apb2enr.modify(|_, w|
+        w.spi1en().set_bit()
+         .spi4en().set_bit()
+         .spi5en().set_bit()
+    );
+    rcc.apb4enr.modify(|_, w|
+        w.spi6en().set_bit()
+    );
+
+    let gpioa = dp.GPIOA;
+    rcc.ahb4enr.modify(|_, w| w.gpioaen().set_bit());
+
+    // AFE0_A0,1: PG2,PG3
+    gpiog.otyper.modify(|_, w|
+        w.ot2().push_pull()
+         .ot3().push_pull()
+    );
+    gpiog.moder.modify(|_, w|
+        w.moder2().output()
+         .moder3().output()
+    );
+    gpiod.odr.modify(|_, w|
+        w.odr2().clear_bit()
+         .odr3().clear_bit()
+    );
+
+    // SCK: PG11
+    gpiog.moder.modify(|_, w| w.moder11().alternate());
+    gpiog.otyper.modify(|_, w| w.ot11().push_pull());
+    gpiog.afrh.modify(|_, w| w.afr11().af5());
+    // MOSI: PD7
+    // MISO: PA6
+    gpioa.moder.modify(|_, w| w.moder6().alternate());
+    gpioa.afrl.modify(|_, w| w.afr6().af5());
+    // NSS: PG10
+    gpiog.moder.modify(|_, w| w.moder10().alternate());
+    gpiog.otyper.modify(|_, w| w.ot10().push_pull());
+    gpiog.afrh.modify(|_, w| w.afr10().af5());
+
+    let spi1 = dp.SPI1;
+    spi1.cfg1.modify(|_, w| unsafe {
+        // w.mbr().bits(0)  // clk/2
+        w.mbr().bits(1)  // FIXME
+         .dsize().bits(16 - 1)
+         .fthvl().bits(1 - 1)  // one data
     });
+    spi1.cfg2.modify(|_, w| unsafe {
+        w.ssom().set_bit()  // ss deassert between frames during midi
+         .ssoe().set_bit()  // ss output enable
+         .ssiop().clear_bit()  // ss active low
+         .ssm().clear_bit()  // PAD counts
+         .cpol().clear_bit()
+         .cpha().clear_bit()
+         .lsbfrst().clear_bit()
+         .master().set_bit()
+         .sp().bits(0)  // motorola
+         .comm().bits(0b10)  // simplex receiver
+         .ioswp().clear_bit()
+         .midi().bits(2)  // master inter data idle
+         .mssi().bits(15)  // master SS idle
+    });
+    spi1.cr2.modify(|_, w| unsafe {
+        w.tsize().bits(1)
+    });
+    spi1.cr1.write(|w| w.spe().set_bit());
+
+    // cortex_m::interrupt::free(|_cs| { });
     loop {
+        // spi1.cr1.write(|w| w.cstart().set_bit());
+        spi1.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
+        while spi1.sr.read().eot().bit_is_clear() {}
+        spi1.ifcr.write(|w| w.eotc().set_bit());
+        while spi1.sr.read().rxp().bit_is_set() {
+           let a = spi1.rxdr.read().rxdr().bits() as i16;
+           info!("adc {}", a);
+        }
         // cortex_m::asm::wfi();
     }
 }
