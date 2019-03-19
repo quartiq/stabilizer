@@ -141,8 +141,8 @@ fn main() -> ! {
     rcc.cr.modify(|_, w| w.pll2on().set_bit());
     while rcc.cr.read().pll2rdy().bit_is_clear() {}
 
-    // hclk 200 MHz, pclk 100 MHz
-    let dapb = 0b100;
+    // hclk 200 MHz, pclk 50 MHz
+    let dapb = 0b101;
     rcc.d1cfgr.write(|w| unsafe {
         w.d1cpre().bits(0)  // sys_ck not divided
          .hpre().bits(0b1000)  // rcc_hclk3 = sys_d1cpre_ck / 2
@@ -268,7 +268,7 @@ fn main() -> ! {
     let spi1 = dp.SPI1;
     spi1.cfg1.modify(|_, w| unsafe {
         // w.mbr().bits(0)  // clk/2
-        w.mbr().bits(1)  // FIXME
+        w.mbr().bits(0)  // FIXME
          .dsize().bits(16 - 1)
          .fthvl().bits(1 - 1)  // one data
     });
@@ -356,7 +356,7 @@ fn main() -> ! {
     spi2.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
 
     loop {
-    // cortex_m::interrupt::free(|_cs| { });
+        // cortex_m::interrupt::free(|_cs| { });
         // spi1.cr1.write(|w| w.cstart().set_bit());
         spi1.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
         while spi1.sr.read().eot().bit_is_clear() {}
@@ -368,7 +368,7 @@ fn main() -> ! {
             // while spi2.sr.read().txp().bit_is_clear() {}
             // spi2.txdr.write(|w| unsafe { w.bits(d as u32) });
             unsafe { ptr::write_volatile(&spi2.txdr as *const _ as *mut u16, d) };
-             //   write(|w| unsafe { w.bits(d as u32) });
+            //   write(|w| unsafe { w.bits(d as u32) });
             // while spi2.sr.read().txc().bit_is_clear() {}
             // while spi2.sr.read().eot().bit_is_clear() {}
             // spi2.ifcr.write(|w| w.eotc().set_bit());
