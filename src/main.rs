@@ -245,7 +245,7 @@ fn main() -> ! {
         w.moder2().output()
          .moder3().output()
     );
-    gpiod.odr.modify(|_, w|
+    gpiog.odr.modify(|_, w|
         w.odr2().clear_bit()
          .odr3().clear_bit()
     );
