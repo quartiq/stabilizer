@@ -30,6 +30,7 @@ smoltcp = { version = "0.5.0", default-features = false, features = ["proto-ipv4
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
+bkpt = [ ]
 
 [build-dependencies]
 built = "0.3"

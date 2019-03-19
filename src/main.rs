@@ -141,8 +141,8 @@ fn main() -> ! {
     rcc.cr.modify(|_, w| w.pll2on().set_bit());
     while rcc.cr.read().pll2rdy().bit_is_clear() {}
 
-    // hclk 200 MHz, pclk 50 MHz
-    let dapb = 0b101;
+    // hclk 200 MHz, pclk 100 MHz
+    let dapb = 0b100;
     rcc.d1cfgr.write(|w| unsafe {
         w.d1cpre().bits(0)  // sys_ck not divided
          .hpre().bits(0b1000)  // rcc_hclk3 = sys_d1cpre_ck / 2
@@ -267,8 +267,7 @@ fn main() -> ! {
 
     let spi1 = dp.SPI1;
     spi1.cfg1.modify(|_, w| unsafe {
-        // w.mbr().bits(0)  // clk/2
-        w.mbr().bits(0)  // FIXME
+        w.mbr().bits(0)  // clk/2
          .dsize().bits(16 - 1)
          .fthvl().bits(1 - 1)  // one data
     });
@@ -327,7 +326,7 @@ fn main() -> ! {
     rcc.apb1lrstr.write(|w| w.spi2rst().set_bit());
     rcc.apb1lrstr.write(|w| w.spi2rst().clear_bit());
     rcc.apb1lenr.modify(|_, w| w.spi2en().set_bit());
- 
+
     spi2.cfg1.modify(|_, w| unsafe {
         w.mbr().bits(0)  // clk/2
          .dsize().bits(16 - 1)
@@ -350,34 +349,37 @@ fn main() -> ! {
          .mssi().bits(0)  // master SS idle
     });
     spi2.cr2.modify(|_, w| unsafe {
-        w.tsize().bits(0)
+        w.tsize().bits(0)  // infinite
     });
     spi2.cr1.write(|w| w.spe().set_bit());
+    // at least one SCK between EOT and CSTART
     spi2.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
 
     loop {
-        // cortex_m::interrupt::free(|_cs| { });
-        // spi1.cr1.write(|w| w.cstart().set_bit());
+        #[cfg(feature = "bkpt")]
+        cortex_m::asm::bkpt();
+
+        // at least one SCK between EOT and CSTART
         spi1.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
         while spi1.sr.read().eot().bit_is_clear() {}
         spi1.ifcr.write(|w| w.eotc().set_bit());
-        while spi1.sr.read().rxp().bit_is_set() {
-            let a = spi1.rxdr.read().rxdr().bits() as i16;
-            let d = (a as u16) ^ 0x8000;
+        while spi1.sr.read().rxp().bit_is_clear() {}
+        let a = spi1.rxdr.read().rxdr().bits() as i16;
+        let d = (a as u16) ^ 0x8000;
 
-            // while spi2.sr.read().txp().bit_is_clear() {}
-            // spi2.txdr.write(|w| unsafe { w.bits(d as u32) });
-            unsafe { ptr::write_volatile(&spi2.txdr as *const _ as *mut u16, d) };
-            //   write(|w| unsafe { w.bits(d as u32) });
-            // while spi2.sr.read().txc().bit_is_clear() {}
-            // while spi2.sr.read().eot().bit_is_clear() {}
-            // spi2.ifcr.write(|w| w.eotc().set_bit());
-            info!("dac adc {:#x} cr1 {:#x} sr {:#x} cfg1 {:#x} cr2 {:#x}",
-                a,
-                spi2.cr1.read().bits(), spi2.sr.read().bits(),
-                spi2.cfg1.read().bits(), spi2.cr2.read().bits(),
-            );
-        }
+        while spi2.sr.read().txp().bit_is_clear() {}
+        let txdr = &spi2.txdr as *const _ as *mut u16;
+        unsafe { ptr::write_volatile(txdr, d) };
+        while spi2.sr.read().txc().bit_is_clear() {}
+
+        #[cfg(feature = "bkpt")]
+        cortex_m::asm::bkpt();
+
+        info!("dac adc {:#x} cr1 {:#x} sr {:#x} cfg1 {:#x} cr2 {:#x}",
+            a,
+            spi2.cr1.read().bits(), spi2.sr.read().bits(),
+            spi2.cfg1.read().bits(), spi2.cr2.read().bits(),
+        );
         // cortex_m::asm::wfi();
     }
 }
