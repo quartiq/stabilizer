@@ -6,6 +6,12 @@ monitor arm semihosting enable
 # or uart
 # monitor tpiu config external uart off 168000000 2000000
 # monitor itm port 0 on
+
+# detect unhandled exceptions, hard faults and panics
+break DefaultHandler
+break HardFault
+break rust_begin_unwind
+
 load
 # tbreak cortex_m_rt::reset_handler
 # monitor reset halt
