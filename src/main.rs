@@ -383,9 +383,8 @@ fn main() -> ! {
         if spi1.sr.read().rxp().bit_is_clear() {
             continue;
         }
-        // let a = spi1.rxdr.read().rxdr().bits() as i16;
         let a = unsafe { ptr::read_volatile(rxdr) };
-        let d = (a as u16) ^ 0x8000;
+        let d = a ^ 0x8000;
 
         if spi2.sr.read().txp().bit_is_clear() {
             continue;
