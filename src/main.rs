@@ -48,13 +48,7 @@ mod build_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
-#[entry]
-fn main() -> ! {
-    let mut cp = cortex_m::Peripherals::take().unwrap();
-    let dp = stm32::Peripherals::take().unwrap();
-
-    // go to VOS1 voltage scale high perf
-    let pwr = dp.PWR;
+fn pwr_setup(pwr: &stm32::PWR) {
     pwr.pwr_cr3.write(|w|
         w.sden().set_bit()
          .ldoen().set_bit()
@@ -63,9 +57,9 @@ fn main() -> ! {
     while pwr.pwr_csr1.read().actvosrdy().bit_is_clear() {}
     pwr.pwr_d3cr.write(|w| unsafe { w.vos().bits(0b11) });  // vos1
     while pwr.pwr_d3cr.read().vosrdy().bit_is_clear() {}
+}
 
-    let rcc = dp.RCC;
-
+fn rcc_reset(rcc: &stm32::RCC) {
     // Reset all peripherals
     rcc.ahb1rstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
     rcc.ahb1rstr.write(|w| unsafe { w.bits(0)});
@@ -89,7 +83,9 @@ fn main() -> ! {
     rcc.ahb4rstr.write(|w| unsafe { w.bits(0)});
     rcc.apb4rstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
     rcc.apb4rstr.write(|w| unsafe { w.bits(0)});
+}
 
+fn rcc_pll_setup(rcc: &stm32::RCC, flash: &stm32::FLASH) {
     // Ensure HSI is on and stable
     rcc.cr.modify(|_, w| w.hsion().set_bit());
     while rcc.cr.read().hsirdy().bit_is_clear() {}
@@ -157,7 +153,6 @@ fn main() -> ! {
         w.d3ppre().bits(dapb)  // rcc_pclk4 = rcc_hclk3 / 2
     });
 
-    let flash = dp.FLASH;
     // 2 wait states, 0b10 programming delay
     // 185-210 MHz
     flash.acr.write(|w| unsafe {
@@ -166,56 +161,13 @@ fn main() -> ! {
     });
     while flash.acr.read().latency().bits() != 2 {}
 
-    // Set system clock to pll1_p
-    rcc.cfgr.modify(|_, w| unsafe { w.sw().bits(0b011) });  // pll1p
-    while rcc.cfgr.read().sws().bits() != 0b011 {}
-
     // CSI for I/O compensationc ell
     rcc.cr.modify(|_, w| w.csion().set_bit());
     while rcc.cr.read().csirdy().bit_is_clear() {}
-    rcc.apb4enr.modify(|_, w| w.syscfgen().set_bit());
 
-    let syscfg = dp.SYSCFG;
-    // enable I/O compensation cell
-    syscfg.cccsr.modify(|_, w|
-        w.en().set_bit()
-         .cs().clear_bit()
-         .hslv().clear_bit()
-    );
-    while syscfg.cccsr.read().ready().bit_is_clear() {}
-
-    cp.SCB.enable_icache();
-    cp.SCB.enable_dcache(&mut cp.CPUID);
-    cp.DWT.enable_cycle_counter();
-
-    init_log();
-    // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
-    // info!("Built on {}", build_info::BUILT_TIME_UTC);
-    // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
-
-    // FP_LED0
-    let gpiod = dp.GPIOD;
-    rcc.ahb4enr.modify(|_, w| w.gpioden().set_bit());
-    gpiod.otyper.modify(|_, w| w.ot5().push_pull());
-    gpiod.moder.modify(|_, w| w.moder5().output());
-    gpiod.odr.modify(|_, w| w.odr5().set_bit());
-
-    // FP_LED1
-    gpiod.otyper.modify(|_, w| w.ot6().push_pull());
-    gpiod.moder.modify(|_, w| w.moder6().output());
-    gpiod.odr.modify(|_, w| w.odr6().set_bit());
-
-    // LED_FP2
-    let gpiog = dp.GPIOG;
-    rcc.ahb4enr.modify(|_, w| w.gpiogen().set_bit());
-    gpiog.otyper.modify(|_, w| w.ot4().push_pull());
-    gpiog.moder.modify(|_, w| w.moder4().output());
-    gpiog.odr.modify(|_, w| w.odr4().set_bit());
-
-    // LED_FP3
-    gpiod.otyper.modify(|_, w| w.ot12().push_pull());
-    gpiod.moder.modify(|_, w| w.moder12().output());
-    gpiod.odr.modify(|_, w| w.odr12().set_bit());
+    // Set system clock to pll1_p
+    rcc.cfgr.modify(|_, w| unsafe { w.sw().bits(0b011) });  // pll1p
+    while rcc.cfgr.read().sws().bits() != 0b011 {}
 
     rcc.d1ccipr.write(|w| unsafe {
         w.ckpersrc().bits(1)  // hse_ck
@@ -228,27 +180,39 @@ fn main() -> ! {
     rcc.d3ccipr.modify(|_, w| unsafe {
         w.spi6src().bits(1)  // pll2_q
     });
+}
 
-    // Set up peripheral clocks
-    rcc.ahb1enr.modify(|_, w|
-        w.dma1en().set_bit()
-         .dma2en().set_bit()
+fn io_compensation_setup(syscfg: &stm32::SYSCFG) {
+    // enable I/O compensation cell
+    syscfg.cccsr.modify(|_, w|
+        w.en().set_bit()
+         .cs().clear_bit()
+         .hslv().clear_bit()
     );
-    rcc.apb1lenr.modify(|_, w|
-        w.spi2en().set_bit()
-         .spi3en().set_bit()
-    );
-    rcc.apb2enr.modify(|_, w|
-        w.spi1en().set_bit()
-         .spi4en().set_bit()
-         .spi5en().set_bit()
-    );
-    rcc.apb4enr.modify(|_, w|
-        w.spi6en().set_bit()
-    );
+    while syscfg.cccsr.read().ready().bit_is_clear() {}
+}
 
-    let gpioa = dp.GPIOA;
-    rcc.ahb4enr.modify(|_, w| w.gpioaen().set_bit());
+fn gpio_setup(gpioa: &stm32::GPIOA, gpiob: &stm32::GPIOB, gpiod: &stm32::GPIOD,
+              gpioe: &stm32::GPIOE, gpiog: &stm32::GPIOG) {
+    // FP_LED0
+    gpiod.otyper.modify(|_, w| w.ot5().push_pull());
+    gpiod.moder.modify(|_, w| w.moder5().output());
+    gpiod.odr.modify(|_, w| w.odr5().set_bit());
+
+    // FP_LED1
+    gpiod.otyper.modify(|_, w| w.ot6().push_pull());
+    gpiod.moder.modify(|_, w| w.moder6().output());
+    gpiod.odr.modify(|_, w| w.odr6().set_bit());
+
+    // LED_FP2
+    gpiog.otyper.modify(|_, w| w.ot4().push_pull());
+    gpiog.moder.modify(|_, w| w.moder4().output());
+    gpiog.odr.modify(|_, w| w.odr4().set_bit());
+
+    // LED_FP3
+    gpiod.otyper.modify(|_, w| w.ot12().push_pull());
+    gpiod.moder.modify(|_, w| w.moder12().output());
+    gpiod.odr.modify(|_, w| w.odr12().set_bit());
 
     // AFE0_A0,1: PG2,PG3
     gpiog.otyper.modify(|_, w|
@@ -279,7 +243,34 @@ fn main() -> ! {
     gpiog.ospeedr.modify(|_, w| w.ospeedr10().very_high_speed());
     gpiog.afrh.modify(|_, w| w.afr10().af5());
 
-    let spi1 = dp.SPI1;
+    // SCK: PB10
+    gpiob.moder.modify(|_, w| w.moder10().alternate());
+    gpiob.otyper.modify(|_, w| w.ot10().push_pull());
+    gpiob.ospeedr.modify(|_, w| w.ospeedr10().very_high_speed());
+    gpiob.afrh.modify(|_, w| w.afr10().af5());
+    // MOSI: PB15
+    gpiob.moder.modify(|_, w| w.moder15().alternate());
+    gpiob.otyper.modify(|_, w| w.ot15().push_pull());
+    gpiob.ospeedr.modify(|_, w| w.ospeedr15().very_high_speed());
+    gpiob.afrh.modify(|_, w| w.afr15().af5());
+    // MISO: PB14
+    // NSS: PB9
+    gpiob.moder.modify(|_, w| w.moder9().alternate());
+    gpiob.otyper.modify(|_, w| w.ot9().push_pull());
+    gpiob.ospeedr.modify(|_, w| w.ospeedr9().very_high_speed());
+    gpiob.afrh.modify(|_, w| w.afr9().af5());
+
+    // DAC0_LDAC: PE11
+    gpioe.moder.modify(|_, w| w.moder11().output());
+    gpioe.otyper.modify(|_, w| w.ot11().push_pull());
+    gpioe.odr.modify(|_, w| w.odr11().clear_bit());
+    // DAC_CLR: PE12
+    gpioe.moder.modify(|_, w| w.moder12().output());
+    gpioe.otyper.modify(|_, w| w.ot12().push_pull());
+    gpioe.odr.modify(|_, w| w.odr12().set_bit());
+}
+
+fn spi1_setup(spi1: &stm32::SPI1) {
     spi1.cfg1.modify(|_, w| unsafe {
         w.mbr().bits(0)  // clk/2
          .dsize().bits(16 - 1)
@@ -305,42 +296,9 @@ fn main() -> ! {
         w.tsize().bits(1)
     });
     spi1.cr1.write(|w| w.spe().set_bit());
+}
 
-    let gpiob = dp.GPIOB;
-    rcc.ahb4enr.modify(|_, w| w.gpioben().set_bit());
-    // SCK: PB10
-    gpiob.moder.modify(|_, w| w.moder10().alternate());
-    gpiob.otyper.modify(|_, w| w.ot10().push_pull());
-    gpiob.ospeedr.modify(|_, w| w.ospeedr10().very_high_speed());
-    gpiob.afrh.modify(|_, w| w.afr10().af5());
-    // MOSI: PB15
-    gpiob.moder.modify(|_, w| w.moder15().alternate());
-    gpiob.otyper.modify(|_, w| w.ot15().push_pull());
-    gpiob.ospeedr.modify(|_, w| w.ospeedr15().very_high_speed());
-    gpiob.afrh.modify(|_, w| w.afr15().af5());
-    // MISO: PB14
-    // NSS: PB9
-    gpiob.moder.modify(|_, w| w.moder9().alternate());
-    gpiob.otyper.modify(|_, w| w.ot9().push_pull());
-    gpiob.ospeedr.modify(|_, w| w.ospeedr9().very_high_speed());
-    gpiob.afrh.modify(|_, w| w.afr9().af5());
-
-    let gpioe = dp.GPIOE;
-    rcc.ahb4enr.modify(|_, w| w.gpioeen().set_bit());
-    // DAC0_LDAC: PE11
-    gpioe.moder.modify(|_, w| w.moder11().output());
-    gpioe.otyper.modify(|_, w| w.ot11().push_pull());
-    gpioe.odr.modify(|_, w| w.odr11().clear_bit());
-    // DAC_CLR: PE12
-    gpioe.moder.modify(|_, w| w.moder12().output());
-    gpioe.otyper.modify(|_, w| w.ot12().push_pull());
-    gpioe.odr.modify(|_, w| w.odr12().set_bit());
-
-    let spi2 = dp.SPI2;
-    rcc.apb1lrstr.write(|w| w.spi2rst().set_bit());
-    rcc.apb1lrstr.write(|w| w.spi2rst().clear_bit());
-    rcc.apb1lenr.modify(|_, w| w.spi2en().set_bit());
-
+fn spi2_setup(spi2: &stm32::SPI2) {
     spi2.cfg1.modify(|_, w| unsafe {
         w.mbr().bits(0)  // clk/2
          .dsize().bits(16 - 1)
@@ -366,6 +324,49 @@ fn main() -> ! {
         w.tsize().bits(0)
     });
     spi2.cr1.write(|w| w.spe().set_bit());
+}
+
+#[entry]
+fn main() -> ! {
+    let mut cp = cortex_m::Peripherals::take().unwrap();
+    let dp = stm32::Peripherals::take().unwrap();
+
+    let rcc = dp.RCC;
+    rcc_reset(&rcc);
+
+    init_log();
+    // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
+    // info!("Built on {}", build_info::BUILT_TIME_UTC);
+    // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
+
+    // go to VOS1 voltage scale high perf
+    pwr_setup(&dp.PWR);
+    rcc_pll_setup(&rcc, &dp.FLASH);
+    rcc.apb4enr.modify(|_, w| w.syscfgen().set_bit());
+    io_compensation_setup(&dp.SYSCFG);
+
+    cp.SCB.enable_icache();
+    cp.SCB.enable_dcache(&mut cp.CPUID);
+    cp.DWT.enable_cycle_counter();
+
+    rcc.ahb4enr.modify(|_, w|
+        w.gpioaen().set_bit()
+         .gpioben().set_bit()
+         .gpioden().set_bit()
+         .gpioeen().set_bit()
+         .gpiogen().set_bit()
+    );
+    gpio_setup(&dp.GPIOA, &dp.GPIOB, &dp.GPIOD, &dp.GPIOE, &dp.GPIOG);
+
+    rcc.ahb1enr.modify(|_, w| w.dma1en().set_bit());
+    rcc.apb1lenr.modify(|_, w| w.spi2en().set_bit());
+    rcc.apb2enr.modify(|_, w| w.spi1en().set_bit());
+
+    let spi1 = dp.SPI1;
+    spi1_setup(&spi1);
+    let spi2 = dp.SPI2;
+    spi2_setup(&spi2);
+
     // at least one SCK between EOT and CSTART
     spi2.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
 

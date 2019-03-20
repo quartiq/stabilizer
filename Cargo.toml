@@ -43,5 +43,3 @@ incremental = false
 debug = true
 lto = true
 codegen-units = 1
-incremental = false
-opt-level = 2
