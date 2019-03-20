@@ -170,6 +170,20 @@ fn main() -> ! {
     rcc.cfgr.modify(|_, w| unsafe { w.sw().bits(0b011) });  // pll1p
     while rcc.cfgr.read().sws().bits() != 0b011 {}
 
+    // CSI for I/O compensationc ell
+    rcc.cr.modify(|_, w| w.csion().set_bit());
+    while rcc.cr.read().csirdy().bit_is_clear() {}
+    rcc.apb4enr.modify(|_, w| w.syscfgen().set_bit());
+
+    let syscfg = dp.SYSCFG;
+    // enable I/O compensation cell
+    syscfg.cccsr.modify(|_, w|
+        w.en().set_bit()
+         .cs().clear_bit()
+         .hslv().clear_bit()
+    );
+    while syscfg.cccsr.read().ready().bit_is_clear() {}
+
     cp.SCB.enable_icache();
     cp.SCB.enable_dcache(&mut cp.CPUID);
     cp.DWT.enable_cycle_counter();
