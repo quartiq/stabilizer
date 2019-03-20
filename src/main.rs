@@ -369,6 +369,8 @@ fn main() -> ! {
     // at least one SCK between EOT and CSTART
     spi2.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
 
+    let txdr = &spi2.txdr as *const _ as *mut u16;
+    let rxdr = &spi1.rxdr as *const _ as *const u16;
     loop {
         #[cfg(feature = "bkpt")]
         cortex_m::asm::bkpt();
@@ -380,13 +382,14 @@ fn main() -> ! {
         if spi1.sr.read().rxp().bit_is_clear() {
             continue;
         }
-        let a = spi1.rxdr.read().rxdr().bits() as i16;
+        // let a = spi1.rxdr.read().rxdr().bits() as i16;
+        let a = unsafe { ptr::read_volatile(rxdr) };
         let d = (a as u16) ^ 0x8000;
 
         if spi2.sr.read().txp().bit_is_clear() {
             continue;
         }
-        let txdr = &spi2.txdr as *const _ as *mut u16;
+        // needs to be a half word write
         unsafe { ptr::write_volatile(txdr, d) };
         while spi2.sr.read().txc().bit_is_clear() {}
 
