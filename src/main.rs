@@ -260,8 +260,8 @@ fn main() -> ! {
          .moder3().output()
     );
     gpiog.odr.modify(|_, w|
-        w.odr2().clear_bit()
-         .odr3().clear_bit()
+        w.odr2().set_bit()
+         .odr3().set_bit()
     );
 
     // SCK: PG11
@@ -298,7 +298,7 @@ fn main() -> ! {
          .sp().bits(0)  // motorola
          .comm().bits(0b10)  // simplex receiver
          .ioswp().clear_bit()
-         .midi().bits(2)  // master inter data idle
+         .midi().bits(0)  // master inter data idle
          .mssi().bits(11)  // master SS idle
     });
     spi1.cr2.modify(|_, w| unsafe {
@@ -359,13 +359,14 @@ fn main() -> ! {
          .sp().bits(0)  // motorola
          .comm().bits(0b01)  // simplex transmitter
          .ioswp().clear_bit()
-         .midi().bits(1)  // master inter data idle
+         .midi().bits(0)  // master inter data idle
          .mssi().bits(0)  // master SS idle
     });
     spi2.cr2.modify(|_, w| unsafe {
         w.tsize().bits(0)
     });
     spi2.cr1.write(|w| w.spe().set_bit());
+    // at least one SCK between EOT and CSTART
     spi2.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
 
     loop {
@@ -387,7 +388,6 @@ fn main() -> ! {
         }
         let txdr = &spi2.txdr as *const _ as *mut u16;
         unsafe { ptr::write_volatile(txdr, d) };
-        // at least one SCK between EOT and CSTART
         while spi2.sr.read().txc().bit_is_clear() {}
 
         #[cfg(feature = "bkpt")]
