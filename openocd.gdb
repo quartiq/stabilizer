@@ -1,5 +1,7 @@
 target remote :3333
 set print asm-demangle on
+# https://github.com/rust-embedded/cortex-m-rt/issues/139
+set backtrace limit 32
 monitor arm semihosting enable
 # if using ITM with itmdump
 # monitor tpiu config internal itm.fifo uart off 168000000
