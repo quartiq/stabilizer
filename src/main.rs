@@ -286,13 +286,13 @@ fn spi1_setup(spi1: &stm32::SPI1) {
          .lsbfrst().clear_bit()
          .master().set_bit()
          .sp().bits(0)  // motorola
-         .comm().bits(0b00)  // duplex
+         .comm().bits(0b10)  // simplex receiver
          .ioswp().clear_bit()
          .midi().bits(0)  // master inter data idle
          .mssi().bits(11)  // master SS idle
     });
     spi1.cr2.modify(|_, w| unsafe {
-        w.tsize().bits(0)
+        w.tsize().bits(1)
     });
     spi1.cr1.write(|w| w.spe().set_bit());
 }
@@ -367,12 +367,9 @@ fn main() -> ! {
     spi2_setup(&spi2);
 
     // at least one SCK between EOT and CSTART
-    spi1.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
-    // at least one SCK between EOT and CSTART
     spi2.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
 
     // needs to be a half word write
-    let txdr1 = &spi1.txdr as *const _ as *mut u16;
     let rxdr1 = &spi1.rxdr as *const _ as *const u16;
     // needs to be a half word write
     let txdr2 = &spi2.txdr as *const _ as *mut u16;
@@ -380,14 +377,15 @@ fn main() -> ! {
         #[cfg(feature = "bkpt")]
         cortex_m::asm::bkpt();
 
-        while spi1.sr.read().txp().bit_is_clear() {}
-        unsafe { ptr::write_volatile(txdr1, 0) };
-        // while spi1.sr.read().txc().bit_is_clear() {}
-        while spi1.sr.read().rxp().bit_is_clear() {}
+        // at least one SCK between EOT and CSTART
+        spi1.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
+        while spi1.sr.read().eot().bit_is_clear() {}
+        spi1.ifcr.write(|w| w.eotc().set_bit());
+        // while spi1.sr.read().rxp().bit_is_clear() {}
         let a = unsafe { ptr::read_volatile(rxdr1) };
-        while spi2.sr.read().txp().bit_is_clear() {}
+        // while spi2.sr.read().txp().bit_is_clear() {}
         unsafe { ptr::write_volatile(txdr2, a ^ 0x8000) };
-        // while spi2.sr.read().txc().bit_is_clear() {}
+        while spi2.sr.read().txc().bit_is_clear() {}
 
         #[cfg(feature = "bkpt")]
         cortex_m::asm::bkpt();
