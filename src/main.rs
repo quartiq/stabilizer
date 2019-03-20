@@ -349,9 +349,10 @@ fn main() -> ! {
          .mssi().bits(0)  // master SS idle
     });
     spi2.cr2.modify(|_, w| unsafe {
-        w.tsize().bits(1)
+        w.tsize().bits(0)
     });
     spi2.cr1.write(|w| w.spe().set_bit());
+    spi2.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
 
     loop {
         #[cfg(feature = "bkpt")]
@@ -373,10 +374,7 @@ fn main() -> ! {
         let txdr = &spi2.txdr as *const _ as *mut u16;
         unsafe { ptr::write_volatile(txdr, d) };
         // at least one SCK between EOT and CSTART
-        spi2.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
         while spi2.sr.read().txc().bit_is_clear() {}
-        while spi2.sr.read().eot().bit_is_clear() {}
-        spi1.ifcr.write(|w| w.eotc().set_bit());
 
         #[cfg(feature = "bkpt")]
         cortex_m::asm::bkpt();
