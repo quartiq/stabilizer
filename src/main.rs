@@ -18,9 +18,10 @@ extern crate stm32h7;
 extern crate log;
 
 use core::ptr;
+use core::cell::RefCell;
 use cortex_m_rt::{entry, exception};
-// use core::fmt::Write;
-use stm32h7::{stm32h7x3 as stm32};
+use stm32h7::stm32h7x3::{self as stm32, Peripherals, CorePeripherals, interrupt};
+use cortex_m::interrupt::Mutex;
 
 #[cfg(not(feature = "semihosting"))]
 fn init_log() {}
@@ -325,10 +326,15 @@ fn spi2_setup(spi2: &stm32::SPI2) {
     spi2.cr1.write(|w| w.spe().set_bit());
 }
 
+static SPI1P: Mutex<RefCell<Option<stm32::SPI1>>> =
+    Mutex::new(RefCell::new(None));
+static SPI2P: Mutex<RefCell<Option<stm32::SPI2>>> =
+    Mutex::new(RefCell::new(None));
+
 #[entry]
 fn main() -> ! {
-    let mut cp = cortex_m::Peripherals::take().unwrap();
-    let dp = stm32::Peripherals::take().unwrap();
+    let mut cp = CorePeripherals::take().unwrap();
+    let dp = Peripherals::take().unwrap();
 
     let rcc = dp.RCC;
     rcc_reset(&rcc);
@@ -366,37 +372,57 @@ fn main() -> ! {
     let spi2 = dp.SPI2;
     spi2_setup(&spi2);
 
-    // at least one SCK between EOT and CSTART
-    spi2.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
+    cortex_m::interrupt::free(|cs| {
+        spi1.ier.write(|w| w.rxpie().set_bit().eotie().set_bit());
+        stm32::NVIC::unpend(stm32::Interrupt::SPI1);
+        cp.NVIC.enable(stm32::Interrupt::SPI1);
 
-    // needs to be a half word write
-    let rxdr1 = &spi1.rxdr as *const _ as *const u16;
-    // needs to be a half word write
-    let txdr2 = &spi2.txdr as *const _ as *mut u16;
+        spi2.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
+        spi1.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
+
+        SPI1P.borrow(cs).replace(Some(spi1));
+        SPI2P.borrow(cs).replace(Some(spi2));
+    });
+
     loop {
         #[cfg(feature = "bkpt")]
         cortex_m::asm::bkpt();
 
-        // at least one SCK between EOT and CSTART
-        spi1.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
-        while spi1.sr.read().eot().bit_is_clear() {}
-        spi1.ifcr.write(|w| w.eotc().set_bit());
-        // while spi1.sr.read().rxp().bit_is_clear() {}
-        let a = unsafe { ptr::read_volatile(rxdr1) };
-        // while spi2.sr.read().txp().bit_is_clear() {}
-        unsafe { ptr::write_volatile(txdr2, a ^ 0x8000) };
-        while spi2.sr.read().txc().bit_is_clear() {}
+        cortex_m::asm::wfi();
 
         #[cfg(feature = "bkpt")]
         cortex_m::asm::bkpt();
-
-        info!("dac adc {:#x} cr1 {:#x} sr {:#x} cfg1 {:#x} cr2 {:#x}",
-            a,
-            spi2.cr1.read().bits(), spi2.sr.read().bits(),
-            spi2.cfg1.read().bits(), spi2.cr2.read().bits(),
-        );
-        // cortex_m::asm::wfi();
     }
+}
+
+#[interrupt]
+fn SPI1() {
+    cortex_m::interrupt::free(|cs| {
+        // let p = unsafe { Peripherals::steal() };
+        // let spi1 = p.SPI1;
+        // let spi2 = p.SPI2;
+        let spi1p = SPI1P.borrow(cs).borrow();
+        let spi1 = spi1p.as_ref().unwrap();
+        let spi2p = SPI2P.borrow(cs).borrow();
+        let spi2 = spi2p.as_ref().unwrap();
+        let sr = spi1.sr.read();
+        if sr.eot().bit_is_set() {
+            spi1.ifcr.write(|w| w.eotc().set_bit());
+        }
+        if sr.rxp().bit_is_set() {
+            // needs to be a half word read
+            let rxdr1 = &spi1.rxdr as *const _ as *const u16;
+            let a = unsafe { ptr::read_volatile(rxdr1) };
+            // while spi2.sr.read().txp().bit_is_clear() {}
+            // needs to be a half word write
+            let txdr2 = &spi2.txdr as *const _ as *mut u16;
+            unsafe { ptr::write_volatile(txdr2, a ^ 0x8000) };
+            info!("adc: {:#x}", a);
+            while spi2.sr.read().txc().bit_is_clear() {}
+            // at least one SCK between EOT and CSTART
+            spi1.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
+        }
+    });
 }
 
 #[exception]
