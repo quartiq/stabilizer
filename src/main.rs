@@ -198,22 +198,22 @@ fn gpio_setup(gpioa: &stm32::GPIOA, gpiob: &stm32::GPIOB, gpiod: &stm32::GPIOD,
     // FP_LED0
     gpiod.otyper.modify(|_, w| w.ot5().push_pull());
     gpiod.moder.modify(|_, w| w.moder5().output());
-    gpiod.odr.modify(|_, w| w.odr5().set_bit());
+    gpiod.odr.modify(|_, w| w.odr5().clear_bit());
 
     // FP_LED1
     gpiod.otyper.modify(|_, w| w.ot6().push_pull());
     gpiod.moder.modify(|_, w| w.moder6().output());
-    gpiod.odr.modify(|_, w| w.odr6().set_bit());
+    gpiod.odr.modify(|_, w| w.odr6().clear_bit());
 
     // LED_FP2
     gpiog.otyper.modify(|_, w| w.ot4().push_pull());
     gpiog.moder.modify(|_, w| w.moder4().output());
-    gpiog.odr.modify(|_, w| w.odr4().set_bit());
+    gpiog.odr.modify(|_, w| w.odr4().clear_bit());
 
     // LED_FP3
     gpiod.otyper.modify(|_, w| w.ot12().push_pull());
     gpiod.moder.modify(|_, w| w.moder12().output());
-    gpiod.odr.modify(|_, w| w.odr12().set_bit());
+    gpiod.odr.modify(|_, w| w.odr12().clear_bit());
 
     // AFE0_A0,1: PG2,PG3
     gpiog.otyper.modify(|_, w|
