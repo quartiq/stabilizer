@@ -23,6 +23,9 @@ use cortex_m_rt::{entry, exception};
 use stm32h7::stm32h7x3::{self as stm32, Peripherals, CorePeripherals, interrupt};
 use cortex_m::interrupt::Mutex;
 
+mod iir;
+use iir::*;
+
 #[cfg(not(feature = "semihosting"))]
 fn init_log() {}
 
@@ -442,6 +445,11 @@ fn TIM2() {  // FIXME
     dp.SPI1.cr1.write(|w| unsafe { w.bits(0x201) });
 }
 
+const SCALE: f32 = ((1 << 15) - 1) as f32;
+static mut IIR_STATE: [IIRState; 2] = [[0.; 5]; 2];
+static mut IIR_CH: [IIR; 2] = [
+    IIR{ y0: 0., ba: [1., 0., 0., 0., 0.], scale: SCALE },
+    IIR{ y0: 0., ba: [1., 0., 0., 0., 0.], scale: SCALE }];
 
 #[interrupt]
 fn SPI1() {
@@ -462,8 +470,10 @@ fn SPI1() {
             let a = unsafe { ptr::read_volatile(rxdr1) };
             // needs to be a half word write
             let txdr2 = &spi2.txdr as *const _ as *mut u16;
-            unsafe { ptr::write_volatile(txdr2, a ^ 0x8000) };
-            info!("adc: {:#x}", a);
+            let x0 = a as f32;
+            let y0 = unsafe { IIR_CH[0].update(&mut IIR_STATE[0], x0) };
+            unsafe { ptr::write_volatile(txdr2, y0 as i16 as u16 ^ 0x8000) };
+            info!("adc={:.1} dac={:.1}", x0, y0);
         }
     });
     #[cfg(feature = "bkpt")]
