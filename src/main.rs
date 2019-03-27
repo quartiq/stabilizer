@@ -326,10 +326,51 @@ fn spi2_setup(spi2: &stm32::SPI2) {
     spi2.cr1.write(|w| w.spe().set_bit());
 }
 
+fn tim2_setup(tim2: &stm32::TIM2) {
+    tim2.psc.write(|w| unsafe { w.psc().bits(100 - 1) });
+    tim2.arr.write(|w| unsafe { w.bits(10 - 1) });
+    tim2.dier.write(|w| w.ude().set_bit());
+    tim2.cr1.modify(|_, w| unsafe {
+        w.ckd().bits(0b00)  // div1
+         .dir().clear_bit()  // up
+         .cen().set_bit() });  // enable
+}
+
+fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa: usize) {
+    // info!("{:#x} {:#x}", pa, unsafe { *(pa as *const u32) });
+
+    dma1.s0cr.modify(|_, w| w.en().clear_bit());
+    while dma1.s0cr.read().en().bit_is_set() {}
+
+    dma1.s0par.write(|w| unsafe { w.pa().bits(pa as u32) });
+    dma1.s0m0ar.write(|w| unsafe { w.m0a().bits(ma as u32) });
+    dma1.s0ndtr.write(|w| unsafe { w.ndt().bits(1) });
+    dmamux1.dmamux1_c0cr.modify(|_, w| unsafe { w.dmareq_id().bits(22) });  // tim2_up
+    dma1.s0cr.modify(|_, w| unsafe {
+        w.pl().bits(0b11)  // very high
+         .circ().set_bit()  // reload ndtr
+         .msize().bits(0b10)  // 32
+         .minc().clear_bit()
+         .mburst().bits(0b00)
+         .psize().bits(0b10)  // 32
+         .pinc().clear_bit()
+         .pburst().bits(0b00)
+         .dbm().clear_bit()
+         .dir().bits(0b01)  // peripheral_to_memory
+         .pfctrl().clear_bit()  // dma is FC
+    });
+    // dma1.s0fcr.modify(|_, w| w.dmdis().clear_bit());
+    dma1.lifcr.write(|w| w.ctcif0().set_bit());
+    dma1.s0cr.modify(|_, w| w.en().set_bit());
+}
+
 static SPI1P: Mutex<RefCell<Option<stm32::SPI1>>> =
     Mutex::new(RefCell::new(None));
 static SPI2P: Mutex<RefCell<Option<stm32::SPI2>>> =
     Mutex::new(RefCell::new(None));
+
+#[link_section = ".sram1"]
+static mut DAT: u32 = (1 << 9) | (1 << 0);
 
 #[entry]
 fn main() -> ! {
@@ -363,22 +404,30 @@ fn main() -> ! {
     );
     gpio_setup(&dp.GPIOA, &dp.GPIOB, &dp.GPIOD, &dp.GPIOE, &dp.GPIOG);
 
-    rcc.ahb1enr.modify(|_, w| w.dma1en().set_bit());
     rcc.apb1lenr.modify(|_, w| w.spi2en().set_bit());
-    rcc.apb2enr.modify(|_, w| w.spi1en().set_bit());
-
-    let spi1 = dp.SPI1;
-    spi1_setup(&spi1);
     let spi2 = dp.SPI2;
     spi2_setup(&spi2);
+    spi2.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
+
+    rcc.apb2enr.modify(|_, w| w.spi1en().set_bit());
+    let spi1 = dp.SPI1;
+    spi1_setup(&spi1);
+
+    rcc.ahb2enr.modify(|_, w| w.sram1en().set_bit());
+    rcc.ahb1enr.modify(|_, w| w.dma1en().set_bit());
+    unsafe { DAT = (1 << 9) | (1 << 0) };
+    dma1_setup(&dp.DMA1, &dp.DMAMUX1, unsafe { &DAT as *const _ as usize },
+               &spi1.cr1 as *const _ as usize);
+
+    rcc.apb1lenr.modify(|_, w| w.tim2en().set_bit());
+    tim2_setup(&dp.TIM2);
 
     cortex_m::interrupt::free(|cs| {
         spi1.ier.write(|w| w.rxpie().set_bit().eotie().set_bit());
-        stm32::NVIC::unpend(stm32::Interrupt::SPI1);
+        // stm32::NVIC::unpend(stm32::Interrupt::SPI1);
         cp.NVIC.enable(stm32::Interrupt::SPI1);
 
-        spi2.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
-        spi1.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
+        // spi1.cr1.write(|w| unsafe { w.bits((1 << 9) | (1 << 0)) });
 
         SPI1P.borrow(cs).replace(Some(spi1));
         SPI2P.borrow(cs).replace(Some(spi2));
@@ -388,7 +437,22 @@ fn main() -> ! {
         #[cfg(feature = "bkpt")]
         cortex_m::asm::bkpt();
 
-        cortex_m::asm::wfi();
+        // cortex_m::asm::wfi();
+        info!("{:#x} {:#x} {:#x}",
+              dp.DMA1.lisr.read().bits(),
+              dp.DMA1.s0cr.read().bits(),
+              dp.DMA1.s0ndtr.read().bits());
+        // dp.DMA1.lifcr.write(|w| w.ctcif0().set_bit());
+        // dp.DMA1.s0cr.write(|w| w.en().set_bit());
+        let mut sr = 0;
+        let mut cr = 0;
+        cortex_m::interrupt::free(|cs| {
+        let spi1p = SPI1P.borrow(cs).borrow();
+        let spi1 = spi1p.as_ref().unwrap();
+        sr = spi1.sr.read().bits();
+        cr = spi1.cr1.read().bits();
+        });
+        info!("{:#x} {:#x}", sr, cr);
 
         #[cfg(feature = "bkpt")]
         cortex_m::asm::bkpt();
@@ -420,7 +484,7 @@ fn SPI1() {
             info!("adc: {:#x}", a);
             while spi2.sr.read().txc().bit_is_clear() {}
             // at least one SCK between EOT and CSTART
-            spi1.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
+            // spi1.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
         }
     });
 }

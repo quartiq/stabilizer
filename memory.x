@@ -9,3 +9,10 @@ MEMORY
   FLASH  (rx)  : ORIGIN = 0x08000000, LENGTH = 1024K
   FLASH1 (rx)  : ORIGIN = 0x08100000, LENGTH = 1024K
 }
+
+SECTIONS {
+  .sram1 (NOLOAD) : ALIGN(4) {
+    *(.sram1);
+    . = ALIGN(4);
+    } > RAM_D2
+} INSERT AFTER .bss;
