@@ -50,6 +50,7 @@ mod build_info {
 }
 
 fn pwr_setup(pwr: &stm32::PWR) {
+    // go to VOS1 voltage scale for high perf
     pwr.pwr_cr3.write(|w|
         w.sden().set_bit()
          .ldoen().set_bit()
@@ -272,7 +273,7 @@ fn gpio_setup(gpioa: &stm32::GPIOA, gpiob: &stm32::GPIOB, gpiod: &stm32::GPIOD,
 
 fn spi1_setup(spi1: &stm32::SPI1) {
     spi1.cfg1.modify(|_, w| unsafe {
-        w.mbr().bits(0)  // clk/2
+        w.mbr().bits(1)  // clk/4
          .dsize().bits(16 - 1)
          .fthvl().bits(1 - 1)  // one data
     });
@@ -290,7 +291,7 @@ fn spi1_setup(spi1: &stm32::SPI1) {
          .comm().bits(0b10)  // simplex receiver
          .ioswp().clear_bit()
          .midi().bits(0)  // master inter data idle
-         .mssi().bits(11)  // master SS idle
+         .mssi().bits(6)  // master SS idle
     });
     spi1.cr2.modify(|_, w| unsafe {
         w.tsize().bits(1)
@@ -327,13 +328,13 @@ fn spi2_setup(spi2: &stm32::SPI2) {
 }
 
 fn tim2_setup(tim2: &stm32::TIM2) {
-    tim2.psc.write(|w| unsafe { w.psc().bits(100 - 1) });
-    tim2.arr.write(|w| unsafe { w.bits(10 - 1) });
-    tim2.dier.write(|w| w.ude().set_bit());
-    tim2.cr1.modify(|_, w| unsafe {
-        w.ckd().bits(0b00)  // div1
-         .dir().clear_bit()  // up
-         .cen().set_bit() });  // enable
+    tim2.psc.write(|w| unsafe { w.psc().bits(200 - 1) });  // from 200 MHz
+    tim2.arr.write(|w| unsafe { w.bits(2 - 1) });  // µs
+    tim2.dier.write(|w| w.ude().set_bit().uie().set_bit());  // FIXME
+    tim2.egr.write(|w| w.ug().set_bit());
+    tim2.cr1.modify(|_, w|
+        w.dir().clear_bit()  // up
+         .cen().set_bit());  // enable
 }
 
 fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa: usize) {
@@ -356,11 +357,10 @@ fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa: usize
          .pinc().clear_bit()
          .pburst().bits(0b00)
          .dbm().clear_bit()
-         .dir().bits(0b01)  // peripheral_to_memory
+         .dir().bits(0b01)  // memory_to_peripheral
          .pfctrl().clear_bit()  // dma is FC
     });
-    // dma1.s0fcr.modify(|_, w| w.dmdis().clear_bit());
-    dma1.lifcr.write(|w| w.ctcif0().set_bit());
+    dma1.s0fcr.modify(|_, w| w.dmdis().clear_bit());
     dma1.s0cr.modify(|_, w| w.en().set_bit());
 }
 
@@ -385,7 +385,6 @@ fn main() -> ! {
     // info!("Built on {}", build_info::BUILT_TIME_UTC);
     // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
 
-    // go to VOS1 voltage scale high perf
     pwr_setup(&dp.PWR);
     rcc_pll_setup(&rcc, &dp.FLASH);
     rcc.apb4enr.modify(|_, w| w.syscfgen().set_bit());
@@ -412,81 +411,63 @@ fn main() -> ! {
     rcc.apb2enr.modify(|_, w| w.spi1en().set_bit());
     let spi1 = dp.SPI1;
     spi1_setup(&spi1);
+    spi1.ier.write(|w| w.rxpie().set_bit());
 
     rcc.ahb2enr.modify(|_, w| w.sram1en().set_bit());
     rcc.ahb1enr.modify(|_, w| w.dma1en().set_bit());
-    unsafe { DAT = (1 << 9) | (1 << 0) };
-    dma1_setup(&dp.DMA1, &dp.DMAMUX1, unsafe { &DAT as *const _ as usize },
+    unsafe { DAT = (1 << 9) | (1 << 0) };  // init SRAM1 rodata can't load with sram1 disabled
+    cortex_m::asm::dsb();
+    dma1_setup(&dp.DMA1, &dp.DMAMUX1, unsafe { &DAT as *const _ } as usize,
                &spi1.cr1 as *const _ as usize);
 
     rcc.apb1lenr.modify(|_, w| w.tim2en().set_bit());
     tim2_setup(&dp.TIM2);
 
     cortex_m::interrupt::free(|cs| {
-        spi1.ier.write(|w| w.rxpie().set_bit().eotie().set_bit());
-        // stm32::NVIC::unpend(stm32::Interrupt::SPI1);
         cp.NVIC.enable(stm32::Interrupt::SPI1);
-
-        // spi1.cr1.write(|w| unsafe { w.bits((1 << 9) | (1 << 0)) });
-
+        cp.NVIC.enable(stm32::Interrupt::TIM2);  // FIXME
         SPI1P.borrow(cs).replace(Some(spi1));
         SPI2P.borrow(cs).replace(Some(spi2));
     });
 
     loop {
-        #[cfg(feature = "bkpt")]
-        cortex_m::asm::bkpt();
-
-        // cortex_m::asm::wfi();
-        info!("{:#x} {:#x} {:#x}",
-              dp.DMA1.lisr.read().bits(),
-              dp.DMA1.s0cr.read().bits(),
-              dp.DMA1.s0ndtr.read().bits());
-        // dp.DMA1.lifcr.write(|w| w.ctcif0().set_bit());
-        // dp.DMA1.s0cr.write(|w| w.en().set_bit());
-        let mut sr = 0;
-        let mut cr = 0;
-        cortex_m::interrupt::free(|cs| {
-        let spi1p = SPI1P.borrow(cs).borrow();
-        let spi1 = spi1p.as_ref().unwrap();
-        sr = spi1.sr.read().bits();
-        cr = spi1.cr1.read().bits();
-        });
-        info!("{:#x} {:#x}", sr, cr);
-
-        #[cfg(feature = "bkpt")]
-        cortex_m::asm::bkpt();
+        cortex_m::asm::wfi();
     }
 }
 
 #[interrupt]
+fn TIM2() {  // FIXME
+    let dp = unsafe { Peripherals::steal() };
+    dp.TIM2.sr.modify(|_, w| w.uif().clear_bit());
+    dp.SPI1.cr1.write(|w| unsafe { w.bits(0x201) });
+}
+
+
+#[interrupt]
 fn SPI1() {
+    #[cfg(feature = "bkpt")]
+    cortex_m::asm::bkpt();
     cortex_m::interrupt::free(|cs| {
-        // let p = unsafe { Peripherals::steal() };
-        // let spi1 = p.SPI1;
-        // let spi2 = p.SPI2;
         let spi1p = SPI1P.borrow(cs).borrow();
         let spi1 = spi1p.as_ref().unwrap();
         let spi2p = SPI2P.borrow(cs).borrow();
         let spi2 = spi2p.as_ref().unwrap();
         let sr = spi1.sr.read();
         if sr.eot().bit_is_set() {
-            spi1.ifcr.write(|w| w.eotc().set_bit());
+           spi1.ifcr.write(|w| w.eotc().set_bit());
         }
         if sr.rxp().bit_is_set() {
             // needs to be a half word read
             let rxdr1 = &spi1.rxdr as *const _ as *const u16;
             let a = unsafe { ptr::read_volatile(rxdr1) };
-            // while spi2.sr.read().txp().bit_is_clear() {}
             // needs to be a half word write
             let txdr2 = &spi2.txdr as *const _ as *mut u16;
             unsafe { ptr::write_volatile(txdr2, a ^ 0x8000) };
             info!("adc: {:#x}", a);
-            while spi2.sr.read().txc().bit_is_clear() {}
-            // at least one SCK between EOT and CSTART
-            // spi1.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
         }
     });
+    #[cfg(feature = "bkpt")]
+    cortex_m::asm::bkpt();
 }
 
 #[exception]
