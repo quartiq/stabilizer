@@ -542,8 +542,8 @@ fn main() -> ! {
     rcc.apb1lenr.modify(|_, w| w.tim2en().set_bit());
     tim2_setup(&dp.TIM2);
 
-    unsafe { IIR_CH[0].pi(-0.1, 10.*2e-6/2., 0.).expect("bad coefficients"); }
-    unsafe { IIR_CH[1].pi(0.1, 10.*2e-6/2., 0.).expect("bad coefficients"); }
+    unsafe { IIR_CH[0].pi(0.1, 10.*2e-6/2., 0.).expect("bad coefficients"); }
+    unsafe { IIR_CH[1].pi(-0.1, 10.*2e-6/2., 0.).expect("bad coefficients"); }
 
     cortex_m::interrupt::free(|cs| {
         cp.NVIC.enable(stm32::Interrupt::SPI1);

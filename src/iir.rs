@@ -10,34 +10,37 @@ pub struct IIR {
     pub scale: f32,
 }
 
+fn abs(x: f32) -> f32 {
+    if x >= 0. { x } else { -x }
+}
+
+fn copysign(x: f32, y: f32) -> f32 {
+    match () {
+        _ if (x >= 0. && y >= 0.) || (x <= 0. && y <= 0.) => y,
+        _ => -y
+    }
+}
+
 impl IIR {
     pub fn pi(&mut self, kp: f32, ki: f32, g: f32) -> Result<(), &str> {
-        if ki < 0. {
-            return Err("ki < 0");
-        }
-        let (a1, b1, b0) = match () {
-            _ if ki < 0. => return Err("ki < 0"),
-            _ if ki < f32::EPSILON => (0., 0., kp),
+        let ki = copysign(kp, ki);
+        let g = copysign(kp, g);
+        let (a1, b0, b1) = match () {
+            _ if abs(ki) < f32::EPSILON => (0., kp, 0.),
             _ => {
-                let (c, a1) = match () {
-                    _ if g < 0. => return Err("g < 0"),
-                    _ if g < f32::EPSILON => (1., 1.),
-                    _ => {
-                        let c = 1./(1. + ki/g);
-                        (c, 2.*c - 1.)
-                    }
+                let c = match () {
+                    _ if abs(g) < f32::EPSILON => 1.,
+                    _ => 1./(1. + ki/g)
                 };
-                let b0 = kp + ki*c;
-                let b1 = b0 - 2.*kp*c;
-                if b0 + b1 > -f32::EPSILON && b0 + b1 < f32::EPSILON {
-                    return Err("low integrator gain and/or gain limit");
+                let a1 = 2.*c - 1.;
+                let b0 = ki*c + kp;
+                let b1 = ki*c - a1*kp;
+                if abs(b0 + b1) < f32::EPSILON {
+                    return Err("low integrator gain and/or gain limit")
                 }
-                (a1, b1, b0)
+                (a1, b0, b1)
             }
         };
-        if b0 > 1. || b0 < -1. || b1 > 1. || b1 < -1. {
-            return Err("high gains");
-        }
         self.ba[0] = b0;
         self.ba[1] = b1;
         self.ba[2] = 0.;
