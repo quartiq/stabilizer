@@ -426,6 +426,8 @@ fn main() -> ! {
     rcc.apb1lenr.modify(|_, w| w.tim2en().set_bit());
     tim2_setup(&dp.TIM2);
 
+    unsafe { IIR_CH[0].pi(-0.01, 10.*2e-6/2., 0.).expect("bad coefficients"); }
+
     cortex_m::interrupt::free(|cs| {
         cp.NVIC.enable(stm32::Interrupt::SPI1);
         cp.NVIC.enable(stm32::Interrupt::TIM2);  // FIXME
@@ -434,22 +436,24 @@ fn main() -> ! {
     });
 
     loop {
-        cortex_m::asm::wfi();
+        for _ in 0..1000000 { cortex_m::asm::wfi(); }
+        let (x0, y0) = unsafe { (IIR_STATE[0][0], IIR_STATE[0][2]) };
+        info!("x0={} y0={}", x0, y0);
     }
 }
 
 #[interrupt]
 fn TIM2() {  // FIXME
     let dp = unsafe { Peripherals::steal() };
-    dp.TIM2.sr.modify(|_, w| w.uif().clear_bit());
+    dp.TIM2.sr.write(|w| w.uif().clear_bit());  // rc_w0
     dp.SPI1.cr1.write(|w| unsafe { w.bits(0x201) });
 }
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
 static mut IIR_STATE: [IIRState; 2] = [[0.; 5]; 2];
 static mut IIR_CH: [IIR; 2] = [
-    IIR{ y0: 0., ba: [1., 0., 0., 0., 0.], scale: SCALE },
-    IIR{ y0: 0., ba: [1., 0., 0., 0., 0.], scale: SCALE }];
+    IIR{ y_offset: 0., x_offset: 0., ba: [0., 0., 0., 0., 0.], scale: SCALE },
+    IIR{ y_offset: 0., x_offset: 0., ba: [0., 0., 0., 0., 0.], scale: SCALE }];
 
 #[interrupt]
 fn SPI1() {
@@ -458,8 +462,6 @@ fn SPI1() {
     cortex_m::interrupt::free(|cs| {
         let spi1p = SPI1P.borrow(cs).borrow();
         let spi1 = spi1p.as_ref().unwrap();
-        let spi2p = SPI2P.borrow(cs).borrow();
-        let spi2 = spi2p.as_ref().unwrap();
         let sr = spi1.sr.read();
         if sr.eot().bit_is_set() {
            spi1.ifcr.write(|w| w.eotc().set_bit());
@@ -468,12 +470,15 @@ fn SPI1() {
             // needs to be a half word read
             let rxdr1 = &spi1.rxdr as *const _ as *const u16;
             let a = unsafe { ptr::read_volatile(rxdr1) };
+            let x0 = a as i16 as f32;
+            let y0 = unsafe { IIR_CH[0].update(&mut IIR_STATE[0], x0) };
+            let d = y0 as i16 as u16 ^ 0x8000;
+
+            let spi2p = SPI2P.borrow(cs).borrow();
+            let spi2 = spi2p.as_ref().unwrap();
             // needs to be a half word write
             let txdr2 = &spi2.txdr as *const _ as *mut u16;
-            let x0 = a as f32;
-            let y0 = unsafe { IIR_CH[0].update(&mut IIR_STATE[0], x0) };
-            unsafe { ptr::write_volatile(txdr2, y0 as i16 as u16 ^ 0x8000) };
-            info!("adc={:.1} dac={:.1}", x0, y0);
+            unsafe { ptr::write_volatile(txdr2, d) };
         }
     });
     #[cfg(feature = "bkpt")]
