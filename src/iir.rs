@@ -48,7 +48,7 @@ impl IIR {
 
     pub fn update(&self, xy: &mut IIRState, x0: f32) -> f32 {
         xy.rotate_right(1);
-        xy[0] = x0 - self.x_offset;
+        xy[0] = x0 + self.x_offset;
         let y0 = macc(self.y_offset, xy, &self.ba)
             .min(self.scale).max(-self.scale);
         xy[xy.len()/2] = y0;
