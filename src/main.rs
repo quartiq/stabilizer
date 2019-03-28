@@ -420,7 +420,10 @@ fn main() -> ! {
     rcc.ahb1enr.modify(|_, w| w.dma1en().set_bit());
     unsafe { DAT = (1 << 9) | (1 << 0) };  // init SRAM1 rodata can't load with sram1 disabled
     cortex_m::asm::dsb();
-    dma1_setup(&dp.DMA1, &dp.DMAMUX1, unsafe { &DAT as *const _ } as usize,
+    let dat_addr = unsafe { &DAT as *const _ } as usize;
+    cp.SCB.clean_dcache_by_address(dat_addr, 4);
+
+    dma1_setup(&dp.DMA1, &dp.DMAMUX1, dat_addr,
                &spi1.cr1 as *const _ as usize);
 
     rcc.apb1lenr.modify(|_, w| w.tim2en().set_bit());
