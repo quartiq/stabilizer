@@ -1,0 +1,11 @@
+language: rust
+matrix:
+  include:
+    - rust: nightly
+      env: FEATURES='' ARGS='--release'
+    - rust: nightly
+      env: FEATURES='semihosting'
+    - rust: nightly
+      env: FEATURES='bkpt'
+script:
+  - "cargo build --target=thumbv7em-none-eabihf --no-default-features --features \"$FEATURES\""
