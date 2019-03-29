@@ -276,6 +276,20 @@ fn gpio_setup(gpioa: &stm32::GPIOA, gpiob: &stm32::GPIOB, gpiod: &stm32::GPIOD,
     gpioe.otyper.modify(|_, w| w.ot12().push_pull());
     gpioe.odr.modify(|_, w| w.odr12().set_bit());
 
+    // AFE1_A0,1: PD14,PD15
+    gpiod.otyper.modify(|_, w|
+        w.ot14().push_pull()
+         .ot15().push_pull()
+    );
+    gpiod.moder.modify(|_, w|
+        w.moder14().output()
+         .moder15().output()
+    );
+    gpiod.odr.modify(|_, w|
+        w.odr14().clear_bit()
+         .odr15().clear_bit()
+    );
+
     // ADC1
     // SCK: PF6
     gpiof.moder.modify(|_, w| w.moder7().alternate());
