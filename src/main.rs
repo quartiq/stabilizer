@@ -556,8 +556,14 @@ fn main() -> ! {
     rcc.apb1lenr.modify(|_, w| w.tim2en().set_bit());
     tim2_setup(&dp.TIM2);
 
-    unsafe { IIR_CH[0].pi(0.1, 10.*2e-6/2., 0.).expect("bad coefficients"); }
-    unsafe { IIR_CH[1].pi(-0.1, 10.*2e-6/2., 0.).expect("bad coefficients"); }
+    unsafe {
+        let t = 2e-6*2.;
+        IIR_CH[0].set_pi(1., 0., 0.).expect("bad coefficients");
+        IIR_CH[0].set_x_offset(0.*SCALE);
+
+        IIR_CH[1].set_pi(-0.1, -10.*t, 0.).expect("bad coefficients");
+        IIR_CH[1].set_x_offset(0.1*SCALE);
+    }
 
     cortex_m::interrupt::free(|cs| {
         cp.NVIC.enable(stm32::Interrupt::SPI1);
@@ -584,8 +590,8 @@ fn TIM2() {  // FIXME
 const SCALE: f32 = ((1 << 15) - 1) as f32;
 static mut IIR_STATE: [IIRState; 2] = [[0.; 5]; 2];
 static mut IIR_CH: [IIR; 2] = [
-    IIR{ y_offset: 0., x_offset: 0., ba: [0., 0., 0., 0., 0.], scale: SCALE },
-    IIR{ y_offset: 0., x_offset: 0., ba: [0., 0., 0., 0., 0.], scale: SCALE }];
+    IIR{ ba: [0., 0., 0., 0., 0.], y_offset: 0.,
+         y_min: -SCALE, y_max: SCALE }; 2];
 
 #[interrupt]
 fn SPI1() {
@@ -594,8 +600,8 @@ fn SPI1() {
     cortex_m::interrupt::free(|cs| {
         let spip = SPIP.borrow(cs).borrow();
         let (spi1, spi2, spi4, spi5) = spip.as_ref().unwrap();
-        let sr = spi1.sr.read();
 
+        let sr = spi1.sr.read();
         if sr.eot().bit_is_set() {
            spi1.ifcr.write(|w| w.eotc().set_bit());
         }

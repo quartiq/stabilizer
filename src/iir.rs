@@ -2,12 +2,12 @@ use core::f32;
 
 pub type IIRState = [f32; 5];
 
-#[derive(Default,Copy,Clone,Debug)]
+#[derive(Copy,Clone)]
 pub struct IIR {
-    pub x_offset: f32,
-    pub y_offset: f32,
     pub ba: IIRState,
-    pub scale: f32,
+    pub y_offset: f32,
+    pub y_min: f32,
+    pub y_max: f32,
 }
 
 fn abs(x: f32) -> f32 {
@@ -15,23 +15,27 @@ fn abs(x: f32) -> f32 {
 }
 
 fn copysign(x: f32, y: f32) -> f32 {
-    match () {
-        _ if (x >= 0. && y >= 0.) || (x <= 0. && y <= 0.) => y,
-        _ => -y
+    if (x >= 0. && y >= 0.) || (x <= 0. && y <= 0.) {
+        x
+    } else {
+        -x
     }
 }
 
+fn macc(y0: f32, x: &[f32], a: &[f32]) -> f32 {
+    y0 + x.iter().zip(a.iter()) .map(|(&i, &j)| i * j).sum::<f32>()
+}
+
 impl IIR {
-    pub fn pi(&mut self, kp: f32, ki: f32, g: f32) -> Result<(), &str> {
-        let ki = copysign(kp, ki);
-        let g = copysign(kp, g);
-        let (a1, b0, b1) = match () {
-            _ if abs(ki) < f32::EPSILON => (0., kp, 0.),
-            _ => {
-                let c = match () {
-                    _ if abs(g) < f32::EPSILON => 1.,
-                    _ => 1./(1. + ki/g)
-                };
+    pub fn set_pi(&mut self, kp: f32, ki: f32, g: f32) -> Result<(), &'static str> {
+        let ki = copysign(ki, kp);
+        let g = copysign(g, kp);
+        let (a1, b0, b1) =
+            if abs(ki) < f32::EPSILON {
+                (0., kp, 0.)
+            } else {
+                let c = if abs(g) < f32::EPSILON { 1. }
+                        else { 1./(1. + ki/g) };
                 let a1 = 2.*c - 1.;
                 let b0 = ki*c + kp;
                 let b1 = ki*c - a1*kp;
@@ -39,8 +43,7 @@ impl IIR {
                     return Err("low integrator gain and/or gain limit")
                 }
                 (a1, b0, b1)
-            }
-        };
+            };
         self.ba[0] = b0;
         self.ba[1] = b1;
         self.ba[2] = 0.;
@@ -49,17 +52,17 @@ impl IIR {
         Ok(())
     }
 
+    pub fn set_x_offset(&mut self, xo: f32) {
+        let b: f32 = self.ba[..3].iter().sum();
+        self.y_offset = xo*b;
+    }
+
     pub fn update(&self, xy: &mut IIRState, x0: f32) -> f32 {
         xy.rotate_right(1);
-        xy[0] = x0 + self.x_offset;
+        xy[0] = x0;
         let y0 = macc(self.y_offset, xy, &self.ba)
-            .min(self.scale).max(-self.scale);
+            .max(self.y_min).min(self.y_max);
         xy[xy.len()/2] = y0;
         y0
     }
-}
-
-fn macc(y0: f32, x: &[f32], a: &[f32]) -> f32 {
-    y0 + x.iter().zip(a.iter())
-        .map(|(&i, &j)| i * j).sum::<f32>()
 }

@@ -19,10 +19,11 @@ load
 # monitor reset halt
 
 # cycle counter delta tool, place two bkpts around the section
+set var $cc=0xe0001004
 define qq
-print *0xe0001004-$t0
-set var $t0=*0xe0001004
+print *$cc-$t0
+set var $t0=*$cc
 continue
 end
-set var $t0=0xe0001004
+set var $t0=*$cc
 continue
