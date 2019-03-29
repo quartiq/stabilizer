@@ -2,12 +2,18 @@
 name = "stabilizer"
 version = "0.1.0"
 authors = ["Robert Jördens <rj@quartiq.de>"]
+description = "Firmware for the Sinara Stabilizer board (stm32h743, eth, 2 adc, 2 dac)"
 categories = ["embedded", "no-std"]
 license = "GPL-3"
-keywords = ["ethernet", "eth", "stm32", "adc", "dac", "tcp"]
+keywords = ["ethernet", "eth", "stm32", "stm32h7", "adc", "dac", "tcp", "no-std", "embedded"]
 repository = "https://github.com/quartiq/stabilizer"
+readme = "README.md"
 #documentation = "https://docs.rs/stabilizer/"
 edition = "2018"
+exclude = [
+	".travis.yml",
+	".gitignore",
+]
 
 [badges]
 travis-ci = { repository = "jordens/stabilizer", branch = "master" }
