@@ -27,7 +27,7 @@ fn macc(y0: f32, x: &[f32], a: &[f32]) -> f32 {
 }
 
 impl IIR {
-    pub fn set_pi(&mut self, kp: f32, ki: f32, g: f32) -> Result<(), &'static str> {
+    pub fn set_pi(&mut self, kp: f32, ki: f32, g: f32) -> Result<(), &str> {
         let ki = copysign(ki, kp);
         let g = copysign(g, kp);
         let (a1, b0, b1) =
@@ -50,6 +50,14 @@ impl IIR {
         self.ba[3] = a1;
         self.ba[4] = 0.;
         Ok(())
+    }
+
+    pub fn get_x_offset(&self) -> Result<f32, &str> {
+        let b: f32 = self.ba[..3].iter().sum();
+        if abs(b) < f32::EPSILON {
+            return Err("b is zero")
+        }
+        Ok(self.y_offset/b)
     }
 
     pub fn set_x_offset(&mut self, xo: f32) {

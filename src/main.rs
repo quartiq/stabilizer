@@ -563,6 +563,7 @@ fn main() -> ! {
 
         IIR_CH[1].set_pi(-0.1, -10.*t, 0.).expect("bad coefficients");
         IIR_CH[1].set_x_offset(0.1*SCALE);
+        IIR_CH[1].get_x_offset().expect("bad coefficients");
     }
 
     cortex_m::interrupt::free(|cs| {
