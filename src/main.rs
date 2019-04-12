@@ -3,16 +3,11 @@
 #![feature(asm)]
 // Enable returning `!`
 #![feature(never_type)]
-#[allow(unused_extern_crates)]
 
 #[cfg(not(feature = "semihosting"))]
 extern crate panic_abort;
 #[cfg(feature = "semihosting")]
 extern crate panic_semihosting;
-
-extern crate cortex_m;
-extern crate cortex_m_rt;
-extern crate stm32h7;
 
 #[macro_use]
 extern crate log;

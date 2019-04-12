@@ -23,7 +23,7 @@ fn copysign(x: f32, y: f32) -> f32 {
 }
 
 fn macc(y0: f32, x: &[f32], a: &[f32]) -> f32 {
-    y0 + x.iter().zip(a.iter()) .map(|(&i, &j)| i * j).sum::<f32>()
+    y0 + x.iter().zip(a.iter()).map(|(&i, &j)| i * j).sum::<f32>()
 }
 
 impl IIR {
