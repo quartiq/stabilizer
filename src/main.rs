@@ -31,14 +31,14 @@ fn init_log() {
     use cortex_m_log::printer::semihosting::{InterruptOk, hio::HStdout};
     static mut LOGGER: Option<Logger<InterruptOk<HStdout>>> = None;
     let logger = Logger {
-        inner: InterruptOk::<_>::stdout().expect("semihosting stdout"),
+        inner: InterruptOk::<_>::stdout().unwrap(),
         level: LevelFilter::Info,
     };
     let logger = unsafe {
         LOGGER.get_or_insert(logger)
     };
 
-    init(logger).expect("set logger");
+    init(logger).unwrap();
 }
 
 // Pull in build information (from `built` crate)
@@ -553,12 +553,12 @@ fn main() -> ! {
 
     unsafe {
         let t = 2e-6*2.;
-        IIR_CH[0].set_pi(1., 0., 0.).expect("bad coefficients");
+        IIR_CH[0].set_pi(1., 0., 0.).unwrap();
         IIR_CH[0].set_x_offset(0.*SCALE);
 
-        IIR_CH[1].set_pi(-0.1, -10.*t, 0.).expect("bad coefficients");
+        IIR_CH[1].set_pi(-0.1, -10.*t, 0.).unwrap();
         IIR_CH[1].set_x_offset(0.1*SCALE);
-        IIR_CH[1].get_x_offset().expect("bad coefficients");
+        IIR_CH[1].get_x_offset().unwrap();
     }
 
     cortex_m::interrupt::free(|cs| {
