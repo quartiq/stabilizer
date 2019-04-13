@@ -32,7 +32,6 @@ cortex-m-rt = { version = "0.6", features = ["device"] }
 cortex-m-log = { version = "0.4", features = ["log-integration"] }
 stm32h7 = { version = "0.6", features = ["stm32h7x3", "rt"] }
 # stm32h7 = { path = "../stm32-rs/stm32h7", features = ["stm32h7x3", "rt"] }
-embedded-hal = "0.2"
 log = "0.4"
 panic-abort = "0.3"
 panic-semihosting = { version = "0.5", optional = true }
