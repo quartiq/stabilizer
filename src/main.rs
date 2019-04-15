@@ -462,7 +462,7 @@ fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa0: usiz
     dma1.s0ndtr.write(|w| unsafe { w.ndt().bits(1) });
     dmamux1.dmamux1_c0cr.modify(|_, w| unsafe { w.dmareq_id().bits(22) });  // tim2_up
     dma1.s0cr.modify(|_, w| unsafe {
-        w.pl().bits(0b11)  // very high
+        w.pl().bits(0b01)  // medium
          .circ().set_bit()  // reload ndtr
          .msize().bits(0b10)  // 32
          .minc().clear_bit()
@@ -485,7 +485,7 @@ fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa0: usiz
     dma1.s1ndtr.write(|w| unsafe { w.ndt().bits(1) });
     dmamux1.dmamux1_c1cr.modify(|_, w| unsafe { w.dmareq_id().bits(22) });  // tim2_up
     dma1.s1cr.modify(|_, w| unsafe {
-        w.pl().bits(0b11)  // very high
+        w.pl().bits(0b01)  // medium
          .circ().set_bit()  // reload ndtr
          .msize().bits(0b10)  // 32
          .minc().clear_bit()
@@ -589,7 +589,7 @@ fn main() -> ! {
     });
 
     loop {
-        for _ in 0..1000000 { cortex_m::asm::wfi(); }
+        for _ in 0..1_000_000 { cortex_m::asm::wfi(); }
         let (x0, y0, x1, y1) = unsafe {
             (IIR_STATE[0][0], IIR_STATE[0][2], IIR_STATE[1][0], IIR_STATE[1][2]) };
         info!("x0={} y0={} x1={} y1={}", x0, y0, x1, y1);
@@ -615,14 +615,13 @@ fn SPI1() {
            spi1.ifcr.write(|w| w.eotc().set_bit());
         }
         if sr.rxp().bit_is_set() {
-            let rxdr1 = &spi1.rxdr as *const _ as *const u16;
-            let a = unsafe { ptr::read_volatile(rxdr1) };
+            let rxdr = &spi1.rxdr as *const _ as *const u16;
+            let a = unsafe { ptr::read_volatile(rxdr) };
             let x0 = a as i16 as f32;
             let y0 = unsafe { IIR_CH[0].update(&mut IIR_STATE[0], x0) };
             let d = y0 as i16 as u16 ^ 0x8000;
-
-            let txdr2 = &spi2.txdr as *const _ as *mut u16;
-            unsafe { ptr::write_volatile(txdr2, d) };
+            let txdr = &spi2.txdr as *const _ as *mut u16;
+            unsafe { ptr::write_volatile(txdr, d) };
         }
 
         let sr = spi5.sr.read();
@@ -630,14 +629,13 @@ fn SPI1() {
            spi5.ifcr.write(|w| w.eotc().set_bit());
         }
         if sr.rxp().bit_is_set() {
-            let rxdr1 = &spi5.rxdr as *const _ as *const u16;
-            let a = unsafe { ptr::read_volatile(rxdr1) };
+            let rxdr = &spi5.rxdr as *const _ as *const u16;
+            let a = unsafe { ptr::read_volatile(rxdr) };
             let x0 = a as i16 as f32;
             let y0 = unsafe { IIR_CH[1].update(&mut IIR_STATE[1], x0) };
             let d = y0 as i16 as u16 ^ 0x8000;
-
-            let txdr2 = &spi4.txdr as *const _ as *mut u16;
-            unsafe { ptr::write_volatile(txdr2, d) };
+            let txdr = &spi4.txdr as *const _ as *mut u16;
+            unsafe { ptr::write_volatile(txdr, d) };
         }
     });
     #[cfg(feature = "bkpt")]
