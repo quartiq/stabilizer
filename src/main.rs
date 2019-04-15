@@ -446,20 +446,18 @@ fn spi4_setup(spi4: &stm32::SPI4) {
 fn tim2_setup(tim2: &stm32::TIM2) {
     tim2.psc.write(|w| unsafe { w.psc().bits(200 - 1) });  // from 200 MHz
     tim2.arr.write(|w| unsafe { w.bits(2 - 1) });  // µs
-    tim2.dier.write(|w| w.ude().set_bit().uie().set_bit());  // FIXME
+    tim2.dier.write(|w| w.ude().set_bit());
     tim2.egr.write(|w| w.ug().set_bit());
     tim2.cr1.modify(|_, w|
         w.dir().clear_bit()  // up
          .cen().set_bit());  // enable
 }
 
-fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa: usize) {
-    // info!("{:#x} {:#x}", pa, unsafe { *(pa as *const u32) });
-
+fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa0: usize, pa1: usize) {
     dma1.s0cr.modify(|_, w| w.en().clear_bit());
     while dma1.s0cr.read().en().bit_is_set() {}
 
-    dma1.s0par.write(|w| unsafe { w.pa().bits(pa as u32) });
+    dma1.s0par.write(|w| unsafe { w.pa().bits(pa0 as u32) });
     dma1.s0m0ar.write(|w| unsafe { w.m0a().bits(ma as u32) });
     dma1.s0ndtr.write(|w| unsafe { w.ndt().bits(1) });
     dmamux1.dmamux1_c0cr.modify(|_, w| unsafe { w.dmareq_id().bits(22) });  // tim2_up
@@ -478,6 +476,30 @@ fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa: usize
     });
     dma1.s0fcr.modify(|_, w| w.dmdis().clear_bit());
     dma1.s0cr.modify(|_, w| w.en().set_bit());
+
+    dma1.s1cr.modify(|_, w| w.en().clear_bit());
+    while dma1.s1cr.read().en().bit_is_set() {}
+
+    dma1.s1par.write(|w| unsafe { w.pa().bits(pa1 as u32) });
+    dma1.s1m0ar.write(|w| unsafe { w.m0a().bits(ma as u32) });
+    dma1.s1ndtr.write(|w| unsafe { w.ndt().bits(1) });
+    dmamux1.dmamux1_c1cr.modify(|_, w| unsafe { w.dmareq_id().bits(22) });  // tim2_up
+    dma1.s1cr.modify(|_, w| unsafe {
+        w.pl().bits(0b11)  // very high
+         .circ().set_bit()  // reload ndtr
+         .msize().bits(0b10)  // 32
+         .minc().clear_bit()
+         .mburst().bits(0b00)
+         .psize().bits(0b10)  // 32
+         .pinc().clear_bit()
+         .pburst().bits(0b00)
+         .dbm().clear_bit()
+         .dir().bits(0b01)  // memory_to_peripheral
+         .pfctrl().clear_bit()  // dma is FC
+    });
+    dma1.s1fcr.modify(|_, w| w.dmdis().clear_bit());
+    dma1.s1cr.modify(|_, w| w.en().set_bit());
+
 }
 
 static SPIP: Mutex<RefCell<Option<(
@@ -544,9 +566,9 @@ fn main() -> ! {
     let dat_addr = unsafe { &DAT as *const _ } as usize;
     cp.SCB.clean_dcache_by_address(dat_addr, 4);
 
-    // TODO: also SPI4/ADC0
     dma1_setup(&dp.DMA1, &dp.DMAMUX1, dat_addr,
-               &spi1.cr1 as *const _ as usize);
+               &spi1.cr1 as *const _ as usize,
+               &spi5.cr1 as *const _ as usize);
 
     rcc.apb1lenr.modify(|_, w| w.tim2en().set_bit());
     tim2_setup(&dp.TIM2);
@@ -563,7 +585,6 @@ fn main() -> ! {
 
     cortex_m::interrupt::free(|cs| {
         cp.NVIC.enable(stm32::Interrupt::SPI1);
-        cp.NVIC.enable(stm32::Interrupt::TIM2);  // FIXME
         SPIP.borrow(cs).replace(Some((spi1, spi2, spi4, spi5)));
     });
 
@@ -573,14 +594,6 @@ fn main() -> ! {
             (IIR_STATE[0][0], IIR_STATE[0][2], IIR_STATE[1][0], IIR_STATE[1][2]) };
         info!("x0={} y0={} x1={} y1={}", x0, y0, x1, y1);
     }
-}
-
-#[interrupt]
-fn TIM2() {  // FIXME
-    let dp = unsafe { Peripherals::steal() };
-    dp.TIM2.sr.write(|w| w.uif().clear_bit());  // rc_w0
-    dp.SPI1.cr1.write(|w| unsafe { w.bits(0x201) });  // ADC0
-    dp.SPI5.cr1.write(|w| unsafe { w.bits(0x201) });  // ADC1
 }
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
