@@ -1,5 +1,4 @@
 use core::ops::{Add, Mul};
-use core::iter::Sum;
 
 use core::f32;
 
@@ -25,10 +24,18 @@ fn copysign(x: f32, y: f32) -> f32 {
     }
 }
 
+fn max(x: f32, y: f32) -> f32 {
+    if x > y { x } else { y }
+}
+
+fn min(x: f32, y: f32) -> f32 {
+    if x < y { x } else { y }
+}
+
 fn macc<T>(y0: T, x: &[T], a: &[T]) -> T
-    where T: Sum + Add<Output=T> + Mul<Output=T> + Copy
+    where T: Add<Output=T> + Mul<Output=T> + Copy
 {
-    y0 + x.iter().zip(a.iter()).map(|(&i, &j)| i * j).sum()
+    x.iter().zip(a.iter()).map(|(&i, &j)| i * j).fold(y0, |y, xa| y + xa)
 }
 
 impl IIR {
@@ -74,8 +81,8 @@ impl IIR {
     pub fn update(&self, xy: &mut IIRState, x0: f32) -> f32 {
         xy.rotate_right(1);
         xy[0] = x0;
-        let y0 = macc(self.y_offset, xy, &self.ba)
-            .max(self.y_min).min(self.y_max);
+        let y0 = macc(self.y_offset, xy, &self.ba);
+        let y0 = max(self.y_min, min(self.y_max, y0));
         xy[xy.len()/2] = y0;
         y0
     }
