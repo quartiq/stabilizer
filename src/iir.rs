@@ -1,3 +1,6 @@
+use core::ops::{Add, Mul};
+use core::iter::Sum;
+
 use core::f32;
 
 pub type IIRState = [f32; 5];
@@ -22,8 +25,10 @@ fn copysign(x: f32, y: f32) -> f32 {
     }
 }
 
-fn macc(y0: f32, x: &[f32], a: &[f32]) -> f32 {
-    y0 + x.iter().zip(a.iter()).map(|(&i, &j)| i * j).sum::<f32>()
+fn macc<T>(y0: T, x: &[T], a: &[T]) -> T
+    where T: Sum + Add<Output=T> + Mul<Output=T> + Copy
+{
+    y0 + x.iter().zip(a.iter()).map(|(&i, &j)| i * j).sum()
 }
 
 impl IIR {
@@ -55,9 +60,10 @@ impl IIR {
     pub fn get_x_offset(&self) -> Result<f32, &str> {
         let b: f32 = self.ba[..3].iter().sum();
         if abs(b) < f32::EPSILON {
-            return Err("b is zero")
+            Err("b is zero")
+        } else {
+            Ok(self.y_offset/b)
         }
-        Ok(self.y_offset/b)
     }
 
     pub fn set_x_offset(&mut self, xo: f32) {
