@@ -571,6 +571,12 @@ fn main() -> ! {
                &spi5.cr1 as *const _ as usize);
 
     rcc.apb1lenr.modify(|_, w| w.tim2en().set_bit());
+
+    // work around the SPI stall erratum
+    //let dbgmcu = dp.DBGMCU;
+    //dbgmcu.apb1lfz1.modify(|_, w| w.stop_tim2().set_bit());  // stop tim2 in debug
+    unsafe { ptr::write_volatile(0x5c00_103c as *mut usize, 0x0000_0001) };
+
     tim2_setup(&dp.TIM2);
 
     unsafe {
