@@ -14,9 +14,14 @@ extern crate log;
 
 use core::ptr;
 use core::cell::RefCell;
+use core::fmt::Write;
 use cortex_m_rt::{entry, exception};
 use stm32h7::stm32h7x3::{self as stm32, Peripherals, CorePeripherals, interrupt};
 use cortex_m::interrupt::Mutex;
+
+use smoltcp as net;
+
+mod eth;
 
 mod iir;
 use iir::*;
@@ -49,14 +54,14 @@ mod build_info {
 
 fn pwr_setup(pwr: &stm32::PWR) {
     // go to VOS1 voltage scale for high perf
-    pwr.pwr_cr3.write(|w|
+    pwr.cr3.write(|w|
         w.sden().set_bit()
          .ldoen().set_bit()
          .bypass().clear_bit()
     );
-    while pwr.pwr_csr1.read().actvosrdy().bit_is_clear() {}
-    pwr.pwr_d3cr.write(|w| unsafe { w.vos().bits(0b11) });  // vos1
-    while pwr.pwr_d3cr.read().vosrdy().bit_is_clear() {}
+    while pwr.csr1.read().actvosrdy().bit_is_clear() {}
+    pwr.d3cr.write(|w| unsafe { w.vos().bits(0b11) });  // vos1
+    while pwr.d3cr.read().vosrdy().bit_is_clear() {}
 }
 
 fn rcc_reset(rcc: &stm32::RCC) {
@@ -327,7 +332,7 @@ fn gpio_setup(gpioa: &stm32::GPIOA, gpiob: &stm32::GPIOB, gpiod: &stm32::GPIOD,
 
 // ADC0
 fn spi1_setup(spi1: &stm32::SPI1) {
-    spi1.cfg1.modify(|_, w| unsafe {
+    spi1.cfg1.modify(|_, w| {
         w.mbr().bits(1)  // clk/4
          .dsize().bits(16 - 1)
          .fthvl().bits(1 - 1)  // one data
@@ -348,7 +353,7 @@ fn spi1_setup(spi1: &stm32::SPI1) {
          .midi().bits(0)  // master inter data idle
          .mssi().bits(6)  // master SS idle
     });
-    spi1.cr2.modify(|_, w| unsafe {
+    spi1.cr2.modify(|_, w| {
         w.tsize().bits(1)
     });
     spi1.cr1.write(|w| w.spe().set_bit());
@@ -356,7 +361,7 @@ fn spi1_setup(spi1: &stm32::SPI1) {
 
 // ADC1
 fn spi5_setup(spi5: &stm32::SPI5) {
-    spi5.cfg1.modify(|_, w| unsafe {
+    spi5.cfg1.modify(|_, w| {
         w.mbr().bits(1)  // clk/4
          .dsize().bits(16 - 1)
          .fthvl().bits(1 - 1)  // one data
@@ -377,7 +382,7 @@ fn spi5_setup(spi5: &stm32::SPI5) {
          .midi().bits(0)  // master inter data idle
          .mssi().bits(6)  // master SS idle
     });
-    spi5.cr2.modify(|_, w| unsafe {
+    spi5.cr2.modify(|_, w| {
         w.tsize().bits(1)
     });
     spi5.cr1.write(|w| w.spe().set_bit());
@@ -385,7 +390,7 @@ fn spi5_setup(spi5: &stm32::SPI5) {
 
 // DAC0
 fn spi2_setup(spi2: &stm32::SPI2) {
-    spi2.cfg1.modify(|_, w| unsafe {
+    spi2.cfg1.modify(|_, w| {
         w.mbr().bits(0)  // clk/2
          .dsize().bits(16 - 1)
          .fthvl().bits(1 - 1)  // one data
@@ -406,7 +411,7 @@ fn spi2_setup(spi2: &stm32::SPI2) {
          .midi().bits(0)  // master inter data idle
          .mssi().bits(0)  // master SS idle
     });
-    spi2.cr2.modify(|_, w| unsafe {
+    spi2.cr2.modify(|_, w| {
         w.tsize().bits(0)
     });
     spi2.cr1.write(|w| w.spe().set_bit());
@@ -415,7 +420,7 @@ fn spi2_setup(spi2: &stm32::SPI2) {
 
 // DAC1
 fn spi4_setup(spi4: &stm32::SPI4) {
-    spi4.cfg1.modify(|_, w| unsafe {
+    spi4.cfg1.modify(|_, w| {
         w.mbr().bits(0)  // clk/2
          .dsize().bits(16 - 1)
          .fthvl().bits(1 - 1)  // one data
@@ -436,7 +441,7 @@ fn spi4_setup(spi4: &stm32::SPI4) {
          .midi().bits(0)  // master inter data idle
          .mssi().bits(0)  // master SS idle
     });
-    spi4.cr2.modify(|_, w| unsafe {
+    spi4.cr2.modify(|_, w| {
         w.tsize().bits(0)
     });
     spi4.cr1.write(|w| w.spe().set_bit());
@@ -460,7 +465,7 @@ fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa0: usiz
     dma1.s0par.write(|w| unsafe { w.pa().bits(pa0 as u32) });
     dma1.s0m0ar.write(|w| unsafe { w.m0a().bits(ma as u32) });
     dma1.s0ndtr.write(|w| unsafe { w.ndt().bits(1) });
-    dmamux1.dmamux1_c0cr.modify(|_, w| unsafe { w.dmareq_id().bits(22) });  // tim2_up
+    dmamux1.ccr[0].modify(|_, w| unsafe { w.dmareq_id().bits(22) });  // tim2_up
     dma1.s0cr.modify(|_, w| unsafe {
         w.pl().bits(0b01)  // medium
          .circ().set_bit()  // reload ndtr
@@ -483,7 +488,7 @@ fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa0: usiz
     dma1.s1par.write(|w| unsafe { w.pa().bits(pa1 as u32) });
     dma1.s1m0ar.write(|w| unsafe { w.m0a().bits(ma as u32) });
     dma1.s1ndtr.write(|w| unsafe { w.ndt().bits(1) });
-    dmamux1.dmamux1_c1cr.modify(|_, w| unsafe { w.dmareq_id().bits(22) });  // tim2_up
+    dmamux1.ccr[1].modify(|_, w| unsafe { w.dmareq_id().bits(22) });  // tim2_up
     dma1.s1cr.modify(|_, w| unsafe {
         w.pl().bits(0b01)  // medium
          .circ().set_bit()  // reload ndtr
@@ -499,7 +504,6 @@ fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa0: usiz
     });
     dma1.s1fcr.modify(|_, w| w.dmdis().clear_bit());
     dma1.s1cr.modify(|_, w| w.en().set_bit());
-
 }
 
 static SPIP: Mutex<RefCell<Option<(
@@ -508,6 +512,26 @@ static SPIP: Mutex<RefCell<Option<(
 
 #[link_section = ".sram1"]
 static mut DAT: u32 = (1 << 9) | (1 << 0);
+
+static TIME: Mutex<RefCell<i64>> = Mutex::new(RefCell::new(0));
+
+#[link_section = ".sram3"]
+static mut ETH: eth::Device = eth::Device::new();
+
+const TCP_RX_BUFFER_SIZE: usize = 4096;
+const TCP_TX_BUFFER_SIZE: usize = 4096;
+
+macro_rules! create_socket {
+    ($set:ident, $rx_storage:ident, $tx_storage:ident, $target:ident) => (
+        let mut $rx_storage = [0; TCP_RX_BUFFER_SIZE];
+        let mut $tx_storage = [0; TCP_TX_BUFFER_SIZE];
+        let tcp_rx_buffer = net::socket::TcpSocketBuffer::new(&mut $rx_storage[..]);
+        let tcp_tx_buffer = net::socket::TcpSocketBuffer::new(&mut $tx_storage[..]);
+        let tcp_socket = net::socket::TcpSocket::new(tcp_rx_buffer, tcp_tx_buffer);
+        let $target = $set.add(tcp_socket);
+    )
+}
+
 
 #[entry]
 fn main() -> ! {
@@ -527,13 +551,22 @@ fn main() -> ! {
     rcc.apb4enr.modify(|_, w| w.syscfgen().set_bit());
     io_compensation_setup(&dp.SYSCFG);
 
+    // 100 MHz
+    cp.SYST.set_clock_source(cortex_m::peripheral::syst::SystClkSource::Core);
+    cp.SYST.set_reload(cortex_m::peripheral::SYST::get_ticks_per_10ms()*200/10);
+    cp.SYST.enable_counter();
+    cp.SYST.enable_interrupt();
+    unsafe { cp.SCB.shpr[11].write(128); }  // systick exception priority
+
     cp.SCB.enable_icache();
-    cp.SCB.enable_dcache(&mut cp.CPUID);
+    // TODO: ETH DMA coherence issues
+    // cp.SCB.enable_dcache(&mut cp.CPUID);
     cp.DWT.enable_cycle_counter();
 
     rcc.ahb4enr.modify(|_, w|
         w.gpioaen().set_bit()
          .gpioben().set_bit()
+         .gpiocen().set_bit()
          .gpioden().set_bit()
          .gpioeen().set_bit()
          .gpiofen().set_bit()
@@ -559,7 +592,12 @@ fn main() -> ! {
     spi5_setup(&spi5);
     // spi5.ier.write(|w| w.eotie().set_bit());
 
-    rcc.ahb2enr.modify(|_, w| w.sram1en().set_bit());
+    rcc.ahb2enr.modify(|_, w|
+        w
+            .sram1en().set_bit()
+            .sram2en().set_bit()
+            .sram3en().set_bit()
+    );
     rcc.ahb1enr.modify(|_, w| w.dma1en().set_bit());
     unsafe { DAT = (1 << 9) | (1 << 0) };  // init SRAM1 rodata can't load with sram1 disabled
     cortex_m::asm::dsb();
@@ -589,16 +627,62 @@ fn main() -> ! {
         IIR_CH[1].get_x_offset().unwrap();
     }
 
+    unsafe { cp.NVIC.set_priority(stm32::Interrupt::SPI1, 0); }  // highest prio
     cortex_m::interrupt::free(|cs| {
         cp.NVIC.enable(stm32::Interrupt::SPI1);
         SPIP.borrow(cs).replace(Some((spi1, spi2, spi4, spi5)));
     });
 
+    eth::setup(&rcc, &dp.SYSCFG);
+    eth::setup_pins(&dp.GPIOA, &dp.GPIOB, &dp.GPIOC, &dp.GPIOG);
+
+    let device = unsafe { &mut ETH };
+    let hardware_addr = net::wire::EthernetAddress([0x10, 0xE2, 0xD5, 0x00, 0x03, 0x00]);
+    unsafe { device.init(hardware_addr) };
+    let mut neighbor_cache_storage = [None; 8];
+    let neighbor_cache = net::iface::NeighborCache::new(&mut neighbor_cache_storage[..]);
+    let local_addr = net::wire::IpAddress::v4(10, 0, 16, 99);
+    let mut ip_addrs = [net::wire::IpCidr::new(local_addr, 24)];
+    let mut iface = net::iface::EthernetInterfaceBuilder::new(device)
+                .ethernet_addr(hardware_addr)
+                .neighbor_cache(neighbor_cache)
+                .ip_addrs(&mut ip_addrs[..])
+                .finalize();
+    let mut socket_set_entries: [_; 8] = Default::default();
+    let mut sockets = net::socket::SocketSet::new(&mut socket_set_entries[..]);
+    create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle0);
+
+    eth::enable_interrupt(&dp.ETHERNET_DMA);
+    unsafe { cp.NVIC.set_priority(stm32::Interrupt::ETH, 196); }  // mid prio
+    cp.NVIC.enable(stm32::Interrupt::ETH);
+
     loop {
-        for _ in 0..1_000_000 { cortex_m::asm::wfi(); }
-        let (x0, y0, x1, y1) = unsafe {
-            (IIR_STATE[0][0], IIR_STATE[0][2], IIR_STATE[1][0], IIR_STATE[1][2]) };
-        info!("x0={} y0={} x1={} y1={}", x0, y0, x1, y1);
+        let time = cortex_m::interrupt::free(|cs| *TIME.borrow(cs).borrow());
+
+        {
+            let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle0);
+            if !socket.is_open() {
+                socket.listen(80).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
+            }
+            if socket.can_send() {
+                write!(socket, "hello\n")
+                    .map(|_| socket.close())
+                    .unwrap_or_else(|e| warn!("TCP send error: {:?}", e));
+            }
+        }
+
+        match iface.poll(&mut sockets, net::time::Instant::from_millis(time)) {
+            Ok(_) => (),
+            Err(e) => info!("iface poll error: {:?}", e)
+        }
+
+        if time % 1000 == 0 {
+            let (x0, y0, x1, y1) = unsafe {
+                (IIR_STATE[0][0], IIR_STATE[0][2], IIR_STATE[1][0], IIR_STATE[1][2]) };
+            info!("x0={:.1} y0={:.1} x1={:.1} y1={:.1}", x0, y0, x1, y1);
+        }
+
+        cortex_m::asm::wfi();
     }
 }
 
@@ -646,6 +730,17 @@ fn SPI1() {
     });
     #[cfg(feature = "bkpt")]
     cortex_m::asm::bkpt();
+}
+
+#[interrupt]
+fn ETH() {
+    let p = unsafe { Peripherals::steal() };
+    eth::eth_interrupt_handler(&p.ETHERNET_DMA);
+}
+
+#[exception]
+fn SysTick() {
+    cortex_m::interrupt::free(|cs| *TIME.borrow(cs).borrow_mut() += 1);
 }
 
 #[exception]
