@@ -21,7 +21,7 @@ mod phy_consts {
     pub const PHY_REG_CTL: u8 = 0x0D; // Ethernet PHY Register Control
     pub const PHY_REG_ADDAR: u8 = 0x0E; // Ethernet PHY Address or Data
 
-    pub const PHY_REG_WUCSR: u16 = 08010;
+    pub const PHY_REG_WUCSR: u16 = 0x8010;
 
     pub const PHY_REG_BCR_COLTEST: u16 = 1 << 7;
     pub const PHY_REG_BCR_FD: u16 = 1 << 8;
@@ -47,25 +47,25 @@ mod phy_consts {
 }
 use self::phy_consts::*;
 
-pub const MTU: usize = 1522;
+pub const MTU: usize = 1536;
 
-const EMAC_DES3_OWN: u32 = 0x80000000;
-const EMAC_DES3_CTXT: u32 = 0x40000000;
-const EMAC_DES3_FD: u32 = 0x20000000;
-const EMAC_DES3_LD: u32 = 0x10000000;
-const EMAC_DES3_ES: u32 = 0x00008000;
-const EMAC_TDES2_IOC: u32 = 0x80000000;
-const EMAC_RDES3_IOC: u32 = 0x40000000;
-const EMAC_RDES3_PL: u32 = 0x00007FFF;
-const EMAC_RDES3_BUF1V: u32 = 0x01000000;
-const EMAC_TDES2_B1L: u32 = 0x00003FFF;
-const EMAC_DES0_BUF1AP: u32 = 0xFFFFFFFF;
+const EMAC_DES3_OWN: u32 = 0x8000_0000;
+const EMAC_DES3_CTXT: u32 = 0x4000_0000;
+const EMAC_DES3_FD: u32 = 0x2000_0000;
+const EMAC_DES3_LD: u32 = 0x1000_0000;
+const EMAC_DES3_ES: u32 = 0x0000_8000;
+const EMAC_TDES2_IOC: u32 = 0x8000_0000;
+const EMAC_RDES3_IOC: u32 = 0x4000_0000;
+const EMAC_RDES3_PL: u32 = 0x0000_7FFF;
+const EMAC_RDES3_BUF1V: u32 = 0x0100_0000;
+const EMAC_TDES2_B1L: u32 = 0x0000_3FFF;
+const EMAC_DES0_BUF1AP: u32 = 0xFFFF_FFFF;
 
 const ETH_DESC_U32_SIZE: usize =    4;
 const ETH_TX_BUFFER_COUNT: usize =  4;
-const ETH_TX_BUFFER_SIZE: usize =   1536;
+const ETH_TX_BUFFER_SIZE: usize =   MTU;
 const ETH_RX_BUFFER_COUNT: usize =  4;
-const ETH_RX_BUFFER_SIZE: usize =   1536;
+const ETH_RX_BUFFER_SIZE: usize =   MTU;
 
 #[allow(dead_code)]
 mod cr_consts {
@@ -403,14 +403,14 @@ impl Device {
             });
             // Set the MAC address
             eth_mac.maca0lr.write(|w|
-                w.addrlo().bits(  mac.0[0] as u32 |
-                                ((mac.0[1] as u32) <<  8) |
-                                ((mac.0[2] as u32) << 16) |
-                                ((mac.0[3] as u32) << 24))
+                w.addrlo().bits( u32::from(mac.0[0]) |
+                                (u32::from(mac.0[1]) <<  8) |
+                                (u32::from(mac.0[2]) << 16) |
+                                (u32::from(mac.0[3]) << 24))
             );
             eth_mac.maca0hr.write(|w|
-                w.addrhi().bits(  mac.0[4] as u16 |
-                                ((mac.0[5] as u16) << 8))
+                w.addrhi().bits( u16::from(mac.0[4]) |
+                                (u16::from(mac.0[5]) << 8))
                  .ae().set_bit()
                  //.sa().clear_bit()
                  //.mbc().bits(0b000000)
@@ -543,7 +543,7 @@ impl<'a, 'b> phy::Device<'a> for &'b mut Device {
 
     fn capabilities(&self) -> phy::DeviceCapabilities {
         let mut capabilities = phy::DeviceCapabilities::default();
-        capabilities.max_transmission_unit = 1500;
+        capabilities.max_transmission_unit = 1514;
         capabilities.max_burst_size = Some(self.tx.desc_buf.len());
         capabilities
     }
@@ -592,7 +592,8 @@ impl<'a> phy::TxToken for TxToken<'a> {
     }
 }
 
-pub fn eth_interrupt_handler(eth_dma: &stm32::ETHERNET_DMA) {
+pub unsafe fn interrupt_handler() {
+    let eth_dma = &*stm32::ETHERNET_DMA::ptr();
     eth_dma.dmacsr.write(|w|
         w
             .nis().set_bit()
@@ -601,8 +602,9 @@ pub fn eth_interrupt_handler(eth_dma: &stm32::ETHERNET_DMA) {
     );
 }
 
-pub fn enable_interrupt(dma: &stm32::ETHERNET_DMA) {
-    dma.dmacier.modify(|_, w|
+pub unsafe fn enable_interrupt() {
+    let eth_dma = &*stm32::ETHERNET_DMA::ptr();
+    eth_dma.dmacier.modify(|_, w|
         w
             .nie().set_bit()
             .rie().set_bit()

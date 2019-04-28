@@ -335,7 +335,7 @@ fn spi1_setup(spi1: &stm32::SPI1) {
     spi1.cfg1.modify(|_, w| {
         w.mbr().bits(1)  // clk/4
          .dsize().bits(16 - 1)
-         .fthvl().bits(1 - 1)  // one data
+         .fthvl().one_frame()
     });
     spi1.cfg2.modify(|_, w| unsafe {
         w.afcntr().set_bit()
@@ -364,7 +364,7 @@ fn spi5_setup(spi5: &stm32::SPI5) {
     spi5.cfg1.modify(|_, w| {
         w.mbr().bits(1)  // clk/4
          .dsize().bits(16 - 1)
-         .fthvl().bits(1 - 1)  // one data
+         .fthvl().one_frame()
     });
     spi5.cfg2.modify(|_, w| unsafe {
         w.afcntr().set_bit()
@@ -393,7 +393,7 @@ fn spi2_setup(spi2: &stm32::SPI2) {
     spi2.cfg1.modify(|_, w| {
         w.mbr().bits(0)  // clk/2
          .dsize().bits(16 - 1)
-         .fthvl().bits(1 - 1)  // one data
+         .fthvl().one_frame()
     });
     spi2.cfg2.modify(|_, w| unsafe {
         w.afcntr().set_bit()
@@ -411,11 +411,9 @@ fn spi2_setup(spi2: &stm32::SPI2) {
          .midi().bits(0)  // master inter data idle
          .mssi().bits(0)  // master SS idle
     });
-    spi2.cr2.modify(|_, w| {
-        w.tsize().bits(0)
-    });
-    spi2.cr1.write(|w| w.spe().set_bit());
-    spi2.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
+    spi2.cr2.modify(|_, w| w.tsize().bits(0));
+    spi2.cr1.write(|w| w.spe().enabled());
+    spi2.cr1.modify(|_, w| w.cstart().started());
 }
 
 // DAC1
@@ -423,7 +421,7 @@ fn spi4_setup(spi4: &stm32::SPI4) {
     spi4.cfg1.modify(|_, w| {
         w.mbr().bits(0)  // clk/2
          .dsize().bits(16 - 1)
-         .fthvl().bits(1 - 1)  // one data
+         .fthvl().one_frame()
     });
     spi4.cfg2.modify(|_, w| unsafe {
         w.afcntr().set_bit()
@@ -444,8 +442,8 @@ fn spi4_setup(spi4: &stm32::SPI4) {
     spi4.cr2.modify(|_, w| {
         w.tsize().bits(0)
     });
-    spi4.cr1.write(|w| w.spe().set_bit());
-    spi4.cr1.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 9)) });
+    spi4.cr1.write(|w| w.spe().enabled());
+    spi4.cr1.modify(|_, w| w.cstart().started());
 }
 
 fn tim2_setup(tim2: &stm32::TIM2) {
@@ -506,17 +504,16 @@ fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa0: usiz
     dma1.s1cr.modify(|_, w| w.en().set_bit());
 }
 
-static SPIP: Mutex<RefCell<Option<(
-    stm32::SPI1, stm32::SPI2, stm32::SPI4, stm32::SPI5)>>> =
-    Mutex::new(RefCell::new(None));
+type SpiPs = Option<(stm32::SPI1, stm32::SPI2, stm32::SPI4, stm32::SPI5)>;
+static SPIP: Mutex<RefCell<SpiPs>> = Mutex::new(RefCell::new(None));
 
 #[link_section = ".sram1.datspi"]
-static mut DAT: u32 = (1 << 9) | (1 << 0);
+static mut DAT: u32 = 0x201;  // EN | CSTART
 
 static TIME: Mutex<RefCell<i64>> = Mutex::new(RefCell::new(0));
 
 #[link_section = ".sram3.eth"]
-static mut ETH: eth::Device = eth::Device::new();
+static mut ETHERNET: eth::Device = eth::Device::new();
 
 const TCP_RX_BUFFER_SIZE: usize = 4096;
 const TCP_TX_BUFFER_SIZE: usize = 4096;
@@ -599,7 +596,8 @@ fn main() -> ! {
             .sram3en().set_bit()
     );
     rcc.ahb1enr.modify(|_, w| w.dma1en().set_bit());
-    unsafe { DAT = (1 << 9) | (1 << 0) };  // init SRAM1 rodata can't load with sram1 disabled
+    // init SRAM1 rodata can't load with sram1 disabled
+    unsafe { DAT = 0x201 };  // EN | CSTART
     cortex_m::asm::dsb();
     let dat_addr = unsafe { &DAT as *const _ } as usize;
     cp.SCB.clean_dcache_by_address(dat_addr, 4);
@@ -628,7 +626,7 @@ fn main() -> ! {
     eth::setup(&rcc, &dp.SYSCFG);
     eth::setup_pins(&dp.GPIOA, &dp.GPIOB, &dp.GPIOC, &dp.GPIOG);
 
-    let device = unsafe { &mut ETH };
+    let device = unsafe { &mut ETHERNET };
     let hardware_addr = net::wire::EthernetAddress([0x10, 0xE2, 0xD5, 0x00, 0x03, 0x00]);
     unsafe { device.init(hardware_addr) };
     let mut neighbor_cache_storage = [None; 8];
@@ -644,7 +642,7 @@ fn main() -> ! {
     let mut sockets = net::socket::SocketSet::new(&mut socket_set_entries[..]);
     create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle0);
 
-    eth::enable_interrupt(&dp.ETHERNET_DMA);
+    unsafe { eth::enable_interrupt(); }
     unsafe { cp.NVIC.set_priority(stm32::Interrupt::ETH, 196); }  // mid prio
     cp.NVIC.enable(stm32::Interrupt::ETH);
 
@@ -659,26 +657,24 @@ fn main() -> ! {
     let mut last = 0;
     loop {
         let time = cortex_m::interrupt::free(|cs| *TIME.borrow(cs).borrow());
-
         {
             let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle0);
-            if !socket.is_open() {
+            if !(socket.is_open() || socket.is_listening()) {
                 socket.listen(80).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
-            }
-            if socket.can_send() && last != time {
+            } else if last != time && socket.can_send() {
                 last = time;
                 let (x0, y0, x1, y1) = unsafe {
                     (IIR_STATE[0][0], IIR_STATE[0][2], IIR_STATE[1][0], IIR_STATE[1][2]) };
-                write!(socket, "t={} x0={:.1} y0={:.1} x1={:.1} y1={:.1}\n", time, x0, y0, x1, y1)
+                writeln!(socket, "t={} x0={:.1} y0={:.1} x1={:.1} y1={:.1}",
+                         time, x0, y0, x1, y1)
                     .unwrap_or_else(|e| warn!("TCP send error: {:?}", e));
             }
         }
-
         match iface.poll(&mut sockets, net::time::Instant::from_millis(time)) {
             Ok(_) => (),
+            Err(net::Error::Unrecognized) => (),
             Err(e) => info!("iface poll error: {:?}", e)
         }
-
         cortex_m::asm::wfi();
     }
 }
@@ -689,7 +685,8 @@ static mut IIR_CH: [IIR; 2] = [
     IIR{ ba: [0., 0., 0., 0., 0.], y_offset: 0.,
          y_min: -SCALE, y_max: SCALE }; 2];
 
-#[link_section = ".data.spi1"]
+// seems to slow it down
+// #[link_section = ".data.spi1"]
 #[interrupt]
 fn SPI1() {
     #[cfg(feature = "bkpt")]
@@ -705,7 +702,7 @@ fn SPI1() {
         if sr.rxp().bit_is_set() {
             let rxdr = &spi1.rxdr as *const _ as *const u16;
             let a = unsafe { ptr::read_volatile(rxdr) };
-            let x0 = a as i16 as f32;
+            let x0 = f32::from(a as i16);
             let y0 = unsafe { IIR_CH[0].update(&mut IIR_STATE[0], x0) };
             let d = y0 as i16 as u16 ^ 0x8000;
             let txdr = &spi2.txdr as *const _ as *mut u16;
@@ -719,7 +716,7 @@ fn SPI1() {
         if sr.rxp().bit_is_set() {
             let rxdr = &spi5.rxdr as *const _ as *const u16;
             let a = unsafe { ptr::read_volatile(rxdr) };
-            let x0 = a as i16 as f32;
+            let x0 = f32::from(a as i16);
             let y0 = unsafe { IIR_CH[1].update(&mut IIR_STATE[1], x0) };
             let d = y0 as i16 as u16 ^ 0x8000;
             let txdr = &spi4.txdr as *const _ as *mut u16;
@@ -732,8 +729,7 @@ fn SPI1() {
 
 #[interrupt]
 fn ETH() {
-    let p = unsafe { Peripherals::steal() };
-    eth::eth_interrupt_handler(&p.ETHERNET_DMA);
+    unsafe { eth::interrupt_handler() }
 }
 
 #[exception]
