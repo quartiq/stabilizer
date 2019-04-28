@@ -13,20 +13,24 @@ MEMORY
 }
 
 SECTIONS {
+  .itcm : ALIGN(8) {
+    *(.itcm .itcm.*);
+    . = ALIGN(8);
+    } > ITCM
+  .axisram : ALIGN(8) {
+    *(.axisram .axisram.*);
+    . = ALIGN(8);
+    } > AXISRAM
   .sram1 (NOLOAD) : ALIGN(4) {
-    *(.sram1);
+    *(.sram1 .sram1.*);
     . = ALIGN(4);
     } > SRAM1
   .sram2 (NOLOAD) : ALIGN(4) {
-    *(.sram2);
+    *(.sram2 .sram2.*);
     . = ALIGN(4);
     } > SRAM2
   .sram3 (NOLOAD) : ALIGN(4) {
-    *(.sram3);
+    *(.sram3 .sram3.*);
     . = ALIGN(4);
     } > SRAM3
-  .axisram (NOLOAD) : ALIGN(8) {
-    *(.axisram);
-    . = ALIGN(8);
-    } > AXISRAM
 } INSERT AFTER .bss;

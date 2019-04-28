@@ -223,7 +223,7 @@ impl RxRing {
             });
 
             dma.dmacrx_rlr.write(|w| {
-                w.rdrl().bits(self.desc_buf.len() as u16 - 1)  // FIXME: unclear
+                w.rdrl().bits(self.desc_buf.len() as u16 - 1)
             });
         });
 
@@ -310,7 +310,7 @@ impl TxRing {
             });
 
             dma.dmactx_rlr.write(|w| {
-                w.tdrl().bits(self.desc_buf.len() as u16 - 1)  // FIXME: unclear
+                w.tdrl().bits(self.desc_buf.len() as u16 - 1)
             });
 
             dma.dmactx_dtpr.write(|w| {
@@ -411,7 +411,7 @@ impl Device {
             eth_mac.maca0hr.write(|w|
                 w.addrhi().bits(  mac.0[4] as u16 |
                                 ((mac.0[5] as u16) << 8))
-                 //.ae().set_bit()
+                 .ae().set_bit()
                  //.sa().clear_bit()
                  //.mbc().bits(0b000000)
             );

@@ -510,12 +510,12 @@ static SPIP: Mutex<RefCell<Option<(
     stm32::SPI1, stm32::SPI2, stm32::SPI4, stm32::SPI5)>>> =
     Mutex::new(RefCell::new(None));
 
-#[link_section = ".sram1"]
+#[link_section = ".sram1.datspi"]
 static mut DAT: u32 = (1 << 9) | (1 << 0);
 
 static TIME: Mutex<RefCell<i64>> = Mutex::new(RefCell::new(0));
 
-#[link_section = ".sram3"]
+#[link_section = ".sram3.eth"]
 static mut ETH: eth::Device = eth::Device::new();
 
 const TCP_RX_BUFFER_SIZE: usize = 4096;
@@ -615,8 +615,6 @@ fn main() -> ! {
     //dbgmcu.apb1lfz1.modify(|_, w| w.stop_tim2().set_bit());  // stop tim2 in debug
     unsafe { ptr::write_volatile(0x5c00_103c as *mut usize, 0x0000_0001) };
 
-    tim2_setup(&dp.TIM2);
-
     unsafe {
         let t = 2e-6*2.;
         IIR_CH[0].set_pi(1., 0., 0.).unwrap();
@@ -626,12 +624,6 @@ fn main() -> ! {
         IIR_CH[1].set_x_offset(0.1*SCALE);
         IIR_CH[1].get_x_offset().unwrap();
     }
-
-    unsafe { cp.NVIC.set_priority(stm32::Interrupt::SPI1, 0); }  // highest prio
-    cortex_m::interrupt::free(|cs| {
-        cp.NVIC.enable(stm32::Interrupt::SPI1);
-        SPIP.borrow(cs).replace(Some((spi1, spi2, spi4, spi5)));
-    });
 
     eth::setup(&rcc, &dp.SYSCFG);
     eth::setup_pins(&dp.GPIOA, &dp.GPIOB, &dp.GPIOC, &dp.GPIOG);
@@ -656,6 +648,15 @@ fn main() -> ! {
     unsafe { cp.NVIC.set_priority(stm32::Interrupt::ETH, 196); }  // mid prio
     cp.NVIC.enable(stm32::Interrupt::ETH);
 
+    tim2_setup(&dp.TIM2);
+
+    unsafe { cp.NVIC.set_priority(stm32::Interrupt::SPI1, 0); }  // highest prio
+    cortex_m::interrupt::free(|cs| {
+        cp.NVIC.enable(stm32::Interrupt::SPI1);
+        SPIP.borrow(cs).replace(Some((spi1, spi2, spi4, spi5)));
+    });
+
+    let mut last = 0;
     loop {
         let time = cortex_m::interrupt::free(|cs| *TIME.borrow(cs).borrow());
 
@@ -664,9 +665,11 @@ fn main() -> ! {
             if !socket.is_open() {
                 socket.listen(80).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
             }
-            if socket.can_send() {
-                write!(socket, "hello\n")
-                    .map(|_| socket.close())
+            if socket.can_send() && last != time {
+                last = time;
+                let (x0, y0, x1, y1) = unsafe {
+                    (IIR_STATE[0][0], IIR_STATE[0][2], IIR_STATE[1][0], IIR_STATE[1][2]) };
+                write!(socket, "t={} x0={:.1} y0={:.1} x1={:.1} y1={:.1}\n", time, x0, y0, x1, y1)
                     .unwrap_or_else(|e| warn!("TCP send error: {:?}", e));
             }
         }
@@ -674,12 +677,6 @@ fn main() -> ! {
         match iface.poll(&mut sockets, net::time::Instant::from_millis(time)) {
             Ok(_) => (),
             Err(e) => info!("iface poll error: {:?}", e)
-        }
-
-        if time % 1000 == 0 {
-            let (x0, y0, x1, y1) = unsafe {
-                (IIR_STATE[0][0], IIR_STATE[0][2], IIR_STATE[1][0], IIR_STATE[1][2]) };
-            info!("x0={:.1} y0={:.1} x1={:.1} y1={:.1}", x0, y0, x1, y1);
         }
 
         cortex_m::asm::wfi();
@@ -692,6 +689,7 @@ static mut IIR_CH: [IIR; 2] = [
     IIR{ ba: [0., 0., 0., 0., 0.], y_offset: 0.,
          y_min: -SCALE, y_max: SCALE }; 2];
 
+#[link_section = ".data.spi1"]
 #[interrupt]
 fn SPI1() {
     #[cfg(feature = "bkpt")]
