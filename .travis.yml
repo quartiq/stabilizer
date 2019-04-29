@@ -11,10 +11,10 @@ matrix:
 
 before_script:
   - rustup target add thumbv7em-none-eabihf
-  - rustup component add clippy
+    # - rustup component add clippy
 
 script:
-  - cargo clippy
+  # - cargo clippy
   - "cargo build --target thumbv7em-none-eabihf --features \"$FEATURES\" $ARGS"
 
 notifications:
