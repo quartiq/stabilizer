@@ -47,8 +47,6 @@ mod phy_consts {
 }
 use self::phy_consts::*;
 
-pub const MTU: usize = 1536;
-
 const EMAC_DES3_OWN: u32 = 0x8000_0000;
 const EMAC_DES3_CTXT: u32 = 0x4000_0000;
 const EMAC_DES3_FD: u32 = 0x2000_0000;
@@ -61,11 +59,11 @@ const EMAC_RDES3_BUF1V: u32 = 0x0100_0000;
 const EMAC_TDES2_B1L: u32 = 0x0000_3FFF;
 const EMAC_DES0_BUF1AP: u32 = 0xFFFF_FFFF;
 
-const ETH_DESC_U32_SIZE: usize =    4;
-const ETH_TX_BUFFER_COUNT: usize =  4;
-const ETH_TX_BUFFER_SIZE: usize =   MTU;
-const ETH_RX_BUFFER_COUNT: usize =  4;
-const ETH_RX_BUFFER_SIZE: usize =   MTU;
+// 6 DMAC, 6 SMAC, 4 q tag, 2 ethernet type II, 1500 ip MTU, 4 CRC, 2 padding
+const ETH_BUFFER_SIZE: usize = 1524;
+const ETH_DESC_U32_SIZE: usize = 4;
+const ETH_TX_BUFFER_COUNT: usize = 4;
+const ETH_RX_BUFFER_COUNT: usize = 4;
 
 #[allow(dead_code)]
 mod cr_consts {
@@ -171,7 +169,7 @@ fn phy_write(reg_addr: u8, reg_data: u16) {
             w
                 .pa().bits(PHY_ADDR)
                 .rda().bits(reg_addr)
-                .goc().bits(0b01)  // read
+                .goc().bits(0b01)  // write
                 .cr().bits(CLOCK_RANGE)
                 .mb().set_bit()
         });
@@ -190,7 +188,7 @@ fn phy_write_ext(reg_addr: u16, reg_data: u16) {
 #[repr(align(4))]
 struct RxRing {
     desc_buf: [[u32; ETH_DESC_U32_SIZE]; ETH_RX_BUFFER_COUNT],
-    pkt_buf: [[u8; ETH_RX_BUFFER_SIZE]; ETH_RX_BUFFER_COUNT],
+    pkt_buf: [[u8; ETH_BUFFER_SIZE]; ETH_RX_BUFFER_COUNT],
     cur_desc: usize,
     counter: u32,
 }
@@ -199,13 +197,16 @@ impl RxRing {
     const fn new() -> Self {
         Self {
             desc_buf: [[0; ETH_DESC_U32_SIZE]; ETH_RX_BUFFER_COUNT],
-            pkt_buf: [[0; ETH_RX_BUFFER_SIZE]; ETH_RX_BUFFER_COUNT],
+            pkt_buf: [[0; ETH_BUFFER_SIZE]; ETH_RX_BUFFER_COUNT],
             cur_desc: 0,
             counter: 0,
         }
     }
 
     fn init(&mut self) {
+        assert_eq!(self.desc_buf[0].len() % 4, 0);
+        assert_eq!(self.pkt_buf[0].len() % 4, 0);
+
         for i in 0..self.desc_buf.len() {
             for j in 0..self.desc_buf[0].len() {
                 self.desc_buf[i][j] = 0;
@@ -231,7 +232,6 @@ impl RxRing {
         for _ in 0..self.desc_buf.len() {
             self.buf_release()
         }
-        self.counter = 0;
     }
 
     fn next_desc(&self) -> usize {
@@ -251,7 +251,7 @@ impl RxRing {
 
     unsafe fn buf_as_slice<'a>(&self) -> &'a [u8] {
         let len = (self.desc_buf[self.cur_desc][3] & EMAC_RDES3_PL) as usize;
-        let len = cmp::min(len, ETH_RX_BUFFER_SIZE);
+        let len = cmp::min(len, ETH_BUFFER_SIZE);
         let addr = &self.pkt_buf[self.cur_desc] as *const u8;
         slice::from_raw_parts(addr, len)
     }
@@ -268,14 +268,13 @@ impl RxRing {
         });
 
         self.cur_desc = self.next_desc();
-        self.counter += 1;
     }
 }
 
 #[repr(align(4))]
 struct TxRing {
     desc_buf: [[u32; ETH_DESC_U32_SIZE]; ETH_TX_BUFFER_COUNT],
-    pkt_buf: [[u8; ETH_TX_BUFFER_SIZE]; ETH_TX_BUFFER_COUNT],
+    pkt_buf: [[u8; ETH_BUFFER_SIZE]; ETH_TX_BUFFER_COUNT],
     cur_desc: usize,
     counter: u32,
 }
@@ -284,13 +283,16 @@ impl TxRing {
     const fn new() -> Self {
         Self {
             desc_buf: [[0; ETH_DESC_U32_SIZE]; ETH_TX_BUFFER_COUNT],
-            pkt_buf: [[0; ETH_TX_BUFFER_SIZE]; ETH_TX_BUFFER_COUNT],
+            pkt_buf: [[0; ETH_BUFFER_SIZE]; ETH_TX_BUFFER_COUNT],
             cur_desc: 0,
             counter: 0,
         }
     }
 
     fn init(&mut self) {
+        assert_eq!(self.desc_buf[0].len() % 4, 0);
+        assert_eq!(self.pkt_buf[0].len() % 4, 0);
+
         for i in 0..self.desc_buf.len() {
             for j in 0..self.desc_buf[0].len() {
                 self.desc_buf[i][j] = 0;
@@ -300,7 +302,6 @@ impl TxRing {
             }
         }
         self.cur_desc = 0;
-        self.counter = 0;
 
         cortex_m::interrupt::free(|_cs| unsafe {
             let dma = &*stm32::ETHERNET_DMA::ptr();
@@ -329,7 +330,7 @@ impl TxRing {
     }
 
     unsafe fn buf_as_slice_mut<'a>(&mut self, len: usize) -> &'a mut [u8] {
-        let len = cmp::min(len, ETH_TX_BUFFER_SIZE);
+        let len = cmp::min(len, ETH_BUFFER_SIZE);
         self.desc_buf[self.cur_desc][2] = EMAC_TDES2_IOC | (len as u32 & EMAC_TDES2_B1L);
         let addr = &self.pkt_buf[self.cur_desc] as *const _ as *mut u8;
         self.desc_buf[self.cur_desc][0] = addr as u32 & EMAC_DES0_BUF1AP;
@@ -339,7 +340,6 @@ impl TxRing {
     fn buf_release(&mut self) {
         self.desc_buf[self.cur_desc][3] = EMAC_DES3_OWN | EMAC_DES3_FD | EMAC_DES3_LD;
         self.cur_desc = self.next_desc();
-        self.counter += 1;
 
         let addr = &self.desc_buf[self.cur_desc] as *const _;
         cortex_m::interrupt::free(|_cs| {
@@ -508,7 +508,7 @@ impl Device {
             eth_dma.dmacrx_cr.modify(|_, w| {
                 w
                     // receive buffer size
-                    .rbsz().bits(MTU as u16)
+                    .rbsz().bits(ETH_BUFFER_SIZE as u16)
                     // Rx DMA PBL
                     .rxpbl().bits(32)
                     // Disable flushing of received frames
@@ -543,6 +543,8 @@ impl<'a, 'b> phy::Device<'a> for &'b mut Device {
 
     fn capabilities(&self) -> phy::DeviceCapabilities {
         let mut capabilities = phy::DeviceCapabilities::default();
+        // ethernet frame type II (6 smac, 6 dmac, 2 ethertype),
+        // sans CRC (4), 1500 IP MTU
         capabilities.max_transmission_unit = 1514;
         capabilities.max_burst_size = Some(self.tx.desc_buf.len());
         capabilities
