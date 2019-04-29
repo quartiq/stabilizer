@@ -190,7 +190,6 @@ struct RxRing {
     desc_buf: [[u32; ETH_DESC_U32_SIZE]; ETH_RX_BUFFER_COUNT],
     pkt_buf: [[u8; ETH_BUFFER_SIZE]; ETH_RX_BUFFER_COUNT],
     cur_desc: usize,
-    counter: u32,
 }
 
 impl RxRing {
@@ -199,7 +198,6 @@ impl RxRing {
             desc_buf: [[0; ETH_DESC_U32_SIZE]; ETH_RX_BUFFER_COUNT],
             pkt_buf: [[0; ETH_BUFFER_SIZE]; ETH_RX_BUFFER_COUNT],
             cur_desc: 0,
-            counter: 0,
         }
     }
 
@@ -276,7 +274,6 @@ struct TxRing {
     desc_buf: [[u32; ETH_DESC_U32_SIZE]; ETH_TX_BUFFER_COUNT],
     pkt_buf: [[u8; ETH_BUFFER_SIZE]; ETH_TX_BUFFER_COUNT],
     cur_desc: usize,
-    counter: u32,
 }
 
 impl TxRing {
@@ -285,7 +282,6 @@ impl TxRing {
             desc_buf: [[0; ETH_DESC_U32_SIZE]; ETH_TX_BUFFER_COUNT],
             pkt_buf: [[0; ETH_BUFFER_SIZE]; ETH_TX_BUFFER_COUNT],
             cur_desc: 0,
-            counter: 0,
         }
     }
 
