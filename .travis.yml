@@ -8,11 +8,14 @@ matrix:
       env: FEATURES='semihosting'
     - rust: nightly
       env: FEATURES='bkpt'
-script:
-  - "cargo build --target thumbv7em-none-eabihf --features \"$FEATURES\" $ARGS"
 
-install:
+before_script:
   - rustup target add thumbv7em-none-eabihf
+  - rustup component add clippy
+
+script:
+  - cargo clippy
+  - "cargo build --target thumbv7em-none-eabihf --features \"$FEATURES\" $ARGS"
 
 notifications:
   email: false
