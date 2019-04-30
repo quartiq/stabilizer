@@ -15,6 +15,7 @@ extern crate log;
 use core::ptr;
 use core::cell::RefCell;
 use core::fmt::Write;
+use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 use cortex_m_rt::{entry, exception};
 use stm32h7::stm32h7x3::{self as stm32, Peripherals, CorePeripherals, interrupt};
 use cortex_m::interrupt::Mutex;
@@ -510,13 +511,14 @@ static SPIP: Mutex<RefCell<SpiPs>> = Mutex::new(RefCell::new(None));
 #[link_section = ".sram1.datspi"]
 static mut DAT: u32 = 0x201;  // EN | CSTART
 
-static TIME: Mutex<RefCell<i64>> = Mutex::new(RefCell::new(0));
+static TIME: AtomicU32 = AtomicU32::new(0);
+static ETHERNET_PENDING: AtomicBool = AtomicBool::new(true);
 
 #[link_section = ".sram3.eth"]
 static mut ETHERNET: eth::Device = eth::Device::new();
 
-const TCP_RX_BUFFER_SIZE: usize = 4096;
-const TCP_TX_BUFFER_SIZE: usize = 4096;
+const TCP_RX_BUFFER_SIZE: usize = 8192;
+const TCP_TX_BUFFER_SIZE: usize = 8192;
 
 macro_rules! create_socket {
     ($set:ident, $rx_storage:ident, $tx_storage:ident, $target:ident) => (
@@ -656,7 +658,8 @@ fn main() -> ! {
 
     let mut last = 0;
     loop {
-        let time = cortex_m::interrupt::free(|cs| *TIME.borrow(cs).borrow());
+        // if ETHERNET_PENDING.swap(false, Ordering::Relaxed) { }
+        let time = TIME.load(Ordering::Relaxed);
         {
             let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle0);
             if !(socket.is_open() || socket.is_listening()) {
@@ -670,12 +673,13 @@ fn main() -> ! {
                     .unwrap_or_else(|e| warn!("TCP send error: {:?}", e));
             }
         }
-        match iface.poll(&mut sockets, net::time::Instant::from_millis(time)) {
-            Ok(_) => (),
-            Err(net::Error::Unrecognized) => (),
-            Err(e) => info!("iface poll error: {:?}", e)
+        if !match iface.poll(&mut sockets, net::time::Instant::from_millis(time as i64)) {
+            Ok(changed) => changed,
+            Err(net::Error::Unrecognized) => true,
+            Err(e) => { info!("iface poll error: {:?}", e); true }
+        } {
+            cortex_m::asm::wfi();
         }
-        cortex_m::asm::wfi();
     }
 }
 
@@ -729,12 +733,13 @@ fn SPI1() {
 
 #[interrupt]
 fn ETH() {
+    ETHERNET_PENDING.store(true, Ordering::Relaxed);
     unsafe { eth::interrupt_handler() }
 }
 
 #[exception]
 fn SysTick() {
-    cortex_m::interrupt::free(|cs| *TIME.borrow(cs).borrow_mut() += 1);
+    TIME.fetch_add(1, Ordering::Relaxed);
 }
 
 #[exception]
