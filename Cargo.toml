@@ -30,7 +30,7 @@ default-target = "thumbv7em-none-eabihf"
 cortex-m = { version = "0.6", features = ["inline-asm", "const-fn"] }
 cortex-m-rt = { version = "0.6", features = ["device"] }
 cortex-m-log = { version = "0.5", features = ["log-integration"] }
-stm32h7 = { version = "0.7", features = ["stm32h7x3", "rt"] }
+stm32h7 = { path = "../stm32-rs/stm32h7", features = ["stm32h7x3", "rt"] }
 log = "0.4"
 panic-abort = "0.3"
 panic-semihosting = { version = "0.5.2", optional = true }
