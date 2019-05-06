@@ -360,7 +360,6 @@ impl Device {
         cortex_m::interrupt::free(|_cs| {
             let eth_mac = &*stm32::ETHERNET_MAC::ptr();
             let eth_dma = &*stm32::ETHERNET_DMA::ptr();
-            let _eth_mmc = &*stm32::ETHERNET_MMC::ptr();
             let eth_mtl = &*stm32::ETHERNET_MTL::ptr();
 
             eth_dma.dmamr.modify(|_, w| w.swr().set_bit());
@@ -407,9 +406,6 @@ impl Device {
             eth_mac.maca0hr.write(|w|
                 w.addrhi().bits( u16::from(mac.0[4]) |
                                 (u16::from(mac.0[5]) << 8))
-                 .ae().set_bit()
-                 //.sa().clear_bit()
-                 //.mbc().bits(0b000000)
             );
             // frame filter register
             eth_mac.macpfr.modify(|_, w| {
@@ -433,12 +429,12 @@ impl Device {
             });
             eth_mac.macwtr.write(|w| w.pwe().clear_bit());
             // Flow Control Register
-            eth_mac.macqtxfcr.modify(|_, w| {
+            eth_mac.macqtx_fcr.modify(|_, w| {
                 // Pause time
                 w.pt().bits(0x100)
             });
-            eth_mac.macrxfcr.modify(|_, w| w);
-            eth_mtl.mtlrxqomr.modify(|_, w|
+            eth_mac.macrx_fcr.modify(|_, w| w);
+            eth_mtl.mtlrx_qomr.modify(|_, w|
                 w
                     // Receive store and forward
                     .rsf().set_bit()
@@ -449,7 +445,7 @@ impl Device {
                     // Forward undersized good packets
                     .fup().clear_bit()
             );
-            eth_mtl.mtltxqomr.modify(|_, w| {
+            eth_mtl.mtltx_qomr.modify(|_, w| {
                 w
                     // Transmit store and forward
                     .tsf().set_bit()
@@ -473,7 +469,7 @@ impl Device {
             // operation mode register
             eth_dma.dmamr.modify(|_, w| {
                 w
-                    .intm().clear_bit()  // FIXME: bits(0b00)
+                    .intm().bits(0b00)
                     // Rx Tx priority ratio 1:1
                     .pr().bits(0b000)
                     .txpr().clear_bit()
@@ -519,7 +515,7 @@ impl Device {
                 w.re().bit(true) // Receiver Enable
                  .te().bit(true) // Transmiter Enable
             });
-            eth_mtl.mtltxqomr.modify(|_, w| w.ftq().set_bit());
+            eth_mtl.mtltx_qomr.modify(|_, w| w.ftq().set_bit());
 
             // Manage DMA transmission and reception
             eth_dma.dmactx_cr.modify(|_, w| w.st().set_bit());

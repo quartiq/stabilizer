@@ -56,7 +56,7 @@ mod build_info {
 fn pwr_setup(pwr: &stm32::PWR) {
     // go to VOS1 voltage scale for high perf
     pwr.cr3.write(|w|
-        w.sden().set_bit()
+        w.scuen().set_bit()
          .ldoen().set_bit()
          .bypass().clear_bit()
     );
