@@ -612,7 +612,7 @@ fn main() -> ! {
 
     let device = unsafe { &mut ETHERNET };
     let hardware_addr = net::wire::EthernetAddress([0x10, 0xE2, 0xD5, 0x00, 0x03, 0x00]);
-    unsafe { device.init(hardware_addr) };
+    unsafe { device.init(hardware_addr, &dp.ETHERNET_MAC, &dp.ETHERNET_DMA, &dp.ETHERNET_MTL) };
     let mut neighbor_cache_storage = [None; 8];
     let neighbor_cache = net::iface::NeighborCache::new(&mut neighbor_cache_storage[..]);
     let local_addr = net::wire::IpAddress::v4(10, 0, 16, 99);
@@ -626,7 +626,7 @@ fn main() -> ! {
     let mut sockets = net::socket::SocketSet::new(&mut socket_set_entries[..]);
     create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle0);
 
-    unsafe { eth::enable_interrupt(); }
+    unsafe { eth::enable_interrupt(&dp.ETHERNET_DMA); }
     unsafe { cp.NVIC.set_priority(stm32::Interrupt::ETH, 196); }  // mid prio
     cp.NVIC.enable(stm32::Interrupt::ETH);
 
@@ -715,8 +715,9 @@ fn SPI1() {
 
 #[interrupt]
 fn ETH() {
+    let dma = unsafe { &stm32::Peripherals::steal().ETHERNET_DMA };
     ETHERNET_PENDING.store(true, Ordering::Relaxed);
-    unsafe { eth::interrupt_handler() }
+    unsafe { eth::interrupt_handler(dma) }
 }
 
 #[exception]

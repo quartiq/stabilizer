@@ -1,5 +1,4 @@
 use core::{slice, cmp};
-use cortex_m;
 use stm32h7::stm32h7x3 as stm32;
 use smoltcp::Result;
 use smoltcp::time::Instant;
@@ -141,48 +140,40 @@ pub fn setup_pins(gpioa: &stm32::GPIOA, gpiob: &stm32::GPIOB,
 
 const PHY_ADDR: u8 = 0;
 
-fn phy_read(reg_addr: u8) -> u16 {
-    cortex_m::interrupt::free(|_cs| {
-        let mac = unsafe { &*stm32::ETHERNET_MAC::ptr() };
-
-        while mac.macmdioar.read().mb().bit_is_set() {}
-        mac.macmdioar.modify(|_, w| unsafe {
-            w
-                .pa().bits(PHY_ADDR)
-                .rda().bits(reg_addr)
-                .goc().bits(0b11)  // read
-                .cr().bits(CLOCK_RANGE)
-                .mb().set_bit()
-        });
-        while mac.macmdioar.read().mb().bit_is_set() {}
-        mac.macmdiodr.read().md().bits()
-    })
+fn phy_read(reg_addr: u8, mac: &stm32::ETHERNET_MAC) -> u16 {
+    while mac.macmdioar.read().mb().bit_is_set() {}
+    mac.macmdioar.modify(|_, w| unsafe {
+        w
+            .pa().bits(PHY_ADDR)
+            .rda().bits(reg_addr)
+            .goc().bits(0b11)  // read
+            .cr().bits(CLOCK_RANGE)
+            .mb().set_bit()
+    });
+    while mac.macmdioar.read().mb().bit_is_set() {}
+    mac.macmdiodr.read().md().bits()
 }
 
-fn phy_write(reg_addr: u8, reg_data: u16) {
-    cortex_m::interrupt::free(|_cs| {
-        let mac = unsafe { &*stm32::ETHERNET_MAC::ptr() };
-
-        while mac.macmdioar.read().mb().bit_is_set() {}
-        mac.macmdiodr.write(|w| unsafe { w.md().bits(reg_data) });
-        mac.macmdioar.modify(|_, w| unsafe {
-            w
-                .pa().bits(PHY_ADDR)
-                .rda().bits(reg_addr)
-                .goc().bits(0b01)  // write
-                .cr().bits(CLOCK_RANGE)
-                .mb().set_bit()
-        });
-        while mac.macmdioar.read().mb().bit_is_set() {}
-    })
+fn phy_write(reg_addr: u8, reg_data: u16, mac: &stm32::ETHERNET_MAC) {
+    while mac.macmdioar.read().mb().bit_is_set() {}
+    mac.macmdiodr.write(|w| unsafe { w.md().bits(reg_data) });
+    mac.macmdioar.modify(|_, w| unsafe {
+        w
+            .pa().bits(PHY_ADDR)
+            .rda().bits(reg_addr)
+            .goc().bits(0b01)  // write
+            .cr().bits(CLOCK_RANGE)
+            .mb().set_bit()
+    });
+    while mac.macmdioar.read().mb().bit_is_set() {}
 }
 
 // Writes a value to an extended PHY register in MMD address space
-fn phy_write_ext(reg_addr: u16, reg_data: u16) {
-    phy_write(PHY_REG_CTL, 0x0003); // set address
-    phy_write(PHY_REG_ADDAR, reg_addr);
-    phy_write(PHY_REG_CTL, 0x4003); // set data
-    phy_write(PHY_REG_ADDAR, reg_data);
+fn phy_write_ext(reg_addr: u16, reg_data: u16, mac: &stm32::ETHERNET_MAC) {
+    phy_write(PHY_REG_CTL, 0x0003, mac); // set address
+    phy_write(PHY_REG_ADDAR, reg_addr, mac);
+    phy_write(PHY_REG_CTL, 0x4003, mac); // set data
+    phy_write(PHY_REG_ADDAR, reg_data, mac);
 }
 
 #[repr(align(4))]
@@ -201,7 +192,7 @@ impl RxRing {
         }
     }
 
-    fn init(&mut self) {
+    unsafe fn init(&mut self, dma: &stm32::ETHERNET_DMA) {
         assert_eq!(self.desc_buf[0].len() % 4, 0);
         assert_eq!(self.pkt_buf[0].len() % 4, 0);
 
@@ -214,17 +205,10 @@ impl RxRing {
             }
         }
 
-        cortex_m::interrupt::free(|_cs| unsafe {
-            let dma = &*stm32::ETHERNET_DMA::ptr();
-
-            dma.dmacrx_dlar.write(|w| {
-                w.bits(&self.desc_buf as *const _ as u32)
-            });
-
-            dma.dmacrx_rlr.write(|w| {
-                w.rdrl().bits(self.desc_buf.len() as u16 - 1)
-            });
-        });
+        let addr = &self.desc_buf as *const _ as u32;
+        assert_eq!(addr & 0x3, 0);
+        dma.dmacrx_dlar.write(|w| w.bits(addr));
+        dma.dmacrx_rlr.write(|w| w.rdrl().bits(self.desc_buf.len() as u16 - 1));
 
         self.cur_desc = 0;
         for _ in 0..self.desc_buf.len() {
@@ -259,11 +243,10 @@ impl RxRing {
         self.desc_buf[self.cur_desc][0] = addr as u32 & EMAC_DES0_BUF1AP;
         self.desc_buf[self.cur_desc][3] = EMAC_RDES3_BUF1V | EMAC_RDES3_IOC | EMAC_DES3_OWN;
 
-        let addr = &self.desc_buf[self.cur_desc] as *const _;
-        cortex_m::interrupt::free(|_cs| {
-            let dma = unsafe { &*stm32::ETHERNET_DMA::ptr() };
-            dma.dmacrx_dtpr.write(|w| unsafe { w.bits(addr as u32) });
-        });
+        let addr = &self.desc_buf[self.cur_desc] as *const _ as u32;
+        assert_eq!(addr & 0x3, 0);
+        let dma = unsafe { stm32::Peripherals::steal().ETHERNET_DMA };
+        dma.dmacrx_dtpr.write(|w| unsafe { w.bits(addr) });
 
         self.cur_desc = self.next_desc();
     }
@@ -285,7 +268,7 @@ impl TxRing {
         }
     }
 
-    fn init(&mut self) {
+    unsafe fn init(&mut self, dma: &stm32::ETHERNET_DMA) {
         assert_eq!(self.desc_buf[0].len() % 4, 0);
         assert_eq!(self.pkt_buf[0].len() % 4, 0);
 
@@ -299,21 +282,13 @@ impl TxRing {
         }
         self.cur_desc = 0;
 
-        cortex_m::interrupt::free(|_cs| unsafe {
-            let dma = &*stm32::ETHERNET_DMA::ptr();
-
-            dma.dmactx_dlar.write(|w| {
-                w.bits(&self.desc_buf as *const _ as u32)
-            });
-
-            dma.dmactx_rlr.write(|w| {
-                w.tdrl().bits(self.desc_buf.len() as u16 - 1)
-            });
-
-            dma.dmactx_dtpr.write(|w| {
-                w.bits(&self.desc_buf[0] as *const _ as u32)
-            });
-        });
+        let addr = &self.desc_buf as *const _ as u32;
+        assert_eq!(addr & 0x3, 0);
+        dma.dmactx_dlar.write(|w| w.bits(addr));
+        dma.dmactx_rlr.write(|w| w.tdrl().bits(self.desc_buf.len() as u16 - 1));
+        let addr = &self.desc_buf[0] as *const _ as u32;
+        assert_eq!(addr & 0x3, 0);
+        dma.dmactx_dtpr.write(|w| w.bits(addr));
     }
 
     fn next_desc(&self) -> usize {
@@ -337,11 +312,10 @@ impl TxRing {
         self.desc_buf[self.cur_desc][3] = EMAC_DES3_OWN | EMAC_DES3_FD | EMAC_DES3_LD;
         self.cur_desc = self.next_desc();
 
-        let addr = &self.desc_buf[self.cur_desc] as *const _;
-        cortex_m::interrupt::free(|_cs| {
-            let dma = unsafe { &*stm32::ETHERNET_DMA::ptr() };
-            dma.dmactx_dtpr.write(|w| unsafe { w.bits(addr as u32) });
-        });
+        let addr = &self.desc_buf[self.cur_desc] as *const _ as u32;
+        assert_eq!(addr & 0x3, 0);
+        let dma = unsafe { stm32::Peripherals::steal().ETHERNET_DMA };
+        dma.dmactx_dtpr.write(|w| unsafe { w.bits(addr) });
     }
 }
 
@@ -356,176 +330,174 @@ impl Device {
     }
 
     // After `init` is called, `Device` shall not be moved.
-    pub unsafe fn init(&mut self, mac: EthernetAddress) {
-        cortex_m::interrupt::free(|_cs| {
-            let eth_mac = &*stm32::ETHERNET_MAC::ptr();
-            let eth_dma = &*stm32::ETHERNET_DMA::ptr();
-            let eth_mtl = &*stm32::ETHERNET_MTL::ptr();
+    pub unsafe fn init(&mut self, mac: EthernetAddress,
+                       eth_mac: &stm32::ETHERNET_MAC,
+                       eth_dma: &stm32::ETHERNET_DMA,
+                       eth_mtl: &stm32::ETHERNET_MTL,
+                       ) {
+        eth_dma.dmamr.modify(|_, w| w.swr().set_bit());
+        while eth_dma.dmamr.read().swr().bit_is_set() {}
 
-            eth_dma.dmamr.modify(|_, w| w.swr().set_bit());
-            while eth_dma.dmamr.read().swr().bit_is_set() {}
+        // 200 MHz
+        eth_mac.mac1ustcr.modify(|_, w| w.tic_1us_cntr().bits(200 - 1));
 
-            // 200 MHz
-            eth_mac.mac1ustcr.modify(|_, w| w.tic_1us_cntr().bits(200 - 1));
-
-            // Configuration Register
-            eth_mac.maccr.modify(|_, w| {
-                w
-                    .arpen().clear_bit()
-                    .ipc().set_bit()
-                    .ipg().bits(0b000)  // 96 bit
-                    .ecrsfd().clear_bit()
-                    .dcrs().clear_bit()
-                    .bl().bits(0b00)  // 19
-                    .prelen().bits(0b00)  // 7
-                    // CRC stripping for Type frames
-                    .cst().set_bit()
-                    // Fast Ethernet speed
-                    .fes().set_bit()
-                    // Duplex mode
-                    .dm().set_bit()
-                    // Automatic pad/CRC stripping
-                    .acs().set_bit()
-                    // Retry disable in half-duplex mode
-                    .dr().set_bit()
-            });
-            eth_mac.macecr.modify(|_, w| {
-                w
-                    .eipgen().clear_bit()
-                    .usp().clear_bit()
-                    .spen().clear_bit()
-                    .dcrcc().clear_bit()
-            });
-            // Set the MAC address
-            eth_mac.maca0lr.write(|w|
-                w.addrlo().bits( u32::from(mac.0[0]) |
-                                (u32::from(mac.0[1]) <<  8) |
-                                (u32::from(mac.0[2]) << 16) |
-                                (u32::from(mac.0[3]) << 24))
-            );
-            eth_mac.maca0hr.write(|w|
-                w.addrhi().bits( u16::from(mac.0[4]) |
-                                (u16::from(mac.0[5]) << 8))
-            );
-            // frame filter register
-            eth_mac.macpfr.modify(|_, w| {
-                w
-                    .dntu().clear_bit()
-                    .ipfe().clear_bit()
-                    .vtfe().clear_bit()
-                    .hpf().clear_bit()
-                    .saf().clear_bit()
-                    .saif().clear_bit()
-                    .pcf().bits(0b00)
-                    .dbf().clear_bit()
-                    .pm().clear_bit()
-                    .daif().clear_bit()
-                    .hmc().clear_bit()
-                    .huc().clear_bit()
-                    // Receive All
-                    .ra().clear_bit()
-                    // Promiscuous mode
-                    .pr().clear_bit()
-            });
-            eth_mac.macwtr.write(|w| w.pwe().clear_bit());
-            // Flow Control Register
-            eth_mac.macqtx_fcr.modify(|_, w| {
-                // Pause time
-                w.pt().bits(0x100)
-            });
-            eth_mac.macrx_fcr.modify(|_, w| w);
-            eth_mtl.mtlrx_qomr.modify(|_, w|
-                w
-                    // Receive store and forward
-                    .rsf().set_bit()
-                    // Dropping of TCP/IP checksum error frames disable
-                    .dis_tcp_ef().clear_bit()
-                    // Forward error frames
-                    .fep().clear_bit()
-                    // Forward undersized good packets
-                    .fup().clear_bit()
-            );
-            eth_mtl.mtltx_qomr.modify(|_, w| {
-                w
-                    // Transmit store and forward
-                    .tsf().set_bit()
-            });
-
-            if  (phy_read(PHY_REG_ID1) != 0x0007) | (phy_read(PHY_REG_ID2) != 0xC131) {
-                error!("PHY ID error!");
-            }
-
-            phy_write(PHY_REG_BCR, PHY_REG_BCR_RESET);
-            while phy_read(PHY_REG_BCR) & PHY_REG_BCR_RESET == PHY_REG_BCR_RESET {};
-            phy_write_ext(PHY_REG_WUCSR, 0);
-            phy_write(PHY_REG_BCR, PHY_REG_BCR_AN | PHY_REG_BCR_ANRST | PHY_REG_BCR_100M);
-            /*
-            while phy_read(PHY_REG_BSR) & PHY_REG_BSR_UP == 0 {};
-            while phy_read(PHY_REG_BSR) & PHY_REG_BSR_ANDONE == 0 {};
-            while phy_read(PHY_REG_SSR) & (PHY_REG_SSR_ANDONE | PHY_REG_SSR_SPEED)
-                != PHY_REG_SSR_ANDONE | PHY_REG_SSR_100BASE_FD {};
-            */
-
-            // operation mode register
-            eth_dma.dmamr.modify(|_, w| {
-                w
-                    .intm().bits(0b00)
-                    // Rx Tx priority ratio 1:1
-                    .pr().bits(0b000)
-                    .txpr().clear_bit()
-                    .da().clear_bit()
-            });
-            // bus mode register
-            eth_dma.dmasbmr.modify(|_, w| {
-                // Address-aligned beats
-                w.aal().set_bit()
-                    // Fixed burst
-                    .fb().set_bit()
-            });
-            eth_dma.dmaccr.modify(|_, w| {
-                w
-                    .dsl().bits(0)
-                    .pblx8().clear_bit()
-                    .mss().bits(536)
-            });
-            eth_dma.dmactx_cr.modify(|_, w| {
-                w
-                    // Tx DMA PBL
-                    .txpbl().bits(32)
-                    .tse().clear_bit()
-                    // Operate on second frame
-                    .osf().clear_bit()
-            });
-
-            eth_dma.dmacrx_cr.modify(|_, w| {
-                w
-                    // receive buffer size
-                    .rbsz().bits(ETH_BUFFER_SIZE as u16)
-                    // Rx DMA PBL
-                    .rxpbl().bits(32)
-                    // Disable flushing of received frames
-                    .rpf().clear_bit()
-            });
-
-            self.rx.init();
-            self.tx.init();
-
-            // Manage MAC transmission and reception
-            eth_mac.maccr.modify(|_, w| {
-                w.re().bit(true) // Receiver Enable
-                 .te().bit(true) // Transmiter Enable
-            });
-            eth_mtl.mtltx_qomr.modify(|_, w| w.ftq().set_bit());
-
-            // Manage DMA transmission and reception
-            eth_dma.dmactx_cr.modify(|_, w| w.st().set_bit());
-            eth_dma.dmacrx_cr.modify(|_, w| w.sr().set_bit());
-
-            eth_dma.dmacsr.modify(|_, w|
-                w.tps().set_bit()
-                 .rps().set_bit()
-            );
+        // Configuration Register
+        eth_mac.maccr.modify(|_, w| {
+            w
+                .arpen().clear_bit()
+                .ipc().set_bit()
+                .ipg().bits(0b000)  // 96 bit
+                .ecrsfd().clear_bit()
+                .dcrs().clear_bit()
+                .bl().bits(0b00)  // 19
+                .prelen().bits(0b00)  // 7
+                // CRC stripping for Type frames
+                .cst().set_bit()
+                // Fast Ethernet speed
+                .fes().set_bit()
+                // Duplex mode
+                .dm().set_bit()
+                // Automatic pad/CRC stripping
+                .acs().set_bit()
+                // Retry disable in half-duplex mode
+                .dr().set_bit()
         });
+        eth_mac.macecr.modify(|_, w| {
+            w
+                .eipgen().clear_bit()
+                .usp().clear_bit()
+                .spen().clear_bit()
+                .dcrcc().clear_bit()
+        });
+        // Set the MAC address
+        eth_mac.maca0lr.write(|w|
+            w.addrlo().bits( u32::from(mac.0[0]) |
+                            (u32::from(mac.0[1]) <<  8) |
+                            (u32::from(mac.0[2]) << 16) |
+                            (u32::from(mac.0[3]) << 24))
+        );
+        eth_mac.maca0hr.write(|w|
+            w.addrhi().bits( u16::from(mac.0[4]) |
+                            (u16::from(mac.0[5]) << 8))
+        );
+        // frame filter register
+        eth_mac.macpfr.modify(|_, w| {
+            w
+                .dntu().clear_bit()
+                .ipfe().clear_bit()
+                .vtfe().clear_bit()
+                .hpf().clear_bit()
+                .saf().clear_bit()
+                .saif().clear_bit()
+                .pcf().bits(0b00)
+                .dbf().clear_bit()
+                .pm().clear_bit()
+                .daif().clear_bit()
+                .hmc().clear_bit()
+                .huc().clear_bit()
+                // Receive All
+                .ra().clear_bit()
+                // Promiscuous mode
+                .pr().clear_bit()
+        });
+        eth_mac.macwtr.write(|w| w.pwe().clear_bit());
+        // Flow Control Register
+        eth_mac.macqtx_fcr.modify(|_, w| {
+            // Pause time
+            w.pt().bits(0x100)
+        });
+        eth_mac.macrx_fcr.modify(|_, w| w);
+        eth_mtl.mtlrx_qomr.modify(|_, w|
+            w
+                // Receive store and forward
+                .rsf().set_bit()
+                // Dropping of TCP/IP checksum error frames disable
+                .dis_tcp_ef().clear_bit()
+                // Forward error frames
+                .fep().clear_bit()
+                // Forward undersized good packets
+                .fup().clear_bit()
+        );
+        eth_mtl.mtltx_qomr.modify(|_, w| {
+            w
+                // Transmit store and forward
+                .tsf().set_bit()
+        });
+
+        if  (phy_read(PHY_REG_ID1, eth_mac) != 0x0007) | (phy_read(PHY_REG_ID2, eth_mac) != 0xC131) {
+            error!("PHY ID error!");
+        }
+
+        phy_write(PHY_REG_BCR, PHY_REG_BCR_RESET, eth_mac);
+        while phy_read(PHY_REG_BCR, eth_mac) & PHY_REG_BCR_RESET == PHY_REG_BCR_RESET {};
+        phy_write_ext(PHY_REG_WUCSR, 0, eth_mac);
+        phy_write(PHY_REG_BCR, PHY_REG_BCR_AN | PHY_REG_BCR_ANRST | PHY_REG_BCR_100M, eth_mac);
+        /*
+        while phy_read(PHY_REG_BSR) & PHY_REG_BSR_UP == 0 {};
+        while phy_read(PHY_REG_BSR) & PHY_REG_BSR_ANDONE == 0 {};
+        while phy_read(PHY_REG_SSR) & (PHY_REG_SSR_ANDONE | PHY_REG_SSR_SPEED)
+            != PHY_REG_SSR_ANDONE | PHY_REG_SSR_100BASE_FD {};
+        */
+
+        // operation mode register
+        eth_dma.dmamr.modify(|_, w| {
+            w
+                .intm().bits(0b00)
+                // Rx Tx priority ratio 1:1
+                .pr().bits(0b000)
+                .txpr().clear_bit()
+                .da().clear_bit()
+        });
+        // bus mode register
+        eth_dma.dmasbmr.modify(|_, w| {
+            // Address-aligned beats
+            w.aal().set_bit()
+                // Fixed burst
+                .fb().set_bit()
+        });
+        eth_dma.dmaccr.modify(|_, w| {
+            w
+                .dsl().bits(0)
+                .pblx8().clear_bit()
+                .mss().bits(536)
+        });
+        eth_dma.dmactx_cr.modify(|_, w| {
+            w
+                // Tx DMA PBL
+                .txpbl().bits(32)
+                .tse().clear_bit()
+                // Operate on second frame
+                .osf().clear_bit()
+        });
+
+        eth_dma.dmacrx_cr.modify(|_, w| {
+            w
+                // receive buffer size
+                .rbsz().bits(ETH_BUFFER_SIZE as u16)
+                // Rx DMA PBL
+                .rxpbl().bits(32)
+                // Disable flushing of received frames
+                .rpf().clear_bit()
+        });
+
+        self.rx.init(eth_dma);
+        self.tx.init(eth_dma);
+
+        // Manage MAC transmission and reception
+        eth_mac.maccr.modify(|_, w| {
+            w.re().bit(true) // Receiver Enable
+                .te().bit(true) // Transmiter Enable
+        });
+        eth_mtl.mtltx_qomr.modify(|_, w| w.ftq().set_bit());
+
+        // Manage DMA transmission and reception
+        eth_dma.dmactx_cr.modify(|_, w| w.st().set_bit());
+        eth_dma.dmacrx_cr.modify(|_, w| w.sr().set_bit());
+
+        eth_dma.dmacsr.modify(|_, w|
+            w.tps().set_bit()
+                .rps().set_bit()
+        );
     }
 }
 
@@ -586,8 +558,7 @@ impl<'a> phy::TxToken for TxToken<'a> {
     }
 }
 
-pub unsafe fn interrupt_handler() {
-    let eth_dma = &*stm32::ETHERNET_DMA::ptr();
+pub unsafe fn interrupt_handler(eth_dma: &stm32::ETHERNET_DMA) {
     eth_dma.dmacsr.write(|w|
         w
             .nis().set_bit()
@@ -596,8 +567,7 @@ pub unsafe fn interrupt_handler() {
     );
 }
 
-pub unsafe fn enable_interrupt() {
-    let eth_dma = &*stm32::ETHERNET_DMA::ptr();
+pub unsafe fn enable_interrupt(eth_dma: &stm32::ETHERNET_DMA) {
     eth_dma.dmacier.modify(|_, w|
         w
             .nie().set_bit()
