@@ -333,85 +333,81 @@ fn gpio_setup(gpioa: &stm32::GPIOA, gpiob: &stm32::GPIOB, gpiod: &stm32::GPIOD,
 
 // ADC0
 fn spi1_setup(spi1: &stm32::SPI1) {
-    spi1.cfg1.modify(|_, w| {
-        w.mbr().bits(1)  // clk/4
+    spi1.cfg1.modify(|_, w|
+        w.mbr().div4()
          .dsize().bits(16 - 1)
          .fthlv().one_frame()
-    });
-    spi1.cfg2.modify(|_, w| unsafe {
-        w.afcntr().set_bit()
-         .ssom().set_bit()  // ss deassert between frames during midi
-         .ssoe().set_bit()  // ss output enable
-         .ssiop().clear_bit()  // ss active low
-         .ssm().clear_bit()  // PAD counts
-         .cpol().set_bit()
-         .cpha().set_bit()
-         .lsbfrst().clear_bit()
-         .master().set_bit()
-         .sp().bits(0)  // motorola
-         .comm().bits(0b10)  // simplex receiver
-         .ioswp().clear_bit()
-         .midi().bits(0)  // master inter data idle
-         .mssi().bits(6)  // master SS idle
-    });
-    spi1.cr2.modify(|_, w| {
-        w.tsize().bits(1)
-    });
+    );
+    spi1.cfg2.modify(|_, w|
+        w.afcntr().controlled()
+         .ssom().not_asserted()
+         .ssoe().enabled()
+         .ssiop().active_low()
+         .ssm().disabled()
+         .cpol().idle_high()
+         .cpha().second_edge()
+         .lsbfrst().msbfirst()
+         .master().master()
+         .sp().motorola()
+         .comm().receiver()
+         .ioswp().disabled()
+         .midi().bits(0)
+         .mssi().bits(6)
+    );
+    spi1.cr2.modify(|_, w| w.tsize().bits(1));
     spi1.cr1.write(|w| w.spe().set_bit());
 }
 
 // ADC1
 fn spi5_setup(spi5: &stm32::SPI5) {
-    spi5.cfg1.modify(|_, w| {
-        w.mbr().bits(1)  // clk/4
+    spi5.cfg1.modify(|_, w|
+        w.mbr().div4()
          .dsize().bits(16 - 1)
          .fthlv().one_frame()
-    });
-    spi5.cfg2.modify(|_, w| unsafe {
-        w.afcntr().set_bit()
-         .ssom().set_bit()  // ss deassert between frames during midi
-         .ssoe().set_bit()  // ss output enable
-         .ssiop().clear_bit()  // ss active low
-         .ssm().clear_bit()  // PAD counts
-         .cpol().set_bit()
-         .cpha().set_bit()
-         .lsbfrst().clear_bit()
-         .master().set_bit()
-         .sp().bits(0)  // motorola
-         .comm().bits(0b10)  // simplex receiver
-         .ioswp().clear_bit()
-         .midi().bits(0)  // master inter data idle
-         .mssi().bits(6)  // master SS idle
-    });
-    spi5.cr2.modify(|_, w| {
-        w.tsize().bits(1)
-    });
+    );
+    spi5.cfg2.modify(|_, w|
+        w.afcntr().controlled()
+         .ssom().not_asserted()
+         .ssoe().enabled()
+         .ssiop().active_low()
+         .ssm().disabled()
+         .cpol().idle_high()
+         .cpha().second_edge()
+         .lsbfrst().msbfirst()
+         .master().master()
+         .sp().motorola()
+         .comm().receiver()
+         .ioswp().disabled()
+         .midi().bits(0)
+         .mssi().bits(6)
+    );
+    spi5.cr2.modify(|_, w| w.tsize().bits(1));
     spi5.cr1.write(|w| w.spe().set_bit());
 }
 
 // DAC0
 fn spi2_setup(spi2: &stm32::SPI2) {
-    spi2.cfg1.modify(|_, w| {
-        w.mbr().bits(0)  // clk/2
+    spi2.cfg1.modify(|_, w|
+        w.mbr().div2()
          .dsize().bits(16 - 1)
          .fthlv().one_frame()
-    });
-    spi2.cfg2.modify(|_, w| unsafe {
-        w.afcntr().set_bit()
-         .ssom().set_bit()  // ss deassert between frames during midi
-         .ssoe().set_bit()  // ss output enable
-         .ssiop().clear_bit()  // ss active low
-         .ssm().clear_bit()  // PAD counts
-         .cpol().clear_bit()
-         .cpha().clear_bit()
-         .lsbfrst().clear_bit()
-         .master().set_bit()
-         .sp().bits(0)  // motorola
-         .comm().bits(0b01)  // simplex transmitter
-         .ioswp().clear_bit()
-         .midi().bits(0)  // master inter data idle
-         .mssi().bits(0)  // master SS idle
-    });
+    );
+    spi2.cfg2.modify(|_, w|
+        w.afcntr().controlled()
+         .ssom().not_asserted()
+         .ssoe().enabled()
+         .ssiop().active_low()
+         .ssm().disabled()
+         .cpol().idle_low()
+         .cpha().first_edge()
+         .lsbfrst().msbfirst()
+         .master().master()
+         .sp().motorola()
+         .comm().transmitter()
+         .ioswp().disabled()
+         .midi().bits(0)
+         .mssi().bits(0)
+    );
     spi2.cr2.modify(|_, w| w.tsize().bits(0));
     spi2.cr1.write(|w| w.spe().enabled());
     spi2.cr1.modify(|_, w| w.cstart().started());
@@ -419,30 +415,28 @@ fn spi2_setup(spi2: &stm32::SPI2) {
 
 // DAC1
 fn spi4_setup(spi4: &stm32::SPI4) {
-    spi4.cfg1.modify(|_, w| {
-        w.mbr().bits(0)  // clk/2
+    spi4.cfg1.modify(|_, w|
+        w.mbr().div2()
          .dsize().bits(16 - 1)
          .fthlv().one_frame()
-    });
-    spi4.cfg2.modify(|_, w| unsafe {
-        w.afcntr().set_bit()
-         .ssom().set_bit()  // ss deassert between frames during midi
-         .ssoe().set_bit()  // ss output enable
-         .ssiop().clear_bit()  // ss active low
-         .ssm().clear_bit()  // PAD counts
-         .cpol().clear_bit()
-         .cpha().clear_bit()
-         .lsbfrst().clear_bit()
-         .master().set_bit()
-         .sp().bits(0)  // motorola
-         .comm().bits(0b01)  // simplex transmitter
-         .ioswp().clear_bit()
-         .midi().bits(0)  // master inter data idle
-         .mssi().bits(0)  // master SS idle
-    });
-    spi4.cr2.modify(|_, w| {
-        w.tsize().bits(0)
-    });
+    );
+    spi4.cfg2.modify(|_, w|
+        w.afcntr().controlled()
+         .ssom().not_asserted()
+         .ssoe().enabled()
+         .ssiop().active_low()
+         .ssm().disabled()
+         .cpol().idle_low()
+         .cpha().first_edge()
+         .lsbfrst().msbfirst()
+         .master().master()
+         .sp().motorola()
+         .comm().transmitter()
+         .ioswp().disabled()
+         .midi().bits(0)
+         .mssi().bits(0)
+    );
+    spi4.cr2.modify(|_, w| w.tsize().bits(0));
     spi4.cr1.write(|w| w.spe().enabled());
     spi4.cr1.modify(|_, w| w.cstart().started());
 }
@@ -461,10 +455,10 @@ fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa0: usiz
     dma1.st[0].cr.modify(|_, w| w.en().clear_bit());
     while dma1.st[0].cr.read().en().bit_is_set() {}
 
-    dma1.st[0].par.write(|w| unsafe { w.pa().bits(pa0 as u32) });
-    dma1.st[0].m0ar.write(|w| unsafe { w.m0a().bits(ma as u32) });
+    dma1.st[0].par.write(|w| unsafe { w.bits(pa0 as u32) });
+    dma1.st[0].m0ar.write(|w| unsafe { w.bits(ma as u32) });
     dma1.st[0].ndtr.write(|w| unsafe { w.ndt().bits(1) });
-    dmamux1.ccr[0].modify(|_, w| unsafe { w.dmareq_id().bits(22) });  // tim2_up
+    dmamux1.ccr[0].modify(|_, w| w.dmareq_id().tim2_up());
     dma1.st[0].cr.modify(|_, w| unsafe {
         w.pl().bits(0b01)  // medium
          .circ().set_bit()  // reload ndtr
@@ -484,10 +478,10 @@ fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa0: usiz
     dma1.st[1].cr.modify(|_, w| w.en().clear_bit());
     while dma1.st[1].cr.read().en().bit_is_set() {}
 
-    dma1.st[1].par.write(|w| unsafe { w.pa().bits(pa1 as u32) });
-    dma1.st[1].m0ar.write(|w| unsafe { w.m0a().bits(ma as u32) });
+    dma1.st[1].par.write(|w| unsafe { w.bits(pa1 as u32) });
+    dma1.st[1].m0ar.write(|w| unsafe { w.bits(ma as u32) });
     dma1.st[1].ndtr.write(|w| unsafe { w.ndt().bits(1) });
-    dmamux1.ccr[1].modify(|_, w| unsafe { w.dmareq_id().bits(22) });  // tim2_up
+    dmamux1.ccr[1].modify(|_, w| w.dmareq_id().tim2_up());
     dma1.st[1].cr.modify(|_, w| unsafe {
         w.pl().bits(0b01)  // medium
          .circ().set_bit()  // reload ndtr
@@ -611,9 +605,8 @@ fn main() -> ! {
     rcc.apb1lenr.modify(|_, w| w.tim2en().set_bit());
 
     // work around the SPI stall erratum
-    //let dbgmcu = dp.DBGMCU;
-    //dbgmcu.apb1lfz1.modify(|_, w| w.stop_tim2().set_bit());  // stop tim2 in debug
-    unsafe { ptr::write_volatile(0x5c00_103c as *mut usize, 0x0000_0001) };
+    let dbgmcu = dp.DBGMCU;
+    dbgmcu.apb1lfz1.modify(|_, w| w.tim2().set_bit());
 
     unsafe {
         let t = 2e-6*2.;
