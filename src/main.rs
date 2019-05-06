@@ -92,47 +92,43 @@ fn rcc_reset(rcc: &stm32::RCC) {
 }
 
 fn rcc_pll_setup(rcc: &stm32::RCC, flash: &stm32::FLASH) {
-    // Ensure HSI is on and stable
-    rcc.cr.modify(|_, w| w.hsion().set_bit());
-    while rcc.cr.read().hsirdy().bit_is_clear() {}
-
-    // Set system clock to HSI
-    rcc.cfgr.modify(|_, w| unsafe { w.sw().bits(0) });  // hsi
-    while rcc.cfgr.read().sws().bits() != 0 {}
-
-    // Clear registers to reset value
-    rcc.cr.write(|w| w.hsion().set_bit());
+    // Switch to HSI to mess with HSE
+    rcc.cr.modify(|_, w| w.hsion().on());
+    while rcc.cr.read().hsirdy().is_not_ready() {}
+    rcc.cfgr.modify(|_, w| w.sw().hsi());
+    while !rcc.cfgr.read().sws().is_hsi() {}
+    rcc.cr.write(|w| w.hsion().on());
     rcc.cfgr.reset();
 
     // Ensure HSE is on and stable
     rcc.cr.modify(|_, w|
-        w.hseon().set_bit()
-         .hsebyp().clear_bit());
-    while rcc.cr.read().hserdy().bit_is_clear() {}
+        w.hseon().on()
+         .hsebyp().not_bypassed());
+    while !rcc.cr.read().hserdy().is_ready() {}
 
-    rcc.pllckselr.modify(|_, w| unsafe {
-        w.pllsrc().bits(0b10)  // hse
+    rcc.pllckselr.modify(|_, w|
+        w.pllsrc().hse()
          .divm1().bits(1)  // ref prescaler
          .divm2().bits(1)  // ref prescaler
-    });
+    );
     // Configure PLL1: 8MHz /1 *100 /2 = 400 MHz
-    rcc.pllcfgr.modify(|_, w| unsafe {
-        w.pll1vcosel().clear_bit()  // 192-836 MHz VCO
-         .pll1rge().bits(0b11)  // 8-16 MHz PFD
-         .pll1fracen().clear_bit()
-         .divp1en().set_bit()
-         .pll2vcosel().set_bit()  // 150-420 MHz VCO
-         .pll2rge().bits(0b11)  // 8-16 MHz PFD
-         .pll2fracen().clear_bit()
-         .divp2en().set_bit()
-         .divq2en().set_bit()
-    });
+    rcc.pllcfgr.modify(|_, w|
+        w.pll1vcosel().wide_vco()  // 192-836 MHz VCO
+         .pll1rge().range8()  // 8-16 MHz PFD
+         .pll1fracen().reset()
+         .divp1en().enabled()
+         .pll2vcosel().medium_vco()  // 150-420 MHz VCO
+         .pll2rge().range8()  // 8-16 MHz PFD
+         .pll2fracen().reset()
+         .divp2en().enabled()
+         .divq2en().enabled()
+    );
     rcc.pll1divr.write(|w| unsafe {
         w.divn1().bits(100 - 1)  // feebdack divider
-         .divp1().bits(2 - 1)  // p output divider
+         .divp1().div2()  // p output divider
     });
-    rcc.cr.modify(|_, w| w.pll1on().set_bit());
-    while rcc.cr.read().pll1rdy().bit_is_clear() {}
+    rcc.cr.modify(|_, w| w.pll1on().on());
+    while !rcc.cr.read().pll1rdy().is_ready() {}
 
     // Configure PLL2: 8MHz /1 *25 / 2 = 100 MHz
     rcc.pll2divr.write(|w| unsafe {
@@ -140,24 +136,22 @@ fn rcc_pll_setup(rcc: &stm32::RCC, flash: &stm32::FLASH) {
          .divp1().bits(2 - 1)  // p output divider
          .divq1().bits(2 - 1)  // q output divider
     });
-    rcc.cr.modify(|_, w| w.pll2on().set_bit());
-    while rcc.cr.read().pll2rdy().bit_is_clear() {}
+    rcc.cr.modify(|_, w| w.pll2on().on());
+    while !rcc.cr.read().pll2rdy().is_ready() {}
 
     // hclk 200 MHz, pclk 100 MHz
-    let dapb = 0b100;
-    rcc.d1cfgr.write(|w| unsafe {
-        w.d1cpre().bits(0)  // sys_ck not divided
-         .hpre().bits(0b1000)  // rcc_hclk3 = sys_d1cpre_ck / 2
-         .d1ppre().bits(dapb) // rcc_pclk3 = rcc_hclk3 / 2
-    });
-    rcc.d2cfgr.write(|w| unsafe {
-        w.d2ppre1().bits(dapb)  // rcc_pclk1 = rcc_hclk3 / 2
-         .d2ppre2().bits(dapb) // rcc_pclk2 = rcc_hclk3 / 2
-
-    });
-    rcc.d3cfgr.write(|w| unsafe {
-        w.d3ppre().bits(dapb)  // rcc_pclk4 = rcc_hclk3 / 2
-    });
+    rcc.d1cfgr.write(|w|
+        w.d1cpre().div1()  // sys_ck not divided
+         .hpre().div2()  // rcc_hclk3 = sys_d1cpre_ck / 2
+         .d1ppre().div2() // rcc_pclk3 = rcc_hclk3 / 2
+    );
+    rcc.d2cfgr.write(|w|
+        w.d2ppre1().div2()  // rcc_pclk1 = rcc_hclk3 / 2
+         .d2ppre2().div2() // rcc_pclk2 = rcc_hclk3 / 2
+    );
+    rcc.d3cfgr.write(|w|
+        w.d3ppre().div2()  // rcc_pclk4 = rcc_hclk3 / 2
+    );
 
     // 2 wait states, 0b10 programming delay
     // 185-210 MHz
@@ -168,24 +162,19 @@ fn rcc_pll_setup(rcc: &stm32::RCC, flash: &stm32::FLASH) {
     while flash.acr.read().latency().bits() != 2 {}
 
     // CSI for I/O compensationc ell
-    rcc.cr.modify(|_, w| w.csion().set_bit());
-    while rcc.cr.read().csirdy().bit_is_clear() {}
+    rcc.cr.modify(|_, w| w.csion().on());
+    while !rcc.cr.read().csirdy().is_ready() {}
 
     // Set system clock to pll1_p
-    rcc.cfgr.modify(|_, w| unsafe { w.sw().bits(0b011) });  // pll1p
-    while rcc.cfgr.read().sws().bits() != 0b011 {}
+    rcc.cfgr.modify(|_, w| w.sw().pll1());
+    while !rcc.cfgr.read().sws().is_pll1() {}
 
-    rcc.d1ccipr.write(|w| unsafe {
-        w.ckpersrc().bits(1)  // hse_ck
-    });
-    rcc.d2ccip1r.modify(|_, w| unsafe {
-        w.spi123src().bits(1)  // pll2_p
-         .spi45src().bits(1)  // pll2_q
-    });
-
-    rcc.d3ccipr.modify(|_, w| unsafe {
-        w.spi6src().bits(1)  // pll2_q
-    });
+    rcc.d1ccipr.write(|w| w.ckpersel().hse());
+    rcc.d2ccip1r.modify(|_, w|
+        w.spi123sel().pll2_p()
+         .spi45sel().pll2_q()
+    );
+    rcc.d3ccipr.modify(|_, w| w.spi6sel().pll2_q());
 }
 
 fn io_compensation_setup(syscfg: &stm32::SYSCFG) {
