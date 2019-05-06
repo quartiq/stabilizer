@@ -336,7 +336,7 @@ fn spi1_setup(spi1: &stm32::SPI1) {
     spi1.cfg1.modify(|_, w| {
         w.mbr().bits(1)  // clk/4
          .dsize().bits(16 - 1)
-         .fthvl().one_frame()
+         .fthlv().one_frame()
     });
     spi1.cfg2.modify(|_, w| unsafe {
         w.afcntr().set_bit()
@@ -365,7 +365,7 @@ fn spi5_setup(spi5: &stm32::SPI5) {
     spi5.cfg1.modify(|_, w| {
         w.mbr().bits(1)  // clk/4
          .dsize().bits(16 - 1)
-         .fthvl().one_frame()
+         .fthlv().one_frame()
     });
     spi5.cfg2.modify(|_, w| unsafe {
         w.afcntr().set_bit()
@@ -394,7 +394,7 @@ fn spi2_setup(spi2: &stm32::SPI2) {
     spi2.cfg1.modify(|_, w| {
         w.mbr().bits(0)  // clk/2
          .dsize().bits(16 - 1)
-         .fthvl().one_frame()
+         .fthlv().one_frame()
     });
     spi2.cfg2.modify(|_, w| unsafe {
         w.afcntr().set_bit()
@@ -422,7 +422,7 @@ fn spi4_setup(spi4: &stm32::SPI4) {
     spi4.cfg1.modify(|_, w| {
         w.mbr().bits(0)  // clk/2
          .dsize().bits(16 - 1)
-         .fthvl().one_frame()
+         .fthlv().one_frame()
     });
     spi4.cfg2.modify(|_, w| unsafe {
         w.afcntr().set_bit()
@@ -458,14 +458,14 @@ fn tim2_setup(tim2: &stm32::TIM2) {
 }
 
 fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa0: usize, pa1: usize) {
-    dma1.s0cr.modify(|_, w| w.en().clear_bit());
-    while dma1.s0cr.read().en().bit_is_set() {}
+    dma1.st[0].cr.modify(|_, w| w.en().clear_bit());
+    while dma1.st[0].cr.read().en().bit_is_set() {}
 
-    dma1.s0par.write(|w| unsafe { w.pa().bits(pa0 as u32) });
-    dma1.s0m0ar.write(|w| unsafe { w.m0a().bits(ma as u32) });
-    dma1.s0ndtr.write(|w| unsafe { w.ndt().bits(1) });
+    dma1.st[0].par.write(|w| unsafe { w.pa().bits(pa0 as u32) });
+    dma1.st[0].m0ar.write(|w| unsafe { w.m0a().bits(ma as u32) });
+    dma1.st[0].ndtr.write(|w| unsafe { w.ndt().bits(1) });
     dmamux1.ccr[0].modify(|_, w| unsafe { w.dmareq_id().bits(22) });  // tim2_up
-    dma1.s0cr.modify(|_, w| unsafe {
+    dma1.st[0].cr.modify(|_, w| unsafe {
         w.pl().bits(0b01)  // medium
          .circ().set_bit()  // reload ndtr
          .msize().bits(0b10)  // 32
@@ -478,17 +478,17 @@ fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa0: usiz
          .dir().bits(0b01)  // memory_to_peripheral
          .pfctrl().clear_bit()  // dma is FC
     });
-    dma1.s0fcr.modify(|_, w| w.dmdis().clear_bit());
-    dma1.s0cr.modify(|_, w| w.en().set_bit());
+    dma1.st[0].fcr.modify(|_, w| w.dmdis().clear_bit());
+    dma1.st[0].cr.modify(|_, w| w.en().set_bit());
 
-    dma1.s1cr.modify(|_, w| w.en().clear_bit());
-    while dma1.s1cr.read().en().bit_is_set() {}
+    dma1.st[1].cr.modify(|_, w| w.en().clear_bit());
+    while dma1.st[1].cr.read().en().bit_is_set() {}
 
-    dma1.s1par.write(|w| unsafe { w.pa().bits(pa1 as u32) });
-    dma1.s1m0ar.write(|w| unsafe { w.m0a().bits(ma as u32) });
-    dma1.s1ndtr.write(|w| unsafe { w.ndt().bits(1) });
+    dma1.st[1].par.write(|w| unsafe { w.pa().bits(pa1 as u32) });
+    dma1.st[1].m0ar.write(|w| unsafe { w.m0a().bits(ma as u32) });
+    dma1.st[1].ndtr.write(|w| unsafe { w.ndt().bits(1) });
     dmamux1.ccr[1].modify(|_, w| unsafe { w.dmareq_id().bits(22) });  // tim2_up
-    dma1.s1cr.modify(|_, w| unsafe {
+    dma1.st[1].cr.modify(|_, w| unsafe {
         w.pl().bits(0b01)  // medium
          .circ().set_bit()  // reload ndtr
          .msize().bits(0b10)  // 32
@@ -501,8 +501,8 @@ fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa0: usiz
          .dir().bits(0b01)  // memory_to_peripheral
          .pfctrl().clear_bit()  // dma is FC
     });
-    dma1.s1fcr.modify(|_, w| w.dmdis().clear_bit());
-    dma1.s1cr.modify(|_, w| w.en().set_bit());
+    dma1.st[1].fcr.modify(|_, w| w.dmdis().clear_bit());
+    dma1.st[1].cr.modify(|_, w| w.en().set_bit());
 }
 
 type SpiPs = Option<(stm32::SPI1, stm32::SPI2, stm32::SPI4, stm32::SPI5)>;
