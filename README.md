@@ -1,6 +1,6 @@
 # Stabilizer Firmware
 
-![Flow diagram](https://raw.githubusercontent.com/quartiq/stabilizer/master/stabilizer_pid.png)
+![Flow diagram](stabilizer_pid.svg)
 
 ![Hardware](https://github.com/sinara-hw/Stabilizer/wiki/Stabilizer_v1.0_top_small.jpg)
 
