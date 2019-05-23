@@ -34,6 +34,13 @@ stm32h7 = { version = "0.7", features = ["stm32h7x3", "rt"] }
 log = "0.4"
 panic-abort = "0.3"
 panic-semihosting = { version = "0.5.2", optional = true }
+serde-json-core = { version = "0.0" }
+serde = { version = "1.0", features = ["derive"], default-features = false }
+heapless = { version = "0.4" }
+
+[patch.crates-io]
+serde-json-core = { path = "../serde-json-core" }
+lexical-core = { path = "../rust-lexical/lexical-core" }
 
 [dependencies.smoltcp]
 #git = "https://github.com/m-labs/smoltcp"
@@ -45,9 +52,6 @@ default-features = false
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
 bkpt = [ ]
-
-[build-dependencies]
-built = "0.3"
 
 [profile.dev]
 codegen-units = 1
