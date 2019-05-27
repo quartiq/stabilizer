@@ -1,5 +1,9 @@
 # Stabilizer Firmware
 
+![Flow diagram](stabilizer_pid.svg)
+
+![Hardware](https://github.com/sinara-hw/Stabilizer/wiki/Stabilizer_v1.0_top_small.jpg)
+
 ## Features
 
 * dual channel

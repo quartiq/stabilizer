@@ -1,10 +1,11 @@
 use core::ops::{Add, Mul};
+use serde::{Serialize, Deserialize};
 
 use core::f32;
 
 pub type IIRState = [f32; 5];
 
-#[derive(Copy,Clone)]
+#[derive(Copy,Clone,Deserialize,Serialize)]
 pub struct IIR {
     pub ba: IIRState,
     pub y_offset: f32,

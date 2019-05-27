@@ -14,13 +14,17 @@ extern crate log;
 
 use core::ptr;
 use core::cell::RefCell;
-use core::fmt::Write;
 use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
+use core::fmt::Write;
 use cortex_m_rt::{entry, exception};
 use stm32h7::stm32h7x3::{self as stm32, Peripherals, CorePeripherals, interrupt};
 use cortex_m::interrupt::Mutex;
+use heapless::{String, Vec, consts::*};
 
 use smoltcp as net;
+
+use serde::{Serialize, Deserialize};
+use serde_json_core::{ser::to_string, de::from_slice};
 
 mod eth;
 
@@ -50,7 +54,7 @@ fn init_log() {
 // Pull in build information (from `built` crate)
 mod build_info {
     #![allow(dead_code)]
-    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+    // include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
 fn pwr_setup(pwr: &stm32::PWR) {
@@ -625,6 +629,7 @@ fn main() -> ! {
     let mut socket_set_entries: [_; 8] = Default::default();
     let mut sockets = net::socket::SocketSet::new(&mut socket_set_entries[..]);
     create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle0);
+    create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle1);
 
     unsafe { eth::enable_interrupt(&dp.ETHERNET_DMA); }
     unsafe { cp.NVIC.set_priority(stm32::Interrupt::ETH, 196); }  // mid prio
@@ -645,16 +650,28 @@ fn main() -> ! {
         {
             let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle0);
             if !(socket.is_open() || socket.is_listening()) {
-                socket.listen(80).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
+                socket.listen(1234).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
             } else if last != time && socket.can_send() {
                 last = time;
-                let (x0, y0, x1, y1) = unsafe {
-                    (IIR_STATE[0][0], IIR_STATE[0][2], IIR_STATE[1][0], IIR_STATE[1][2]) };
-                writeln!(socket, "t={} x0={:.1} y0={:.1} x1={:.1} y1={:.1}",
-                         time, x0, y0, x1, y1)
-                    .unwrap_or_else(|e| warn!("TCP send error: {:?}", e));
+                let s = unsafe { Status{
+                    t: time,
+                    x0: IIR_STATE[0][0],
+                    y0: IIR_STATE[0][2],
+                    x1: IIR_STATE[1][0],
+                    y1: IIR_STATE[1][2],
+                }};
+                send_response(socket, &s);
             }
         }
+        {
+            let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle1);
+            if !(socket.is_open() || socket.is_listening()) {
+                socket.listen(1235).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
+            } else {
+                handle_command(socket);
+            }
+        }
+
         if !match iface.poll(&mut sockets, net::time::Instant::from_millis(time as i64)) {
             Ok(changed) => changed,
             Err(net::Error::Unrecognized) => true,
@@ -663,6 +680,73 @@ fn main() -> ! {
             cortex_m::asm::wfi();
         }
     }
+}
+
+#[derive(Deserialize,Serialize)]
+struct Request {
+    channel: i8,
+    iir: IIR,
+}
+
+#[derive(Serialize)]
+struct Response<'a> {
+    code: i32,
+    message: &'a str,
+}
+
+fn send_response<T: Serialize>(socket: &mut net::socket::TcpSocket, msg: &T) {
+    let mut u: String<U128> = to_string(msg).unwrap();
+    u.push('\n').unwrap();
+    socket.write_str(&u).unwrap();
+}
+
+fn handle_command(socket: &mut net::socket::TcpSocket) {
+    let mut data: Vec<u8, U256> = Vec::new();
+    let mut discard: bool = false;
+    while socket.can_recv() {
+        if socket.recv(|buf| {
+            let (len, found) = match buf.iter().position(|&c| c as char == '\n') {
+                Some(end) => (end + 1, true),
+                None => (buf.len(), false),
+            };
+            if data.len() + len >= data.capacity() {
+                discard = true;
+                data.clear();
+            } else if !discard && len > 0 {
+                data.extend_from_slice(&buf[..len - 1]).unwrap();
+            }
+            (len, found)
+        }).unwrap() {
+            let resp = if discard {
+                discard = false;
+                Response{ code: 500, message: "command buffer overflow" }
+            } else {
+                match from_slice::<Request>(&data) {
+                    Ok(request) => {
+                        cortex_m::interrupt::free(|_| {
+                            unsafe { IIR_CH[request.channel as usize] = request.iir; };
+                        });
+                        Response{ code: 200, message: "ok" }
+                    },
+                    Err(err) => {
+                        warn!("parse error {}", err);
+                        Response{ code: 550, message: "parse error" }
+                    },
+                }
+            };
+            send_response(socket, &resp);
+            socket.close();
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct Status {
+    t: u32,
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32
 }
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
