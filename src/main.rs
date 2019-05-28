@@ -692,7 +692,7 @@ fn main() -> ! {
 
 #[derive(Deserialize,Serialize)]
 struct Request {
-    channel: i8,
+    channel: u8,
     iir: IIR,
 }
 
@@ -731,10 +731,14 @@ fn handle_command(socket: &mut net::socket::TcpSocket) {
             } else {
                 match from_slice::<Request>(&data) {
                     Ok(request) => {
-                        cortex_m::interrupt::free(|_| {
-                            unsafe { IIR_CH[request.channel as usize] = request.iir; };
-                        });
-                        Response{ code: 200, message: "ok" }
+                        if request.channel > 1 {
+                            Response{ code: 500, message: "invalid channel" }
+                        } else {
+                            cortex_m::interrupt::free(|_| {
+                                unsafe { IIR_CH[request.channel as usize] = request.iir; };
+                            });
+                            Response{ code: 200, message: "ok" }
+                        }
                     },
                     Err(err) => {
                         warn!("parse error {}", err);

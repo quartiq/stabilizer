@@ -32,12 +32,13 @@ class StabilizerConfig:
 
 class IIR:
     t_update = 2e-6
+    full_scale = float((1 << 15) - 1)
 
     def __init__(self):
         self.ba = np.zeros(5, np.float32)
         self.y_offset = 0.
-        self.y_min = -float(1 << 15)
-        self.y_max = float(1 << 15) - 1
+        self.y_min = -self.full_scale - 1
+        self.y_max = self.full_scale
 
     def as_dict(self):
         iir = OD()
@@ -70,7 +71,7 @@ class IIR:
         self.ba[4] = 0.
 
     def set_x_offset(self, o):
-        b = self.ba[:3].sum()*((1 << 15) - 1)
+        b = self.ba[:3].sum()*self.full_scale
         self.y_offset = b*o
 
 
@@ -100,6 +101,7 @@ if __name__ == "__main__":
         i.set_x_offset(args.offset)
         s = StabilizerConfig()
         await s.connect(args.stabilizer)
+        assert args.channel in range(2)
         r = await s.set(args.channel, i)
 
     loop.run_until_complete(main())

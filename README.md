@@ -9,14 +9,20 @@
 * dual channel
 * SPI ADC
 * SPI DAC
-* fixed AFE gains
-* 500 kHz rate, timed
-* < 2 µs latency, unmatched
+* 500 kHz rate, timed sampling
+* 2 µs latency, unmatched between channels
 * f32 IIR math
 * generic biquad (second order) IIR filter
 * anti-windup
 * derivative kick avoidance
-* configurable output limits
+
+## Limitations/TODOs
+
+* Fixed AFE gains
+* The IP and MAC address are [hardcoded](src/main.rs)
+* Expose configurable limits
+* 100Base-T only
+* Digital IO, GPIO header, AFE header, EEM header are not handled
 
 ## Hardware
 
@@ -33,3 +39,10 @@ See https://github.com/sinara-hw/Stabilizer
 * `rustup target add thumbv7em-none-eabihf`
 * `openocd -f stabilizer.cfg` and leave it running
 * `cargo run --release`
+
+
+## Protocol
+
+Stabilizer can be configured via newline-delimited JSON over TCP.
+It listens on port 1235. [stabilizer.py](stabilizer.py) contains a reference
+implementation of the protocol.

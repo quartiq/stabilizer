@@ -39,6 +39,7 @@ fn macc<T>(y0: T, x: &[T], a: &[T]) -> T
     x.iter().zip(a.iter()).map(|(&i, &j)| i * j).fold(y0, |y, xa| y + xa)
 }
 
+#[allow(unused)]
 impl IIR {
     pub fn set_pi(&mut self, kp: f32, ki: f32, g: f32) -> Result<(), &str> {
         let ki = copysign(ki, kp);
