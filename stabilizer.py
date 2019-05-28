@@ -1,6 +1,6 @@
 import json
 import asyncio
-from collections import OrderedDict
+from collections import OrderedDict as OD
 import logging
 
 import numpy as np
@@ -17,14 +17,14 @@ class StabilizerConfig:
         self.reader, self.writer = await asyncio.open_connection(host, port)
 
     async def set(self, channel, iir):
-        up = OrderedDict([("channel", channel), ("iir", iir.as_dict())])
+        up = OD([("channel", channel), ("iir", iir.as_dict())])
         s = json.dumps(up, separators=(",", ":"))
         assert "\n" not in s
         logger.debug("send %s", s)
         self.writer.write(s.encode() + b"\n")
         r = (await self.reader.readline()).decode()
         logger.debug("recv %s", r)
-        ret = json.loads(r, object_pairs_hook=OrderedDict)
+        ret = json.loads(r, object_pairs_hook=OD)
         if ret["code"] != 200:
             raise StabilizerError(ret)
         return ret
@@ -40,7 +40,7 @@ class IIR:
         self.y_max = float(1 << 15) - 1
 
     def as_dict(self):
-        iir = OrderedDict()
+        iir = OD()
         iir["ba"] = [float(_) for _ in self.ba]
         iir["y_offset"] = self.y_offset
         iir["y_min"] = self.y_min
@@ -70,7 +70,7 @@ class IIR:
         self.ba[4] = 0.
 
     def set_x_offset(self, o):
-        b = self.ba[:3].sum()
+        b = self.ba[:3].sum()*((1 << 15) - 1)
         self.y_offset = b*o
 
 
@@ -81,11 +81,12 @@ if __name__ == "__main__":
     p.add_argument("-c", "--channel", default=0, type=int,
                    help="Stabilizer channel to configure")
     p.add_argument("-o", "--offset", default=0., type=float,
-                   help="X offset, in ADC LSB")
+                   help="input offset, in units of full scale")
     p.add_argument("-p", "--proportional-gain", default=1., type=float,
-                   help="Proportional gain, in DAC LSB/ADC LSB")
+                   help="Proportional gain, in units of 1")
     p.add_argument("-i", "--integral-gain", default=0., type=float,
-                   help="Integral gain, in DAC LSB/(ADC LSB*s)")
+                   help="Integral gain, in units of Hz, "
+                        "sign taken from proportional-gain")
 
     args = p.parse_args()
 
@@ -99,6 +100,6 @@ if __name__ == "__main__":
         i.set_x_offset(args.offset)
         s = StabilizerConfig()
         await s.connect(args.stabilizer)
-        r = await s.set(0, i)
+        r = await s.set(args.channel, i)
 
     loop.run_until_complete(main())
