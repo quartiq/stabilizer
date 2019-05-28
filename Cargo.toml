@@ -34,15 +34,16 @@ stm32h7 = { version = "0.7", features = ["stm32h7x3", "rt"] }
 log = "0.4"
 panic-abort = "0.3"
 panic-semihosting = { version = "0.5.2", optional = true }
-serde-json-core = { version = "0.0" }
 serde = { version = "1.0", features = ["derive"], default-features = false }
 heapless = { version = "0.4" }
 
-[patch.crates-io]
-serde-json-core = { path = "../serde-json-core" }
+[dependencies.serde-json-core]
+# version = "0.0"
+git = "https://github.com/quartiq/serde-json-core.git"
+rev = "6143ac2"
 
 [dependencies.smoltcp]
-#git = "https://github.com/m-labs/smoltcp"
+#git = "https://github.com/m-labs/smoltcp.git"
 #rev = "cd893e6"
 version = "0.5"
 features = ["proto-ipv4", "socket-tcp"]
