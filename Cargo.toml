@@ -40,7 +40,6 @@ heapless = { version = "0.4" }
 
 [patch.crates-io]
 serde-json-core = { path = "../serde-json-core" }
-lexical-core = { path = "../rust-lexical/lexical-core" }
 
 [dependencies.smoltcp]
 #git = "https://github.com/m-labs/smoltcp"
