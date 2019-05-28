@@ -652,6 +652,7 @@ fn main() -> ! {
     });
 
     let mut last = 0;
+    let mut server = Server::new();
     loop {
         // if ETHERNET_PENDING.swap(false, Ordering::Relaxed) { }
         let time = TIME.load(Ordering::Relaxed);
@@ -661,14 +662,7 @@ fn main() -> ! {
                 socket.listen(1234).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
             } else if last != time && socket.can_send() {
                 last = time;
-                let s = unsafe { Status{
-                    t: time,
-                    x0: IIR_STATE[0][0],
-                    y0: IIR_STATE[0][2],
-                    x1: IIR_STATE[1][0],
-                    y1: IIR_STATE[1][2],
-                }};
-                send_response(socket, &s);
+                handle_status(socket, time);
             }
         }
         {
@@ -676,7 +670,7 @@ fn main() -> ! {
             if !(socket.is_open() || socket.is_listening()) {
                 socket.listen(1235).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
             } else {
-                handle_command(socket);
+                server.handle_command(socket);
             }
         }
 
@@ -702,37 +696,48 @@ struct Response<'a> {
     message: &'a str,
 }
 
-fn send_response<T: Serialize>(socket: &mut net::socket::TcpSocket, msg: &T) {
+fn reply<T: Serialize>(socket: &mut net::socket::TcpSocket, msg: &T) {
     let mut u: String<U128> = to_string(msg).unwrap();
     u.push('\n').unwrap();
     socket.write_str(&u).unwrap();
 }
 
-fn handle_command(socket: &mut net::socket::TcpSocket) {
-    let mut data: Vec<u8, U256> = Vec::new();
-    let mut discard: bool = false;
-    while socket.can_recv() {
-        if socket.recv(|buf| {
-            let (len, found) = match buf.iter().position(|&c| c as char == '\n') {
-                Some(end) => (end + 1, true),
-                None => (buf.len(), false),
-            };
-            if data.len() + len >= data.capacity() {
-                discard = true;
-                data.clear();
-            } else if !discard && len > 0 {
-                data.extend_from_slice(&buf[..len - 1]).unwrap();
+struct Server {
+    data: Vec<u8, U256>,
+    discard: bool,
+}
+
+impl Server {
+    fn new() -> Self {
+        Self { data: Vec::new(), discard: false }
+    }
+
+    fn handle_command(&mut self, socket: &mut net::socket::TcpSocket) {
+        while socket.can_recv() {
+            let found = socket.recv(|buf| {
+                let (len, found) = match buf.iter().position(|&c| c as char == '\n') {
+                    Some(end) => (end + 1, true),
+                    None => (buf.len(), false),
+                };
+                if self.data.len() + len >= self.data.capacity() {
+                    self.discard = true;
+                    self.data.clear();
+                } else if !self.discard && len > 0 {
+                    self.data.extend_from_slice(&buf[..len - 1]).unwrap();
+                }
+                (len, found)
+            }).unwrap();
+            if !found {
+                continue;
             }
-            (len, found)
-        }).unwrap() {
-            let resp = if discard {
-                discard = false;
-                Response{ code: 500, message: "command buffer overflow" }
+            let resp = if self.discard {
+                self.discard = false;
+                Response{ code: 520, message: "command buffer overflow" }
             } else {
-                match from_slice::<Request>(&data) {
+                match from_slice::<Request>(&self.data) {
                     Ok(request) => {
                         if request.channel > 1 {
-                            Response{ code: 500, message: "invalid channel" }
+                            Response{ code: 530, message: "invalid channel" }
                         } else {
                             cortex_m::interrupt::free(|_| {
                                 unsafe { IIR_CH[request.channel as usize] = request.iir; };
@@ -741,15 +746,27 @@ fn handle_command(socket: &mut net::socket::TcpSocket) {
                         }
                     },
                     Err(err) => {
-                        warn!("parse error {}", err);
+                        warn!("parse error {:?}", err);
                         Response{ code: 550, message: "parse error" }
                     },
                 }
             };
-            send_response(socket, &resp);
+            self.data.clear();
+            reply(socket, &resp);
             socket.close();
         }
     }
+}
+
+fn handle_status(socket: &mut net::socket::TcpSocket, time: u32) {
+    let s = unsafe { Status{
+        t: time,
+        x0: IIR_STATE[0][0],
+        y0: IIR_STATE[0][2],
+        x1: IIR_STATE[1][0],
+        y1: IIR_STATE[1][2],
+    }};
+    reply(socket, &s);
 }
 
 #[derive(Serialize)]
@@ -765,7 +782,7 @@ const SCALE: f32 = ((1 << 15) - 1) as f32;
 static mut IIR_STATE: [IIRState; 2] = [[0.; 5]; 2];
 static mut IIR_CH: [IIR; 2] = [
     IIR{ ba: [0., 0., 0., 0., 0.], y_offset: 0.,
-         y_min: -SCALE, y_max: SCALE }; 2];
+         y_min: -SCALE - 1., y_max: SCALE }; 2];
 
 // seems to slow it down
 // #[link_section = ".data.spi1"]
