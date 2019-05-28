@@ -619,16 +619,6 @@ fn main() -> ! {
     //dbgmcu.apb1lfz1.modify(|_, w| w.stop_tim2().set_bit());  // stop tim2 in debug
     unsafe { ptr::write_volatile(0x5c00_103c as *mut usize, 0x0000_0001) };
 
-    unsafe {
-        let t = 2e-6*2.;
-        IIR_CH[0].set_pi(1., 0., 0.).unwrap();
-        IIR_CH[0].set_x_offset(0.*SCALE);
-
-        IIR_CH[1].set_pi(-0.1, -10.*t, 0.).unwrap();
-        IIR_CH[1].set_x_offset(0.1*SCALE);
-        IIR_CH[1].get_x_offset().unwrap();
-    }
-
     eth::setup(&rcc, &dp.SYSCFG);
     eth::setup_pins(&dp.GPIOA, &dp.GPIOB, &dp.GPIOC, &dp.GPIOG);
 
