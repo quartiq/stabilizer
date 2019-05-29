@@ -32,7 +32,9 @@ See https://github.com/sinara-hw/Stabilizer
 
 * Clone or download this
 * Get a recent openocd, a JTAG adapter ("st-link" or some clone) and
-  everything connected and permissions setup
+  everything connected and permissions setup. Most
+  [Nucleo](https://www.digikey.de/short/p41h4v) boards have a
+  detachable ST-Link v2 and are cheap.[^swd]
 * Get a multiarch `gdb` (or a cross arm gdb and edit `.cargo/config` accordingly)
 * Get [rustup](https://rustup.rs/)
 * `rustup override add nightly`
@@ -40,6 +42,14 @@ See https://github.com/sinara-hw/Stabilizer
 * `openocd -f stabilizer.cfg` and leave it running
 * `cargo run --release`
 
+[^swd]: Build a cable: connect a standard 8 conductor ribbon with the wires numbered
+  `1-8` to the pins on the St-Link v2 single row 2.54mm connector as `647513(82)`
+  (`(i)` marks an unused wire)
+  and to the [1.27mm dual row](https://www.digikey.de/short/p41h0n) on Stabilizer as `657483x2x1`
+  (`x` marks an unused pin, enumeration is standard for dual row, as in the
+  schematic).
+  It's just folding the ribbon between wires `5` and `6`. The signals on the ribbon
+  are then `NRST,TDI,TDO,TCK,TMS,3V3,GND,GND`.
 
 ## Protocol
 
