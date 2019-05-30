@@ -497,9 +497,6 @@ static mut DAT: u32 = 0x201;  // EN | CSTART
 
 static ETHERNET_PENDING: AtomicBool = AtomicBool::new(true);
 
-#[link_section = ".sram3.eth"]
-static mut ETHERNET: eth::Device = eth::Device::new();
-
 const TCP_RX_BUFFER_SIZE: usize = 8192;
 const TCP_TX_BUFFER_SIZE: usize = 8192;
 
@@ -527,8 +524,10 @@ const APP: () = {
             y_max: SCALE
         };
     2];
-    // static IFACE: net::iface::EthernetInterface<'static, 'static, 'static, eth::Device> = ();
-    // static SOCKETS: net::socket::SocketSet<'static, 'static, 'static> = ();
+    static ETHERNET_PERIPH: (stm32::ETHERNET_MAC, stm32::ETHERNET_DMA, stm32::ETHERNET_MTL) = ();
+
+    #[link_section = ".sram3.eth"]
+    static mut ETHERNET: eth::Device = eth::Device::new();
 
     #[init(schedule = [tick])]
     fn init(c: init::Context) -> init::LateResources {
@@ -605,17 +604,30 @@ const APP: () = {
         let dbgmcu = dp.DBGMCU;
         dbgmcu.apb1lfz1.modify(|_, w| w.tim2().set_bit());
 
+        tim2_setup(&dp.TIM2);
+
         eth::setup(&rcc, &dp.SYSCFG);
         eth::setup_pins(&dp.GPIOA, &dp.GPIOB, &dp.GPIOC, &dp.GPIOG);
 
-        let device = unsafe { &mut ETHERNET };
+        c.schedule.tick(rtfm::Instant::now()).unwrap();
+
+        init::LateResources {
+            SPI: (spi1, spi2, spi4, spi5),
+            ETHERNET_PERIPH: (dp.ETHERNET_MAC, dp.ETHERNET_DMA, dp.ETHERNET_MTL),
+        }
+    }
+
+    #[idle(resources = [ETHERNET, ETHERNET_PERIPH])]
+    fn idle(c: idle::Context) -> ! {
+        let (MAC, DMA, MTL) = c.resources.ETHERNET_PERIPH;
+
         let hardware_addr = net::wire::EthernetAddress([0x10, 0xE2, 0xD5, 0x00, 0x03, 0x00]);
-        unsafe { device.init(hardware_addr, &dp.ETHERNET_MAC, &dp.ETHERNET_DMA, &dp.ETHERNET_MTL) };
+        unsafe { c.resources.ETHERNET.init(hardware_addr, MAC, DMA, MTL) };
         let mut neighbor_cache_storage = [None; 8];
         let neighbor_cache = net::iface::NeighborCache::new(&mut neighbor_cache_storage[..]);
         let local_addr = net::wire::IpAddress::v4(10, 0, 16, 99);
         let mut ip_addrs = [net::wire::IpCidr::new(local_addr, 24)];
-        let mut iface = net::iface::EthernetInterfaceBuilder::new(device)
+        let mut iface = net::iface::EthernetInterfaceBuilder::new(c.resources.ETHERNET)
                     .ethernet_addr(hardware_addr)
                     .neighbor_cache(neighbor_cache)
                     .ip_addrs(&mut ip_addrs[..])
@@ -625,36 +637,56 @@ const APP: () = {
         create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle0);
         create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle1);
 
-        unsafe { eth::enable_interrupt(&dp.ETHERNET_DMA); }
-
-        tim2_setup(&dp.TIM2);
-
-        c.schedule.tick(rtfm::Instant::now()).unwrap();
-
-        init::LateResources {
-            SPI: (spi1, spi2, spi4, spi5),
-            // IFACE: iface,
-            // SOCKETS: sockets,
-        }
-    }
-
-    #[idle]
-    fn idle(_: idle::Context) -> ! {
+        // unsafe { eth::enable_interrupt(DMA); }
+        let mut last = 0u32;
+        let mut last_iter = rtfm::Instant::now();
+        //let mut server = Server::new();
         loop {
-            cortex_m::asm::wfi();
+            // if ETHERNET_PENDING.swap(false, Ordering::Relaxed) { }
+            let mut time = last;
+            if rtfm::Instant::now() >= last_iter + 200_000.cycles() {
+                last_iter += 200_000.cycles();
+                time += 1;
+            }
+            {
+                let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle0);
+                if !(socket.is_open() || socket.is_listening()) {
+                    socket.listen(1234).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
+                } else if time > last && socket.can_send() {
+                    last = time;
+                    //handle_status(socket, time);
+                }
+            }
+            {
+                let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle1);
+                if !(socket.is_open() || socket.is_listening()) {
+                    socket.listen(1235).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
+                } else {
+                    //server.handle_command(socket);
+                }
+            }
+
+            if !match iface.poll(&mut sockets, net::time::Instant::from_millis(time as i64)) {
+                Ok(changed) => changed,
+                Err(net::Error::Unrecognized) => true,
+                Err(e) => { info!("iface poll error: {:?}", e); true }
+            } {
+                // cortex_m::asm::wfi();
+            }
         }
     }
 
     #[task(schedule = [tick])]
     fn tick(c: tick::Context) {
-        // let now = rtfm::Instant::now();
+        static mut TIME: u32 = 0;
+        *TIME += 1;
         const PERIOD: u32 = 200_000_000;
         c.schedule.tick(c.scheduled + PERIOD.cycles()).unwrap();
     }
 
     // seems to slow it down
     // #[link_section = ".data.spi1"]
-    #[interrupt(resources = [SPI, IIR_STATE, IIR_CH], priority = 1)]
+    #[interrupt(resources = [SPI, IIR_STATE, IIR_CH], priority = 3)]
     fn SPI1(c: SPI1::Context) {
         #[cfg(feature = "bkpt")]
         cortex_m::asm::bkpt();
@@ -664,7 +696,7 @@ const APP: () = {
 
         let sr = spi1.sr.read();
         if sr.eot().bit_is_set() {
-        spi1.ifcr.write(|w| w.eotc().set_bit());
+            spi1.ifcr.write(|w| w.eotc().set_bit());
         }
         if sr.rxp().bit_is_set() {
             let rxdr = &spi1.rxdr as *const _ as *const u16;
@@ -678,7 +710,7 @@ const APP: () = {
 
         let sr = spi5.sr.read();
         if sr.eot().bit_is_set() {
-        spi5.ifcr.write(|w| w.eotc().set_bit());
+            spi5.ifcr.write(|w| w.eotc().set_bit());
         }
         if sr.rxp().bit_is_set() {
             let rxdr = &spi5.rxdr as *const _ as *const u16;
@@ -693,53 +725,23 @@ const APP: () = {
         cortex_m::asm::bkpt();
     }
 
-    #[interrupt(resources = [], priority = 7)]
-    fn ETH(_: ETH::Context) {
-        let dma = unsafe { &stm32::Peripherals::steal().ETHERNET_DMA };
+    /*
+    #[interrupt(resources = [ETHERNET_PERIPH], priority = 1)]
+    fn ETH(c: ETH::Context) {
+        let dma = &c.resources.ETHERNET_PERIPH.1;
         ETHERNET_PENDING.store(true, Ordering::Relaxed);
         unsafe { eth::interrupt_handler(dma) }
     }
+    */
 
     extern "C" {
-        // hw interrupt handlers for RTFM to use for scheduling tasks, one per priority
+        // hw interrupt handlers for RTFM to use for scheduling tasks
+        // one per priority
         fn DCMI();
         fn JPEG();
         fn SDMMC();
     }
 };
-
-/*
-        let mut last = 0;
-        let mut server = Server::new();
-        loop {
-            // if ETHERNET_PENDING.swap(false, Ordering::Relaxed) { }
-            let time = TIME.load(Ordering::Relaxed);
-            {
-                let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle0);
-                if !(socket.is_open() || socket.is_listening()) {
-                    socket.listen(1234).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
-                } else if last != time && socket.can_send() {
-                    last = time;
-                    handle_status(socket, time);
-                }
-            }
-            {
-                let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle1);
-                if !(socket.is_open() || socket.is_listening()) {
-                    socket.listen(1235).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
-                } else {
-                    server.handle_command(socket);
-                }
-            }
-
-            if !match iface.poll(&mut sockets, net::time::Instant::from_millis(time as i64)) {
-                Ok(changed) => changed,
-                Err(net::Error::Unrecognized) => true,
-                Err(e) => { info!("iface poll error: {:?}", e); true }
-            } {
-                cortex_m::asm::wfi();
-            }
-        }
 
 #[derive(Deserialize,Serialize)]
 struct Request {
@@ -753,15 +755,24 @@ struct Response<'a> {
     message: &'a str,
 }
 
-fn reply<T: Serialize>(socket: &mut net::socket::TcpSocket, msg: &T) {
-    let mut u: String<U128> = to_string(msg).unwrap();
-    u.push('\n').unwrap();
-    socket.write_str(&u).unwrap();
+#[derive(Serialize)]
+struct Status {
+    t: u32,
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32
 }
 
 struct Server {
     data: Vec<u8, U256>,
     discard: bool,
+}
+
+fn reply<T: Serialize>(socket: &mut net::socket::TcpSocket, msg: &T) {
+    let mut u: String<U128> = to_string(msg).unwrap();
+    u.push('\n').unwrap();
+    socket.write_str(&u).unwrap();
 }
 
 impl Server {
@@ -796,9 +807,7 @@ impl Server {
                         if request.channel > 1 {
                             Response{ code: 530, message: "invalid channel" }
                         } else {
-                            cortex_m::interrupt::free(|_| {
-                                unsafe { IIR_CH[request.channel as usize] = request.iir; };
-                            });
+                            //unsafe { IIR_CH[request.channel as usize] = request.iir; };
                             Response{ code: 200, message: "ok" }
                         }
                     },
@@ -815,26 +824,17 @@ impl Server {
     }
 }
 
-fn handle_status(socket: &mut net::socket::TcpSocket, time: u32) {
+fn handle_status(socket: &mut net::socket::TcpSocket, time: u32,
+                 iir_state: &[IIRState]) {
     let s = unsafe { Status{
         t: time,
-        x0: IIR_STATE[0][0],
-        y0: IIR_STATE[0][2],
-        x1: IIR_STATE[1][0],
-        y1: IIR_STATE[1][2],
+        x0: iir_state[0][0],
+        y0: iir_state[0][2],
+        x1: iir_state[1][0],
+        y1: iir_state[1][2],
     }};
     reply(socket, &s);
 }
-
-#[derive(Serialize)]
-struct Status {
-    t: u32,
-    x0: f32,
-    y0: f32,
-    x1: f32,
-    y1: f32
-}
-*/
 
 #[exception]
 fn HardFault(ef: &cortex_m_rt::ExceptionFrame) -> ! {
