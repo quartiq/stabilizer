@@ -1,6 +1,6 @@
 [package]
 name = "stabilizer"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Robert Jördens <rj@quartiq.de>"]
 description = "Firmware for the Sinara Stabilizer board (stm32h743, eth, poe, 2 adc, 2 dac)"
 categories = ["embedded", "no-std", "hardware-support", "science"]
@@ -8,7 +8,7 @@ license = "GPL-3.0-or-later"
 keywords = ["ethernet", "eth", "stm32", "stm32h7", "adc", "dac", "tcp", "no-std", "embedded"]
 repository = "https://github.com/quartiq/stabilizer"
 readme = "README.md"
-#documentation = "https://docs.rs/stabilizer/"
+documentation = "https://docs.rs/stabilizer/"
 edition = "2018"
 publish = false
 exclude = [
@@ -39,7 +39,7 @@ heapless = { version = "0.4" }
 [dependencies.serde-json-core]
 # version = "0.0"
 git = "https://github.com/quartiq/serde-json-core.git"
-rev = "6143ac2"
+rev = "82fdca9"
 
 [dependencies.stm32h7]
 path = "../stm32-rs/stm32h7"
