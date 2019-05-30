@@ -53,6 +53,10 @@ version = "0.5"
 features = ["proto-ipv4", "socket-tcp"]
 default-features = false
 
+[dependencies.cortex-m-rtfm]
+git = "https://github.com/japaric/cortex-m-rtfm"
+features = ["timer-queue"]
+
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
 bkpt = [ ]

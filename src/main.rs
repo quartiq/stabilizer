@@ -13,12 +13,10 @@ extern crate panic_semihosting;
 extern crate log;
 
 use core::ptr;
-use core::cell::RefCell;
 use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 use core::fmt::Write;
-use cortex_m_rt::{entry, exception};
-use stm32h7::stm32h7x3::{self as stm32, Peripherals, CorePeripherals, interrupt};
-use cortex_m::interrupt::Mutex;
+use cortex_m_rt::{exception};
+use stm32h7::stm32h7x3::{self as stm32, interrupt};
 use heapless::{String, Vec, consts::*};
 
 use smoltcp as net;
@@ -37,7 +35,7 @@ fn init_log() {}
 #[cfg(feature = "semihosting")]
 fn init_log() {
     use log::LevelFilter;
-    use cortex_m_log::log::{Logger, init};
+    use cortex_m_log::log::{Logger, init as init_log};
     use cortex_m_log::printer::semihosting::{InterruptOk, hio::HStdout};
     static mut LOGGER: Option<Logger<InterruptOk<HStdout>>> = None;
     let logger = Logger {
@@ -48,7 +46,7 @@ fn init_log() {
         LOGGER.get_or_insert(logger)
     };
 
-    init(logger).unwrap();
+    init_log(logger).unwrap();
 }
 
 // Pull in build information (from `built` crate)
@@ -492,8 +490,7 @@ fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa0: usiz
     dma1.st[1].cr.modify(|_, w| w.en().set_bit());
 }
 
-type SpiPs = Option<(stm32::SPI1, stm32::SPI2, stm32::SPI4, stm32::SPI5)>;
-static SPIP: Mutex<RefCell<SpiPs>> = Mutex::new(RefCell::new(None));
+const SCALE: f32 = ((1 << 15) - 1) as f32;
 
 #[link_section = ".sram1.datspi"]
 static mut DAT: u32 = 0x201;  // EN | CSTART
@@ -518,153 +515,231 @@ macro_rules! create_socket {
     )
 }
 
+#[rtfm::app(device = stm32h7::stm32h7x3)]
+const APP: () = {
+    static SPI: (stm32::SPI1, stm32::SPI2, stm32::SPI4, stm32::SPI5) = ();
 
-#[entry]
-fn main() -> ! {
-    let mut cp = CorePeripherals::take().unwrap();
-    let dp = Peripherals::take().unwrap();
+    static mut IIR_STATE: [IIRState; 2] = [[0.; 5]; 2];
+    static mut IIR_CH: [IIR; 2] = [
+        IIR {
+            ba: [0., 0., 0., 0., 0.],
+            y_offset: 0.,
+            y_min: -SCALE - 1.,
+            y_max: SCALE
+        };
+    2];
+    // static IFACE: net::iface::EthernetInterface<'static, 'static, 'static, eth::Device> = ();
+    // static SOCKETS: net::socket::SocketSet<'static, 'static, 'static> = ();
 
-    let rcc = dp.RCC;
-    rcc_reset(&rcc);
+    #[init]
+    fn init(c: init::Context) -> init::LateResources {
+        let dp = c.device;
+        let cp = c.core;
 
-    init_log();
-    // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
-    // info!("Built on {}", build_info::BUILT_TIME_UTC);
-    // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
+        let rcc = dp.RCC;
+        rcc_reset(&rcc);
 
-    pwr_setup(&dp.PWR);
-    rcc_pll_setup(&rcc, &dp.FLASH);
-    rcc.apb4enr.modify(|_, w| w.syscfgen().set_bit());
-    io_compensation_setup(&dp.SYSCFG);
+        init_log();
+        // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
+        // info!("Built on {}", build_info::BUILT_TIME_UTC);
+        // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
 
-    // 100 MHz
-    cp.SYST.set_clock_source(cortex_m::peripheral::syst::SystClkSource::Core);
-    cp.SYST.set_reload(cortex_m::peripheral::SYST::get_ticks_per_10ms()*200/10);
-    cp.SYST.enable_counter();
-    cp.SYST.enable_interrupt();
-    unsafe { cp.SCB.shpr[11].write(128); }  // systick exception priority
+        pwr_setup(&dp.PWR);
+        rcc_pll_setup(&rcc, &dp.FLASH);
+        rcc.apb4enr.modify(|_, w| w.syscfgen().set_bit());
+        io_compensation_setup(&dp.SYSCFG);
 
-    cp.SCB.enable_icache();
-    // TODO: ETH DMA coherence issues
-    // cp.SCB.enable_dcache(&mut cp.CPUID);
-    cp.DWT.enable_cycle_counter();
+        // 100 MHz
+/*
+        cp.SYST.set_clock_source(cortex_m::peripheral::syst::SystClkSource::Core);
+        cp.SYST.set_reload(cortex_m::peripheral::SYST::get_ticks_per_10ms()*200/10);
+        cp.SYST.enable_counter();
+        cp.SYST.enable_interrupt();
+        unsafe { cp.SCB.shpr[11].write(128); }  // systick exception priority
+*/
 
-    rcc.ahb4enr.modify(|_, w|
-        w.gpioaen().set_bit()
-         .gpioben().set_bit()
-         .gpiocen().set_bit()
-         .gpioden().set_bit()
-         .gpioeen().set_bit()
-         .gpiofen().set_bit()
-         .gpiogen().set_bit()
-    );
-    gpio_setup(&dp.GPIOA, &dp.GPIOB, &dp.GPIOD, &dp.GPIOE, &dp.GPIOF, &dp.GPIOG);
+        cp.SCB.enable_icache();
+        // TODO: ETH DMA coherence issues
+        // cp.SCB.enable_dcache(&mut cp.CPUID);
+        // cp.DWT.enable_cycle_counter();
 
-    rcc.apb1lenr.modify(|_, w| w.spi2en().set_bit());
-    let spi2 = dp.SPI2;
-    spi2_setup(&spi2);
+        rcc.ahb4enr.modify(|_, w|
+            w.gpioaen().set_bit()
+            .gpioben().set_bit()
+            .gpiocen().set_bit()
+            .gpioden().set_bit()
+            .gpioeen().set_bit()
+            .gpiofen().set_bit()
+            .gpiogen().set_bit()
+        );
+        gpio_setup(&dp.GPIOA, &dp.GPIOB, &dp.GPIOD, &dp.GPIOE, &dp.GPIOF, &dp.GPIOG);
 
-    rcc.apb2enr.modify(|_, w| w.spi4en().set_bit());
-    let spi4 = dp.SPI4;
-    spi4_setup(&spi4);
+        rcc.apb1lenr.modify(|_, w| w.spi2en().set_bit());
+        let spi2 = dp.SPI2;
+        spi2_setup(&spi2);
 
-    rcc.apb2enr.modify(|_, w| w.spi1en().set_bit());
-    let spi1 = dp.SPI1;
-    spi1_setup(&spi1);
-    spi1.ier.write(|w| w.eotie().set_bit());
+        rcc.apb2enr.modify(|_, w| w.spi4en().set_bit());
+        let spi4 = dp.SPI4;
+        spi4_setup(&spi4);
 
-    rcc.apb2enr.modify(|_, w| w.spi5en().set_bit());
-    let spi5 = dp.SPI5;
-    spi5_setup(&spi5);
-    // spi5.ier.write(|w| w.eotie().set_bit());
+        rcc.apb2enr.modify(|_, w| w.spi1en().set_bit());
+        let spi1 = dp.SPI1;
+        spi1_setup(&spi1);
+        spi1.ier.write(|w| w.eotie().set_bit());
 
-    rcc.ahb2enr.modify(|_, w|
-        w
-            .sram1en().set_bit()
-            .sram2en().set_bit()
-            .sram3en().set_bit()
-    );
-    rcc.ahb1enr.modify(|_, w| w.dma1en().set_bit());
-    // init SRAM1 rodata can't load with sram1 disabled
-    unsafe { DAT = 0x201 };  // EN | CSTART
-    cortex_m::asm::dsb();
-    let dat_addr = unsafe { &DAT as *const _ } as usize;
-    cp.SCB.clean_dcache_by_address(dat_addr, 4);
+        rcc.apb2enr.modify(|_, w| w.spi5en().set_bit());
+        let spi5 = dp.SPI5;
+        spi5_setup(&spi5);
+        // spi5.ier.write(|w| w.eotie().set_bit());
 
-    dma1_setup(&dp.DMA1, &dp.DMAMUX1, dat_addr,
-               &spi1.cr1 as *const _ as usize,
-               &spi5.cr1 as *const _ as usize);
+        rcc.ahb2enr.modify(|_, w|
+            w
+                .sram1en().set_bit()
+                .sram2en().set_bit()
+                .sram3en().set_bit()
+        );
+        rcc.ahb1enr.modify(|_, w| w.dma1en().set_bit());
+        // init SRAM1 rodata can't load with sram1 disabled
+        unsafe { DAT = 0x201 };  // EN | CSTART
+        cortex_m::asm::dsb();
+        let dat_addr = unsafe { &DAT as *const _ } as usize;
+        cp.SCB.clean_dcache_by_address(dat_addr, 4);
 
-    rcc.apb1lenr.modify(|_, w| w.tim2en().set_bit());
+        dma1_setup(&dp.DMA1, &dp.DMAMUX1, dat_addr,
+                &spi1.cr1 as *const _ as usize,
+                &spi5.cr1 as *const _ as usize);
 
-    // work around the SPI stall erratum
-    let dbgmcu = dp.DBGMCU;
-    dbgmcu.apb1lfz1.modify(|_, w| w.tim2().set_bit());
+        rcc.apb1lenr.modify(|_, w| w.tim2en().set_bit());
 
-    eth::setup(&rcc, &dp.SYSCFG);
-    eth::setup_pins(&dp.GPIOA, &dp.GPIOB, &dp.GPIOC, &dp.GPIOG);
+        // work around the SPI stall erratum
+        let dbgmcu = dp.DBGMCU;
+        dbgmcu.apb1lfz1.modify(|_, w| w.tim2().set_bit());
 
-    let device = unsafe { &mut ETHERNET };
-    let hardware_addr = net::wire::EthernetAddress([0x10, 0xE2, 0xD5, 0x00, 0x03, 0x00]);
-    unsafe { device.init(hardware_addr, &dp.ETHERNET_MAC, &dp.ETHERNET_DMA, &dp.ETHERNET_MTL) };
-    let mut neighbor_cache_storage = [None; 8];
-    let neighbor_cache = net::iface::NeighborCache::new(&mut neighbor_cache_storage[..]);
-    let local_addr = net::wire::IpAddress::v4(10, 0, 16, 99);
-    let mut ip_addrs = [net::wire::IpCidr::new(local_addr, 24)];
-    let mut iface = net::iface::EthernetInterfaceBuilder::new(device)
-                .ethernet_addr(hardware_addr)
-                .neighbor_cache(neighbor_cache)
-                .ip_addrs(&mut ip_addrs[..])
-                .finalize();
-    let mut socket_set_entries: [_; 8] = Default::default();
-    let mut sockets = net::socket::SocketSet::new(&mut socket_set_entries[..]);
-    create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle0);
-    create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle1);
+        eth::setup(&rcc, &dp.SYSCFG);
+        eth::setup_pins(&dp.GPIOA, &dp.GPIOB, &dp.GPIOC, &dp.GPIOG);
 
-    unsafe { eth::enable_interrupt(&dp.ETHERNET_DMA); }
-    unsafe { cp.NVIC.set_priority(stm32::Interrupt::ETH, 196); }  // mid prio
-    cp.NVIC.enable(stm32::Interrupt::ETH);
+        let device = unsafe { &mut ETHERNET };
+        let hardware_addr = net::wire::EthernetAddress([0x10, 0xE2, 0xD5, 0x00, 0x03, 0x00]);
+        unsafe { device.init(hardware_addr, &dp.ETHERNET_MAC, &dp.ETHERNET_DMA, &dp.ETHERNET_MTL) };
+        let mut neighbor_cache_storage = [None; 8];
+        let neighbor_cache = net::iface::NeighborCache::new(&mut neighbor_cache_storage[..]);
+        let local_addr = net::wire::IpAddress::v4(10, 0, 16, 99);
+        let mut ip_addrs = [net::wire::IpCidr::new(local_addr, 24)];
+        let mut iface = net::iface::EthernetInterfaceBuilder::new(device)
+                    .ethernet_addr(hardware_addr)
+                    .neighbor_cache(neighbor_cache)
+                    .ip_addrs(&mut ip_addrs[..])
+                    .finalize();
+        let mut socket_set_entries: [_; 8] = Default::default();
+        let mut sockets = net::socket::SocketSet::new(&mut socket_set_entries[..]);
+        create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle0);
+        create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle1);
 
-    tim2_setup(&dp.TIM2);
+        unsafe { eth::enable_interrupt(&dp.ETHERNET_DMA); }
 
-    unsafe { cp.NVIC.set_priority(stm32::Interrupt::SPI1, 0); }  // highest prio
-    cortex_m::interrupt::free(|cs| {
-        cp.NVIC.enable(stm32::Interrupt::SPI1);
-        SPIP.borrow(cs).replace(Some((spi1, spi2, spi4, spi5)));
-    });
+        tim2_setup(&dp.TIM2);
 
-    let mut last = 0;
-    let mut server = Server::new();
-    loop {
-        // if ETHERNET_PENDING.swap(false, Ordering::Relaxed) { }
-        let time = TIME.load(Ordering::Relaxed);
-        {
-            let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle0);
-            if !(socket.is_open() || socket.is_listening()) {
-                socket.listen(1234).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
-            } else if last != time && socket.can_send() {
-                last = time;
-                handle_status(socket, time);
-            }
+        init::LateResources {
+            SPI: (spi1, spi2, spi4, spi5),
+            // IFACE: iface,
+            // SOCKETS: sockets,
         }
-        {
-            let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle1);
-            if !(socket.is_open() || socket.is_listening()) {
-                socket.listen(1235).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
-            } else {
-                server.handle_command(socket);
-            }
-        }
+    }
 
-        if !match iface.poll(&mut sockets, net::time::Instant::from_millis(time as i64)) {
-            Ok(changed) => changed,
-            Err(net::Error::Unrecognized) => true,
-            Err(e) => { info!("iface poll error: {:?}", e); true }
-        } {
+    #[idle]
+    fn idle(_: idle::Context) -> ! {
+        loop {
             cortex_m::asm::wfi();
         }
     }
-}
+
+    // seems to slow it down
+    // #[link_section = ".data.spi1"]
+    #[interrupt(resources = [SPI, IIR_STATE, IIR_CH], priority = 1)]
+    fn SPI1(c: SPI1::Context) {
+        #[cfg(feature = "bkpt")]
+        cortex_m::asm::bkpt();
+        let (spi1, spi2, spi4, spi5) = c.resources.SPI;
+        let iir_ch = c.resources.IIR_CH;
+        let iir_state = c.resources.IIR_STATE;
+
+        let sr = spi1.sr.read();
+        if sr.eot().bit_is_set() {
+        spi1.ifcr.write(|w| w.eotc().set_bit());
+        }
+        if sr.rxp().bit_is_set() {
+            let rxdr = &spi1.rxdr as *const _ as *const u16;
+            let a = unsafe { ptr::read_volatile(rxdr) };
+            let x0 = f32::from(a as i16);
+            let y0 = unsafe { iir_ch[0].update(&mut iir_state[0], x0) };
+            let d = y0 as i16 as u16 ^ 0x8000;
+            let txdr = &spi2.txdr as *const _ as *mut u16;
+            unsafe { ptr::write_volatile(txdr, d) };
+        }
+
+        let sr = spi5.sr.read();
+        if sr.eot().bit_is_set() {
+        spi5.ifcr.write(|w| w.eotc().set_bit());
+        }
+        if sr.rxp().bit_is_set() {
+            let rxdr = &spi5.rxdr as *const _ as *const u16;
+            let a = unsafe { ptr::read_volatile(rxdr) };
+            let x0 = f32::from(a as i16);
+            let y0 = unsafe { iir_ch[1].update(&mut iir_state[1], x0) };
+            let d = y0 as i16 as u16 ^ 0x8000;
+            let txdr = &spi4.txdr as *const _ as *mut u16;
+            unsafe { ptr::write_volatile(txdr, d) };
+        }
+        #[cfg(feature = "bkpt")]
+        cortex_m::asm::bkpt();
+    }
+
+    #[interrupt(resources = [], priority = 7)]
+    fn ETH(_: ETH::Context) {
+        let dma = unsafe { &stm32::Peripherals::steal().ETHERNET_DMA };
+        ETHERNET_PENDING.store(true, Ordering::Relaxed);
+        unsafe { eth::interrupt_handler(dma) }
+    }
+
+    extern "C" {
+        fn DCMI();
+        fn JPEG();
+        fn SDMMC();
+    }
+};
+
+/*
+        let mut last = 0;
+        let mut server = Server::new();
+        loop {
+            // if ETHERNET_PENDING.swap(false, Ordering::Relaxed) { }
+            let time = TIME.load(Ordering::Relaxed);
+            {
+                let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle0);
+                if !(socket.is_open() || socket.is_listening()) {
+                    socket.listen(1234).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
+                } else if last != time && socket.can_send() {
+                    last = time;
+                    handle_status(socket, time);
+                }
+            }
+            {
+                let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle1);
+                if !(socket.is_open() || socket.is_listening()) {
+                    socket.listen(1235).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
+                } else {
+                    server.handle_command(socket);
+                }
+            }
+
+            if !match iface.poll(&mut sockets, net::time::Instant::from_millis(time as i64)) {
+                Ok(changed) => changed,
+                Err(net::Error::Unrecognized) => true,
+                Err(e) => { info!("iface poll error: {:?}", e); true }
+            } {
+                cortex_m::asm::wfi();
+            }
+        }
 
 #[derive(Deserialize,Serialize)]
 struct Request {
@@ -760,65 +835,11 @@ struct Status {
     y1: f32
 }
 
-const SCALE: f32 = ((1 << 15) - 1) as f32;
-static mut IIR_STATE: [IIRState; 2] = [[0.; 5]; 2];
-static mut IIR_CH: [IIR; 2] = [
-    IIR{ ba: [0., 0., 0., 0., 0.], y_offset: 0.,
-         y_min: -SCALE - 1., y_max: SCALE }; 2];
-
-// seems to slow it down
-// #[link_section = ".data.spi1"]
-#[interrupt]
-fn SPI1() {
-    #[cfg(feature = "bkpt")]
-    cortex_m::asm::bkpt();
-    cortex_m::interrupt::free(|cs| {
-        let spip = SPIP.borrow(cs).borrow();
-        let (spi1, spi2, spi4, spi5) = spip.as_ref().unwrap();
-
-        let sr = spi1.sr.read();
-        if sr.eot().bit_is_set() {
-           spi1.ifcr.write(|w| w.eotc().set_bit());
-        }
-        if sr.rxp().bit_is_set() {
-            let rxdr = &spi1.rxdr as *const _ as *const u16;
-            let a = unsafe { ptr::read_volatile(rxdr) };
-            let x0 = f32::from(a as i16);
-            let y0 = unsafe { IIR_CH[0].update(&mut IIR_STATE[0], x0) };
-            let d = y0 as i16 as u16 ^ 0x8000;
-            let txdr = &spi2.txdr as *const _ as *mut u16;
-            unsafe { ptr::write_volatile(txdr, d) };
-        }
-
-        let sr = spi5.sr.read();
-        if sr.eot().bit_is_set() {
-           spi5.ifcr.write(|w| w.eotc().set_bit());
-        }
-        if sr.rxp().bit_is_set() {
-            let rxdr = &spi5.rxdr as *const _ as *const u16;
-            let a = unsafe { ptr::read_volatile(rxdr) };
-            let x0 = f32::from(a as i16);
-            let y0 = unsafe { IIR_CH[1].update(&mut IIR_STATE[1], x0) };
-            let d = y0 as i16 as u16 ^ 0x8000;
-            let txdr = &spi4.txdr as *const _ as *mut u16;
-            unsafe { ptr::write_volatile(txdr, d) };
-        }
-    });
-    #[cfg(feature = "bkpt")]
-    cortex_m::asm::bkpt();
-}
-
-#[interrupt]
-fn ETH() {
-    let dma = unsafe { &stm32::Peripherals::steal().ETHERNET_DMA };
-    ETHERNET_PENDING.store(true, Ordering::Relaxed);
-    unsafe { eth::interrupt_handler(dma) }
-}
-
 #[exception]
 fn SysTick() {
     TIME.fetch_add(1, Ordering::Relaxed);
 }
+*/
 
 #[exception]
 fn HardFault(ef: &cortex_m_rt::ExceptionFrame) -> ! {
