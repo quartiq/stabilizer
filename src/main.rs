@@ -514,6 +514,7 @@ macro_rules! create_socket {
 #[rtfm::app(device = stm32h7::stm32h7x3)]
 const APP: () = {
     static SPI: (stm32::SPI1, stm32::SPI2, stm32::SPI4, stm32::SPI5) = ();
+    static ETHERNET_PERIPH: (stm32::ETHERNET_MAC, stm32::ETHERNET_DMA, stm32::ETHERNET_MTL) = ();
 
     static mut IIR_STATE: [IIRState; 2] = [[0.; 5]; 2];
     static mut IIR_CH: [IIR; 2] = [
@@ -524,7 +525,6 @@ const APP: () = {
             y_max: SCALE
         };
     2];
-    static ETHERNET_PERIPH: (stm32::ETHERNET_MAC, stm32::ETHERNET_DMA, stm32::ETHERNET_MTL) = ();
 
     #[link_section = ".sram3.eth"]
     static mut ETHERNET: eth::Device = eth::Device::new();
@@ -617,7 +617,7 @@ const APP: () = {
         }
     }
 
-    #[idle(resources = [ETHERNET, ETHERNET_PERIPH])]
+    #[idle(resources = [ETHERNET, ETHERNET_PERIPH, IIR_STATE])]
     fn idle(c: idle::Context) -> ! {
         let (MAC, DMA, MTL) = c.resources.ETHERNET_PERIPH;
 
@@ -641,6 +641,7 @@ const APP: () = {
         let mut last = 0u32;
         let mut last_iter = rtfm::Instant::now();
         //let mut server = Server::new();
+        let mut iir_state: resources::IIR_STATE = c.resources.IIR_STATE;
         loop {
             // if ETHERNET_PENDING.swap(false, Ordering::Relaxed) { }
             let mut time = last;
@@ -652,9 +653,16 @@ const APP: () = {
                 let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle0);
                 if !(socket.is_open() || socket.is_listening()) {
                     socket.listen(1234).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
-                } else if time > last && socket.can_send() {
+                } else if time != last && socket.can_send() {
                     last = time;
-                    //handle_status(socket, time);
+                    let s = iir_state.lock(|iir_state| Status {
+                        t: time,
+                        x0: iir_state[0][0],
+                        y0: iir_state[0][2],
+                        x1: iir_state[1][0],
+                        y1: iir_state[1][2]
+                    });
+                    reply(socket, &s);
                 }
             }
             {
@@ -676,7 +684,7 @@ const APP: () = {
         }
     }
 
-    #[task(schedule = [tick])]
+    #[task(priority = 1, schedule = [tick])]
     fn tick(c: tick::Context) {
         static mut TIME: u32 = 0;
         *TIME += 1;
@@ -686,13 +694,13 @@ const APP: () = {
 
     // seems to slow it down
     // #[link_section = ".data.spi1"]
-    #[interrupt(resources = [SPI, IIR_STATE, IIR_CH], priority = 3)]
+    #[interrupt(resources = [SPI, IIR_STATE, IIR_CH], priority = 2)]
     fn SPI1(c: SPI1::Context) {
         #[cfg(feature = "bkpt")]
         cortex_m::asm::bkpt();
         let (spi1, spi2, spi4, spi5) = c.resources.SPI;
         let iir_ch = c.resources.IIR_CH;
-        let iir_state = c.resources.IIR_STATE;
+        let mut iir_state = c.resources.IIR_STATE;
 
         let sr = spi1.sr.read();
         if sr.eot().bit_is_set() {
@@ -822,18 +830,6 @@ impl Server {
             socket.close();
         }
     }
-}
-
-fn handle_status(socket: &mut net::socket::TcpSocket, time: u32,
-                 iir_state: &[IIRState]) {
-    let s = unsafe { Status{
-        t: time,
-        x0: iir_state[0][0],
-        y0: iir_state[0][2],
-        x1: iir_state[1][0],
-        y1: iir_state[1][2],
-    }};
-    reply(socket, &s);
 }
 
 #[exception]
