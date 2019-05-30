@@ -495,7 +495,6 @@ const SCALE: f32 = ((1 << 15) - 1) as f32;
 #[link_section = ".sram1.datspi"]
 static mut DAT: u32 = 0x201;  // EN | CSTART
 
-static TIME: AtomicU32 = AtomicU32::new(0);
 static ETHERNET_PENDING: AtomicBool = AtomicBool::new(true);
 
 #[link_section = ".sram3.eth"]
@@ -531,7 +530,7 @@ const APP: () = {
     // static IFACE: net::iface::EthernetInterface<'static, 'static, 'static, eth::Device> = ();
     // static SOCKETS: net::socket::SocketSet<'static, 'static, 'static> = ();
 
-    #[init]
+    #[init(schedule = [tick])]
     fn init(c: init::Context) -> init::LateResources {
         let dp = c.device;
         let cp = c.core;
@@ -548,15 +547,6 @@ const APP: () = {
         rcc_pll_setup(&rcc, &dp.FLASH);
         rcc.apb4enr.modify(|_, w| w.syscfgen().set_bit());
         io_compensation_setup(&dp.SYSCFG);
-
-        // 100 MHz
-/*
-        cp.SYST.set_clock_source(cortex_m::peripheral::syst::SystClkSource::Core);
-        cp.SYST.set_reload(cortex_m::peripheral::SYST::get_ticks_per_10ms()*200/10);
-        cp.SYST.enable_counter();
-        cp.SYST.enable_interrupt();
-        unsafe { cp.SCB.shpr[11].write(128); }  // systick exception priority
-*/
 
         cp.SCB.enable_icache();
         // TODO: ETH DMA coherence issues
@@ -639,6 +629,8 @@ const APP: () = {
 
         tim2_setup(&dp.TIM2);
 
+        c.schedule.tick(rtfm::Instant::now()).unwrap();
+
         init::LateResources {
             SPI: (spi1, spi2, spi4, spi5),
             // IFACE: iface,
@@ -651,6 +643,13 @@ const APP: () = {
         loop {
             cortex_m::asm::wfi();
         }
+    }
+
+    #[task(schedule = [tick])]
+    fn tick(c: tick::Context) {
+        // let now = rtfm::Instant::now();
+        const PERIOD: u32 = 200_000_000;
+        c.schedule.tick(c.scheduled + PERIOD.cycles()).unwrap();
     }
 
     // seems to slow it down
@@ -671,7 +670,7 @@ const APP: () = {
             let rxdr = &spi1.rxdr as *const _ as *const u16;
             let a = unsafe { ptr::read_volatile(rxdr) };
             let x0 = f32::from(a as i16);
-            let y0 = unsafe { iir_ch[0].update(&mut iir_state[0], x0) };
+            let y0 = iir_ch[0].update(&mut iir_state[0], x0);
             let d = y0 as i16 as u16 ^ 0x8000;
             let txdr = &spi2.txdr as *const _ as *mut u16;
             unsafe { ptr::write_volatile(txdr, d) };
@@ -685,7 +684,7 @@ const APP: () = {
             let rxdr = &spi5.rxdr as *const _ as *const u16;
             let a = unsafe { ptr::read_volatile(rxdr) };
             let x0 = f32::from(a as i16);
-            let y0 = unsafe { iir_ch[1].update(&mut iir_state[1], x0) };
+            let y0 = iir_ch[1].update(&mut iir_state[1], x0);
             let d = y0 as i16 as u16 ^ 0x8000;
             let txdr = &spi4.txdr as *const _ as *mut u16;
             unsafe { ptr::write_volatile(txdr, d) };
@@ -702,6 +701,7 @@ const APP: () = {
     }
 
     extern "C" {
+        // hw interrupt handlers for RTFM to use for scheduling tasks, one per priority
         fn DCMI();
         fn JPEG();
         fn SDMMC();
@@ -833,11 +833,6 @@ struct Status {
     y0: f32,
     x1: f32,
     y1: f32
-}
-
-#[exception]
-fn SysTick() {
-    TIME.fetch_add(1, Ordering::Relaxed);
 }
 */
 
