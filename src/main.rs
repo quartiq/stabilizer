@@ -797,10 +797,10 @@ impl Server {
         Self { data: Vec::new(), discard: false }
     }
 
-    fn poll<T, F>(&mut self, socket: &mut net::socket::TcpSocket, f: F)
+    fn poll<T, F, R>(&mut self, socket: &mut net::socket::TcpSocket, f: F) -> Option<R>
         where
             T: DeserializeOwned,
-            F: FnOnce(&T),
+            F: FnOnce(&T) -> R,
     {
         while socket.can_recv() {
             let found = socket.recv(|buf| {
@@ -820,14 +820,15 @@ impl Server {
                 if self.discard {
                     self.discard = false;
                     json_reply(socket, &Response { code: 520, message: "command buffer overflow" });
+                    self.data.clear();
                 } else {
                     let r = from_slice::<T>(&self.data);
                     self.data.clear();
                     match r {
                         Ok(res) => {
-                            f(&res);
-                            json_reply(socket, &Response{ code: 200, message: "ok" });
-                            return;
+                            let r = f(&res);
+                            json_reply(socket, &Response { code: 200, message: "ok" });
+                            return Some(r);
                         },
                         Err(err) => {
                             warn!("parse error {:?}", err);
@@ -837,6 +838,7 @@ impl Server {
                 }
             }
         }
+        None
     }
 }
 
