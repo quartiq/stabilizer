@@ -13,10 +13,10 @@ extern crate panic_semihosting;
 extern crate log;
 
 use core::ptr;
-use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
+// use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 use core::fmt::Write;
-use cortex_m_rt::{exception};
-use stm32h7::stm32h7x3::{self as stm32, interrupt};
+use cortex_m_rt::exception;
+use stm32h7::stm32h7x3 as pac;
 use heapless::{String, Vec, consts::*};
 
 use smoltcp as net;
@@ -55,7 +55,7 @@ mod build_info {
     // include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
-fn pwr_setup(pwr: &stm32::PWR) {
+fn pwr_setup(pwr: &pac::PWR) {
     // go to VOS1 voltage scale for high perf
     pwr.cr3.write(|w|
         w.scuen().set_bit()
@@ -67,7 +67,7 @@ fn pwr_setup(pwr: &stm32::PWR) {
     while pwr.d3cr.read().vosrdy().bit_is_clear() {}
 }
 
-fn rcc_reset(rcc: &stm32::RCC) {
+fn rcc_reset(rcc: &pac::RCC) {
     // Reset all peripherals
     rcc.ahb1rstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
     rcc.ahb1rstr.write(|w| unsafe { w.bits(0)});
@@ -93,7 +93,7 @@ fn rcc_reset(rcc: &stm32::RCC) {
     rcc.apb4rstr.write(|w| unsafe { w.bits(0)});
 }
 
-fn rcc_pll_setup(rcc: &stm32::RCC, flash: &stm32::FLASH) {
+fn rcc_pll_setup(rcc: &pac::RCC, flash: &pac::FLASH) {
     // Switch to HSI to mess with HSE
     rcc.cr.modify(|_, w| w.hsion().on());
     while rcc.cr.read().hsirdy().is_not_ready() {}
@@ -179,7 +179,7 @@ fn rcc_pll_setup(rcc: &stm32::RCC, flash: &stm32::FLASH) {
     rcc.d3ccipr.modify(|_, w| w.spi6sel().pll2_q());
 }
 
-fn io_compensation_setup(syscfg: &stm32::SYSCFG) {
+fn io_compensation_setup(syscfg: &pac::SYSCFG) {
     syscfg.cccsr.modify(|_, w|
         w.en().set_bit()
          .cs().clear_bit()
@@ -188,8 +188,8 @@ fn io_compensation_setup(syscfg: &stm32::SYSCFG) {
     while syscfg.cccsr.read().ready().bit_is_clear() {}
 }
 
-fn gpio_setup(gpioa: &stm32::GPIOA, gpiob: &stm32::GPIOB, gpiod: &stm32::GPIOD,
-              gpioe: &stm32::GPIOE, gpiof: &stm32::GPIOF, gpiog: &stm32::GPIOG) {
+fn gpio_setup(gpioa: &pac::GPIOA, gpiob: &pac::GPIOB, gpiod: &pac::GPIOD,
+              gpioe: &pac::GPIOE, gpiof: &pac::GPIOF, gpiog: &pac::GPIOG) {
     // FP_LED0
     gpiod.otyper.modify(|_, w| w.ot5().push_pull());
     gpiod.moder.modify(|_, w| w.moder5().output());
@@ -323,7 +323,7 @@ fn gpio_setup(gpioa: &stm32::GPIOA, gpiob: &stm32::GPIOB, gpiod: &stm32::GPIOD,
 }
 
 // ADC0
-fn spi1_setup(spi1: &stm32::SPI1) {
+fn spi1_setup(spi1: &pac::SPI1) {
     spi1.cfg1.modify(|_, w|
         w.mbr().div4()
          .dsize().bits(16 - 1)
@@ -350,7 +350,7 @@ fn spi1_setup(spi1: &stm32::SPI1) {
 }
 
 // ADC1
-fn spi5_setup(spi5: &stm32::SPI5) {
+fn spi5_setup(spi5: &pac::SPI5) {
     spi5.cfg1.modify(|_, w|
         w.mbr().div4()
          .dsize().bits(16 - 1)
@@ -377,7 +377,7 @@ fn spi5_setup(spi5: &stm32::SPI5) {
 }
 
 // DAC0
-fn spi2_setup(spi2: &stm32::SPI2) {
+fn spi2_setup(spi2: &pac::SPI2) {
     spi2.cfg1.modify(|_, w|
         w.mbr().div2()
          .dsize().bits(16 - 1)
@@ -405,7 +405,7 @@ fn spi2_setup(spi2: &stm32::SPI2) {
 }
 
 // DAC1
-fn spi4_setup(spi4: &stm32::SPI4) {
+fn spi4_setup(spi4: &pac::SPI4) {
     spi4.cfg1.modify(|_, w|
         w.mbr().div2()
          .dsize().bits(16 - 1)
@@ -432,7 +432,7 @@ fn spi4_setup(spi4: &stm32::SPI4) {
     spi4.cr1.modify(|_, w| w.cstart().started());
 }
 
-fn tim2_setup(tim2: &stm32::TIM2) {
+fn tim2_setup(tim2: &pac::TIM2) {
     tim2.psc.write(|w| unsafe { w.psc().bits(200 - 1) });  // from 200 MHz
     tim2.arr.write(|w| unsafe { w.bits(2 - 1) });  // µs
     tim2.dier.write(|w| w.ude().set_bit());
@@ -442,7 +442,7 @@ fn tim2_setup(tim2: &stm32::TIM2) {
          .cen().set_bit());  // enable
 }
 
-fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa0: usize, pa1: usize) {
+fn dma1_setup(dma1: &pac::DMA1, dmamux1: &pac::DMAMUX1, ma: usize, pa0: usize, pa1: usize) {
     dma1.st[0].cr.modify(|_, w| w.en().clear_bit());
     while dma1.st[0].cr.read().en().bit_is_set() {}
 
@@ -495,7 +495,7 @@ const SCALE: f32 = ((1 << 15) - 1) as f32;
 #[link_section = ".sram1.datspi"]
 static mut DAT: u32 = 0x201;  // EN | CSTART
 
-static ETHERNET_PENDING: AtomicBool = AtomicBool::new(true);
+// static ETHERNET_PENDING: AtomicBool = AtomicBool::new(true);
 
 const TCP_RX_BUFFER_SIZE: usize = 8192;
 const TCP_TX_BUFFER_SIZE: usize = 8192;
@@ -513,8 +513,8 @@ macro_rules! create_socket {
 
 #[rtfm::app(device = stm32h7::stm32h7x3)]
 const APP: () = {
-    static SPI: (stm32::SPI1, stm32::SPI2, stm32::SPI4, stm32::SPI5) = ();
-    static ETHERNET_PERIPH: (stm32::ETHERNET_MAC, stm32::ETHERNET_DMA, stm32::ETHERNET_MTL) = ();
+    static SPI: (pac::SPI1, pac::SPI2, pac::SPI4, pac::SPI5) = ();
+    static ETHERNET_PERIPH: (pac::ETHERNET_MAC, pac::ETHERNET_DMA, pac::ETHERNET_MTL) = ();
 
     static mut IIR_STATE: [IIRState; 2] = [[0.; 5]; 2];
     static mut IIR_CH: [IIR; 2] = [
@@ -609,7 +609,7 @@ const APP: () = {
         eth::setup(&rcc, &dp.SYSCFG);
         eth::setup_pins(&dp.GPIOA, &dp.GPIOB, &dp.GPIOC, &dp.GPIOG);
 
-        c.schedule.tick(rtfm::Instant::now()).unwrap();
+        // c.schedule.tick(rtfm::Instant::now()).unwrap();
 
         init::LateResources {
             SPI: (spi1, spi2, spi4, spi5),
@@ -617,7 +617,7 @@ const APP: () = {
         }
     }
 
-    #[idle(resources = [ETHERNET, ETHERNET_PERIPH, IIR_STATE])]
+    #[idle(resources = [ETHERNET, ETHERNET_PERIPH, IIR_STATE, IIR_CH])]
     fn idle(c: idle::Context) -> ! {
         let (MAC, DMA, MTL) = c.resources.ETHERNET_PERIPH;
 
@@ -638,23 +638,26 @@ const APP: () = {
         create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle1);
 
         // unsafe { eth::enable_interrupt(DMA); }
-        let mut last = 0u32;
-        let mut last_iter = rtfm::Instant::now();
-        //let mut server = Server::new();
+        let mut time = 0u32;
+        let mut next_ms = rtfm::Instant::now();
+        next_ms += 200_000.cycles();
+        let mut server = Server::new();
         let mut iir_state: resources::IIR_STATE = c.resources.IIR_STATE;
+        let mut iir_ch: resources::IIR_CH = c.resources.IIR_CH;
         loop {
             // if ETHERNET_PENDING.swap(false, Ordering::Relaxed) { }
-            let mut time = last;
-            if rtfm::Instant::now() >= last_iter + 200_000.cycles() {
-                last_iter += 200_000.cycles();
+            let tick = rtfm::Instant::now() > next_ms;
+            if tick {
+                next_ms += 200_000.cycles();
                 time += 1;
             }
             {
                 let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle0);
-                if !(socket.is_open() || socket.is_listening()) {
+                if socket.state() == net::socket::TcpState::CloseWait {
+                    socket.close();
+                } else if !(socket.is_open() || socket.is_listening()) {
                     socket.listen(1234).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
-                } else if time != last && socket.can_send() {
-                    last = time;
+                } else if tick && socket.can_send() {
                     let s = iir_state.lock(|iir_state| Status {
                         t: time,
                         x0: iir_state[0][0],
@@ -662,15 +665,21 @@ const APP: () = {
                         x1: iir_state[1][0],
                         y1: iir_state[1][2]
                     });
-                    reply(socket, &s);
+                    json_reply(socket, &s);
                 }
             }
             {
                 let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle1);
-                if !(socket.is_open() || socket.is_listening()) {
+                if socket.state() == net::socket::TcpState::CloseWait {
+                    socket.close();
+                } else if !(socket.is_open() || socket.is_listening()) {
                     socket.listen(1235).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
                 } else {
-                    //server.handle_command(socket);
+                    server.poll(socket, |req| {
+                        if req.channel < 2 {
+                            iir_ch.lock(|iir_ch| iir_ch[req.channel as usize] = req.iir);
+                        }
+                    });
                 }
             }
 
@@ -772,15 +781,15 @@ struct Status {
     y1: f32
 }
 
-struct Server {
-    data: Vec<u8, U256>,
-    discard: bool,
-}
-
-fn reply<T: Serialize>(socket: &mut net::socket::TcpSocket, msg: &T) {
+fn json_reply<T: Serialize>(socket: &mut net::socket::TcpSocket, msg: &T) {
     let mut u: String<U128> = to_string(msg).unwrap();
     u.push('\n').unwrap();
     socket.write_str(&u).unwrap();
+}
+
+struct Server {
+    data: Vec<u8, U256>,
+    discard: bool,
 }
 
 impl Server {
@@ -788,7 +797,8 @@ impl Server {
         Self { data: Vec::new(), discard: false }
     }
 
-    fn handle_command(&mut self, socket: &mut net::socket::TcpSocket) {
+    fn poll<F: FnOnce(&Request)>(
+            &mut self, socket: &mut net::socket::TcpSocket, f: F) {
         while socket.can_recv() {
             let found = socket.recv(|buf| {
                 let (len, found) = match buf.iter().position(|&c| c as char == '\n') {
@@ -803,31 +813,26 @@ impl Server {
                 }
                 (len, found)
             }).unwrap();
-            if !found {
-                continue;
-            }
-            let resp = if self.discard {
-                self.discard = false;
-                Response{ code: 520, message: "command buffer overflow" }
-            } else {
-                match from_slice::<Request>(&self.data) {
-                    Ok(request) => {
-                        if request.channel > 1 {
-                            Response{ code: 530, message: "invalid channel" }
-                        } else {
-                            //unsafe { IIR_CH[request.channel as usize] = request.iir; };
-                            Response{ code: 200, message: "ok" }
-                        }
-                    },
-                    Err(err) => {
-                        warn!("parse error {:?}", err);
-                        Response{ code: 550, message: "parse error" }
-                    },
+            if found {
+                if self.discard {
+                    self.discard = false;
+                    json_reply(socket, &Response { code: 520, message: "command buffer overflow" });
+                } else {
+                    let r = from_slice::<Request>(&self.data);
+                    self.data.clear();
+                    match r {
+                        Ok(res) => {
+                            f(&res);
+                            json_reply(socket, &Response{ code: 200, message: "ok" });
+                            return;
+                        },
+                        Err(err) => {
+                            warn!("parse error {:?}", err);
+                            json_reply(socket, &Response { code: 550, message: "parse error" });
+                        },
+                    }
                 }
-            };
-            self.data.clear();
-            reply(socket, &resp);
-            socket.close();
+            }
         }
     }
 }
