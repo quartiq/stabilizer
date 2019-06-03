@@ -99,18 +99,18 @@ dependencies = [
 [[package]]
 name = "cortex-m-rtfm"
 version = "0.5.0-alpha.1"
-source = "git+https://github.com/japaric/cortex-m-rtfm#fafeeb27270ef24fc3852711c6032f65aa7dbcc0"
+source = "git+https://github.com/japaric/cortex-m-rtfm?rev=fafeeb2#fafeeb27270ef24fc3852711c6032f65aa7dbcc0"
 dependencies = [
  "cortex-m 0.5.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "cortex-m-rt 0.6.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "cortex-m-rtfm-macros 0.5.0-alpha.1 (git+https://github.com/japaric/cortex-m-rtfm)",
+ "cortex-m-rtfm-macros 0.5.0-alpha.1 (git+https://github.com/japaric/cortex-m-rtfm?rev=fafeeb2)",
  "heapless 0.5.0-alpha.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "cortex-m-rtfm-macros"
 version = "0.5.0-alpha.1"
-source = "git+https://github.com/japaric/cortex-m-rtfm#fafeeb27270ef24fc3852711c6032f65aa7dbcc0"
+source = "git+https://github.com/japaric/cortex-m-rtfm?rev=fafeeb2#fafeeb27270ef24fc3852711c6032f65aa7dbcc0"
 dependencies = [
  "proc-macro2 0.4.30 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote 0.6.12 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -269,10 +269,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "serde"
-version = "1.0.91"
+version = "1.0.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "serde_derive 1.0.91 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.92 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -281,12 +281,12 @@ version = "0.0.1"
 source = "git+https://github.com/quartiq/serde-json-core.git?rev=82fdca9#82fdca9eb08183f00480eea289e809e5dd37e9fe"
 dependencies = [
  "heapless 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.91 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.92 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.91"
+version = "1.0.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "proc-macro2 0.4.30 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -311,12 +311,12 @@ dependencies = [
  "cortex-m 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "cortex-m-log 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "cortex-m-rt 0.6.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "cortex-m-rtfm 0.5.0-alpha.1 (git+https://github.com/japaric/cortex-m-rtfm)",
+ "cortex-m-rtfm 0.5.0-alpha.1 (git+https://github.com/japaric/cortex-m-rtfm?rev=fafeeb2)",
  "heapless 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "panic-abort 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "panic-semihosting 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.91 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.92 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde-json-core 0.0.1 (git+https://github.com/quartiq/serde-json-core.git?rev=82fdca9)",
  "smoltcp 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "stm32h7 0.7.0",
@@ -383,8 +383,8 @@ dependencies = [
 "checksum cortex-m-log 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "584a62cf37ddd834b8bfc21317bf3396915844298bf346dd1f4ca0572180ac7f"
 "checksum cortex-m-rt 0.6.8 (registry+https://github.com/rust-lang/crates.io-index)" = "7e1ccc9052352415ec4e3f762f4541098d012016f9354a1a5b2dede39b67f426"
 "checksum cortex-m-rt-macros 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "d7ae692573e0acccb1579fef1abf5a5bf1d2f3f0149a22b16870ec9309aee25f"
-"checksum cortex-m-rtfm 0.5.0-alpha.1 (git+https://github.com/japaric/cortex-m-rtfm)" = "<none>"
-"checksum cortex-m-rtfm-macros 0.5.0-alpha.1 (git+https://github.com/japaric/cortex-m-rtfm)" = "<none>"
+"checksum cortex-m-rtfm 0.5.0-alpha.1 (git+https://github.com/japaric/cortex-m-rtfm?rev=fafeeb2)" = "<none>"
+"checksum cortex-m-rtfm-macros 0.5.0-alpha.1 (git+https://github.com/japaric/cortex-m-rtfm?rev=fafeeb2)" = "<none>"
 "checksum cortex-m-semihosting 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "165f3f86f4d1031351a6c9dc8d5a3f8fae2050f9dd6ef925e3d675c232cc0e46"
 "checksum generic-array 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)" = "8107dafa78c80c848b71b60133954b4a58609a3a1a5f9af037ecc7f67280f369"
 "checksum generic-array 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3c0f28c2f5bfb5960175af447a2da7c18900693738343dc896ffbcabd9839592"
@@ -405,9 +405,9 @@ dependencies = [
 "checksum rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "138e3e0acb6c9fb258b19b67cb8abd63c00679d2851805ea151465464fe9030a"
 "checksum semver 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"
 "checksum semver-parser 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
-"checksum serde 1.0.91 (registry+https://github.com/rust-lang/crates.io-index)" = "a72e9b96fa45ce22a4bc23da3858dfccfd60acd28a25bcd328a98fdd6bea43fd"
+"checksum serde 1.0.92 (registry+https://github.com/rust-lang/crates.io-index)" = "32746bf0f26eab52f06af0d0aa1984f641341d06d8d673c693871da2d188c9be"
 "checksum serde-json-core 0.0.1 (git+https://github.com/quartiq/serde-json-core.git?rev=82fdca9)" = "<none>"
-"checksum serde_derive 1.0.91 (registry+https://github.com/rust-lang/crates.io-index)" = "101b495b109a3e3ca8c4cbe44cf62391527cdfb6ba15821c5ce80bcd5ea23f9f"
+"checksum serde_derive 1.0.92 (registry+https://github.com/rust-lang/crates.io-index)" = "46a3223d0c9ba936b61c0d2e3e559e3217dbfb8d65d06d26e8b3c25de38bae3e"
 "checksum smoltcp 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "fef582369edb298c6c41319a544ca9c4e83622f226055ccfcb35974fbb55ed34"
 "checksum stable_deref_trait 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "dba1a27d3efae4351c8051072d619e3ade2820635c3958d826bfea39d59b54c8"
 "checksum syn 0.15.34 (registry+https://github.com/rust-lang/crates.io-index)" = "a1393e4a97a19c01e900df2aec855a29f71cf02c402e2f443b8d2747c25c5dbe"

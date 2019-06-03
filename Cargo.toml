@@ -48,13 +48,14 @@ features = ["stm32h7x3", "rt"]
 
 [dependencies.smoltcp]
 #git = "https://github.com/m-labs/smoltcp.git"
-#rev = "cd893e6"
+#rev = "0f61443"
 version = "0.5"
 features = ["proto-ipv4", "socket-tcp"]
 default-features = false
 
 [dependencies.cortex-m-rtfm]
 git = "https://github.com/japaric/cortex-m-rtfm"
+rev = "fafeeb2"
 features = ["timer-queue"]
 
 [features]
