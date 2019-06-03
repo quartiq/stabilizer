@@ -21,7 +21,7 @@ use heapless::{String, Vec, consts::*};
 
 use smoltcp as net;
 
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use serde_json_core::{ser::to_string, de::from_slice};
 
 mod eth;
@@ -675,7 +675,7 @@ const APP: () = {
                 } else if !(socket.is_open() || socket.is_listening()) {
                     socket.listen(1235).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
                 } else {
-                    server.poll(socket, |req| {
+                    server.poll(socket, |req: &Request| {
                         if req.channel < 2 {
                             iir_ch.lock(|iir_ch| iir_ch[req.channel as usize] = req.iir);
                         }
@@ -797,8 +797,11 @@ impl Server {
         Self { data: Vec::new(), discard: false }
     }
 
-    fn poll<F: FnOnce(&Request)>(
-            &mut self, socket: &mut net::socket::TcpSocket, f: F) {
+    fn poll<T, F>(&mut self, socket: &mut net::socket::TcpSocket, f: F)
+        where
+            T: DeserializeOwned,
+            F: FnOnce(&T),
+    {
         while socket.can_recv() {
             let found = socket.recv(|buf| {
                 let (len, found) = match buf.iter().position(|&c| c as char == '\n') {
@@ -818,7 +821,7 @@ impl Server {
                     self.discard = false;
                     json_reply(socket, &Response { code: 520, message: "command buffer overflow" });
                 } else {
-                    let r = from_slice::<Request>(&self.data);
+                    let r = from_slice::<T>(&self.data);
                     self.data.clear();
                     match r {
                         Ok(res) => {
