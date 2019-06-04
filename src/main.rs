@@ -193,22 +193,22 @@ fn gpio_setup(gpioa: &pac::GPIOA, gpiob: &pac::GPIOB, gpiod: &pac::GPIOD,
     // FP_LED0
     gpiod.otyper.modify(|_, w| w.ot5().push_pull());
     gpiod.moder.modify(|_, w| w.moder5().output());
-    gpiod.odr.modify(|_, w| w.odr5().clear_bit());
+    gpiod.odr.modify(|_, w| w.odr5().low());
 
     // FP_LED1
     gpiod.otyper.modify(|_, w| w.ot6().push_pull());
     gpiod.moder.modify(|_, w| w.moder6().output());
-    gpiod.odr.modify(|_, w| w.odr6().clear_bit());
+    gpiod.odr.modify(|_, w| w.odr6().low());
 
     // LED_FP2
     gpiog.otyper.modify(|_, w| w.ot4().push_pull());
     gpiog.moder.modify(|_, w| w.moder4().output());
-    gpiog.odr.modify(|_, w| w.odr4().clear_bit());
+    gpiog.odr.modify(|_, w| w.odr4().low());
 
     // LED_FP3
     gpiod.otyper.modify(|_, w| w.ot12().push_pull());
     gpiod.moder.modify(|_, w| w.moder12().output());
-    gpiod.odr.modify(|_, w| w.odr12().clear_bit());
+    gpiod.odr.modify(|_, w| w.odr12().low());
 
     // AFE0_A0,1: PG2,PG3
     gpiog.otyper.modify(|_, w|
@@ -220,8 +220,8 @@ fn gpio_setup(gpioa: &pac::GPIOA, gpiob: &pac::GPIOB, gpiod: &pac::GPIOD,
          .moder3().output()
     );
     gpiog.odr.modify(|_, w|
-        w.odr2().clear_bit()
-         .odr3().clear_bit()
+        w.odr2().low()
+         .odr3().low()
     );
 
     // ADC0
@@ -261,12 +261,12 @@ fn gpio_setup(gpioa: &pac::GPIOA, gpiob: &pac::GPIOB, gpiod: &pac::GPIOD,
     // DAC0_LDAC: PE11
     gpioe.moder.modify(|_, w| w.moder11().output());
     gpioe.otyper.modify(|_, w| w.ot11().push_pull());
-    gpioe.odr.modify(|_, w| w.odr11().clear_bit());
+    gpioe.odr.modify(|_, w| w.odr11().low());
 
     // DAC_CLR: PE12
     gpioe.moder.modify(|_, w| w.moder12().output());
     gpioe.otyper.modify(|_, w| w.ot12().push_pull());
-    gpioe.odr.modify(|_, w| w.odr12().set_bit());
+    gpioe.odr.modify(|_, w| w.odr12().high());
 
     // AFE1_A0,1: PD14,PD15
     gpiod.otyper.modify(|_, w|
@@ -278,8 +278,8 @@ fn gpio_setup(gpioa: &pac::GPIOA, gpiob: &pac::GPIOB, gpiod: &pac::GPIOD,
          .moder15().output()
     );
     gpiod.odr.modify(|_, w|
-        w.odr14().clear_bit()
-         .odr15().clear_bit()
+        w.odr14().low()
+         .odr15().low()
     );
 
     // ADC1
@@ -319,7 +319,7 @@ fn gpio_setup(gpioa: &pac::GPIOA, gpiob: &pac::GPIOB, gpiod: &pac::GPIOD,
     // DAC1_LDAC: PE15
     gpioe.moder.modify(|_, w| w.moder15().output());
     gpioe.otyper.modify(|_, w| w.ot15().push_pull());
-    gpioe.odr.modify(|_, w| w.odr15().clear_bit());
+    gpioe.odr.modify(|_, w| w.odr15().low());
 }
 
 // ADC0
@@ -346,7 +346,7 @@ fn spi1_setup(spi1: &pac::SPI1) {
          .mssi().bits(6)
     );
     spi1.cr2.modify(|_, w| w.tsize().bits(1));
-    spi1.cr1.write(|w| w.spe().set_bit());
+    spi1.cr1.write(|w| w.spe().enabled());
 }
 
 // ADC1
@@ -373,7 +373,7 @@ fn spi5_setup(spi5: &pac::SPI5) {
          .mssi().bits(6)
     );
     spi5.cr2.modify(|_, w| w.tsize().bits(1));
-    spi5.cr1.write(|w| w.spe().set_bit());
+    spi5.cr1.write(|w| w.spe().enabled());
 }
 
 // DAC0
