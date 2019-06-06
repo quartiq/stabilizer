@@ -31,14 +31,18 @@ See https://github.com/sinara-hw/Stabilizer
 ## Minimal bootstrapping documentation
 
 * Clone or download this
+* Get [rustup](https://rustup.rs/)
+* `rustup override add nightly`
+* `rustup target add thumbv7em-none-eabihf`
+* `cargo build --release`
+
+### Using GDB/OpenOCD
+
 * Get a recent openocd, a JTAG adapter ("st-link" or some clone) and
   everything connected and permissions setup. Most
   [Nucleo](https://www.digikey.de/short/p41h4v) boards have a
   detachable ST-Link v2 and are cheap.[^swd]
 * Get a multiarch `gdb` (or a cross arm gdb and edit `.cargo/config` accordingly)
-* Get [rustup](https://rustup.rs/)
-* `rustup override add nightly`
-* `rustup target add thumbv7em-none-eabihf`
 * `openocd -f stabilizer.cfg` and leave it running
 * `cargo run --release`
 
@@ -50,6 +54,21 @@ See https://github.com/sinara-hw/Stabilizer
   schematic).
   It's just folding the ribbon between wires `5` and `6`. The signals on the ribbon
   are then `NRST,TDI,TDO,TCK,TMS,3V3,GND,GND`.
+
+### Using USB-DFU
+
+* Connect to the Micro USB connector below the RJ45
+* Configure the BOOT pins
+* Install the DFU USB tool
+* **TBD**
+
+### Using ST-Link virtual mass storage
+
+* `arm-none-eabi-objcopy -O binary
+  target/thumbv7em-none-eabihf/release/stabilizer
+  stabilizer.bin`
+* Connect the ST-Link debugger
+* copy `stabilizer.bin` to the `NODE_H743ZI` USB disk
 
 ## Protocol
 
