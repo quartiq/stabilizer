@@ -57,16 +57,15 @@ See https://github.com/sinara-hw/Stabilizer
 
 ### Using USB-DFU
 
+* Install the DFU USB tool (`dfu-util`)
 * Connect to the Micro USB connector below the RJ45
-* Configure the BOOT pins
-* Install the DFU USB tool
-* **TBD**
+* Short JC2/BOOT
+* `cargo objcopy --release --bin stabilizer -- -O binary stabilizer.bin` or `arm-none-eabi-objcopy -O binary target/thumbv7em-none-eabihf/release/stabilizer stabilizer.bin`
+* `dfu-util -a 0 -s 0x08000000:84092 -D stabilizer.bin` where 84092 is the size of the binary
 
 ### Using ST-Link virtual mass storage
 
-* `arm-none-eabi-objcopy -O binary
-  target/thumbv7em-none-eabihf/release/stabilizer
-  stabilizer.bin`
+* `cargo objcopy --release --bin stabilizer -- -O binary stabilizer.bin` or `arm-none-eabi-objcopy -O binary target/thumbv7em-none-eabihf/release/stabilizer stabilizer.bin`
 * Connect the ST-Link debugger
 * copy `stabilizer.bin` to the `NODE_H743ZI` USB disk
 
