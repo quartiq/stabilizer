@@ -34,12 +34,12 @@ log = "0.4"
 panic-abort = "0.3"
 panic-semihosting = { version = "0.5.2", optional = true }
 serde = { version = "1.0", features = ["derive"], default-features = false }
-heapless = { version = "0.4" }
+heapless = { version = "0.5.0-alpha.2" }
 
 [dependencies.serde-json-core]
 # version = "0.0"
 git = "https://github.com/quartiq/serde-json-core.git"
-rev = "82fdca9"
+rev = "fc764de"
 
 [dependencies.stm32h7]
 path = "../stm32-rs/stm32h7"
