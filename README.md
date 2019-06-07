@@ -61,7 +61,7 @@ See https://github.com/sinara-hw/Stabilizer
 * Connect to the Micro USB connector below the RJ45
 * Short JC2/BOOT
 * `cargo objcopy --release --bin stabilizer -- -O binary stabilizer.bin` or `arm-none-eabi-objcopy -O binary target/thumbv7em-none-eabihf/release/stabilizer stabilizer.bin`
-* `dfu-util -a 0 -s 0x08000000:84092 -D stabilizer.bin` where 84092 is the size of the binary
+* `dfu-util -a 0 -s 0x08000000:leave -D stabilizer.bin`
 
 ### Using ST-Link virtual mass storage
 
