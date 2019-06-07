@@ -4,8 +4,16 @@
 // Enable returning `!`
 #![feature(never_type)]
 
+#[inline(never)]
+#[panic_handler]
 #[cfg(not(feature = "semihosting"))]
-extern crate panic_abort;
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    let dp = unsafe { pac::Peripherals::steal() };
+    dp.GPIOD.odr.modify(|_, w| w.odr6().high());  // FP_LED_1
+    dp.GPIOG.odr.modify(|_, w| w.odr4().high());  // FP_LED_3
+    loop { core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst); }
+}
+
 #[cfg(feature = "semihosting")]
 extern crate panic_semihosting;
 
