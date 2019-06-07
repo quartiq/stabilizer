@@ -35,6 +35,7 @@ See https://github.com/sinara-hw/Stabilizer
 * `rustup override add nightly`
 * `rustup target add thumbv7em-none-eabihf`
 * `cargo build --release`
+* Do not try the debug (default) mode. It is guaranteed to panic.
 
 ### Using GDB/OpenOCD
 
