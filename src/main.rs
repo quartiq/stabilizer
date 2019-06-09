@@ -3,6 +3,7 @@
 #![feature(asm)]
 // Enable returning `!`
 #![feature(never_type)]
+#![feature(core_intrinsics)]
 
 #[inline(never)]
 #[panic_handler]
@@ -10,7 +11,7 @@
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     let gpiod = unsafe { &*pac::GPIOD::ptr() };
     gpiod.odr.modify(|_, w| w.odr6().high().odr12().high());  // FP_LED_1, FP_LED_3
-    loop { core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst); }
+    unsafe { core::intrinsics::abort(); }
 }
 
 #[cfg(feature = "semihosting")]
