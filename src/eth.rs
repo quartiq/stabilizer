@@ -1,5 +1,5 @@
 use core::{slice, cmp};
-use stm32h7::stm32h7x3 as stm32;
+use stm32h7::stm32h743 as pac;
 use smoltcp::Result;
 use smoltcp::time::Instant;
 use smoltcp::wire::EthernetAddress;
@@ -86,7 +86,7 @@ use self::cr_consts::*;
 const CLOCK_RANGE: u8 = ETH_MACMIIAR_CR_HCLK_DIV_102;
 
 
-pub fn setup(rcc: &stm32::RCC, syscfg: &stm32::SYSCFG) {
+pub fn setup(rcc: &pac::RCC, syscfg: &pac::SYSCFG) {
     rcc.apb4enr.modify(|_, w| w.syscfgen().set_bit());
     rcc.ahb1enr.modify(|_, w| {
         w.eth1macen().set_bit()
@@ -98,8 +98,8 @@ pub fn setup(rcc: &stm32::RCC, syscfg: &stm32::SYSCFG) {
     //rcc.ahb1rstr.modify(|_, w| w.eth1macrst().clear_bit());
 }
 
-pub fn setup_pins(gpioa: &stm32::GPIOA, gpiob: &stm32::GPIOB,
-                  gpioc: &stm32::GPIOC, gpiog: &stm32::GPIOG) {
+pub fn setup_pins(gpioa: &pac::GPIOA, gpiob: &pac::GPIOB,
+                  gpioc: &pac::GPIOC, gpiog: &pac::GPIOG) {
     // PA1 RMII_REF_CLK
     gpioa.moder.modify(|_, w| w.moder1().alternate());
     gpioa.afrl.modify(|_, w| w.afr1().af11());
@@ -140,7 +140,7 @@ pub fn setup_pins(gpioa: &stm32::GPIOA, gpiob: &stm32::GPIOB,
 
 const PHY_ADDR: u8 = 0;
 
-fn phy_read(reg_addr: u8, mac: &stm32::ETHERNET_MAC) -> u16 {
+fn phy_read(reg_addr: u8, mac: &pac::ETHERNET_MAC) -> u16 {
     while mac.macmdioar.read().mb().bit_is_set() {}
     mac.macmdioar.modify(|_, w| unsafe {
         w
@@ -154,7 +154,7 @@ fn phy_read(reg_addr: u8, mac: &stm32::ETHERNET_MAC) -> u16 {
     mac.macmdiodr.read().md().bits()
 }
 
-fn phy_write(reg_addr: u8, reg_data: u16, mac: &stm32::ETHERNET_MAC) {
+fn phy_write(reg_addr: u8, reg_data: u16, mac: &pac::ETHERNET_MAC) {
     while mac.macmdioar.read().mb().bit_is_set() {}
     mac.macmdiodr.write(|w| unsafe { w.md().bits(reg_data) });
     mac.macmdioar.modify(|_, w| unsafe {
@@ -169,7 +169,7 @@ fn phy_write(reg_addr: u8, reg_data: u16, mac: &stm32::ETHERNET_MAC) {
 }
 
 // Writes a value to an extended PHY register in MMD address space
-fn phy_write_ext(reg_addr: u16, reg_data: u16, mac: &stm32::ETHERNET_MAC) {
+fn phy_write_ext(reg_addr: u16, reg_data: u16, mac: &pac::ETHERNET_MAC) {
     phy_write(PHY_REG_CTL, 0x0003, mac); // set address
     phy_write(PHY_REG_ADDAR, reg_addr, mac);
     phy_write(PHY_REG_CTL, 0x4003, mac); // set data
@@ -192,7 +192,7 @@ impl RxRing {
         }
     }
 
-    unsafe fn init(&mut self, dma: &stm32::ETHERNET_DMA) {
+    unsafe fn init(&mut self, dma: &pac::ETHERNET_DMA) {
         assert_eq!(self.desc_buf[0].len() % 4, 0);
         assert_eq!(self.pkt_buf[0].len() % 4, 0);
 
@@ -245,7 +245,7 @@ impl RxRing {
 
         let addr = &self.desc_buf[self.cur_desc] as *const _ as u32;
         assert_eq!(addr & 0x3, 0);
-        let dma = unsafe { stm32::Peripherals::steal().ETHERNET_DMA };
+        let dma = unsafe { pac::Peripherals::steal().ETHERNET_DMA };
         dma.dmacrx_dtpr.write(|w| unsafe { w.bits(addr) });
 
         self.cur_desc = self.next_desc();
@@ -268,7 +268,7 @@ impl TxRing {
         }
     }
 
-    unsafe fn init(&mut self, dma: &stm32::ETHERNET_DMA) {
+    unsafe fn init(&mut self, dma: &pac::ETHERNET_DMA) {
         assert_eq!(self.desc_buf[0].len() % 4, 0);
         assert_eq!(self.pkt_buf[0].len() % 4, 0);
 
@@ -314,7 +314,7 @@ impl TxRing {
 
         let addr = &self.desc_buf[self.cur_desc] as *const _ as u32;
         assert_eq!(addr & 0x3, 0);
-        let dma = unsafe { stm32::Peripherals::steal().ETHERNET_DMA };
+        let dma = unsafe { pac::Peripherals::steal().ETHERNET_DMA };
         dma.dmactx_dtpr.write(|w| unsafe { w.bits(addr) });
     }
 }
@@ -331,9 +331,9 @@ impl Device {
 
     // After `init` is called, `Device` shall not be moved.
     pub unsafe fn init(&mut self, mac: EthernetAddress,
-                       eth_mac: &stm32::ETHERNET_MAC,
-                       eth_dma: &stm32::ETHERNET_DMA,
-                       eth_mtl: &stm32::ETHERNET_MTL,
+                       eth_mac: &pac::ETHERNET_MAC,
+                       eth_dma: &pac::ETHERNET_DMA,
+                       eth_mtl: &pac::ETHERNET_MTL,
                        ) {
         eth_dma.dmamr.modify(|_, w| w.swr().set_bit());
         while eth_dma.dmamr.read().swr().bit_is_set() {}
@@ -558,7 +558,7 @@ impl<'a> phy::TxToken for TxToken<'a> {
     }
 }
 
-pub unsafe fn interrupt_handler(eth_dma: &stm32::ETHERNET_DMA) {
+pub unsafe fn interrupt_handler(eth_dma: &pac::ETHERNET_DMA) {
     eth_dma.dmacsr.write(|w|
         w
             .nis().set_bit()
@@ -567,7 +567,7 @@ pub unsafe fn interrupt_handler(eth_dma: &stm32::ETHERNET_DMA) {
     );
 }
 
-pub unsafe fn enable_interrupt(eth_dma: &stm32::ETHERNET_DMA) {
+pub unsafe fn enable_interrupt(eth_dma: &pac::ETHERNET_DMA) {
     eth_dma.dmacier.modify(|_, w|
         w
             .nie().set_bit()

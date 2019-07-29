@@ -41,9 +41,8 @@ git = "https://github.com/quartiq/serde-json-core.git"
 rev = "fc764de"
 
 [dependencies.stm32h7]
-path = "../stm32-rs/stm32h7"
-# version = "0.7"
-features = ["stm32h7x3", "rt"]
+version = "0.8"
+features = ["stm32h743", "rt"]
 
 [dependencies.smoltcp]
 #git = "https://github.com/m-labs/smoltcp.git"

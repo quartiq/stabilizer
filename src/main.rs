@@ -24,7 +24,7 @@ use core::ptr;
 // use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 use core::fmt::Write;
 use cortex_m_rt::exception;
-use stm32h7::stm32h7x3 as pac;
+use stm32h7::stm32h743 as pac;
 use heapless::{String, Vec, consts::*};
 
 use smoltcp as net;
@@ -441,7 +441,7 @@ fn spi4_setup(spi4: &pac::SPI4) {
 }
 
 fn tim2_setup(tim2: &pac::TIM2) {
-    tim2.psc.write(|w| unsafe { w.psc().bits(200 - 1) });  // from 200 MHz
+    tim2.psc.write(|w| w.psc().bits(200 - 1));  // from 200 MHz
     tim2.arr.write(|w| unsafe { w.bits(2 - 1) });  // µs
     tim2.dier.write(|w| w.ude().set_bit());
     tim2.egr.write(|w| w.ug().set_bit());
@@ -519,7 +519,7 @@ macro_rules! create_socket {
     )
 }
 
-#[rtfm::app(device = stm32h7::stm32h7x3)]
+#[rtfm::app(device = stm32h7::stm32h743)]
 const APP: () = {
     static SPI: (pac::SPI1, pac::SPI2, pac::SPI4, pac::SPI5) = ();
     static ETHERNET_PERIPH: (pac::ETHERNET_MAC, pac::ETHERNET_DMA, pac::ETHERNET_MTL) = ();
