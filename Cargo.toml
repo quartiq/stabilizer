@@ -30,24 +30,31 @@ default-target = "thumbv7em-none-eabihf"
 cortex-m = { version = "0.6", features = ["inline-asm", "const-fn"] }
 cortex-m-rt = { version = "0.6", features = ["device"] }
 cortex-m-log = { version = "0.5", features = ["log-integration"] }
-stm32h7 = { version = "0.7", features = ["stm32h7x3", "rt"] }
 log = "0.4"
-panic-abort = "0.3"
-panic-semihosting = { version = "0.5.2", optional = true }
+panic-semihosting = { version = "0.5", optional = true }
 serde = { version = "1.0", features = ["derive"], default-features = false }
-heapless = { version = "0.4" }
+heapless = { version = "0.5" }
 
 [dependencies.serde-json-core]
 # version = "0.0"
 git = "https://github.com/quartiq/serde-json-core.git"
-rev = "82fdca9"
+rev = "fc764de"
+
+[dependencies.stm32h7]
+version = "0.8"
+features = ["stm32h743", "rt"]
 
 [dependencies.smoltcp]
 #git = "https://github.com/m-labs/smoltcp.git"
-#rev = "cd893e6"
+#rev = "0f61443"
 version = "0.5"
 features = ["proto-ipv4", "socket-tcp"]
 default-features = false
+
+[dependencies.cortex-m-rtfm]
+git = "https://github.com/japaric/cortex-m-rtfm"
+rev = "fafeeb2"
+features = ["timer-queue"]
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]

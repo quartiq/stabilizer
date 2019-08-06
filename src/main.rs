@@ -3,9 +3,17 @@
 #![feature(asm)]
 // Enable returning `!`
 #![feature(never_type)]
+#![feature(core_intrinsics)]
 
+#[inline(never)]
+#[panic_handler]
 #[cfg(not(feature = "semihosting"))]
-extern crate panic_abort;
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    let gpiod = unsafe { &*pac::GPIOD::ptr() };
+    gpiod.odr.modify(|_, w| w.odr6().high().odr12().high());  // FP_LED_1, FP_LED_3
+    unsafe { core::intrinsics::abort(); }
+}
+
 #[cfg(feature = "semihosting")]
 extern crate panic_semihosting;
 
@@ -13,17 +21,15 @@ extern crate panic_semihosting;
 extern crate log;
 
 use core::ptr;
-use core::cell::RefCell;
-use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
+// use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 use core::fmt::Write;
-use cortex_m_rt::{entry, exception};
-use stm32h7::stm32h7x3::{self as stm32, Peripherals, CorePeripherals, interrupt};
-use cortex_m::interrupt::Mutex;
+use cortex_m_rt::exception;
+use stm32h7::stm32h743 as pac;
 use heapless::{String, Vec, consts::*};
 
 use smoltcp as net;
 
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use serde_json_core::{ser::to_string, de::from_slice};
 
 mod eth;
@@ -37,7 +43,7 @@ fn init_log() {}
 #[cfg(feature = "semihosting")]
 fn init_log() {
     use log::LevelFilter;
-    use cortex_m_log::log::{Logger, init};
+    use cortex_m_log::log::{Logger, init as init_log};
     use cortex_m_log::printer::semihosting::{InterruptOk, hio::HStdout};
     static mut LOGGER: Option<Logger<InterruptOk<HStdout>>> = None;
     let logger = Logger {
@@ -48,7 +54,7 @@ fn init_log() {
         LOGGER.get_or_insert(logger)
     };
 
-    init(logger).unwrap();
+    init_log(logger).unwrap();
 }
 
 // Pull in build information (from `built` crate)
@@ -57,10 +63,10 @@ mod build_info {
     // include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
-fn pwr_setup(pwr: &stm32::PWR) {
+fn pwr_setup(pwr: &pac::PWR) {
     // go to VOS1 voltage scale for high perf
     pwr.cr3.write(|w|
-        w.sden().set_bit()
+        w.scuen().set_bit()
          .ldoen().set_bit()
          .bypass().clear_bit()
     );
@@ -69,7 +75,7 @@ fn pwr_setup(pwr: &stm32::PWR) {
     while pwr.d3cr.read().vosrdy().bit_is_clear() {}
 }
 
-fn rcc_reset(rcc: &stm32::RCC) {
+fn rcc_reset(rcc: &pac::RCC) {
     // Reset all peripherals
     rcc.ahb1rstr.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
     rcc.ahb1rstr.write(|w| unsafe { w.bits(0)});
@@ -95,48 +101,44 @@ fn rcc_reset(rcc: &stm32::RCC) {
     rcc.apb4rstr.write(|w| unsafe { w.bits(0)});
 }
 
-fn rcc_pll_setup(rcc: &stm32::RCC, flash: &stm32::FLASH) {
-    // Ensure HSI is on and stable
-    rcc.cr.modify(|_, w| w.hsion().set_bit());
-    while rcc.cr.read().hsirdy().bit_is_clear() {}
-
-    // Set system clock to HSI
-    rcc.cfgr.modify(|_, w| unsafe { w.sw().bits(0) });  // hsi
-    while rcc.cfgr.read().sws().bits() != 0 {}
-
-    // Clear registers to reset value
-    rcc.cr.write(|w| w.hsion().set_bit());
+fn rcc_pll_setup(rcc: &pac::RCC, flash: &pac::FLASH) {
+    // Switch to HSI to mess with HSE
+    rcc.cr.modify(|_, w| w.hsion().on());
+    while rcc.cr.read().hsirdy().is_not_ready() {}
+    rcc.cfgr.modify(|_, w| w.sw().hsi());
+    while !rcc.cfgr.read().sws().is_hsi() {}
+    rcc.cr.write(|w| w.hsion().on());
     rcc.cfgr.reset();
 
     // Ensure HSE is on and stable
     rcc.cr.modify(|_, w|
-        w.hseon().set_bit()
-         .hsebyp().clear_bit());
-    while rcc.cr.read().hserdy().bit_is_clear() {}
+        w.hseon().on()
+         .hsebyp().not_bypassed());
+    while !rcc.cr.read().hserdy().is_ready() {}
 
-    rcc.pllckselr.modify(|_, w| unsafe {
-        w.pllsrc().bits(0b10)  // hse
+    rcc.pllckselr.modify(|_, w|
+        w.pllsrc().hse()
          .divm1().bits(1)  // ref prescaler
          .divm2().bits(1)  // ref prescaler
-    });
+    );
     // Configure PLL1: 8MHz /1 *100 /2 = 400 MHz
-    rcc.pllcfgr.modify(|_, w| unsafe {
-        w.pll1vcosel().clear_bit()  // 192-836 MHz VCO
-         .pll1rge().bits(0b11)  // 8-16 MHz PFD
-         .pll1fracen().clear_bit()
-         .divp1en().set_bit()
-         .pll2vcosel().set_bit()  // 150-420 MHz VCO
-         .pll2rge().bits(0b11)  // 8-16 MHz PFD
-         .pll2fracen().clear_bit()
-         .divp2en().set_bit()
-         .divq2en().set_bit()
-    });
+    rcc.pllcfgr.modify(|_, w|
+        w.pll1vcosel().wide_vco()  // 192-836 MHz VCO
+         .pll1rge().range8()  // 8-16 MHz PFD
+         .pll1fracen().reset()
+         .divp1en().enabled()
+         .pll2vcosel().medium_vco()  // 150-420 MHz VCO
+         .pll2rge().range8()  // 8-16 MHz PFD
+         .pll2fracen().reset()
+         .divp2en().enabled()
+         .divq2en().enabled()
+    );
     rcc.pll1divr.write(|w| unsafe {
         w.divn1().bits(100 - 1)  // feebdack divider
-         .divp1().bits(2 - 1)  // p output divider
+         .divp1().div2()  // p output divider
     });
-    rcc.cr.modify(|_, w| w.pll1on().set_bit());
-    while rcc.cr.read().pll1rdy().bit_is_clear() {}
+    rcc.cr.modify(|_, w| w.pll1on().on());
+    while !rcc.cr.read().pll1rdy().is_ready() {}
 
     // Configure PLL2: 8MHz /1 *25 / 2 = 100 MHz
     rcc.pll2divr.write(|w| unsafe {
@@ -144,24 +146,22 @@ fn rcc_pll_setup(rcc: &stm32::RCC, flash: &stm32::FLASH) {
          .divp1().bits(2 - 1)  // p output divider
          .divq1().bits(2 - 1)  // q output divider
     });
-    rcc.cr.modify(|_, w| w.pll2on().set_bit());
-    while rcc.cr.read().pll2rdy().bit_is_clear() {}
+    rcc.cr.modify(|_, w| w.pll2on().on());
+    while !rcc.cr.read().pll2rdy().is_ready() {}
 
     // hclk 200 MHz, pclk 100 MHz
-    let dapb = 0b100;
-    rcc.d1cfgr.write(|w| unsafe {
-        w.d1cpre().bits(0)  // sys_ck not divided
-         .hpre().bits(0b1000)  // rcc_hclk3 = sys_d1cpre_ck / 2
-         .d1ppre().bits(dapb) // rcc_pclk3 = rcc_hclk3 / 2
-    });
-    rcc.d2cfgr.write(|w| unsafe {
-        w.d2ppre1().bits(dapb)  // rcc_pclk1 = rcc_hclk3 / 2
-         .d2ppre2().bits(dapb) // rcc_pclk2 = rcc_hclk3 / 2
-
-    });
-    rcc.d3cfgr.write(|w| unsafe {
-        w.d3ppre().bits(dapb)  // rcc_pclk4 = rcc_hclk3 / 2
-    });
+    rcc.d1cfgr.write(|w|
+        w.d1cpre().div1()  // sys_ck not divided
+         .hpre().div2()  // rcc_hclk3 = sys_d1cpre_ck / 2
+         .d1ppre().div2() // rcc_pclk3 = rcc_hclk3 / 2
+    );
+    rcc.d2cfgr.write(|w|
+        w.d2ppre1().div2()  // rcc_pclk1 = rcc_hclk3 / 2
+         .d2ppre2().div2() // rcc_pclk2 = rcc_hclk3 / 2
+    );
+    rcc.d3cfgr.write(|w|
+        w.d3ppre().div2()  // rcc_pclk4 = rcc_hclk3 / 2
+    );
 
     // 2 wait states, 0b10 programming delay
     // 185-210 MHz
@@ -172,27 +172,22 @@ fn rcc_pll_setup(rcc: &stm32::RCC, flash: &stm32::FLASH) {
     while flash.acr.read().latency().bits() != 2 {}
 
     // CSI for I/O compensationc ell
-    rcc.cr.modify(|_, w| w.csion().set_bit());
-    while rcc.cr.read().csirdy().bit_is_clear() {}
+    rcc.cr.modify(|_, w| w.csion().on());
+    while !rcc.cr.read().csirdy().is_ready() {}
 
     // Set system clock to pll1_p
-    rcc.cfgr.modify(|_, w| unsafe { w.sw().bits(0b011) });  // pll1p
-    while rcc.cfgr.read().sws().bits() != 0b011 {}
+    rcc.cfgr.modify(|_, w| w.sw().pll1());
+    while !rcc.cfgr.read().sws().is_pll1() {}
 
-    rcc.d1ccipr.write(|w| unsafe {
-        w.ckpersrc().bits(1)  // hse_ck
-    });
-    rcc.d2ccip1r.modify(|_, w| unsafe {
-        w.spi123src().bits(1)  // pll2_p
-         .spi45src().bits(1)  // pll2_q
-    });
-
-    rcc.d3ccipr.modify(|_, w| unsafe {
-        w.spi6src().bits(1)  // pll2_q
-    });
+    rcc.d1ccipr.write(|w| w.ckpersel().hse());
+    rcc.d2ccip1r.modify(|_, w|
+        w.spi123sel().pll2_p()
+         .spi45sel().pll2_q()
+    );
+    rcc.d3ccipr.modify(|_, w| w.spi6sel().pll2_q());
 }
 
-fn io_compensation_setup(syscfg: &stm32::SYSCFG) {
+fn io_compensation_setup(syscfg: &pac::SYSCFG) {
     syscfg.cccsr.modify(|_, w|
         w.en().set_bit()
          .cs().clear_bit()
@@ -201,27 +196,27 @@ fn io_compensation_setup(syscfg: &stm32::SYSCFG) {
     while syscfg.cccsr.read().ready().bit_is_clear() {}
 }
 
-fn gpio_setup(gpioa: &stm32::GPIOA, gpiob: &stm32::GPIOB, gpiod: &stm32::GPIOD,
-              gpioe: &stm32::GPIOE, gpiof: &stm32::GPIOF, gpiog: &stm32::GPIOG) {
+fn gpio_setup(gpioa: &pac::GPIOA, gpiob: &pac::GPIOB, gpiod: &pac::GPIOD,
+              gpioe: &pac::GPIOE, gpiof: &pac::GPIOF, gpiog: &pac::GPIOG) {
     // FP_LED0
     gpiod.otyper.modify(|_, w| w.ot5().push_pull());
     gpiod.moder.modify(|_, w| w.moder5().output());
-    gpiod.odr.modify(|_, w| w.odr5().clear_bit());
+    gpiod.odr.modify(|_, w| w.odr5().low());
 
     // FP_LED1
     gpiod.otyper.modify(|_, w| w.ot6().push_pull());
     gpiod.moder.modify(|_, w| w.moder6().output());
-    gpiod.odr.modify(|_, w| w.odr6().clear_bit());
+    gpiod.odr.modify(|_, w| w.odr6().low());
 
     // LED_FP2
     gpiog.otyper.modify(|_, w| w.ot4().push_pull());
     gpiog.moder.modify(|_, w| w.moder4().output());
-    gpiog.odr.modify(|_, w| w.odr4().clear_bit());
+    gpiog.odr.modify(|_, w| w.odr4().low());
 
     // LED_FP3
     gpiod.otyper.modify(|_, w| w.ot12().push_pull());
     gpiod.moder.modify(|_, w| w.moder12().output());
-    gpiod.odr.modify(|_, w| w.odr12().clear_bit());
+    gpiod.odr.modify(|_, w| w.odr12().low());
 
     // AFE0_A0,1: PG2,PG3
     gpiog.otyper.modify(|_, w|
@@ -233,8 +228,8 @@ fn gpio_setup(gpioa: &stm32::GPIOA, gpiob: &stm32::GPIOB, gpiod: &stm32::GPIOD,
          .moder3().output()
     );
     gpiog.odr.modify(|_, w|
-        w.odr2().clear_bit()
-         .odr3().clear_bit()
+        w.odr2().low()
+         .odr3().low()
     );
 
     // ADC0
@@ -274,12 +269,12 @@ fn gpio_setup(gpioa: &stm32::GPIOA, gpiob: &stm32::GPIOB, gpiod: &stm32::GPIOD,
     // DAC0_LDAC: PE11
     gpioe.moder.modify(|_, w| w.moder11().output());
     gpioe.otyper.modify(|_, w| w.ot11().push_pull());
-    gpioe.odr.modify(|_, w| w.odr11().clear_bit());
+    gpioe.odr.modify(|_, w| w.odr11().low());
 
     // DAC_CLR: PE12
     gpioe.moder.modify(|_, w| w.moder12().output());
     gpioe.otyper.modify(|_, w| w.ot12().push_pull());
-    gpioe.odr.modify(|_, w| w.odr12().set_bit());
+    gpioe.odr.modify(|_, w| w.odr12().high());
 
     // AFE1_A0,1: PD14,PD15
     gpiod.otyper.modify(|_, w|
@@ -291,8 +286,8 @@ fn gpio_setup(gpioa: &stm32::GPIOA, gpiob: &stm32::GPIOB, gpiod: &stm32::GPIOD,
          .moder15().output()
     );
     gpiod.odr.modify(|_, w|
-        w.odr14().clear_bit()
-         .odr15().clear_bit()
+        w.odr14().low()
+         .odr15().low()
     );
 
     // ADC1
@@ -332,127 +327,121 @@ fn gpio_setup(gpioa: &stm32::GPIOA, gpiob: &stm32::GPIOB, gpiod: &stm32::GPIOD,
     // DAC1_LDAC: PE15
     gpioe.moder.modify(|_, w| w.moder15().output());
     gpioe.otyper.modify(|_, w| w.ot15().push_pull());
-    gpioe.odr.modify(|_, w| w.odr15().clear_bit());
+    gpioe.odr.modify(|_, w| w.odr15().low());
 }
 
 // ADC0
-fn spi1_setup(spi1: &stm32::SPI1) {
-    spi1.cfg1.modify(|_, w| {
-        w.mbr().bits(1)  // clk/4
+fn spi1_setup(spi1: &pac::SPI1) {
+    spi1.cfg1.modify(|_, w|
+        w.mbr().div4()
          .dsize().bits(16 - 1)
-         .fthvl().one_frame()
-    });
-    spi1.cfg2.modify(|_, w| unsafe {
-        w.afcntr().set_bit()
-         .ssom().set_bit()  // ss deassert between frames during midi
-         .ssoe().set_bit()  // ss output enable
-         .ssiop().clear_bit()  // ss active low
-         .ssm().clear_bit()  // PAD counts
-         .cpol().set_bit()
-         .cpha().set_bit()
-         .lsbfrst().clear_bit()
-         .master().set_bit()
-         .sp().bits(0)  // motorola
-         .comm().bits(0b10)  // simplex receiver
-         .ioswp().clear_bit()
-         .midi().bits(0)  // master inter data idle
-         .mssi().bits(6)  // master SS idle
-    });
-    spi1.cr2.modify(|_, w| {
-        w.tsize().bits(1)
-    });
-    spi1.cr1.write(|w| w.spe().set_bit());
+         .fthlv().one_frame()
+    );
+    spi1.cfg2.modify(|_, w|
+        w.afcntr().controlled()
+         .ssom().not_asserted()
+         .ssoe().enabled()
+         .ssiop().active_low()
+         .ssm().disabled()
+         .cpol().idle_high()
+         .cpha().second_edge()
+         .lsbfrst().msbfirst()
+         .master().master()
+         .sp().motorola()
+         .comm().receiver()
+         .ioswp().disabled()
+         .midi().bits(0)
+         .mssi().bits(6)
+    );
+    spi1.cr2.modify(|_, w| w.tsize().bits(1));
+    spi1.cr1.write(|w| w.spe().enabled());
 }
 
 // ADC1
-fn spi5_setup(spi5: &stm32::SPI5) {
-    spi5.cfg1.modify(|_, w| {
-        w.mbr().bits(1)  // clk/4
+fn spi5_setup(spi5: &pac::SPI5) {
+    spi5.cfg1.modify(|_, w|
+        w.mbr().div4()
          .dsize().bits(16 - 1)
-         .fthvl().one_frame()
-    });
-    spi5.cfg2.modify(|_, w| unsafe {
-        w.afcntr().set_bit()
-         .ssom().set_bit()  // ss deassert between frames during midi
-         .ssoe().set_bit()  // ss output enable
-         .ssiop().clear_bit()  // ss active low
-         .ssm().clear_bit()  // PAD counts
-         .cpol().set_bit()
-         .cpha().set_bit()
-         .lsbfrst().clear_bit()
-         .master().set_bit()
-         .sp().bits(0)  // motorola
-         .comm().bits(0b10)  // simplex receiver
-         .ioswp().clear_bit()
-         .midi().bits(0)  // master inter data idle
-         .mssi().bits(6)  // master SS idle
-    });
-    spi5.cr2.modify(|_, w| {
-        w.tsize().bits(1)
-    });
-    spi5.cr1.write(|w| w.spe().set_bit());
+         .fthlv().one_frame()
+    );
+    spi5.cfg2.modify(|_, w|
+        w.afcntr().controlled()
+         .ssom().not_asserted()
+         .ssoe().enabled()
+         .ssiop().active_low()
+         .ssm().disabled()
+         .cpol().idle_high()
+         .cpha().second_edge()
+         .lsbfrst().msbfirst()
+         .master().master()
+         .sp().motorola()
+         .comm().receiver()
+         .ioswp().disabled()
+         .midi().bits(0)
+         .mssi().bits(6)
+    );
+    spi5.cr2.modify(|_, w| w.tsize().bits(1));
+    spi5.cr1.write(|w| w.spe().enabled());
 }
 
 // DAC0
-fn spi2_setup(spi2: &stm32::SPI2) {
-    spi2.cfg1.modify(|_, w| {
-        w.mbr().bits(0)  // clk/2
+fn spi2_setup(spi2: &pac::SPI2) {
+    spi2.cfg1.modify(|_, w|
+        w.mbr().div2()
          .dsize().bits(16 - 1)
-         .fthvl().one_frame()
-    });
-    spi2.cfg2.modify(|_, w| unsafe {
-        w.afcntr().set_bit()
-         .ssom().set_bit()  // ss deassert between frames during midi
-         .ssoe().set_bit()  // ss output enable
-         .ssiop().clear_bit()  // ss active low
-         .ssm().clear_bit()  // PAD counts
-         .cpol().clear_bit()
-         .cpha().clear_bit()
-         .lsbfrst().clear_bit()
-         .master().set_bit()
-         .sp().bits(0)  // motorola
-         .comm().bits(0b01)  // simplex transmitter
-         .ioswp().clear_bit()
-         .midi().bits(0)  // master inter data idle
-         .mssi().bits(0)  // master SS idle
-    });
+         .fthlv().one_frame()
+    );
+    spi2.cfg2.modify(|_, w|
+        w.afcntr().controlled()
+         .ssom().not_asserted()
+         .ssoe().enabled()
+         .ssiop().active_low()
+         .ssm().disabled()
+         .cpol().idle_low()
+         .cpha().first_edge()
+         .lsbfrst().msbfirst()
+         .master().master()
+         .sp().motorola()
+         .comm().transmitter()
+         .ioswp().disabled()
+         .midi().bits(0)
+         .mssi().bits(0)
+    );
     spi2.cr2.modify(|_, w| w.tsize().bits(0));
     spi2.cr1.write(|w| w.spe().enabled());
     spi2.cr1.modify(|_, w| w.cstart().started());
 }
 
 // DAC1
-fn spi4_setup(spi4: &stm32::SPI4) {
-    spi4.cfg1.modify(|_, w| {
-        w.mbr().bits(0)  // clk/2
+fn spi4_setup(spi4: &pac::SPI4) {
+    spi4.cfg1.modify(|_, w|
+        w.mbr().div2()
          .dsize().bits(16 - 1)
-         .fthvl().one_frame()
-    });
-    spi4.cfg2.modify(|_, w| unsafe {
-        w.afcntr().set_bit()
-         .ssom().set_bit()  // ss deassert between frames during midi
-         .ssoe().set_bit()  // ss output enable
-         .ssiop().clear_bit()  // ss active low
-         .ssm().clear_bit()  // PAD counts
-         .cpol().clear_bit()
-         .cpha().clear_bit()
-         .lsbfrst().clear_bit()
-         .master().set_bit()
-         .sp().bits(0)  // motorola
-         .comm().bits(0b01)  // simplex transmitter
-         .ioswp().clear_bit()
-         .midi().bits(0)  // master inter data idle
-         .mssi().bits(0)  // master SS idle
-    });
-    spi4.cr2.modify(|_, w| {
-        w.tsize().bits(0)
-    });
+         .fthlv().one_frame()
+    );
+    spi4.cfg2.modify(|_, w|
+        w.afcntr().controlled()
+         .ssom().not_asserted()
+         .ssoe().enabled()
+         .ssiop().active_low()
+         .ssm().disabled()
+         .cpol().idle_low()
+         .cpha().first_edge()
+         .lsbfrst().msbfirst()
+         .master().master()
+         .sp().motorola()
+         .comm().transmitter()
+         .ioswp().disabled()
+         .midi().bits(0)
+         .mssi().bits(0)
+    );
+    spi4.cr2.modify(|_, w| w.tsize().bits(0));
     spi4.cr1.write(|w| w.spe().enabled());
     spi4.cr1.modify(|_, w| w.cstart().started());
 }
 
-fn tim2_setup(tim2: &stm32::TIM2) {
-    tim2.psc.write(|w| unsafe { w.psc().bits(200 - 1) });  // from 200 MHz
+fn tim2_setup(tim2: &pac::TIM2) {
+    tim2.psc.write(|w| w.psc().bits(200 - 1));  // from 200 MHz
     tim2.arr.write(|w| unsafe { w.bits(2 - 1) });  // µs
     tim2.dier.write(|w| w.ude().set_bit());
     tim2.egr.write(|w| w.ug().set_bit());
@@ -461,15 +450,15 @@ fn tim2_setup(tim2: &stm32::TIM2) {
          .cen().set_bit());  // enable
 }
 
-fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa0: usize, pa1: usize) {
-    dma1.s0cr.modify(|_, w| w.en().clear_bit());
-    while dma1.s0cr.read().en().bit_is_set() {}
+fn dma1_setup(dma1: &pac::DMA1, dmamux1: &pac::DMAMUX1, ma: usize, pa0: usize, pa1: usize) {
+    dma1.st[0].cr.modify(|_, w| w.en().clear_bit());
+    while dma1.st[0].cr.read().en().bit_is_set() {}
 
-    dma1.s0par.write(|w| unsafe { w.pa().bits(pa0 as u32) });
-    dma1.s0m0ar.write(|w| unsafe { w.m0a().bits(ma as u32) });
-    dma1.s0ndtr.write(|w| unsafe { w.ndt().bits(1) });
-    dmamux1.ccr[0].modify(|_, w| unsafe { w.dmareq_id().bits(22) });  // tim2_up
-    dma1.s0cr.modify(|_, w| unsafe {
+    dma1.st[0].par.write(|w| unsafe { w.bits(pa0 as u32) });
+    dma1.st[0].m0ar.write(|w| unsafe { w.bits(ma as u32) });
+    dma1.st[0].ndtr.write(|w| unsafe { w.ndt().bits(1) });
+    dmamux1.ccr[0].modify(|_, w| w.dmareq_id().tim2_up());
+    dma1.st[0].cr.modify(|_, w| unsafe {
         w.pl().bits(0b01)  // medium
          .circ().set_bit()  // reload ndtr
          .msize().bits(0b10)  // 32
@@ -482,17 +471,17 @@ fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa0: usiz
          .dir().bits(0b01)  // memory_to_peripheral
          .pfctrl().clear_bit()  // dma is FC
     });
-    dma1.s0fcr.modify(|_, w| w.dmdis().clear_bit());
-    dma1.s0cr.modify(|_, w| w.en().set_bit());
+    dma1.st[0].fcr.modify(|_, w| w.dmdis().clear_bit());
+    dma1.st[0].cr.modify(|_, w| w.en().set_bit());
 
-    dma1.s1cr.modify(|_, w| w.en().clear_bit());
-    while dma1.s1cr.read().en().bit_is_set() {}
+    dma1.st[1].cr.modify(|_, w| w.en().clear_bit());
+    while dma1.st[1].cr.read().en().bit_is_set() {}
 
-    dma1.s1par.write(|w| unsafe { w.pa().bits(pa1 as u32) });
-    dma1.s1m0ar.write(|w| unsafe { w.m0a().bits(ma as u32) });
-    dma1.s1ndtr.write(|w| unsafe { w.ndt().bits(1) });
-    dmamux1.ccr[1].modify(|_, w| unsafe { w.dmareq_id().bits(22) });  // tim2_up
-    dma1.s1cr.modify(|_, w| unsafe {
+    dma1.st[1].par.write(|w| unsafe { w.bits(pa1 as u32) });
+    dma1.st[1].m0ar.write(|w| unsafe { w.bits(ma as u32) });
+    dma1.st[1].ndtr.write(|w| unsafe { w.ndt().bits(1) });
+    dmamux1.ccr[1].modify(|_, w| w.dmareq_id().tim2_up());
+    dma1.st[1].cr.modify(|_, w| unsafe {
         w.pl().bits(0b01)  // medium
          .circ().set_bit()  // reload ndtr
          .msize().bits(0b10)  // 32
@@ -505,21 +494,16 @@ fn dma1_setup(dma1: &stm32::DMA1, dmamux1: &stm32::DMAMUX1, ma: usize, pa0: usiz
          .dir().bits(0b01)  // memory_to_peripheral
          .pfctrl().clear_bit()  // dma is FC
     });
-    dma1.s1fcr.modify(|_, w| w.dmdis().clear_bit());
-    dma1.s1cr.modify(|_, w| w.en().set_bit());
+    dma1.st[1].fcr.modify(|_, w| w.dmdis().clear_bit());
+    dma1.st[1].cr.modify(|_, w| w.en().set_bit());
 }
 
-type SpiPs = Option<(stm32::SPI1, stm32::SPI2, stm32::SPI4, stm32::SPI5)>;
-static SPIP: Mutex<RefCell<SpiPs>> = Mutex::new(RefCell::new(None));
+const SCALE: f32 = ((1 << 15) - 1) as f32;
 
 #[link_section = ".sram1.datspi"]
 static mut DAT: u32 = 0x201;  // EN | CSTART
 
-static TIME: AtomicU32 = AtomicU32::new(0);
-static ETHERNET_PENDING: AtomicBool = AtomicBool::new(true);
-
-#[link_section = ".sram3.eth"]
-static mut ETHERNET: eth::Device = eth::Device::new();
+// static ETHERNET_PENDING: AtomicBool = AtomicBool::new(true);
 
 const TCP_RX_BUFFER_SIZE: usize = 8192;
 const TCP_TX_BUFFER_SIZE: usize = 8192;
@@ -535,154 +519,254 @@ macro_rules! create_socket {
     )
 }
 
+#[rtfm::app(device = stm32h7::stm32h743)]
+const APP: () = {
+    static SPI: (pac::SPI1, pac::SPI2, pac::SPI4, pac::SPI5) = ();
+    static ETHERNET_PERIPH: (pac::ETHERNET_MAC, pac::ETHERNET_DMA, pac::ETHERNET_MTL) = ();
 
-#[entry]
-fn main() -> ! {
-    let mut cp = CorePeripherals::take().unwrap();
-    let dp = Peripherals::take().unwrap();
+    static mut IIR_STATE: [IIRState; 2] = [[0.; 5]; 2];
+    static mut IIR_CH: [IIR; 2] = [
+        IIR {
+            ba: [0., 0., 0., 0., 0.],
+            y_offset: 0.,
+            y_min: -SCALE - 1.,
+            y_max: SCALE
+        };
+    2];
 
-    let rcc = dp.RCC;
-    rcc_reset(&rcc);
+    #[link_section = ".sram3.eth"]
+    static mut ETHERNET: eth::Device = eth::Device::new();
 
-    init_log();
-    // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
-    // info!("Built on {}", build_info::BUILT_TIME_UTC);
-    // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
+    #[init(schedule = [tick])]
+    fn init(c: init::Context) -> init::LateResources {
+        let dp = c.device;
+        let cp = c.core;
 
-    pwr_setup(&dp.PWR);
-    rcc_pll_setup(&rcc, &dp.FLASH);
-    rcc.apb4enr.modify(|_, w| w.syscfgen().set_bit());
-    io_compensation_setup(&dp.SYSCFG);
+        let rcc = dp.RCC;
+        rcc_reset(&rcc);
 
-    // 100 MHz
-    cp.SYST.set_clock_source(cortex_m::peripheral::syst::SystClkSource::Core);
-    cp.SYST.set_reload(cortex_m::peripheral::SYST::get_ticks_per_10ms()*200/10);
-    cp.SYST.enable_counter();
-    cp.SYST.enable_interrupt();
-    unsafe { cp.SCB.shpr[11].write(128); }  // systick exception priority
+        init_log();
+        // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
+        // info!("Built on {}", build_info::BUILT_TIME_UTC);
+        // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
 
-    cp.SCB.enable_icache();
-    // TODO: ETH DMA coherence issues
-    // cp.SCB.enable_dcache(&mut cp.CPUID);
-    cp.DWT.enable_cycle_counter();
+        pwr_setup(&dp.PWR);
+        rcc_pll_setup(&rcc, &dp.FLASH);
+        rcc.apb4enr.modify(|_, w| w.syscfgen().set_bit());
+        io_compensation_setup(&dp.SYSCFG);
 
-    rcc.ahb4enr.modify(|_, w|
-        w.gpioaen().set_bit()
-         .gpioben().set_bit()
-         .gpiocen().set_bit()
-         .gpioden().set_bit()
-         .gpioeen().set_bit()
-         .gpiofen().set_bit()
-         .gpiogen().set_bit()
-    );
-    gpio_setup(&dp.GPIOA, &dp.GPIOB, &dp.GPIOD, &dp.GPIOE, &dp.GPIOF, &dp.GPIOG);
+        cp.SCB.enable_icache();
+        // TODO: ETH DMA coherence issues
+        // cp.SCB.enable_dcache(&mut cp.CPUID);
+        // cp.DWT.enable_cycle_counter();
 
-    rcc.apb1lenr.modify(|_, w| w.spi2en().set_bit());
-    let spi2 = dp.SPI2;
-    spi2_setup(&spi2);
+        rcc.ahb4enr.modify(|_, w|
+            w.gpioaen().set_bit()
+            .gpioben().set_bit()
+            .gpiocen().set_bit()
+            .gpioden().set_bit()
+            .gpioeen().set_bit()
+            .gpiofen().set_bit()
+            .gpiogen().set_bit()
+        );
+        gpio_setup(&dp.GPIOA, &dp.GPIOB, &dp.GPIOD, &dp.GPIOE, &dp.GPIOF, &dp.GPIOG);
 
-    rcc.apb2enr.modify(|_, w| w.spi4en().set_bit());
-    let spi4 = dp.SPI4;
-    spi4_setup(&spi4);
+        rcc.apb1lenr.modify(|_, w| w.spi2en().set_bit());
+        let spi2 = dp.SPI2;
+        spi2_setup(&spi2);
 
-    rcc.apb2enr.modify(|_, w| w.spi1en().set_bit());
-    let spi1 = dp.SPI1;
-    spi1_setup(&spi1);
-    spi1.ier.write(|w| w.eotie().set_bit());
+        rcc.apb2enr.modify(|_, w| w.spi4en().set_bit());
+        let spi4 = dp.SPI4;
+        spi4_setup(&spi4);
 
-    rcc.apb2enr.modify(|_, w| w.spi5en().set_bit());
-    let spi5 = dp.SPI5;
-    spi5_setup(&spi5);
-    // spi5.ier.write(|w| w.eotie().set_bit());
+        rcc.apb2enr.modify(|_, w| w.spi1en().set_bit());
+        let spi1 = dp.SPI1;
+        spi1_setup(&spi1);
+        spi1.ier.write(|w| w.eotie().set_bit());
 
-    rcc.ahb2enr.modify(|_, w|
-        w
-            .sram1en().set_bit()
-            .sram2en().set_bit()
-            .sram3en().set_bit()
-    );
-    rcc.ahb1enr.modify(|_, w| w.dma1en().set_bit());
-    // init SRAM1 rodata can't load with sram1 disabled
-    unsafe { DAT = 0x201 };  // EN | CSTART
-    cortex_m::asm::dsb();
-    let dat_addr = unsafe { &DAT as *const _ } as usize;
-    cp.SCB.clean_dcache_by_address(dat_addr, 4);
+        rcc.apb2enr.modify(|_, w| w.spi5en().set_bit());
+        let spi5 = dp.SPI5;
+        spi5_setup(&spi5);
+        // spi5.ier.write(|w| w.eotie().set_bit());
 
-    dma1_setup(&dp.DMA1, &dp.DMAMUX1, dat_addr,
-               &spi1.cr1 as *const _ as usize,
-               &spi5.cr1 as *const _ as usize);
+        rcc.ahb2enr.modify(|_, w|
+            w
+                .sram1en().set_bit()
+                .sram2en().set_bit()
+                .sram3en().set_bit()
+        );
+        rcc.ahb1enr.modify(|_, w| w.dma1en().set_bit());
+        // init SRAM1 rodata can't load with sram1 disabled
+        unsafe { DAT = 0x201 };  // EN | CSTART
+        cortex_m::asm::dsb();
+        let dat_addr = unsafe { &DAT as *const _ } as usize;
+        cp.SCB.clean_dcache_by_address(dat_addr, 4);
 
-    rcc.apb1lenr.modify(|_, w| w.tim2en().set_bit());
+        dma1_setup(&dp.DMA1, &dp.DMAMUX1, dat_addr,
+                &spi1.cr1 as *const _ as usize,
+                &spi5.cr1 as *const _ as usize);
 
-    // work around the SPI stall erratum
-    //let dbgmcu = dp.DBGMCU;
-    //dbgmcu.apb1lfz1.modify(|_, w| w.stop_tim2().set_bit());  // stop tim2 in debug
-    unsafe { ptr::write_volatile(0x5c00_103c as *mut usize, 0x0000_0001) };
+        rcc.apb1lenr.modify(|_, w| w.tim2en().set_bit());
 
-    eth::setup(&rcc, &dp.SYSCFG);
-    eth::setup_pins(&dp.GPIOA, &dp.GPIOB, &dp.GPIOC, &dp.GPIOG);
+        // work around the SPI stall erratum
+        let dbgmcu = dp.DBGMCU;
+        dbgmcu.apb1lfz1.modify(|_, w| w.tim2().set_bit());
 
-    let device = unsafe { &mut ETHERNET };
-    let hardware_addr = net::wire::EthernetAddress([0x10, 0xE2, 0xD5, 0x00, 0x03, 0x00]);
-    unsafe { device.init(hardware_addr) };
-    let mut neighbor_cache_storage = [None; 8];
-    let neighbor_cache = net::iface::NeighborCache::new(&mut neighbor_cache_storage[..]);
-    let local_addr = net::wire::IpAddress::v4(10, 0, 16, 99);
-    let mut ip_addrs = [net::wire::IpCidr::new(local_addr, 24)];
-    let mut iface = net::iface::EthernetInterfaceBuilder::new(device)
-                .ethernet_addr(hardware_addr)
-                .neighbor_cache(neighbor_cache)
-                .ip_addrs(&mut ip_addrs[..])
-                .finalize();
-    let mut socket_set_entries: [_; 8] = Default::default();
-    let mut sockets = net::socket::SocketSet::new(&mut socket_set_entries[..]);
-    create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle0);
-    create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle1);
+        tim2_setup(&dp.TIM2);
 
-    unsafe { eth::enable_interrupt(); }
-    unsafe { cp.NVIC.set_priority(stm32::Interrupt::ETH, 196); }  // mid prio
-    cp.NVIC.enable(stm32::Interrupt::ETH);
+        eth::setup(&rcc, &dp.SYSCFG);
+        eth::setup_pins(&dp.GPIOA, &dp.GPIOB, &dp.GPIOC, &dp.GPIOG);
 
-    tim2_setup(&dp.TIM2);
+        // c.schedule.tick(rtfm::Instant::now()).unwrap();
 
-    unsafe { cp.NVIC.set_priority(stm32::Interrupt::SPI1, 0); }  // highest prio
-    cortex_m::interrupt::free(|cs| {
-        cp.NVIC.enable(stm32::Interrupt::SPI1);
-        SPIP.borrow(cs).replace(Some((spi1, spi2, spi4, spi5)));
-    });
-
-    let mut last = 0;
-    let mut server = Server::new();
-    loop {
-        // if ETHERNET_PENDING.swap(false, Ordering::Relaxed) { }
-        let time = TIME.load(Ordering::Relaxed);
-        {
-            let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle0);
-            if !(socket.is_open() || socket.is_listening()) {
-                socket.listen(1234).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
-            } else if last != time && socket.can_send() {
-                last = time;
-                handle_status(socket, time);
-            }
-        }
-        {
-            let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle1);
-            if !(socket.is_open() || socket.is_listening()) {
-                socket.listen(1235).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
-            } else {
-                server.handle_command(socket);
-            }
-        }
-
-        if !match iface.poll(&mut sockets, net::time::Instant::from_millis(time as i64)) {
-            Ok(changed) => changed,
-            Err(net::Error::Unrecognized) => true,
-            Err(e) => { info!("iface poll error: {:?}", e); true }
-        } {
-            cortex_m::asm::wfi();
+        init::LateResources {
+            SPI: (spi1, spi2, spi4, spi5),
+            ETHERNET_PERIPH: (dp.ETHERNET_MAC, dp.ETHERNET_DMA, dp.ETHERNET_MTL),
         }
     }
-}
+
+    #[idle(resources = [ETHERNET, ETHERNET_PERIPH, IIR_STATE, IIR_CH])]
+    fn idle(c: idle::Context) -> ! {
+        let (MAC, DMA, MTL) = c.resources.ETHERNET_PERIPH;
+
+        let hardware_addr = net::wire::EthernetAddress([0x10, 0xE2, 0xD5, 0x00, 0x03, 0x00]);
+        unsafe { c.resources.ETHERNET.init(hardware_addr, MAC, DMA, MTL) };
+        let mut neighbor_cache_storage = [None; 8];
+        let neighbor_cache = net::iface::NeighborCache::new(&mut neighbor_cache_storage[..]);
+        let local_addr = net::wire::IpAddress::v4(10, 0, 16, 99);
+        let mut ip_addrs = [net::wire::IpCidr::new(local_addr, 24)];
+        let mut iface = net::iface::EthernetInterfaceBuilder::new(c.resources.ETHERNET)
+                    .ethernet_addr(hardware_addr)
+                    .neighbor_cache(neighbor_cache)
+                    .ip_addrs(&mut ip_addrs[..])
+                    .finalize();
+        let mut socket_set_entries: [_; 8] = Default::default();
+        let mut sockets = net::socket::SocketSet::new(&mut socket_set_entries[..]);
+        create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle0);
+        create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle1);
+
+        // unsafe { eth::enable_interrupt(DMA); }
+        let mut time = 0u32;
+        let mut next_ms = rtfm::Instant::now();
+        next_ms += 200_000.cycles();
+        let mut server = Server::new();
+        let mut iir_state: resources::IIR_STATE = c.resources.IIR_STATE;
+        let mut iir_ch: resources::IIR_CH = c.resources.IIR_CH;
+        loop {
+            // if ETHERNET_PENDING.swap(false, Ordering::Relaxed) { }
+            let tick = rtfm::Instant::now() > next_ms;
+            if tick {
+                next_ms += 200_000.cycles();
+                time += 1;
+            }
+            {
+                let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle0);
+                if socket.state() == net::socket::TcpState::CloseWait {
+                    socket.close();
+                } else if !(socket.is_open() || socket.is_listening()) {
+                    socket.listen(1234).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
+                } else if tick && socket.can_send() {
+                    let s = iir_state.lock(|iir_state| Status {
+                        t: time,
+                        x0: iir_state[0][0],
+                        y0: iir_state[0][2],
+                        x1: iir_state[1][0],
+                        y1: iir_state[1][2]
+                    });
+                    json_reply(socket, &s);
+                }
+            }
+            {
+                let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle1);
+                if socket.state() == net::socket::TcpState::CloseWait {
+                    socket.close();
+                } else if !(socket.is_open() || socket.is_listening()) {
+                    socket.listen(1235).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
+                } else {
+                    server.poll(socket, |req: &Request| {
+                        if req.channel < 2 {
+                            iir_ch.lock(|iir_ch| iir_ch[req.channel as usize] = req.iir);
+                        }
+                    });
+                }
+            }
+
+            if !match iface.poll(&mut sockets, net::time::Instant::from_millis(time as i64)) {
+                Ok(changed) => changed,
+                Err(net::Error::Unrecognized) => true,
+                Err(e) => { info!("iface poll error: {:?}", e); true }
+            } {
+                // cortex_m::asm::wfi();
+            }
+        }
+    }
+
+    #[task(priority = 1, schedule = [tick])]
+    fn tick(c: tick::Context) {
+        static mut TIME: u32 = 0;
+        *TIME += 1;
+        const PERIOD: u32 = 200_000_000;
+        c.schedule.tick(c.scheduled + PERIOD.cycles()).unwrap();
+    }
+
+    // seems to slow it down
+    // #[link_section = ".data.spi1"]
+    #[interrupt(resources = [SPI, IIR_STATE, IIR_CH], priority = 2)]
+    fn SPI1(c: SPI1::Context) {
+        #[cfg(feature = "bkpt")]
+        cortex_m::asm::bkpt();
+        let (spi1, spi2, spi4, spi5) = c.resources.SPI;
+        let iir_ch = c.resources.IIR_CH;
+        let mut iir_state = c.resources.IIR_STATE;
+
+        let sr = spi1.sr.read();
+        if sr.eot().bit_is_set() {
+            spi1.ifcr.write(|w| w.eotc().set_bit());
+        }
+        if sr.rxp().bit_is_set() {
+            let rxdr = &spi1.rxdr as *const _ as *const u16;
+            let a = unsafe { ptr::read_volatile(rxdr) };
+            let x0 = f32::from(a as i16);
+            let y0 = iir_ch[0].update(&mut iir_state[0], x0);
+            let d = y0 as i16 as u16 ^ 0x8000;
+            let txdr = &spi2.txdr as *const _ as *mut u16;
+            unsafe { ptr::write_volatile(txdr, d) };
+        }
+
+        let sr = spi5.sr.read();
+        if sr.eot().bit_is_set() {
+            spi5.ifcr.write(|w| w.eotc().set_bit());
+        }
+        if sr.rxp().bit_is_set() {
+            let rxdr = &spi5.rxdr as *const _ as *const u16;
+            let a = unsafe { ptr::read_volatile(rxdr) };
+            let x0 = f32::from(a as i16);
+            let y0 = iir_ch[1].update(&mut iir_state[1], x0);
+            let d = y0 as i16 as u16 ^ 0x8000;
+            let txdr = &spi4.txdr as *const _ as *mut u16;
+            unsafe { ptr::write_volatile(txdr, d) };
+        }
+        #[cfg(feature = "bkpt")]
+        cortex_m::asm::bkpt();
+    }
+
+    /*
+    #[interrupt(resources = [ETHERNET_PERIPH], priority = 1)]
+    fn ETH(c: ETH::Context) {
+        let dma = &c.resources.ETHERNET_PERIPH.1;
+        ETHERNET_PENDING.store(true, Ordering::Relaxed);
+        unsafe { eth::interrupt_handler(dma) }
+    }
+    */
+
+    extern "C" {
+        // hw interrupt handlers for RTFM to use for scheduling tasks
+        // one per priority
+        fn DCMI();
+        fn JPEG();
+        fn SDMMC();
+    }
+};
 
 #[derive(Deserialize,Serialize)]
 struct Request {
@@ -696,7 +780,16 @@ struct Response<'a> {
     message: &'a str,
 }
 
-fn reply<T: Serialize>(socket: &mut net::socket::TcpSocket, msg: &T) {
+#[derive(Serialize)]
+struct Status {
+    t: u32,
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32
+}
+
+fn json_reply<T: Serialize>(socket: &mut net::socket::TcpSocket, msg: &T) {
     let mut u: String<U128> = to_string(msg).unwrap();
     u.push('\n').unwrap();
     socket.write_str(&u).unwrap();
@@ -712,7 +805,11 @@ impl Server {
         Self { data: Vec::new(), discard: false }
     }
 
-    fn handle_command(&mut self, socket: &mut net::socket::TcpSocket) {
+    fn poll<T, F, R>(&mut self, socket: &mut net::socket::TcpSocket, f: F) -> Option<R>
+        where
+            T: DeserializeOwned,
+            F: FnOnce(&T) -> R,
+    {
         while socket.can_recv() {
             let found = socket.recv(|buf| {
                 let (len, found) = match buf.iter().position(|&c| c as char == '\n') {
@@ -727,114 +824,30 @@ impl Server {
                 }
                 (len, found)
             }).unwrap();
-            if !found {
-                continue;
-            }
-            let resp = if self.discard {
-                self.discard = false;
-                Response{ code: 520, message: "command buffer overflow" }
-            } else {
-                match from_slice::<Request>(&self.data) {
-                    Ok(request) => {
-                        if request.channel > 1 {
-                            Response{ code: 530, message: "invalid channel" }
-                        } else {
-                            cortex_m::interrupt::free(|_| {
-                                unsafe { IIR_CH[request.channel as usize] = request.iir; };
-                            });
-                            Response{ code: 200, message: "ok" }
-                        }
-                    },
-                    Err(err) => {
-                        warn!("parse error {:?}", err);
-                        Response{ code: 550, message: "parse error" }
-                    },
+            if found {
+                if self.discard {
+                    self.discard = false;
+                    json_reply(socket, &Response { code: 520, message: "command buffer overflow" });
+                    self.data.clear();
+                } else {
+                    let r = from_slice::<T>(&self.data);
+                    self.data.clear();
+                    match r {
+                        Ok(res) => {
+                            let r = f(&res);
+                            json_reply(socket, &Response { code: 200, message: "ok" });
+                            return Some(r);
+                        },
+                        Err(err) => {
+                            warn!("parse error {:?}", err);
+                            json_reply(socket, &Response { code: 550, message: "parse error" });
+                        },
+                    }
                 }
-            };
-            self.data.clear();
-            reply(socket, &resp);
-            socket.close();
+            }
         }
+        None
     }
-}
-
-fn handle_status(socket: &mut net::socket::TcpSocket, time: u32) {
-    let s = unsafe { Status{
-        t: time,
-        x0: IIR_STATE[0][0],
-        y0: IIR_STATE[0][2],
-        x1: IIR_STATE[1][0],
-        y1: IIR_STATE[1][2],
-    }};
-    reply(socket, &s);
-}
-
-#[derive(Serialize)]
-struct Status {
-    t: u32,
-    x0: f32,
-    y0: f32,
-    x1: f32,
-    y1: f32
-}
-
-const SCALE: f32 = ((1 << 15) - 1) as f32;
-static mut IIR_STATE: [IIRState; 2] = [[0.; 5]; 2];
-static mut IIR_CH: [IIR; 2] = [
-    IIR{ ba: [0., 0., 0., 0., 0.], y_offset: 0.,
-         y_min: -SCALE - 1., y_max: SCALE }; 2];
-
-// seems to slow it down
-// #[link_section = ".data.spi1"]
-#[interrupt]
-fn SPI1() {
-    #[cfg(feature = "bkpt")]
-    cortex_m::asm::bkpt();
-    cortex_m::interrupt::free(|cs| {
-        let spip = SPIP.borrow(cs).borrow();
-        let (spi1, spi2, spi4, spi5) = spip.as_ref().unwrap();
-
-        let sr = spi1.sr.read();
-        if sr.eot().bit_is_set() {
-           spi1.ifcr.write(|w| w.eotc().set_bit());
-        }
-        if sr.rxp().bit_is_set() {
-            let rxdr = &spi1.rxdr as *const _ as *const u16;
-            let a = unsafe { ptr::read_volatile(rxdr) };
-            let x0 = f32::from(a as i16);
-            let y0 = unsafe { IIR_CH[0].update(&mut IIR_STATE[0], x0) };
-            let d = y0 as i16 as u16 ^ 0x8000;
-            let txdr = &spi2.txdr as *const _ as *mut u16;
-            unsafe { ptr::write_volatile(txdr, d) };
-        }
-
-        let sr = spi5.sr.read();
-        if sr.eot().bit_is_set() {
-           spi5.ifcr.write(|w| w.eotc().set_bit());
-        }
-        if sr.rxp().bit_is_set() {
-            let rxdr = &spi5.rxdr as *const _ as *const u16;
-            let a = unsafe { ptr::read_volatile(rxdr) };
-            let x0 = f32::from(a as i16);
-            let y0 = unsafe { IIR_CH[1].update(&mut IIR_STATE[1], x0) };
-            let d = y0 as i16 as u16 ^ 0x8000;
-            let txdr = &spi4.txdr as *const _ as *mut u16;
-            unsafe { ptr::write_volatile(txdr, d) };
-        }
-    });
-    #[cfg(feature = "bkpt")]
-    cortex_m::asm::bkpt();
-}
-
-#[interrupt]
-fn ETH() {
-    ETHERNET_PENDING.store(true, Ordering::Relaxed);
-    unsafe { eth::interrupt_handler() }
-}
-
-#[exception]
-fn SysTick() {
-    TIME.fetch_add(1, Ordering::Relaxed);
 }
 
 #[exception]
