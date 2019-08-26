@@ -312,7 +312,7 @@ dependencies = [
 [[package]]
 name = "smoltcp"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+source = "git+https://github.com/m-labs/smoltcp.git?rev=1ada3da#1ada3da5aa33917daf891dda2242d7f5beadfb10"
 dependencies = [
  "bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -332,7 +332,7 @@ dependencies = [
  "panic-semihosting 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde-json-core 0.0.1 (git+https://github.com/quartiq/serde-json-core.git?rev=fc764de)",
- "smoltcp 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "smoltcp 0.5.0 (git+https://github.com/m-labs/smoltcp.git?rev=1ada3da)",
  "stm32h7 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -440,7 +440,7 @@ dependencies = [
 "checksum serde 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)" = "fec2851eb56d010dc9a21b89ca53ee75e6528bab60c11e89d38390904982da9f"
 "checksum serde-json-core 0.0.1 (git+https://github.com/quartiq/serde-json-core.git?rev=fc764de)" = "<none>"
 "checksum serde_derive 1.0.98 (registry+https://github.com/rust-lang/crates.io-index)" = "01e69e1b8a631f245467ee275b8c757b818653c6d704cdbcaeb56b56767b529c"
-"checksum smoltcp 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "fef582369edb298c6c41319a544ca9c4e83622f226055ccfcb35974fbb55ed34"
+"checksum smoltcp 0.5.0 (git+https://github.com/m-labs/smoltcp.git?rev=1ada3da)" = "<none>"
 "checksum stable_deref_trait 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "dba1a27d3efae4351c8051072d619e3ade2820635c3958d826bfea39d59b54c8"
 "checksum stm32h7 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "63001af508d3332bd2dd81d4212b69e10f45e8f5435b7dab5def36178b9c1c17"
 "checksum syn 0.15.42 (registry+https://github.com/rust-lang/crates.io-index)" = "eadc09306ca51a40555dd6fc2b415538e9e18bc9f870e47b1a524a79fe2dcf5e"

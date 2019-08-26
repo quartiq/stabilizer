@@ -45,9 +45,8 @@ version = "0.8"
 features = ["stm32h743", "rt"]
 
 [dependencies.smoltcp]
-#git = "https://github.com/m-labs/smoltcp.git"
-#rev = "0f61443"
-version = "0.5"
+git = "https://github.com/m-labs/smoltcp.git"
+rev = "1ada3da"
 features = ["proto-ipv4", "socket-tcp"]
 default-features = false
 
