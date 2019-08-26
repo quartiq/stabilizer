@@ -53,8 +53,7 @@ default-features = false
 
 [dependencies.cortex-m-rtfm]
 git = "https://github.com/japaric/cortex-m-rtfm"
-rev = "fafeeb2"
-features = ["timer-queue"]
+rev = "da675dc3"
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]

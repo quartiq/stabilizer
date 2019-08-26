@@ -26,6 +26,7 @@ use core::fmt::Write;
 use cortex_m_rt::exception;
 use stm32h7::stm32h743 as pac;
 use heapless::{String, Vec, consts::*};
+use rtfm::cyccnt::{Instant, U32Ext as _};
 
 use smoltcp as net;
 
@@ -519,28 +520,24 @@ macro_rules! create_socket {
     )
 }
 
-#[rtfm::app(device = stm32h7::stm32h743)]
+#[rtfm::app(device = stm32h7::stm32h743, peripherals = true, monotonic = rtfm::cyccnt::CYCCNT)]
 const APP: () = {
-    static SPI: (pac::SPI1, pac::SPI2, pac::SPI4, pac::SPI5) = ();
-    static ETHERNET_PERIPH: (pac::ETHERNET_MAC, pac::ETHERNET_DMA, pac::ETHERNET_MTL) = ();
-
-    static mut IIR_STATE: [IIRState; 2] = [[0.; 5]; 2];
-    static mut IIR_CH: [IIR; 2] = [
-        IIR {
-            ba: [0., 0., 0., 0., 0.],
-            y_offset: 0.,
-            y_min: -SCALE - 1.,
-            y_max: SCALE
-        };
-    2];
-
-    #[link_section = ".sram3.eth"]
-    static mut ETHERNET: eth::Device = eth::Device::new();
+    struct Resources {
+        spi: (pac::SPI1, pac::SPI2, pac::SPI4, pac::SPI5),
+        ethernet_periph: (pac::ETHERNET_MAC, pac::ETHERNET_DMA, pac::ETHERNET_MTL),
+        #[init([[0.; 5]; 2])]
+        iir_state: [IIRState; 2],
+        #[init([IIR { ba: [0., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; 2])]
+        iir_ch: [IIR; 2],
+        #[link_section = ".sram3.eth"]
+        #[init(eth::Device::new())]
+        ethernet: eth::Device,
+    }
 
     #[init(schedule = [tick])]
     fn init(c: init::Context) -> init::LateResources {
         let dp = c.device;
-        let cp = c.core;
+        let mut cp = c.core;
 
         let rcc = dp.RCC;
         rcc_reset(&rcc);
@@ -617,25 +614,25 @@ const APP: () = {
         eth::setup(&rcc, &dp.SYSCFG);
         eth::setup_pins(&dp.GPIOA, &dp.GPIOB, &dp.GPIOC, &dp.GPIOG);
 
-        // c.schedule.tick(rtfm::Instant::now()).unwrap();
+        // c.schedule.tick(Instant::now()).unwrap();
 
         init::LateResources {
-            SPI: (spi1, spi2, spi4, spi5),
-            ETHERNET_PERIPH: (dp.ETHERNET_MAC, dp.ETHERNET_DMA, dp.ETHERNET_MTL),
+            spi: (spi1, spi2, spi4, spi5),
+            ethernet_periph: (dp.ETHERNET_MAC, dp.ETHERNET_DMA, dp.ETHERNET_MTL),
         }
     }
 
-    #[idle(resources = [ETHERNET, ETHERNET_PERIPH, IIR_STATE, IIR_CH])]
+    #[idle(resources = [ethernet, ethernet_periph, iir_state, iir_ch])]
     fn idle(c: idle::Context) -> ! {
-        let (MAC, DMA, MTL) = c.resources.ETHERNET_PERIPH;
+        let (MAC, DMA, MTL) = c.resources.ethernet_periph;
 
         let hardware_addr = net::wire::EthernetAddress([0x10, 0xE2, 0xD5, 0x00, 0x03, 0x00]);
-        unsafe { c.resources.ETHERNET.init(hardware_addr, MAC, DMA, MTL) };
+        unsafe { c.resources.ethernet.init(hardware_addr, MAC, DMA, MTL) };
         let mut neighbor_cache_storage = [None; 8];
         let neighbor_cache = net::iface::NeighborCache::new(&mut neighbor_cache_storage[..]);
         let local_addr = net::wire::IpAddress::v4(10, 0, 16, 99);
         let mut ip_addrs = [net::wire::IpCidr::new(local_addr, 24)];
-        let mut iface = net::iface::EthernetInterfaceBuilder::new(c.resources.ETHERNET)
+        let mut iface = net::iface::EthernetInterfaceBuilder::new(c.resources.ethernet)
                     .ethernet_addr(hardware_addr)
                     .neighbor_cache(neighbor_cache)
                     .ip_addrs(&mut ip_addrs[..])
@@ -647,14 +644,14 @@ const APP: () = {
 
         // unsafe { eth::enable_interrupt(DMA); }
         let mut time = 0u32;
-        let mut next_ms = rtfm::Instant::now();
+        let mut next_ms = Instant::now();
         next_ms += 200_000.cycles();
         let mut server = Server::new();
-        let mut iir_state: resources::IIR_STATE = c.resources.IIR_STATE;
-        let mut iir_ch: resources::IIR_CH = c.resources.IIR_CH;
+        let mut iir_state: resources::iir_state = c.resources.iir_state;
+        let mut iir_ch: resources::iir_ch = c.resources.iir_ch;
         loop {
             // if ETHERNET_PENDING.swap(false, Ordering::Relaxed) { }
-            let tick = rtfm::Instant::now() > next_ms;
+            let tick = Instant::now() > next_ms;
             if tick {
                 next_ms += 200_000.cycles();
                 time += 1;
@@ -711,13 +708,13 @@ const APP: () = {
 
     // seems to slow it down
     // #[link_section = ".data.spi1"]
-    #[interrupt(resources = [SPI, IIR_STATE, IIR_CH], priority = 2)]
-    fn SPI1(c: SPI1::Context) {
+    #[task(binds = SPI1, resources = [spi, iir_state, iir_ch], priority = 2)]
+    fn spi1(c: spi1::Context) {
         #[cfg(feature = "bkpt")]
         cortex_m::asm::bkpt();
-        let (spi1, spi2, spi4, spi5) = c.resources.SPI;
-        let iir_ch = c.resources.IIR_CH;
-        let mut iir_state = c.resources.IIR_STATE;
+        let (spi1, spi2, spi4, spi5) = c.resources.spi;
+        let iir_ch = c.resources.iir_ch;
+        let iir_state = c.resources.iir_state;
 
         let sr = spi1.sr.read();
         if sr.eot().bit_is_set() {
@@ -751,9 +748,9 @@ const APP: () = {
     }
 
     /*
-    #[interrupt(resources = [ETHERNET_PERIPH], priority = 1)]
-    fn ETH(c: ETH::Context) {
-        let dma = &c.resources.ETHERNET_PERIPH.1;
+    #[task(binds = ETH, resources = [ethernet_periph], priority = 1)]
+    fn eth(c: eth::Context) {
+        let dma = &c.resources.ethernet_periph.1;
         ETHERNET_PENDING.store(true, Ordering::Relaxed);
         unsafe { eth::interrupt_handler(dma) }
     }
