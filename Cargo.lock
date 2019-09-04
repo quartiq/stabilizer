@@ -88,7 +88,7 @@ dependencies = [
  "cortex-m 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "cortex-m-rt 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "cortex-m-rtfm-macros 0.5.0-alpha.1 (git+https://github.com/japaric/cortex-m-rtfm?rev=da675dc3)",
- "heapless 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "heapless 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rtfm-core 0.3.0-alpha.1 (git+https://github.com/japaric/rtfm-core)",
 ]
 
@@ -137,7 +137,7 @@ dependencies = [
 
 [[package]]
 name = "heapless"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "as-slice 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -279,7 +279,7 @@ name = "serde-json-core"
 version = "0.0.1"
 source = "git+https://github.com/quartiq/serde-json-core.git?rev=fc764de#fc764deb8dfb82e5cfcc6c5059d8d5c3031e0591"
 dependencies = [
- "heapless 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "heapless 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -311,7 +311,7 @@ dependencies = [
  "cortex-m-log 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "cortex-m-rt 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "cortex-m-rtfm 0.5.0-beta.1 (git+https://github.com/japaric/cortex-m-rtfm?rev=da675dc3)",
- "heapless 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "heapless 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "panic-semihosting 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.99 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -401,7 +401,7 @@ dependencies = [
 "checksum generic-array 0.12.3 (registry+https://github.com/rust-lang/crates.io-index)" = "c68f0274ae0e023facc3c97b2e00f076be70e254bc851d972503b328db79b2ec"
 "checksum generic-array 0.13.2 (registry+https://github.com/rust-lang/crates.io-index)" = "0ed1e761351b56f54eb9dcd0cfaca9fd0daecf93918e1cfc01c8a3d26ee7adcd"
 "checksum hash32 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "12d790435639c06a7b798af9e1e331ae245b7ef915b92f70a39b4cf8c00686af"
-"checksum heapless 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "c6c7ce2e47016f34d17acbf2fe5f9e0337ea59d2ab8ceecd9405b2336ffaca9b"
+"checksum heapless 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "f339aa7d51777fc0af6aa7cbeb277dfc6e6c029cbdeda48d0fbb92c2337f0e69"
 "checksum indexmap 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a4d6d89e0948bf10c08b9ecc8ac5b83f07f857ebe2c0cbe38de15b4e4f510356"
 "checksum log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)" = "14b6052be84e6b71ab17edffc2eeabf5c2c3ae1fdb464aae35ac50c67a44e1f7"
 "checksum managed 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)" = "fdcec5e97041c7f0f1c5b7d93f12e57293c831c646f4cc7a5db59460c7ea8de6"
