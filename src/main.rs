@@ -526,6 +526,9 @@ static mut DAT: u32 = 0x201;  // EN | CSTART
 const TCP_RX_BUFFER_SIZE: usize = 8192;
 const TCP_TX_BUFFER_SIZE: usize = 8192;
 
+const DHCP_RX_BUFFER_SIZE: usize = 900;
+const DHCP_TX_BUFFER_SIZE: usize = 900;
+
 macro_rules! create_socket {
     ($set:ident, $rx_storage:ident, $tx_storage:ident, $target:ident) => (
         let mut $rx_storage = [0; TCP_RX_BUFFER_SIZE];
@@ -647,6 +650,7 @@ const APP: () = {
     #[idle(resources = [ethernet, ethernet_periph, iir_state, iir_ch, i2c])]
     fn idle(c: idle::Context) -> ! {
         let (MAC, DMA, MTL) = c.resources.ethernet_periph;
+        let use_dhcp = false;
 
         let hardware_addr = match eeprom::read_eui48(c.resources.i2c) {
             Err(_) => {
@@ -657,20 +661,47 @@ const APP: () = {
         };
         info!("MAC: {}", hardware_addr);
 
+        let local_addr = if use_dhcp {
+            info!("Using DHCP");
+            net::wire::Ipv4Address::UNSPECIFIED.into()
+        } else {
+            let static_ip = net::wire::IpAddress::v4(10, 0, 16, 99);
+            info!("Using static IP: {}", static_ip);
+            static_ip
+        };
+
         unsafe { c.resources.ethernet.init(hardware_addr, MAC, DMA, MTL) };
         let mut neighbor_cache_storage = [None; 8];
         let neighbor_cache = net::iface::NeighborCache::new(&mut neighbor_cache_storage[..]);
-        let local_addr = net::wire::IpAddress::v4(10, 0, 16, 99);
         let mut ip_addrs = [net::wire::IpCidr::new(local_addr, 24)];
+        let mut routes_storage = [None; 1];
+        let routes = net::iface::Routes::new(&mut routes_storage[..]);
         let mut iface = net::iface::EthernetInterfaceBuilder::new(c.resources.ethernet)
                     .ethernet_addr(hardware_addr)
                     .neighbor_cache(neighbor_cache)
                     .ip_addrs(&mut ip_addrs[..])
+                    .routes(routes)
                     .finalize();
         let mut socket_set_entries: [_; 8] = Default::default();
         let mut sockets = net::socket::SocketSet::new(&mut socket_set_entries[..]);
         create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle0);
         create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle1);
+
+        let mut dhcp_rx_storage = [0u8; DHCP_RX_BUFFER_SIZE];
+        let mut dhcp_tx_storage = [0u8; DHCP_TX_BUFFER_SIZE];
+        let mut dhcp_rx_metadata = [net::socket::RawPacketMetadata::EMPTY; 1];
+        let mut dhcp_tx_metadata = [net::socket::RawPacketMetadata::EMPTY; 1];
+
+        let dhcp_rx_buffer = net::socket::RawSocketBuffer::new(
+            &mut dhcp_rx_metadata[..],
+            &mut dhcp_rx_storage[..]
+        );
+        let dhcp_tx_buffer = net::socket::RawSocketBuffer::new(
+            &mut dhcp_tx_metadata[..],
+            &mut dhcp_tx_storage[..]
+        );
+        let mut dhcp = net::dhcp::Dhcpv4Client::new(&mut sockets, dhcp_rx_buffer, dhcp_tx_buffer, net::time::Instant::from_millis(0));
+        let mut prev_cidr = net::wire::Ipv4Cidr::new(net::wire::Ipv4Address::UNSPECIFIED, 0);
 
         // unsafe { eth::enable_interrupt(DMA); }
         let mut time = 0u32;
@@ -718,12 +749,43 @@ const APP: () = {
                 }
             }
 
-            if !match iface.poll(&mut sockets, net::time::Instant::from_millis(time as i64)) {
+            let timestamp = net::time::Instant::from_millis(time as i64);
+            if !match iface.poll(&mut sockets, timestamp) {
                 Ok(changed) => changed,
                 Err(net::Error::Unrecognized) => true,
                 Err(e) => { info!("iface poll error: {:?}", e); true }
             } {
                 // cortex_m::asm::wfi();
+            }
+
+            if use_dhcp {
+                let config = dhcp.poll(&mut iface, &mut sockets, timestamp)
+                .unwrap_or_else(|e| {
+                    if e != net::Error::Unrecognized {
+                        info!("DHCP poll error: {:?}", e);
+                    }
+                    None
+                });
+
+                config.map(|config| {
+                    match config.address {
+                        Some(cidr) => if cidr != prev_cidr {
+                            iface.update_ip_addrs(|addrs| {
+                                addrs.iter_mut().nth(0)
+                                    .map(|addr| {
+                                        *addr = net::wire::IpCidr::Ipv4(cidr);
+                                    });
+                            });
+                            prev_cidr = cidr;
+                            info!("Assigned a new IP address: {}", cidr);
+                        }
+                        _ => {}
+                    }
+                    config.router.map(|router| iface.routes_mut()
+                                      .add_default_ipv4_route(router.into())
+                                      .unwrap()
+                    );
+                });
             }
         }
     }
