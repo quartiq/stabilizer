@@ -38,6 +38,9 @@ mod eth;
 mod iir;
 use iir::*;
 
+pub mod i2c;
+mod eeprom;
+
 #[cfg(not(feature = "semihosting"))]
 fn init_log() {}
 
@@ -291,6 +294,20 @@ fn gpio_setup(gpioa: &pac::GPIOA, gpiob: &pac::GPIOB, gpiod: &pac::GPIOD,
          .odr15().low()
     );
 
+    // I2C2: SDA,SCL: PF0,PF1
+    gpiof.moder.modify(|_, w|
+        w.moder0().alternate()
+         .moder1().alternate()
+    );
+    gpiof.afrl.modify(|_, w|
+        w.afr0().af4()
+         .afr1().af4()
+    );
+    gpiof.otyper.modify(|_, w|
+        w.ot0().open_drain()
+         .ot1().open_drain()
+    );
+
     // ADC1
     // SCK: PF6
     gpiof.moder.modify(|_, w| w.moder7().alternate());
@@ -524,6 +541,7 @@ macro_rules! create_socket {
 const APP: () = {
     struct Resources {
         spi: (pac::SPI1, pac::SPI2, pac::SPI4, pac::SPI5),
+        i2c: pac::I2C2,
         ethernet_periph: (pac::ETHERNET_MAC, pac::ETHERNET_DMA, pac::ETHERNET_MTL),
         #[init([[0.; 5]; 2])]
         iir_state: [IIRState; 2],
@@ -611,6 +629,9 @@ const APP: () = {
 
         tim2_setup(&dp.TIM2);
 
+        let i2c2 = dp.I2C2;
+        i2c::setup(&rcc, &i2c2);
+
         eth::setup(&rcc, &dp.SYSCFG);
         eth::setup_pins(&dp.GPIOA, &dp.GPIOB, &dp.GPIOC, &dp.GPIOG);
 
@@ -618,15 +639,24 @@ const APP: () = {
 
         init::LateResources {
             spi: (spi1, spi2, spi4, spi5),
+            i2c: i2c2,
             ethernet_periph: (dp.ETHERNET_MAC, dp.ETHERNET_DMA, dp.ETHERNET_MTL),
         }
     }
 
-    #[idle(resources = [ethernet, ethernet_periph, iir_state, iir_ch])]
+    #[idle(resources = [ethernet, ethernet_periph, iir_state, iir_ch, i2c])]
     fn idle(c: idle::Context) -> ! {
         let (MAC, DMA, MTL) = c.resources.ethernet_periph;
 
-        let hardware_addr = net::wire::EthernetAddress([0x10, 0xE2, 0xD5, 0x00, 0x03, 0x00]);
+        let hardware_addr = match eeprom::read_eui48(c.resources.i2c) {
+            Err(_) => {
+                info!("Could not read EEPROM, using default MAC address");
+                net::wire::EthernetAddress([0x10, 0xE2, 0xD5, 0x00, 0x03, 0x00])
+            },
+            Ok(raw_mac) => net::wire::EthernetAddress(raw_mac)
+        };
+        info!("MAC: {}", hardware_addr);
+
         unsafe { c.resources.ethernet.init(hardware_addr, MAC, DMA, MTL) };
         let mut neighbor_cache_storage = [None; 8];
         let neighbor_cache = net::iface::NeighborCache::new(&mut neighbor_cache_storage[..]);
