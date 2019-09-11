@@ -675,7 +675,7 @@ const APP: () = {
         // unsafe { eth::enable_interrupt(DMA); }
         let mut time = 0u32;
         let mut next_ms = Instant::now();
-        next_ms += 200_000.cycles();
+        next_ms += 400_000.cycles();
         let mut server = Server::new();
         let mut iir_state: resources::iir_state = c.resources.iir_state;
         let mut iir_ch: resources::iir_ch = c.resources.iir_ch;
@@ -683,7 +683,7 @@ const APP: () = {
             // if ETHERNET_PENDING.swap(false, Ordering::Relaxed) { }
             let tick = Instant::now() > next_ms;
             if tick {
-                next_ms += 200_000.cycles();
+                next_ms += 400_000.cycles();
                 time += 1;
             }
             {
