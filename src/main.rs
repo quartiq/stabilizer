@@ -555,7 +555,7 @@ const APP: () = {
         cp.SCB.enable_icache();
         // TODO: ETH DMA coherence issues
         // cp.SCB.enable_dcache(&mut cp.CPUID);
-        // cp.DWT.enable_cycle_counter();
+        cp.DWT.enable_cycle_counter();  // japaric/cortex-m-rtfm#184
 
         rcc.ahb4enr.modify(|_, w|
             w.gpioaen().set_bit()
