@@ -27,7 +27,7 @@ dependencies = [
 
 [[package]]
 name = "bitflags"
-version = "1.1.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -37,7 +37,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "cfg-if"
-version = "0.1.9"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -155,7 +155,7 @@ name = "log"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "cfg-if 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cfg-if 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -271,7 +271,7 @@ name = "serde"
 version = "1.0.101"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "serde_derive 1.0.100 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -285,7 +285,7 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.100"
+version = "1.0.101"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "proc-macro2 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -298,7 +298,7 @@ name = "smoltcp"
 version = "0.5.0"
 source = "git+https://github.com/m-labs/smoltcp.git?rev=0fedb1d#0fedb1db9aa26712830822dd61f065deaa34d611"
 dependencies = [
- "bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bitflags 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "managed 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -388,9 +388,9 @@ dependencies = [
 "checksum aligned 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "d3a316c7ea8e1e9ece54862c992def5a7ac14de9f5832b69d71760680efeeefa"
 "checksum as-slice 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "293dac66b274fab06f95e7efb05ec439a6b70136081ea522d270bc351ae5bb27"
 "checksum bare-metal 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)" = "5deb64efa5bd81e31fcd1938615a6d98c82eafcbcd787162b6f63b91d6bac5b3"
-"checksum bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3d155346769a6855b86399e9bc3814ab343cd3d62c7e985113d46a0ec3c281fd"
+"checksum bitflags 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "8a606a02debe2813760609f57a64a2ffd27d9fdf5b2f133eaca0b248dd92cdd2"
 "checksum byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "a7c3dd8985a7111efc5c80b44e23ecdd8c007de8ade3b96595387e812b957cf5"
-"checksum cfg-if 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)" = "b486ce3ccf7ffd79fdeb678eac06a9e6c09fc88d33836340becb8fffe87c5e33"
+"checksum cfg-if 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)" = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 "checksum cortex-m 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)" = "145da2fc379bbd378ed425e75e1748214add9bbd800d4d5b77abb54ca423dbca"
 "checksum cortex-m-log 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)" = "978caafe65d1023d38b00c76b83564788fc351d954a5005fb72cf992c0d61458"
 "checksum cortex-m-rt 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)" = "17805910e3ecf029bdbfcc42b7384d9e3d9e5626153fa810002c1ef9839338ac"
@@ -421,7 +421,7 @@ dependencies = [
 "checksum semver-parser 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 "checksum serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)" = "9796c9b7ba2ffe7a9ce53c2287dfc48080f4b2b362fcc245a259b3a7201119dd"
 "checksum serde-json-core 0.0.1 (git+https://github.com/quartiq/serde-json-core.git?rev=fc764de)" = "<none>"
-"checksum serde_derive 1.0.100 (registry+https://github.com/rust-lang/crates.io-index)" = "11e410fde43e157d789fc290d26bc940778ad0fdd47836426fbac36573710dbb"
+"checksum serde_derive 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)" = "4b133a43a1ecd55d4086bd5b4dc6c1751c68b1bfbeba7a5040442022c7e7c02e"
 "checksum smoltcp 0.5.0 (git+https://github.com/m-labs/smoltcp.git?rev=0fedb1d)" = "<none>"
 "checksum stable_deref_trait 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "dba1a27d3efae4351c8051072d619e3ade2820635c3958d826bfea39d59b54c8"
 "checksum stm32h7 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "63001af508d3332bd2dd81d4212b69e10f45e8f5435b7dab5def36178b9c1c17"
