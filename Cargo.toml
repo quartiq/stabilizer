@@ -46,13 +46,13 @@ features = ["stm32h743", "rt"]
 
 [dependencies.smoltcp]
 git = "https://github.com/m-labs/smoltcp.git"
-rev = "1ada3da"
-features = ["proto-ipv4", "socket-tcp"]
+rev = "0fedb1d"
+features = ["ethernet", "proto-ipv4", "socket-tcp"]
 default-features = false
 
 [dependencies.cortex-m-rtfm]
-git = "https://github.com/japaric/cortex-m-rtfm"
-rev = "da675dc3"
+git = "https://github.com/rtfm-rs/cortex-m-rtfm"
+rev = "3830638"
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
