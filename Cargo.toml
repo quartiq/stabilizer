@@ -53,7 +53,7 @@ default-features = false
 
 [dependencies.cortex-m-rtfm]
 git = "https://github.com/rtfm-rs/cortex-m-rtfm"
-rev = "3830638"
+rev = "v0.5.0-beta.1"
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
