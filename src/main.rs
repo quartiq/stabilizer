@@ -1,13 +1,13 @@
 #![no_std]
 #![no_main]
-#![feature(asm)]
+#![cfg_attr(feature = "nightly", feature(asm))]
 // Enable returning `!`
-#![feature(never_type)]
-#![feature(core_intrinsics)]
+#![cfg_attr(feature = "nightly", feature(never_type))]
+#![cfg_attr(feature = "nightly", feature(core_intrinsics))]
 
 #[inline(never)]
 #[panic_handler]
-#[cfg(not(feature = "semihosting"))]
+#[cfg(all(feature = "nightly", not(feature = "semihosting")))]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     let gpiod = unsafe { &*pac::GPIOD::ptr() };
     gpiod.odr.modify(|_, w| w.odr6().high().odr12().high());  // FP_LED_1, FP_LED_3
@@ -16,6 +16,9 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 
 #[cfg(feature = "semihosting")]
 extern crate panic_semihosting;
+
+#[cfg(not(any(feature = "nightly", feature = "semihosting")))]
+extern crate panic_halt;
 
 #[macro_use]
 extern crate log;

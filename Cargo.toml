@@ -27,11 +27,12 @@ features = []
 default-target = "thumbv7em-none-eabihf"
 
 [dependencies]
-cortex-m = { version = "0.6", features = ["inline-asm", "const-fn"] }
+cortex-m = { version = "0.6", features = ["const-fn"] }
 cortex-m-rt = { version = "0.6", features = ["device"] }
 cortex-m-log = { version = "0.6", features = ["log-integration"] }
 log = "0.4"
 panic-semihosting = { version = "0.5", optional = true }
+panic-halt = { version = "0.2" }
 serde = { version = "1.0", features = ["derive"], default-features = false }
 heapless = { version = "0.5" }
 
@@ -57,6 +58,7 @@ rev = "3830638"
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
 bkpt = [ ]
+nightly = ["cortex-m/inline-asm"]
 
 [profile.dev]
 codegen-units = 1
