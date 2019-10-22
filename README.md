@@ -32,7 +32,6 @@ See https://github.com/sinara-hw/Stabilizer
 
 * Clone or download this
 * Get [rustup](https://rustup.rs/)
-* `rustup override add nightly`
 * `rustup target add thumbv7em-none-eabihf`
 * `cargo build --release`
 * Do not try the debug (default) mode. It is guaranteed to panic.

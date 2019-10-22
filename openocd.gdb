@@ -25,5 +25,5 @@ print *$cc-$t0
 set var $t0=*$cc
 continue
 end
-set var $t0=*$cc
+#set var $t0=*$cc
 continue
