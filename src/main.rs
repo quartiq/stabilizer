@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 #![no_std]
 #![no_main]
 #![cfg_attr(feature = "nightly", feature(asm))]
@@ -41,7 +43,7 @@ mod eth;
 mod iir;
 use iir::*;
 
-pub mod i2c;
+mod i2c;
 mod eeprom;
 
 #[cfg(not(feature = "semihosting"))]

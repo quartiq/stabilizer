@@ -109,25 +109,6 @@ fn poll_for_start_ack(
 }
 
 
-pub fn write(
-    i2c: &pac::I2C2,
-    addr: u8,
-    bytes: &[u8]
-) -> Result<(), Error> {
-    assert!(bytes.len() < 256 && bytes.len() > 0);
-
-    poll_for_start_ack(i2c, addr|0, false, bytes.len(), true, true)?;
-
-    for byte in bytes {
-        busy_wait_errors!(i2c, txis);
-        i2c.txdr.write(|w| w.txdata().bits(*byte));
-    }
-    // automatic STOP
-
-    Ok(())
-}
-
-
 pub fn write_read(
     i2c: &pac::I2C2,
     addr: u8,
@@ -150,26 +131,6 @@ pub fn write_read(
     busy_wait_errors!(i2c, tc);
 
     poll_for_start_ack(i2c, addr|1, true, buffer.len(), true, true)?;
-
-    for byte in buffer {
-        // Wait until we have received something
-        busy_wait_errors!(i2c, rxne);
-        *byte = i2c.rxdr.read().rxdata().bits();
-    }
-
-    // automatic STOP
-    Ok(())
-}
-
-
-pub fn read(
-    i2c: &pac::I2C2,
-    addr: u8,
-    buffer: &mut [u8],
-) -> Result<(), Error> {
-    assert!(buffer.len() < 256 && buffer.len() > 0);
-
-    poll_for_start_ack(i2c, addr|0, true, buffer.len(), true, true)?;
 
     for byte in buffer {
         // Wait until we have received something

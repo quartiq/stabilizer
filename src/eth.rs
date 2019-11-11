@@ -557,21 +557,3 @@ impl<'a> phy::TxToken for TxToken<'a> {
         result
     }
 }
-
-pub unsafe fn interrupt_handler(eth_dma: &pac::ETHERNET_DMA) {
-    eth_dma.dmacsr.write(|w|
-        w
-            .nis().set_bit()
-            .ri().set_bit()
-            .ti().set_bit()
-    );
-}
-
-pub unsafe fn enable_interrupt(eth_dma: &pac::ETHERNET_DMA) {
-    eth_dma.dmacier.modify(|_, w|
-        w
-            .nie().set_bit()
-            .rie().set_bit()
-            .tie().set_bit()
-    );
-}
