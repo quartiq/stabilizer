@@ -2,12 +2,12 @@ language: rust
 
 matrix:
   include:
-    - rust: nightly
+    - rust: stable
       env: FEATURES='' ARGS='--release'
-    - rust: nightly
+    - rust: stable
       env: FEATURES='semihosting'
-    - rust: nightly
-      env: FEATURES='bkpt'
+    - rust: beta
+      env: FEATURES='' ARGS='--release'
 
 branches:
   only:
