@@ -149,9 +149,9 @@ fn rcc_pll_setup(rcc: &pac::RCC, flash: &pac::FLASH) {
 
     // Configure PLL2: 8MHz /1 *25 / 2 = 100 MHz
     rcc.pll2divr.write(|w| unsafe {
-        w.divn1().bits(25 - 1)  // feebdack divider
-         .divp1().bits(2 - 1)  // p output divider
-         .divq1().bits(2 - 1)  // q output divider
+        w.divn2().bits(25 - 1)  // feebdack divider
+         .divp2().bits(2 - 1)  // p output divider
+         .divq2().bits(2 - 1)  // q output divider
     });
     rcc.cr.modify(|_, w| w.pll2on().on());
     while !rcc.cr.read().pll2rdy().is_ready() {}
