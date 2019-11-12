@@ -245,7 +245,13 @@ impl RxRing {
 
         let addr = &self.desc_buf[self.cur_desc] as *const _ as u32;
         assert_eq!(addr & 0x3, 0);
+
         let dma = unsafe { pac::Peripherals::steal().ETHERNET_DMA };
+
+        // Ensure changes to the descriptor (in particular, the OWN flag) are
+        // committed before DMA engine sees tail pointer store.
+        cortex_m::asm::dsb();
+
         dma.dmacrx_dtpr.write(|w| unsafe { w.bits(addr) });
 
         self.cur_desc = self.next_desc();
@@ -314,7 +320,13 @@ impl TxRing {
 
         let addr = &self.desc_buf[self.cur_desc] as *const _ as u32;
         assert_eq!(addr & 0x3, 0);
+
         let dma = unsafe { pac::Peripherals::steal().ETHERNET_DMA };
+
+        // Ensure packet contents as well as changes to the descriptor have been
+        // committed before DMA engine sees the tail pointer store.
+        cortex_m::asm::dsb();
+
         dma.dmactx_dtpr.write(|w| unsafe { w.bits(addr) });
     }
 }
@@ -489,6 +501,10 @@ impl Device {
                 .te().bit(true) // Transmiter Enable
         });
         eth_mtl.mtltx_qomr.modify(|_, w| w.ftq().set_bit());
+
+        // Ensure ring buffer descriptors have been set up in memory before
+        // enabling DMA engine.
+        cortex_m::asm::dsb();
 
         // Manage DMA transmission and reception
         eth_dma.dmactx_cr.modify(|_, w| w.st().set_bit());
