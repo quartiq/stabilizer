@@ -852,7 +852,7 @@ impl Server {
                     self.discard = true;
                     self.data.clear();
                 } else if !self.discard && len > 0 {
-                    self.data.extend_from_slice(&buf[..len - 1]).unwrap();
+                    self.data.extend_from_slice(&buf[..len]).unwrap();
                 }
                 (len, found)
             }).unwrap();
@@ -862,7 +862,7 @@ impl Server {
                     json_reply(socket, &Response { code: 520, message: "command buffer overflow" });
                     self.data.clear();
                 } else {
-                    let r = from_slice::<T>(&self.data);
+                    let r = from_slice::<T>(&self.data[..self.data.len() - 1]);
                     self.data.clear();
                     match r {
                         Ok(res) => {
