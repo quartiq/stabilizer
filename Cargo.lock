@@ -290,7 +290,7 @@ dependencies = [
 [[package]]
 name = "serde-json-core"
 version = "0.0.1"
-source = "git+https://github.com/quartiq/serde-json-core.git?rev=fc764de#fc764deb8dfb82e5cfcc6c5059d8d5c3031e0591"
+source = "git+https://github.com/quartiq/serde-json-core.git?rev=86d9abf#86d9abf904b668e4b4e7d4c7f2f137699f4d3802"
 dependencies = [
  "heapless 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -309,7 +309,7 @@ dependencies = [
 [[package]]
 name = "smoltcp"
 version = "0.5.0"
-source = "git+https://github.com/m-labs/smoltcp.git?rev=0fedb1d#0fedb1db9aa26712830822dd61f065deaa34d611"
+source = "git+https://github.com/m-labs/smoltcp.git?rev=8eb01ac#8eb01aca364aefe5f823d68d552d62c76c9be4a3"
 dependencies = [
  "bitflags 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -329,8 +329,8 @@ dependencies = [
  "panic-halt 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "panic-semihosting 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde-json-core 0.0.1 (git+https://github.com/quartiq/serde-json-core.git?rev=fc764de)",
- "smoltcp 0.5.0 (git+https://github.com/m-labs/smoltcp.git?rev=0fedb1d)",
+ "serde-json-core 0.0.1 (git+https://github.com/quartiq/serde-json-core.git?rev=86d9abf)",
+ "smoltcp 0.5.0 (git+https://github.com/m-labs/smoltcp.git?rev=8eb01ac)",
  "stm32h7 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -436,9 +436,9 @@ dependencies = [
 "checksum semver 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"
 "checksum semver-parser 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 "checksum serde 1.0.102 (registry+https://github.com/rust-lang/crates.io-index)" = "0c4b39bd9b0b087684013a792c59e3e07a46a01d2322518d8a1104641a0b1be0"
-"checksum serde-json-core 0.0.1 (git+https://github.com/quartiq/serde-json-core.git?rev=fc764de)" = "<none>"
+"checksum serde-json-core 0.0.1 (git+https://github.com/quartiq/serde-json-core.git?rev=86d9abf)" = "<none>"
 "checksum serde_derive 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)" = "4b133a43a1ecd55d4086bd5b4dc6c1751c68b1bfbeba7a5040442022c7e7c02e"
-"checksum smoltcp 0.5.0 (git+https://github.com/m-labs/smoltcp.git?rev=0fedb1d)" = "<none>"
+"checksum smoltcp 0.5.0 (git+https://github.com/m-labs/smoltcp.git?rev=8eb01ac)" = "<none>"
 "checksum stable_deref_trait 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "dba1a27d3efae4351c8051072d619e3ade2820635c3958d826bfea39d59b54c8"
 "checksum stm32h7 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6fd678579307324f1890552fe644331ce0a46607f2466aac8609f782d9b26524"
 "checksum syn 0.15.44 (registry+https://github.com/rust-lang/crates.io-index)" = "9ca4b3b69a77cbe1ffc9e198781b7acb0c7365a883670e8f1c1bc66fba79a5c5"
