@@ -39,7 +39,7 @@ heapless = { version = "0.5" }
 [dependencies.serde-json-core]
 # version = "0.0"
 git = "https://github.com/quartiq/serde-json-core.git"
-rev = "fc764de"
+rev = "86d9abf"
 
 [dependencies.stm32h7]
 version = "0.9"
@@ -47,7 +47,7 @@ features = ["stm32h743", "rt"]
 
 [dependencies.smoltcp]
 git = "https://github.com/m-labs/smoltcp.git"
-rev = "0fedb1d"
+rev = "8eb01ac"
 features = ["ethernet", "proto-ipv4", "socket-tcp"]
 default-features = false
 
