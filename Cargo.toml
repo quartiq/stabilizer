@@ -52,8 +52,7 @@ features = ["ethernet", "proto-ipv4", "socket-tcp"]
 default-features = false
 
 [dependencies.cortex-m-rtfm]
-git = "https://github.com/rtfm-rs/cortex-m-rtfm"
-rev = "v0.5.0"
+version = "0.5"
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
