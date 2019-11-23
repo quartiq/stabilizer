@@ -130,6 +130,8 @@ const APP: () = {
     fn idle(c: idle::Context) -> ! {
         let (MAC, DMA, MTL) = c.resources.ethernet_periph;
 
+        board::late_init();
+
         let hardware_addr = match eeprom::read_eui48(c.resources.i2c) {
             Err(_) => {
                 info!("Could not read EEPROM, using default MAC address");
