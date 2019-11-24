@@ -1,4 +1,5 @@
 #![deny(warnings)]
+#![allow(clippy::missing_safety_doc)]
 
 #![no_std]
 #![no_main]
