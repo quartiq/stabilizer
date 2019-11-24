@@ -1,5 +1,5 @@
-use stm32h7::stm32h743 as pac;
 use super::i2c;
+use stm32h7::stm32h743 as pac;
 
 const I2C_ADDR: u8 = 0xa0;
 

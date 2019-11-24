@@ -1,6 +1,5 @@
 #![deny(warnings)]
 #![allow(clippy::missing_safety_doc)]
-
 #![no_std]
 #![no_main]
 #![cfg_attr(feature = "nightly", feature(asm))]
@@ -13,8 +12,10 @@
 #[cfg(all(feature = "nightly", not(feature = "semihosting")))]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     let gpiod = unsafe { &*pac::GPIOD::ptr() };
-    gpiod.odr.modify(|_, w| w.odr6().high().odr12().high());  // FP_LED_1, FP_LED_3
-    unsafe { core::intrinsics::abort(); }
+    gpiod.odr.modify(|_, w| w.odr6().high().odr12().high()); // FP_LED_1, FP_LED_3
+    unsafe {
+        core::intrinsics::abort();
+    }
 }
 
 #[cfg(feature = "semihosting")]
@@ -30,40 +31,38 @@ use core::ptr;
 // use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 use core::fmt::Write;
 use cortex_m_rt::exception;
-use stm32h7::stm32h743 as pac;
-use heapless::{String, Vec, consts::*};
+use heapless::{consts::*, String, Vec};
 use rtfm::cyccnt::{Instant, U32Ext as _};
+use stm32h7::stm32h743 as pac;
 
 use smoltcp as net;
 
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use serde_json_core::{ser::to_string, de::from_slice};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_json_core::{de::from_slice, ser::to_string};
 
 mod eth;
 
 mod iir;
 use iir::*;
 
-mod i2c;
-mod eeprom;
 mod board;
+mod eeprom;
+mod i2c;
 
 #[cfg(not(feature = "semihosting"))]
 fn init_log() {}
 
 #[cfg(feature = "semihosting")]
 fn init_log() {
+    use cortex_m_log::log::{init as init_log, Logger};
+    use cortex_m_log::printer::semihosting::{hio::HStdout, InterruptOk};
     use log::LevelFilter;
-    use cortex_m_log::log::{Logger, init as init_log};
-    use cortex_m_log::printer::semihosting::{InterruptOk, hio::HStdout};
     static mut LOGGER: Option<Logger<InterruptOk<HStdout>>> = None;
     let logger = Logger {
         inner: InterruptOk::<_>::stdout().unwrap(),
         level: LevelFilter::Info,
     };
-    let logger = unsafe {
-        LOGGER.get_or_insert(logger)
-    };
+    let logger = unsafe { LOGGER.get_or_insert(logger) };
 
     init_log(logger).unwrap();
 }
@@ -74,7 +73,6 @@ mod build_info {
     // include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
-
 const SCALE: f32 = ((1 << 15) - 1) as f32;
 
 // static ETHERNET_PENDING: AtomicBool = AtomicBool::new(true);
@@ -83,14 +81,17 @@ const TCP_RX_BUFFER_SIZE: usize = 8192;
 const TCP_TX_BUFFER_SIZE: usize = 8192;
 
 macro_rules! create_socket {
-    ($set:ident, $rx_storage:ident, $tx_storage:ident, $target:ident) => (
+    ($set:ident, $rx_storage:ident, $tx_storage:ident, $target:ident) => {
         let mut $rx_storage = [0; TCP_RX_BUFFER_SIZE];
         let mut $tx_storage = [0; TCP_TX_BUFFER_SIZE];
-        let tcp_rx_buffer = net::socket::TcpSocketBuffer::new(&mut $rx_storage[..]);
-        let tcp_tx_buffer = net::socket::TcpSocketBuffer::new(&mut $tx_storage[..]);
-        let tcp_socket = net::socket::TcpSocket::new(tcp_rx_buffer, tcp_tx_buffer);
+        let tcp_rx_buffer =
+            net::socket::TcpSocketBuffer::new(&mut $rx_storage[..]);
+        let tcp_tx_buffer =
+            net::socket::TcpSocketBuffer::new(&mut $tx_storage[..]);
+        let tcp_socket =
+            net::socket::TcpSocket::new(tcp_rx_buffer, tcp_tx_buffer);
         let $target = $set.add(tcp_socket);
-    )
+    };
 }
 
 #[rtfm::app(device = stm32h7::stm32h743, peripherals = true, monotonic = rtfm::cyccnt::CYCCNT)]
@@ -98,7 +99,8 @@ const APP: () = {
     struct Resources {
         spi: (pac::SPI1, pac::SPI2, pac::SPI4, pac::SPI5),
         i2c: pac::I2C2,
-        ethernet_periph: (pac::ETHERNET_MAC, pac::ETHERNET_DMA, pac::ETHERNET_MTL),
+        ethernet_periph:
+            (pac::ETHERNET_MAC, pac::ETHERNET_DMA, pac::ETHERNET_MTL),
         #[init([[0.; 5]; 2])]
         iir_state: [IIRState; 2],
         #[init([IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; 2])]
@@ -123,7 +125,11 @@ const APP: () = {
         init::LateResources {
             spi: (dp.SPI1, dp.SPI2, dp.SPI4, dp.SPI5),
             i2c: dp.I2C2,
-            ethernet_periph: (dp.ETHERNET_MAC, dp.ETHERNET_DMA, dp.ETHERNET_MTL),
+            ethernet_periph: (
+                dp.ETHERNET_MAC,
+                dp.ETHERNET_DMA,
+                dp.ETHERNET_MTL,
+            ),
         }
     }
 
@@ -135,23 +141,26 @@ const APP: () = {
             Err(_) => {
                 info!("Could not read EEPROM, using default MAC address");
                 net::wire::EthernetAddress([0x10, 0xE2, 0xD5, 0x00, 0x03, 0x00])
-            },
-            Ok(raw_mac) => net::wire::EthernetAddress(raw_mac)
+            }
+            Ok(raw_mac) => net::wire::EthernetAddress(raw_mac),
         };
         info!("MAC: {}", hardware_addr);
 
         unsafe { c.resources.ethernet.init(hardware_addr, MAC, DMA, MTL) };
         let mut neighbor_cache_storage = [None; 8];
-        let neighbor_cache = net::iface::NeighborCache::new(&mut neighbor_cache_storage[..]);
+        let neighbor_cache =
+            net::iface::NeighborCache::new(&mut neighbor_cache_storage[..]);
         let local_addr = net::wire::IpAddress::v4(10, 0, 16, 99);
         let mut ip_addrs = [net::wire::IpCidr::new(local_addr, 24)];
-        let mut iface = net::iface::EthernetInterfaceBuilder::new(c.resources.ethernet)
-                    .ethernet_addr(hardware_addr)
-                    .neighbor_cache(neighbor_cache)
-                    .ip_addrs(&mut ip_addrs[..])
-                    .finalize();
+        let mut iface =
+            net::iface::EthernetInterfaceBuilder::new(c.resources.ethernet)
+                .ethernet_addr(hardware_addr)
+                .neighbor_cache(neighbor_cache)
+                .ip_addrs(&mut ip_addrs[..])
+                .finalize();
         let mut socket_set_entries: [_; 8] = Default::default();
-        let mut sockets = net::socket::SocketSet::new(&mut socket_set_entries[..]);
+        let mut sockets =
+            net::socket::SocketSet::new(&mut socket_set_entries[..]);
         create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle0);
         create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle1);
 
@@ -170,41 +179,55 @@ const APP: () = {
                 time += 1;
             }
             {
-                let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle0);
+                let socket =
+                    &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle0);
                 if socket.state() == net::socket::TcpState::CloseWait {
                     socket.close();
                 } else if !(socket.is_open() || socket.is_listening()) {
-                    socket.listen(1234).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
+                    socket
+                        .listen(1234)
+                        .unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
                 } else if tick && socket.can_send() {
                     let s = iir_state.lock(|iir_state| Status {
                         t: time,
                         x0: iir_state[0][0],
                         y0: iir_state[0][2],
                         x1: iir_state[1][0],
-                        y1: iir_state[1][2]
+                        y1: iir_state[1][2],
                     });
                     json_reply(socket, &s);
                 }
             }
             {
-                let socket = &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle1);
+                let socket =
+                    &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle1);
                 if socket.state() == net::socket::TcpState::CloseWait {
                     socket.close();
                 } else if !(socket.is_open() || socket.is_listening()) {
-                    socket.listen(1235).unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
+                    socket
+                        .listen(1235)
+                        .unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
                 } else {
                     server.poll(socket, |req: &Request| {
                         if req.channel < 2 {
-                            iir_ch.lock(|iir_ch| iir_ch[req.channel as usize] = req.iir);
+                            iir_ch.lock(|iir_ch| {
+                                iir_ch[req.channel as usize] = req.iir
+                            });
                         }
                     });
                 }
             }
 
-            if !match iface.poll(&mut sockets, net::time::Instant::from_millis(time as i64)) {
+            if !match iface.poll(
+                &mut sockets,
+                net::time::Instant::from_millis(time as i64),
+            ) {
                 Ok(changed) => changed,
                 Err(net::Error::Unrecognized) => true,
-                Err(e) => { info!("iface poll error: {:?}", e); true }
+                Err(e) => {
+                    info!("iface poll error: {:?}", e);
+                    true
+                }
             } {
                 // cortex_m::asm::wfi();
             }
@@ -278,7 +301,7 @@ const APP: () = {
     }
 };
 
-#[derive(Deserialize,Serialize)]
+#[derive(Deserialize, Serialize)]
 struct Request {
     channel: u8,
     iir: IIR,
@@ -296,7 +319,7 @@ struct Status {
     x0: f32,
     y0: f32,
     x1: f32,
-    y1: f32
+    y1: f32,
 }
 
 fn json_reply<T: Serialize>(socket: &mut net::socket::TcpSocket, msg: &T) {
@@ -312,32 +335,48 @@ struct Server {
 
 impl Server {
     fn new() -> Self {
-        Self { data: Vec::new(), discard: false }
+        Self {
+            data: Vec::new(),
+            discard: false,
+        }
     }
 
-    fn poll<T, F, R>(&mut self, socket: &mut net::socket::TcpSocket, f: F) -> Option<R>
-        where
-            T: DeserializeOwned,
-            F: FnOnce(&T) -> R,
+    fn poll<T, F, R>(
+        &mut self,
+        socket: &mut net::socket::TcpSocket,
+        f: F,
+    ) -> Option<R>
+    where
+        T: DeserializeOwned,
+        F: FnOnce(&T) -> R,
     {
         while socket.can_recv() {
-            let found = socket.recv(|buf| {
-                let (len, found) = match buf.iter().position(|&c| c as char == '\n') {
-                    Some(end) => (end + 1, true),
-                    None => (buf.len(), false),
-                };
-                if self.data.len() + len >= self.data.capacity() {
-                    self.discard = true;
-                    self.data.clear();
-                } else if !self.discard && len > 0 {
-                    self.data.extend_from_slice(&buf[..len]).unwrap();
-                }
-                (len, found)
-            }).unwrap();
+            let found = socket
+                .recv(|buf| {
+                    let (len, found) =
+                        match buf.iter().position(|&c| c as char == '\n') {
+                            Some(end) => (end + 1, true),
+                            None => (buf.len(), false),
+                        };
+                    if self.data.len() + len >= self.data.capacity() {
+                        self.discard = true;
+                        self.data.clear();
+                    } else if !self.discard && len > 0 {
+                        self.data.extend_from_slice(&buf[..len]).unwrap();
+                    }
+                    (len, found)
+                })
+                .unwrap();
             if found {
                 if self.discard {
                     self.discard = false;
-                    json_reply(socket, &Response { code: 520, message: "command buffer overflow" });
+                    json_reply(
+                        socket,
+                        &Response {
+                            code: 520,
+                            message: "command buffer overflow",
+                        },
+                    );
                     self.data.clear();
                 } else {
                     let r = from_slice::<T>(&self.data[..self.data.len() - 1]);
@@ -345,13 +384,25 @@ impl Server {
                     match r {
                         Ok(res) => {
                             let r = f(&res);
-                            json_reply(socket, &Response { code: 200, message: "ok" });
+                            json_reply(
+                                socket,
+                                &Response {
+                                    code: 200,
+                                    message: "ok",
+                                },
+                            );
                             return Some(r);
-                        },
+                        }
                         Err(err) => {
                             warn!("parse error {:?}", err);
-                            json_reply(socket, &Response { code: 550, message: "parse error" });
-                        },
+                            json_reply(
+                                socket,
+                                &Response {
+                                    code: 550,
+                                    message: "parse error",
+                                },
+                            );
+                        }
                     }
                 }
             }
