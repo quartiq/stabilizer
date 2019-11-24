@@ -21,11 +21,7 @@ pub enum Error {
 const N_RETRY: usize = 100; // ~ 10ms @ 100 kHz bus clock
 
 
-pub fn setup(rcc: &pac::RCC, i2c: &pac::I2C2) {
-    rcc.apb1lenr.modify(|_,w|
-        w.i2c2en().set_bit()
-    );
-
+pub fn setup(i2c: &pac::I2C2) {
     // Disable the peripheral before setting timings
     i2c.cr1.modify(|_, w| w.pe().clear_bit());
 

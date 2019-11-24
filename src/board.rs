@@ -399,8 +399,7 @@ fn tim2_setup(tim2: &pac::TIM2) {
     tim2.dier.write(|w| w.ude().set_bit());
     tim2.egr.write(|w| w.ug().set_bit());
     tim2.cr1.modify(|_, w|
-        w.dir().clear_bit()  // up
-         .cen().set_bit());  // enable
+        w.dir().clear_bit());  // up
 }
 
 fn dma1_setup(dma1: &pac::DMA1, dmamux1: &pac::DMAMUX1, ma: usize, pa0: usize, pa1: usize) {
@@ -524,9 +523,19 @@ pub fn init() {
 
     tim2_setup(&dp.TIM2);
 
-    let i2c2 = dp.I2C2;
-    i2c::setup(&rcc, &i2c2);
+    rcc.apb1lenr.modify(|_,w| w.i2c2en().set_bit());
+    i2c::setup(&dp.I2C2);
 
-    eth::setup(&rcc, &dp.SYSCFG);
+    rcc.apb4enr.modify(|_, w| w.syscfgen().set_bit());
+    rcc.ahb1enr.modify(|_, w| {
+        w.eth1macen().set_bit()
+         .eth1txen().set_bit()
+         .eth1rxen().set_bit()
+    });
+    dp.SYSCFG.pmcr.modify(|_, w| unsafe { w.epis().bits(0b100) });  // RMII
     eth::setup_pins(&dp.GPIOA, &dp.GPIOB, &dp.GPIOC, &dp.GPIOG);
+
+    // enable TIM2 this must be late to be able to handle the first ADC SPI
+    // interrupt in time
+    dp.TIM2.cr1.modify(|_, w| w.cen().set_bit());
 }
