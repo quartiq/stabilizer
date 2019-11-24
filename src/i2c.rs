@@ -101,7 +101,7 @@ fn poll_for_start_ack(
         }
     }
 
-    return Err(Error::Timeout);
+    Err(Error::Timeout)
 }
 
 
@@ -111,10 +111,10 @@ pub fn write_read(
     bytes: &[u8],
     buffer: &mut [u8],
 ) -> Result<(), Error> {
-    assert!(bytes.len() < 256 && bytes.len() > 0);
-    assert!(buffer.len() < 256 && buffer.len() > 0);
+    assert!(bytes.len() < 256 && !bytes.is_empty());
+    assert!(buffer.len() < 256 && !buffer.is_empty());
 
-    poll_for_start_ack(i2c, addr|0, false, bytes.len(), false, true)?;
+    poll_for_start_ack(i2c, addr, false, bytes.len(), false, true)?;
 
     for byte in bytes {
         // Wait until we are allowed to send data (START has been ACKed or last
