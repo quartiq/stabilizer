@@ -395,7 +395,7 @@ fn spi4_setup(spi4: &pac::SPI4) {
 
 fn tim2_setup(tim2: &pac::TIM2) {
     tim2.psc.write(|w| w.psc().bits(200 - 1));  // from 200 MHz
-    tim2.arr.write(|w| unsafe { w.bits(2 - 1) });  // µs
+    tim2.arr.write(|w| unsafe { w.bits(2 - 1) });  // s
     tim2.dier.write(|w| w.ude().set_bit());
     tim2.egr.write(|w| w.ug().set_bit());
     tim2.cr1.modify(|_, w|
