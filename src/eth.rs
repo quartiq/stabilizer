@@ -85,19 +85,6 @@ use self::cr_consts::*;
 // 200 MHz AHB clock = eth_hclk
 const CLOCK_RANGE: u8 = ETH_MACMIIAR_CR_HCLK_DIV_102;
 
-
-pub fn setup(rcc: &pac::RCC, syscfg: &pac::SYSCFG) {
-    rcc.apb4enr.modify(|_, w| w.syscfgen().set_bit());
-    rcc.ahb1enr.modify(|_, w| {
-        w.eth1macen().set_bit()
-         .eth1txen().set_bit()
-         .eth1rxen().set_bit()
-    });
-    syscfg.pmcr.modify(|_, w| unsafe { w.epis().bits(0b100) });  // RMII
-    //rcc.ahb1rstr.modify(|_, w| w.eth1macrst().set_bit());
-    //rcc.ahb1rstr.modify(|_, w| w.eth1macrst().clear_bit());
-}
-
 pub fn setup_pins(gpioa: &pac::GPIOA, gpiob: &pac::GPIOB,
                   gpioc: &pac::GPIOC, gpiog: &pac::GPIOG) {
     // PA1 RMII_REF_CLK
