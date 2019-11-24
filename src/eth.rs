@@ -328,6 +328,14 @@ impl Device {
         Self{ rx: RxRing::new(), tx: TxRing::new() }
     }
 
+    // Initialize the ethernet peripherals
+    //
+    // # Safety
+    //
+    // This iis transitively unsafe since it sets potentially
+    // unsafe register values. Might ultimately be safe if the values
+    // are correct.
+    //
     // After `init` is called, `Device` shall not be moved.
     pub unsafe fn init(&mut self, mac: EthernetAddress,
                        eth_mac: &pac::ETHERNET_MAC,
