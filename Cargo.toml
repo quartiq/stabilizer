@@ -32,18 +32,13 @@ cortex-m-rt = { version = "0.6", features = ["device"] }
 cortex-m-log = { version = "0.6", features = ["log-integration"] }
 log = "0.4"
 panic-semihosting = { version = "0.5", optional = true }
-panic-halt = { version = "0.2" }
+panic-halt = "0.2"
 serde = { version = "1.0", features = ["derive"], default-features = false }
-heapless = { version = "0.5" }
-serde-json-core = { version = "0.1" }
+heapless = "0.5"
+serde-json-core = "0.1"
 stm32h7 = { version = "0.9", features = ["stm32h743", "rt"] }
-cortex-m-rtfm = { version = "0.5" }
-
-[dependencies.smoltcp]
-git = "https://github.com/m-labs/smoltcp.git"
-rev = "8eb01ac"
-features = ["ethernet", "proto-ipv4", "socket-tcp"]
-default-features = false
+cortex-m-rtfm = "0.5"
+smoltcp = { version = "0.6", features = ["ethernet", "proto-ipv4", "socket-tcp"], default-features = false }
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
