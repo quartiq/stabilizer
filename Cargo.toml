@@ -38,12 +38,7 @@ heapless = { version = "0.5" }
 serde-json-core = { version = "0.1" }
 stm32h7 = { version = "0.9", features = ["stm32h743", "rt"] }
 cortex-m-rtfm = { version = "0.5" }
-
-[dependencies.smoltcp]
-git = "https://github.com/m-labs/smoltcp.git"
-rev = "8eb01ac"
-features = ["ethernet", "proto-ipv4", "socket-tcp"]
-default-features = false
+smoltcp = { version = "0.6", features = ["ethernet", "proto-ipv4", "socket-tcp"], default-features = false }
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
