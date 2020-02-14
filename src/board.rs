@@ -468,7 +468,7 @@ fn dma1_setup(
     dma1.st[0].m0ar.write(|w| unsafe { w.bits(ma as u32) });
     dma1.st[0].ndtr.write(|w| w.ndt().bits(1));
     dmamux1.ccr[0].modify(|_, w| w.dmareq_id().tim2_up());
-    dma1.st[0].cr.modify(|_, w|
+    dma1.st[0].cr.modify(|_, w| {
         w.pl()
             .medium()
             .circ()
@@ -491,7 +491,7 @@ fn dma1_setup(
             .memory_to_peripheral()
             .pfctrl()
             .dma()
-    );
+    });
     dma1.st[0].fcr.modify(|_, w| w.dmdis().clear_bit());
     dma1.st[0].cr.modify(|_, w| w.en().set_bit());
 
@@ -502,7 +502,7 @@ fn dma1_setup(
     dma1.st[1].m0ar.write(|w| unsafe { w.bits(ma as u32) });
     dma1.st[1].ndtr.write(|w| w.ndt().bits(1));
     dmamux1.ccr[1].modify(|_, w| w.dmareq_id().tim2_up());
-    dma1.st[1].cr.modify(|_, w|
+    dma1.st[1].cr.modify(|_, w| {
         w.pl()
             .medium()
             .circ()
@@ -525,7 +525,7 @@ fn dma1_setup(
             .memory_to_peripheral()
             .pfctrl()
             .dma()
-    );
+    });
     dma1.st[1].fcr.modify(|_, w| w.dmdis().clear_bit());
     dma1.st[1].cr.modify(|_, w| w.en().set_bit());
 }
