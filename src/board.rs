@@ -468,30 +468,30 @@ fn dma1_setup(
     dma1.st[0].m0ar.write(|w| unsafe { w.bits(ma as u32) });
     dma1.st[0].ndtr.write(|w| w.ndt().bits(1));
     dmamux1.ccr[0].modify(|_, w| w.dmareq_id().tim2_up());
-    dma1.st[0].cr.modify(|_, w| unsafe {
+    dma1.st[0].cr.modify(|_, w|
         w.pl()
-            .bits(0b01) // medium
+            .medium()
             .circ()
-            .set_bit() // reload ndtr
+            .enabled()
             .msize()
-            .bits(0b10) // 32
+            .bits32()
             .minc()
-            .clear_bit()
+            .fixed()
             .mburst()
-            .bits(0b00)
+            .single()
             .psize()
-            .bits(0b10) // 32
+            .bits32()
             .pinc()
-            .clear_bit()
+            .fixed()
             .pburst()
-            .bits(0b00)
+            .single()
             .dbm()
-            .clear_bit()
+            .disabled()
             .dir()
-            .bits(0b01) // memory_to_peripheral
+            .memory_to_peripheral()
             .pfctrl()
-            .clear_bit() // dma is FC
-    });
+            .dma()
+    );
     dma1.st[0].fcr.modify(|_, w| w.dmdis().clear_bit());
     dma1.st[0].cr.modify(|_, w| w.en().set_bit());
 
@@ -502,30 +502,30 @@ fn dma1_setup(
     dma1.st[1].m0ar.write(|w| unsafe { w.bits(ma as u32) });
     dma1.st[1].ndtr.write(|w| w.ndt().bits(1));
     dmamux1.ccr[1].modify(|_, w| w.dmareq_id().tim2_up());
-    dma1.st[1].cr.modify(|_, w| unsafe {
+    dma1.st[1].cr.modify(|_, w|
         w.pl()
-            .bits(0b01) // medium
+            .medium()
             .circ()
-            .set_bit() // reload ndtr
+            .enabled()
             .msize()
-            .bits(0b10) // 32
+            .bits32()
             .minc()
-            .clear_bit()
+            .fixed()
             .mburst()
-            .bits(0b00)
+            .single()
             .psize()
-            .bits(0b10) // 32
+            .bits32()
             .pinc()
-            .clear_bit()
+            .fixed()
             .pburst()
-            .bits(0b00)
+            .single()
             .dbm()
-            .clear_bit()
+            .disabled()
             .dir()
-            .bits(0b01) // memory_to_peripheral
+            .memory_to_peripheral()
             .pfctrl()
-            .clear_bit() // dma is FC
-    });
+            .dma()
+    );
     dma1.st[1].fcr.modify(|_, w| w.dmdis().clear_bit());
     dma1.st[1].cr.modify(|_, w| w.en().set_bit());
 }
