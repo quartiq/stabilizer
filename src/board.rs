@@ -466,7 +466,7 @@ fn dma1_setup(
 
     dma1.st[0].par.write(|w| unsafe { w.bits(pa0 as u32) });
     dma1.st[0].m0ar.write(|w| unsafe { w.bits(ma as u32) });
-    dma1.st[0].ndtr.write(|w| unsafe { w.ndt().bits(1) });
+    dma1.st[0].ndtr.write(|w| w.ndt().bits(1));
     dmamux1.ccr[0].modify(|_, w| w.dmareq_id().tim2_up());
     dma1.st[0].cr.modify(|_, w| unsafe {
         w.pl()
@@ -500,7 +500,7 @@ fn dma1_setup(
 
     dma1.st[1].par.write(|w| unsafe { w.bits(pa1 as u32) });
     dma1.st[1].m0ar.write(|w| unsafe { w.bits(ma as u32) });
-    dma1.st[1].ndtr.write(|w| unsafe { w.ndt().bits(1) });
+    dma1.st[1].ndtr.write(|w| w.ndt().bits(1));
     dmamux1.ccr[1].modify(|_, w| w.dmareq_id().tim2_up());
     dma1.st[1].cr.modify(|_, w| unsafe {
         w.pl()
