@@ -33,7 +33,7 @@ use core::fmt::Write;
 use cortex_m_rt::exception;
 use heapless::{consts::*, String, Vec};
 use rtfm::cyccnt::{Instant, U32Ext as _};
-use stm32h7::stm32h743 as pac;
+use stm32h7::stm32h743v as pac;
 
 use smoltcp as net;
 
@@ -94,7 +94,7 @@ macro_rules! create_socket {
     };
 }
 
-#[rtfm::app(device = stm32h7::stm32h743, peripherals = true, monotonic = rtfm::cyccnt::CYCCNT)]
+#[rtfm::app(device = stm32h7::stm32h743v, peripherals = true, monotonic = rtfm::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
         spi: (pac::SPI1, pac::SPI2, pac::SPI4, pac::SPI5),

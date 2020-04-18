@@ -1,4 +1,4 @@
-use stm32h7::stm32h743 as pac;
+use stm32h7::stm32h743v as pac;
 
 // Adapted from stm32h7xx embedded-hal
 

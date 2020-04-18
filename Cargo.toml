@@ -35,7 +35,7 @@ panic-halt = "0.2"
 serde = { version = "1.0", features = ["derive"], default-features = false }
 heapless = "0.5"
 serde-json-core = "0.1"
-stm32h7 = { version = "0.10", features = ["stm32h743", "rt"] }
+stm32h7 = { version = "0.10", features = ["stm32h743v", "rt"] }
 cortex-m-rtfm = "0.5"
 smoltcp = { version = "0.6", features = ["ethernet", "proto-ipv4", "socket-tcp"], default-features = false }
 

@@ -3,7 +3,7 @@ use smoltcp::phy;
 use smoltcp::time::Instant;
 use smoltcp::wire::EthernetAddress;
 use smoltcp::Result;
-use stm32h7::stm32h743 as pac;
+use stm32h7::stm32h743v as pac;
 
 #[allow(dead_code)]
 mod phy_consts {
