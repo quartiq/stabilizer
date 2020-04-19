@@ -3,7 +3,7 @@ use smoltcp::phy;
 use smoltcp::time::Instant;
 use smoltcp::wire::EthernetAddress;
 use smoltcp::Result;
-use stm32h7::stm32h743v as pac;
+use super::{pac};
 
 #[allow(dead_code)]
 mod phy_consts {
@@ -84,50 +84,6 @@ use self::cr_consts::*;
 // set clock range in MAC MII address register
 // 200 MHz AHB clock = eth_hclk
 const CLOCK_RANGE: u8 = ETH_MACMIIAR_CR_HCLK_DIV_102;
-
-pub fn setup_pins(
-    gpioa: &pac::GPIOA,
-    gpiob: &pac::GPIOB,
-    gpioc: &pac::GPIOC,
-    gpiog: &pac::GPIOG,
-) {
-    // PA1 RMII_REF_CLK
-    gpioa.moder.modify(|_, w| w.moder1().alternate());
-    gpioa.afrl.modify(|_, w| w.afr1().af11());
-    gpioa.ospeedr.modify(|_, w| w.ospeedr1().very_high_speed());
-    // PA2 RMII_MDIO
-    gpioa.moder.modify(|_, w| w.moder2().alternate());
-    gpioa.afrl.modify(|_, w| w.afr2().af11());
-    gpioa.ospeedr.modify(|_, w| w.ospeedr2().very_high_speed());
-    // PC1 RMII_MDC
-    gpioc.moder.modify(|_, w| w.moder1().alternate());
-    gpioc.afrl.modify(|_, w| w.afr1().af11());
-    gpioc.ospeedr.modify(|_, w| w.ospeedr1().very_high_speed());
-    // PA7 RMII_CRS_DV
-    gpioa.moder.modify(|_, w| w.moder7().alternate());
-    gpioa.afrl.modify(|_, w| w.afr7().af11());
-    gpioa.ospeedr.modify(|_, w| w.ospeedr7().very_high_speed());
-    // PC4 RMII_RXD0
-    gpioc.moder.modify(|_, w| w.moder4().alternate());
-    gpioc.afrl.modify(|_, w| w.afr4().af11());
-    gpioc.ospeedr.modify(|_, w| w.ospeedr4().very_high_speed());
-    // PC5 RMII_RXD1
-    gpioc.moder.modify(|_, w| w.moder5().alternate());
-    gpioc.afrl.modify(|_, w| w.afr5().af11());
-    gpioc.ospeedr.modify(|_, w| w.ospeedr5().very_high_speed());
-    // PB11 RMII_TX_EN
-    gpiob.moder.modify(|_, w| w.moder11().alternate());
-    gpiob.afrh.modify(|_, w| w.afr11().af11());
-    gpiob.ospeedr.modify(|_, w| w.ospeedr11().very_high_speed());
-    // PB12 RXII_TXD0
-    gpiob.moder.modify(|_, w| w.moder12().alternate());
-    gpiob.afrh.modify(|_, w| w.afr12().af11());
-    gpiob.ospeedr.modify(|_, w| w.ospeedr12().very_high_speed());
-    // PG14 RMII TXD1
-    gpiog.moder.modify(|_, w| w.moder14().alternate());
-    gpiog.afrh.modify(|_, w| w.afr14().af11());
-    gpiog.ospeedr.modify(|_, w| w.ospeedr14().very_high_speed());
-}
 
 const PHY_ADDR: u8 = 0;
 

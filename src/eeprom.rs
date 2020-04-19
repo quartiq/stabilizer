@@ -1,10 +1,11 @@
-use super::i2c;
-use stm32h7::stm32h743v as pac;
+use embedded_hal::blocking::i2c::WriteRead;
 
-const I2C_ADDR: u8 = 0xa0;
+const I2C_ADDR: u8 = 0x50;
 
-pub fn read_eui48(i2c: &pac::I2C2) -> Result<[u8; 6], i2c::Error> {
+pub fn read_eui48<T>(i2c: &mut T) -> Result<[u8; 6], T::Error>
+where T: WriteRead
+{
     let mut buffer = [0u8; 6];
-    i2c::write_read(i2c, I2C_ADDR, &[0xFAu8], &mut buffer)?;
+    i2c.write_read(I2C_ADDR, &[0xFA_u8], &mut buffer)?;
     Ok(buffer)
 }
