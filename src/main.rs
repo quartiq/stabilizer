@@ -28,10 +28,8 @@ extern crate panic_halt;
 extern crate log;
 
 // use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
-use core::fmt::Write;
 use cortex_m_rt::exception;
-use heapless::{consts::*, String, Vec};
-use rtfm::cyccnt::{Instant, U32Ext as _};
+use rtfm::cyccnt::{U32Ext as _};
 use stm32h7xx_hal as hal;
 use stm32h7xx_hal::{
     prelude::*,
@@ -42,10 +40,13 @@ use embedded_hal::{
     digital::v2::OutputPin,
 };
 
+/*
+use core::fmt::Write;
+use heapless::{consts::*, String, Vec};
 use smoltcp as net;
-
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json_core::{de::from_slice, ser::to_string};
+*/
 
 mod eth;
 
@@ -83,6 +84,7 @@ const SCALE: f32 = ((1 << 15) - 1) as f32;
 
 // static ETHERNET_PENDING: AtomicBool = AtomicBool::new(true);
 
+/*
 const TCP_RX_BUFFER_SIZE: usize = 8192;
 const TCP_TX_BUFFER_SIZE: usize = 8192;
 
@@ -99,79 +101,32 @@ macro_rules! create_socket {
         let $target = $set.add(tcp_socket);
     };
 }
-
-type Adc1Spi = hal::spi::Spi<
-    hal::stm32::SPI2,
-    (
-        hal::gpio::gpiob::PB10<hal::gpio::Alternate<hal::gpio::AF5>>,
-        hal::gpio::gpiob::PB14<hal::gpio::Alternate<hal::gpio::AF5>>,
-        hal::spi::NoMosi,
-        //hal::gpio::gpiob::PB9<hal::gpio::Alternate<hal::gpio::AF5>>,
-    )
->;
-
-type Adc2Spi = hal::spi::Spi<
-    hal::stm32::SPI3,
-    (
-        hal::gpio::gpioc::PC10<hal::gpio::Alternate<hal::gpio::AF6>>,
-        hal::gpio::gpiob::PB4<hal::gpio::Alternate<hal::gpio::AF6>>,
-        hal::spi::NoMosi,
-        //hal::gpio::gpioa::PA15<hal::gpio::Alternate<hal::gpio::AF6>>,
-    )
->;
-
-type Dac1Spi = hal::spi::Spi<
-    hal::stm32::SPI4,
-    (
-        hal::gpio::gpioe::PE2<hal::gpio::Alternate<hal::gpio::AF5>>,
-        hal::gpio::gpioe::PE5<hal::gpio::Alternate<hal::gpio::AF5>>,
-        hal::spi::NoMosi,
-        //hal::gpio::gpioe::PE4<hal::gpio::Alternate<hal::gpio::AF5>>,
-    )
->;
-
-type Dac2Spi = hal::spi::Spi<
-    hal::stm32::SPI5,
-    (
-        hal::gpio::gpiof::PF7<hal::gpio::Alternate<hal::gpio::AF5>>,
-        hal::gpio::gpiof::PF8<hal::gpio::Alternate<hal::gpio::AF5>>,
-        hal::spi::NoMosi,
-        //hal::gpio::gpiof::PF6<hal::gpio::Alternate<hal::gpio::AF5>>,
-    )
->;
-
-type EepromI2c = hal::i2c::I2c<
-    hal::stm32::I2C2,
-    (
-        hal::gpio::gpiof::PF1<hal::gpio::Alternate<hal::gpio::AF4>>,
-        hal::gpio::gpiof::PF0<hal::gpio::Alternate<hal::gpio::AF4>>,
-    )
->;
+*/
 
 static DAT: u32 = 0x30; // EN | CSTART
 
 #[rtfm::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtfm::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
-        adc1: Adc1Spi,
-        dac1: Dac1Spi,
+        adc1: hal::spi::Spi<hal::stm32::SPI2>,
+        dac1: hal::spi::Spi<hal::stm32::SPI4>,
 
-        adc2: Adc2Spi,
-        dac2: Dac2Spi,
+        adc2: hal::spi::Spi<hal::stm32::SPI3>,
+        dac2: hal::spi::Spi<hal::stm32::SPI5>,
 
-        i2c: EepromI2c,
+        _eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
         // TODO: Add in pounder hardware resources.
 
-        ethernet_periph:
-            (pac::ETHERNET_MAC, pac::ETHERNET_DMA, pac::ETHERNET_MTL),
+        //ethernet_periph:
+        //    (pac::ETHERNET_MAC, pac::ETHERNET_DMA, pac::ETHERNET_MTL),
         #[init([[0.; 5]; 2])]
         iir_state: [IIRState; 2],
         #[init([IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; 2])]
         iir_ch: [IIR; 2],
-        #[link_section = ".sram3.eth"]
-        #[init(eth::Device::new())]
-        ethernet: eth::Device,
+        //#[link_section = ".sram3.eth"]
+        //#[init(eth::Device::new())]
+        //ethernet: eth::Device,
     }
 
     #[init(schedule = [tick])]
@@ -184,13 +139,15 @@ const APP: () = {
 
         let rcc = dp.RCC.constrain();
         let mut clocks = rcc
-            .use_hse(8.mhz())
+//            .use_hse(8.mhz())
             .sysclk(400.mhz())
             .hclk(200.mhz())
             .per_ck(100.mhz())
             .pll2_p_ck(100.mhz())
             .pll2_q_ck(100.mhz())
             .freeze(vos, &dp.SYSCFG);
+
+        clocks.rb.rsr.write(|w| w.rmvf().set_bit());
 
         clocks.rb.d2ccip1r.modify(|_, w| w.spi123sel().pll2_p().spi45sel().pll2_q());
 
@@ -203,54 +160,61 @@ const APP: () = {
         let gpiog = dp.GPIOG.split(&mut clocks.ahb4);
 
         // Configure the SPI interfaces to the ADCs and DACs.
-        let adc1_spi = {
+        let (adc1_spi, adc1_cr_address) = {
             let spi_miso = gpiob.pb14.into_alternate_af5();
             let spi_sck = gpiob.pb10.into_alternate_af5();
             let _spi_nss = gpiob.pb9.into_alternate_af5();
 
-            let config = hal::spi::Config::new()
-                .set_mode(hal::spi::Mode{
+            let _config = hal::spi::Config::new(hal::spi::Mode{
                     polarity: hal::spi::Polarity::IdleHigh,
-                    phase: hal::spi::Phase::CaptureOnSecondTransition})
+                    phase: hal::spi::Phase::CaptureOnSecondTransition,
+                })
+                .manage_cs()
                 .cs_delay(220e-9)
-                .frame_size(16)
-                .freeze();
+                .frame_size(16);
 
-            let spi = hal::spi::Spi::spi2(
-                    dp.SPI2,
+            let cr_address = &dp.SPI2.cr1 as *const _ as usize;
+
+            let mut spi = dp.SPI2.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
-                    config,
+                    hal::spi::MODE_0, //config,
                     25.mhz(),
                     &clocks);
 
-            //spi.listen(hal::spi::Event::Rxp);
+            spi.listen(hal::spi::Event::Rxp);
 
-            spi
+            (spi, cr_address)
         };
 
-        let adc2_spi = {
+        let (adc2_spi, adc2_cr_address) = {
             let spi_miso = gpiob.pb4.into_alternate_af6();
             let spi_sck = gpioc.pc10.into_alternate_af6();
-            let _spi_nss = gpioa.pa15.into_alternate_af6();
 
-            let config = hal::spi::Config::new()
-                .set_mode(hal::spi::Mode{
+            let mut cs = gpioa.pa15.into_push_pull_output();
+            cs.set_high().unwrap();
+            let _spi_nss = cs.into_alternate_af6();
+
+            let config = hal::spi::Config::new(hal::spi::Mode{
                     polarity: hal::spi::Polarity::IdleHigh,
-                    phase: hal::spi::Phase::CaptureOnSecondTransition})
+                    phase: hal::spi::Phase::CaptureOnSecondTransition,
+                })
+                .manage_cs()
                 .frame_size(16)
-                .cs_delay(220e-9)
-                .freeze();
+                .cs_delay(220e-9);
 
-            let spi = hal::spi::Spi::spi3(
-                    dp.SPI3,
+            let cr_address = &dp.SPI3.cr1 as *const _ as usize;
+
+            let mut spi = dp.SPI3.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
                     25.mhz(),
                     &clocks);
 
-            //spi.listen(hal::spi::Event::Rxp);
+            spi.send(8_u8).unwrap();
 
-            spi
+            spi.listen(hal::spi::Event::Rxp);
+
+            (spi, cr_address)
         };
 
         let dac1_spi = {
@@ -258,22 +222,15 @@ const APP: () = {
             let spi_sck = gpioe.pe2.into_alternate_af5();
             let _spi_nss = gpioe.pe4.into_alternate_af5();
 
-            let config = hal::spi::Config::new()
-                .set_mode(hal::spi::Mode{
+            let config = hal::spi::Config::new(hal::spi::Mode{
                     polarity: hal::spi::Polarity::IdleHigh,
-                    phase: hal::spi::Phase::CaptureOnSecondTransition})
+                    phase: hal::spi::Phase::CaptureOnSecondTransition,
+                })
+                .manage_cs()
                 .frame_size(16)
-                .swap_mosi_miso()
-                .freeze();
+                .swap_mosi_miso();
 
-            let spi = hal::spi::Spi::spi4(
-                    dp.SPI4,
-                    (spi_sck, spi_miso, hal::spi::NoMosi),
-                    config,
-                    25.mhz(),
-                    &clocks);
-
-            spi
+            dp.SPI4.spi((spi_sck, spi_miso, hal::spi::NoMosi), config, 25.mhz(), &clocks)
         };
 
         let dac2_spi = {
@@ -281,48 +238,36 @@ const APP: () = {
             let spi_sck = gpiof.pf7.into_alternate_af5();
             let _spi_nss = gpiof.pf6.into_alternate_af5();
 
-            let config = hal::spi::Config::new()
-                .set_mode(hal::spi::Mode{
+            let config = hal::spi::Config::new(hal::spi::Mode{
                     polarity: hal::spi::Polarity::IdleHigh,
-                    phase: hal::spi::Phase::CaptureOnSecondTransition})
+                    phase: hal::spi::Phase::CaptureOnSecondTransition,
+                })
+                .manage_cs()
                 .frame_size(16)
-                .swap_mosi_miso()
-                .freeze();
+                .swap_mosi_miso();
 
-            let spi = hal::spi::Spi::spi5(
-                    dp.SPI5,
-                    (spi_sck, spi_miso, hal::spi::NoMosi),
-                    config,
-                    25.mhz(),
-                    &clocks);
-
-            spi
+            dp.SPI5.spi((spi_sck, spi_miso, hal::spi::NoMosi), config, 25.mhz(), &clocks)
         };
 
-        // TODO: Configure the DMA
-        //let mut dma = Dma::new(dp.DMA1, dp.DMAMUX1);
-        //dma.configure_transfer(DmaTransfer::MemoryToPeripheral, DmaSource::Timer2, trigger_word,
-        //        &adc1_spi.spi.ptr().cr1.register)
-        //dma.configure_transfer(DmaTransfer::MemoryToPeripheral, DmaSource::Timer2, trigger_word,
-        //        &adc2_spi.spi.ptr().cr1.register)
-
-        // TODO: Configure timer 2 to trigger conversions for the ADC
-        let _timer2 = hal::timer::Timer::tim2(dp.TIM2, 500.khz(), &mut clocks);
+        // Configure timer 2 to trigger conversions for the ADC
+        let mut timer2 = hal::timer::Timer::tim2(dp.TIM2, 500.khz(), &mut clocks);
+        //timer2.listen(hal::timer::Event::TimeOut);
+        timer2.listen(hal::timer::Event::DmaRequest);
 
         cortex_m::asm::dsb();
         let dat_addr = &DAT as *const _ as usize;
         cp.SCB.clean_dcache_by_address(dat_addr, 4);
 
+        // Enable the DMA.
+        // TODO: Refactor the DMA API to be a bit cleaner.
+        clocks.ahb1.enr().modify(|_, w| w.dma1en().set_bit());
         board::dma1_setup(
             &dp.DMA1,
             &dp.DMAMUX1,
             dat_addr,
-            &adc1_spi.spi.cr1 as *const _ as usize,
-            &adc2_spi.spi.cr1 as *const _ as usize,
+            adc1_cr_address,
+            adc2_cr_address,
         );
-        //timer2.enable_event(hal::timer::Event::DmaTransfer);
-
-        // TODO: Configure the ethernet controller
 
         // Instantiate the QUADSPI pins and peripheral interface.
 
@@ -347,16 +292,22 @@ const APP: () = {
         let _i2c1 = {
             let sda = gpiob.pb7.into_alternate_af4().set_open_drain();
             let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
-            hal::i2c::I2c::i2c1(dp.I2C1, (scl, sda), 100.khz(), &clocks)
+            dp.I2C1.i2c((scl, sda), 100.khz(), &clocks)
         };
 
         let i2c2 = {
             let sda = gpiof.pf0.into_alternate_af4().set_open_drain();
             let scl = gpiof.pf1.into_alternate_af4().set_open_drain();
-            hal::i2c::I2c::i2c2(dp.I2C2, (scl, sda), 100.khz(), &clocks)
+            dp.I2C2.i2c((scl, sda), 100.khz(), &clocks)
         };
 
         // Configure ethernet pins.
+
+        // Reset the PHY before configuring pins.
+        let mut eth_phy_nrst = gpioe.pe3.into_push_pull_output();
+        eth_phy_nrst.set_high().unwrap();
+        eth_phy_nrst.set_low().unwrap();
+        eth_phy_nrst.set_high().unwrap();
         let _rmii_ref_clk = gpioa.pa1.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
         let _rmii_mdio = gpioa.pa2.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
         let _rmii_mdc = gpioc.pc1.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
@@ -365,19 +316,18 @@ const APP: () = {
         let _rmii_rxd1 = gpioc.pc5.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
         let _rmii_tx_en = gpiob.pb11.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
         let _rmii_txd0 = gpiob.pb12.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
+        let _rmii_txd1 = gpiog.pg14.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
 
-        // TODO: This configuration seems to cause a system reset?
-        //let _rmii_txd1 = gpiog.pg14.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
-
+        // TODO: Configure the ethernet controller
         // Enable the ethernet peripheral.
-        clocks.apb4.enr().modify(|_, w| w.syscfgen().set_bit());
-        clocks.ahb1.enr().modify(|_, w| {
-            w.eth1macen().set_bit()
-                .eth1txen().set_bit()
-                .eth1rxen().set_bit()
-        });
+        //clocks.apb4.enr().modify(|_, w| w.syscfgen().set_bit());
+        //clocks.ahb1.enr().modify(|_, w| {
+        //    w.eth1macen().set_bit()
+        //        .eth1txen().set_bit()
+        //        .eth1rxen().set_bit()
+        //});
 
-        dp.SYSCFG.pmcr.modify(|_, w| unsafe { w.epis().bits(0b100) }); // RMII
+        //dp.SYSCFG.pmcr.modify(|_, w| unsafe { w.epis().bits(0b100) }); // RMII
 
         cp.SCB.enable_icache();
 
@@ -397,15 +347,22 @@ const APP: () = {
             adc2: adc2_spi,
             dac2: dac2_spi,
 
-            i2c: i2c2,
-            ethernet_periph: (
-                dp.ETHERNET_MAC,
-                dp.ETHERNET_DMA,
-                dp.ETHERNET_MTL,
-            ),
+            _eeprom_i2c: i2c2,
+//            ethernet_periph: (
+//                dp.ETHERNET_MAC,
+//                dp.ETHERNET_DMA,
+//                dp.ETHERNET_MTL,
+//            ),
         }
     }
 
+    #[idle]
+    fn idle(_c: idle::Context) -> ! {
+        // TODO Implement and poll ethernet interface.
+        loop {}
+    }
+
+    /*
     #[idle(resources = [ethernet, ethernet_periph, iir_state, iir_ch, i2c])]
     fn idle(c: idle::Context) -> ! {
         let (MAC, DMA, MTL) = c.resources.ethernet_periph;
@@ -506,6 +463,7 @@ const APP: () = {
             }
         }
     }
+    */
 
     #[task(priority = 1, schedule = [tick])]
     fn tick(c: tick::Context) {
@@ -513,6 +471,11 @@ const APP: () = {
         *TIME += 1;
         const PERIOD: u32 = 200_000_000;
         c.schedule.tick(c.scheduled + PERIOD.cycles()).unwrap();
+    }
+
+    #[task(binds = TIM2)]
+    fn tim2(_c: tim2::Context) {
+        info!("TIM2 interrupt");
     }
 
     // seems to slow it down
@@ -583,6 +546,7 @@ const APP: () = {
     }
 };
 
+/*
 #[derive(Deserialize, Serialize)]
 struct Request {
     channel: u8,
@@ -692,6 +656,7 @@ impl Server {
         None
     }
 }
+*/
 
 #[exception]
 fn HardFault(ef: &cortex_m_rt::ExceptionFrame) -> ! {
