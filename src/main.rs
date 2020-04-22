@@ -27,8 +27,11 @@ extern crate panic_halt;
 #[macro_use]
 extern crate log;
 
+use nb;
+
 // use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 use cortex_m_rt::exception;
+use cortex_m::asm;
 use stm32h7xx_hal as hal;
 use stm32h7xx_hal::{
     prelude::*,
@@ -162,11 +165,11 @@ const APP: () = {
 
         // Configure the SPI interfaces to the ADCs and DACs.
         let adc1_spi = {
-            let spi_miso = gpiob.pb14.into_alternate_af5();
-            let spi_sck = gpiob.pb10.into_alternate_af5();
+            let spi_miso = gpiob.pb14.into_alternate_af5().set_speed(hal::gpio::Speed::VeryHigh);
+            let spi_sck = gpiob.pb10.into_alternate_af5().set_speed(hal::gpio::Speed::VeryHigh);
             let _spi_nss = gpiob.pb9.into_alternate_af5();
 
-            let _config = hal::spi::Config::new(hal::spi::Mode{
+            let config = hal::spi::Config::new(hal::spi::Mode{
                     polarity: hal::spi::Polarity::IdleHigh,
                     phase: hal::spi::Phase::CaptureOnSecondTransition,
                 })
@@ -177,8 +180,8 @@ const APP: () = {
 
             let mut spi = dp.SPI2.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
-                    hal::spi::MODE_0, //config,
-                    25.mhz(),
+                    config,
+                    50.mhz(),
                     &clocks);
 
             spi.listen(hal::spi::Event::Rxp);
@@ -187,8 +190,8 @@ const APP: () = {
         };
 
         let adc2_spi = {
-            let spi_miso = gpiob.pb4.into_alternate_af6();
-            let spi_sck = gpioc.pc10.into_alternate_af6();
+            let spi_miso = gpiob.pb4.into_alternate_af6().set_speed(hal::gpio::Speed::VeryHigh);
+            let spi_sck = gpioc.pc10.into_alternate_af6().set_speed(hal::gpio::Speed::VeryHigh);
             let _spi_nss = gpioa.pa15.into_alternate_af6();
 
 
@@ -201,13 +204,11 @@ const APP: () = {
                 .frame_size(16)
                 .cs_delay(220e-9);
 
-            let mut spi = dp.SPI3.spi(
+            let spi = dp.SPI3.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    25.mhz(),
+                    50.mhz(),
                     &clocks);
-
-            spi.listen(hal::spi::Event::Rxp);
 
             spi
         };
@@ -308,9 +309,6 @@ const APP: () = {
 
         cp.SCB.enable_icache();
 
-        // The cycle counter is used for RTFM scheduling.
-        //cp.DWT.enable_cycle_counter();
-
         init_log();
         // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
         // info!("Built on {}", build_info::BUILT_TIME_UTC);
@@ -323,9 +321,7 @@ const APP: () = {
         dac_pin.set_low().unwrap();
 
         // Configure timer 2 to trigger conversions for the ADC
-        let mut timer2 = dp.TIM2.timer(1.khz(), &mut clocks);
-        timer2.clear_uif_bit();
-
+        let mut timer2 = dp.TIM2.timer(500.khz(), &mut clocks);
         timer2.listen(hal::timer::Event::TimeOut);
 
         init::LateResources {
@@ -347,10 +343,55 @@ const APP: () = {
         }
     }
 
+    #[task(binds = TIM2, resources = [dbg_pin, timer, adc1, adc2])]
+    fn tim2(mut c: tim2::Context) {
+        c.resources.timer.clear_uif_bit();
+        c.resources.dbg_pin.set_high().unwrap();
+
+        // Start a SPI transaction on ADC0 and ADC1
+        c.resources.adc1.lock(|adc| adc.spi.cr1.modify(|_, w| w.cstart().set_bit()));
+        c.resources.adc2.lock(|adc| adc.spi.cr1.modify(|_, w| w.cstart().set_bit()));
+
+        c.resources.dbg_pin.set_low().unwrap();
+    }
+
+    #[task(binds = SPI2, resources = [adc1, dac1, adc2, dac2, iir_state, iir_ch, dac_pin], priority = 2)]
+    fn adc_spi(c: spi2::Context) {
+        #[cfg(feature = "bkpt")]
+        cortex_m::asm::bkpt();
+
+        c.resources.dac_pin.set_high().unwrap();
+
+        let output_ch1 = {
+            let a: u16 = c.resources.adc1.read().unwrap();
+            let x0 = f32::from(a as i16);
+            let y0 = c.resources.iir_ch[0].update(&mut c.resources.iir_state[0], x0);
+            y0 as i16 as u16 ^ 0x8000
+        };
+        c.resources.adc1.spi.ifcr.write(|w| w.eotc().set_bit());
+
+        let output_ch2 = {
+            let a: u16 = nb::block!(c.resources.adc2.read()).unwrap();
+            let x0 = f32::from(a as i16);
+            let y0 = c.resources.iir_ch[1].update(&mut c.resources.iir_state[1], x0);
+            y0 as i16 as u16 ^ 0x8000
+        };
+        c.resources.adc2.spi.ifcr.write(|w| w.eotc().set_bit());
+
+        c.resources.dac1.send(output_ch1).unwrap();
+        c.resources.dac2.send(output_ch2).unwrap();
+
+        c.resources.dac_pin.set_low().unwrap();
+        #[cfg(feature = "bkpt")]
+        cortex_m::asm::bkpt();
+    }
+
     #[idle]
     fn idle(_c: idle::Context) -> ! {
         // TODO Implement and poll ethernet interface.
-        loop {}
+        loop {
+            asm::nop();
+        }
     }
 
     /*
@@ -455,77 +496,6 @@ const APP: () = {
         }
     }
     */
-
-    #[task(binds = TIM2, resources = [dbg_pin, timer, adc1, adc2])]
-    fn tim2(mut c: tim2::Context) {
-        c.resources.timer.clear_uif_bit();
-
-        c.resources.dbg_pin.set_high().unwrap();
-        c.resources.dbg_pin.set_low().unwrap();
-        c.resources.dbg_pin.set_high().unwrap();
-        c.resources.dbg_pin.set_low().unwrap();
-
-        // Start a SPI transaction on ADC0 and ADC1
-        // TODO: Stagger these requests.
-        c.resources.adc1.lock(|adc| adc.spi.cr1.modify(|_, w| w.cstart().set_bit()));
-        c.resources.adc2.lock(|adc| adc.spi.cr1.modify(|_, w| w.cstart().set_bit()));
-    }
-
-    // seems to slow it down
-    // #[link_section = ".data.spi1"]
-    #[task(binds = SPI2, resources = [adc1, dac1, iir_state, iir_ch], priority = 2)]
-    fn spi2(c: spi2::Context) {
-        #[cfg(feature = "bkpt")]
-        cortex_m::asm::bkpt();
-        let adc = c.resources.adc1;
-        let dac = c.resources.dac1;
-        let iir_ch = c.resources.iir_ch;
-        let iir_state = c.resources.iir_state;
-
-        // TODO: Doesn't make sense if RXP is unset.
-        if adc.is_rxp() {
-            let a: u16 = adc.read().unwrap();
-
-            let x0 = f32::from(a as i16);
-            let y0 = iir_ch[0].update(&mut iir_state[0], x0);
-            let d = y0 as i16 as u16 ^ 0x8000;
-
-            // TODO: Handle errors.
-            dac.send(d).unwrap();
-        }
-
-        adc.spi.ifcr.write(|w| w.eotc().set_bit());
-        #[cfg(feature = "bkpt")]
-        cortex_m::asm::bkpt();
-    }
-
-    #[task(binds = SPI3, resources = [adc2, dac2, iir_state, iir_ch, dac_pin], priority = 2)]
-    fn spi3(c: spi3::Context) {
-        #[cfg(feature = "bkpt")]
-        cortex_m::asm::bkpt();
-        let adc = c.resources.adc2;
-        let dac = c.resources.dac2;
-        let iir_ch = c.resources.iir_ch;
-        let iir_state = c.resources.iir_state;
-        c.resources.dac_pin.set_high().unwrap();
-
-        // TODO: Doesn't make sense if RXP is unset.
-        if adc.is_rxp() {
-            let a: u16 = adc.read().unwrap();
-
-            let x0 = f32::from(a as i16);
-            let y0 = iir_ch[1].update(&mut iir_state[1], x0);
-            let d = y0 as i16 as u16 ^ 0x8000;
-
-            // TODO: Handle errors.
-            dac.send(d).unwrap();
-        }
-        adc.spi.ifcr.write(|w| w.eotc().set_bit());
-
-        c.resources.dac_pin.set_low().unwrap();
-        #[cfg(feature = "bkpt")]
-        cortex_m::asm::bkpt();
-    }
 
     /*
     #[task(binds = ETH, resources = [ethernet_periph], priority = 1)]
