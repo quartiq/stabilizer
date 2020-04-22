@@ -356,7 +356,7 @@ const APP: () = {
     }
 
     #[task(binds = SPI2, resources = [adc1, dac1, adc2, dac2, iir_state, iir_ch, dac_pin], priority = 2)]
-    fn adc_spi(c: spi2::Context) {
+    fn adc_spi(c: adc_spi::Context) {
         #[cfg(feature = "bkpt")]
         cortex_m::asm::bkpt();
 
