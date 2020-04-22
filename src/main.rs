@@ -29,7 +29,6 @@ extern crate log;
 
 // use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 use cortex_m_rt::exception;
-use rtfm::cyccnt::{U32Ext as _};
 use stm32h7xx_hal as hal;
 use stm32h7xx_hal::{
     prelude::*,
@@ -53,7 +52,6 @@ mod eth;
 mod iir;
 use iir::*;
 
-mod board;
 mod eeprom;
 
 #[cfg(not(feature = "semihosting"))]
@@ -103,9 +101,7 @@ macro_rules! create_socket {
 }
 */
 
-static DAT: u32 = 0x30; // EN | CSTART
-
-#[rtfm::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtfm::cyccnt::CYCCNT)]
+#[rtfm::app(device = stm32h7xx_hal::stm32, peripherals = true)]
 const APP: () = {
     struct Resources {
         adc1: hal::spi::Spi<hal::stm32::SPI2>,
@@ -115,6 +111,10 @@ const APP: () = {
         dac2: hal::spi::Spi<hal::stm32::SPI5>,
 
         _eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
+
+        dbg_pin: hal::gpio::gpioc::PC6<hal::gpio::Output<hal::gpio::PushPull>>,
+        dac_pin: hal::gpio::gpiob::PB15<hal::gpio::Output<hal::gpio::PushPull>>,
+        timer: hal::timer::Timer<hal::stm32::TIM2>,
 
         // TODO: Add in pounder hardware resources.
 
@@ -129,7 +129,7 @@ const APP: () = {
         //ethernet: eth::Device,
     }
 
-    #[init(schedule = [tick])]
+    #[init]
     fn init(c: init::Context) -> init::LateResources {
         let dp = c.device;
         let mut cp = cortex_m::Peripherals::take().unwrap();
@@ -139,6 +139,7 @@ const APP: () = {
 
         let rcc = dp.RCC.constrain();
         let mut clocks = rcc
+            //TODO: Re-enable HSE for Stabilizer platform.
 //            .use_hse(8.mhz())
             .sysclk(400.mhz())
             .hclk(200.mhz())
@@ -160,7 +161,7 @@ const APP: () = {
         let gpiog = dp.GPIOG.split(&mut clocks.ahb4);
 
         // Configure the SPI interfaces to the ADCs and DACs.
-        let (adc1_spi, adc1_cr_address) = {
+        let adc1_spi = {
             let spi_miso = gpiob.pb14.into_alternate_af5();
             let spi_sck = gpiob.pb10.into_alternate_af5();
             let _spi_nss = gpiob.pb9.into_alternate_af5();
@@ -169,11 +170,10 @@ const APP: () = {
                     polarity: hal::spi::Polarity::IdleHigh,
                     phase: hal::spi::Phase::CaptureOnSecondTransition,
                 })
+                .communication_mode(hal::spi::CommunicationMode::Receiver)
                 .manage_cs()
                 .cs_delay(220e-9)
                 .frame_size(16);
-
-            let cr_address = &dp.SPI2.cr1 as *const _ as usize;
 
             let mut spi = dp.SPI2.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
@@ -183,26 +183,23 @@ const APP: () = {
 
             spi.listen(hal::spi::Event::Rxp);
 
-            (spi, cr_address)
+            spi
         };
 
-        let (adc2_spi, adc2_cr_address) = {
+        let adc2_spi = {
             let spi_miso = gpiob.pb4.into_alternate_af6();
             let spi_sck = gpioc.pc10.into_alternate_af6();
+            let _spi_nss = gpioa.pa15.into_alternate_af6();
 
-            let mut cs = gpioa.pa15.into_push_pull_output();
-            cs.set_high().unwrap();
-            let _spi_nss = cs.into_alternate_af6();
 
             let config = hal::spi::Config::new(hal::spi::Mode{
                     polarity: hal::spi::Polarity::IdleHigh,
                     phase: hal::spi::Phase::CaptureOnSecondTransition,
                 })
+                .communication_mode(hal::spi::CommunicationMode::Receiver)
                 .manage_cs()
                 .frame_size(16)
                 .cs_delay(220e-9);
-
-            let cr_address = &dp.SPI3.cr1 as *const _ as usize;
 
             let mut spi = dp.SPI3.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
@@ -210,11 +207,9 @@ const APP: () = {
                     25.mhz(),
                     &clocks);
 
-            spi.send(8_u8).unwrap();
-
             spi.listen(hal::spi::Event::Rxp);
 
-            (spi, cr_address)
+            spi
         };
 
         let dac1_spi = {
@@ -226,6 +221,7 @@ const APP: () = {
                     polarity: hal::spi::Polarity::IdleHigh,
                     phase: hal::spi::Phase::CaptureOnSecondTransition,
                 })
+                .communication_mode(hal::spi::CommunicationMode::Transmitter)
                 .manage_cs()
                 .frame_size(16)
                 .swap_mosi_miso();
@@ -242,32 +238,13 @@ const APP: () = {
                     polarity: hal::spi::Polarity::IdleHigh,
                     phase: hal::spi::Phase::CaptureOnSecondTransition,
                 })
+                .communication_mode(hal::spi::CommunicationMode::Transmitter)
                 .manage_cs()
                 .frame_size(16)
                 .swap_mosi_miso();
 
             dp.SPI5.spi((spi_sck, spi_miso, hal::spi::NoMosi), config, 25.mhz(), &clocks)
         };
-
-        // Configure timer 2 to trigger conversions for the ADC
-        let mut timer2 = hal::timer::Timer::tim2(dp.TIM2, 500.khz(), &mut clocks);
-        //timer2.listen(hal::timer::Event::TimeOut);
-        timer2.listen(hal::timer::Event::DmaRequest);
-
-        cortex_m::asm::dsb();
-        let dat_addr = &DAT as *const _ as usize;
-        cp.SCB.clean_dcache_by_address(dat_addr, 4);
-
-        // Enable the DMA.
-        // TODO: Refactor the DMA API to be a bit cleaner.
-        clocks.ahb1.enr().modify(|_, w| w.dma1en().set_bit());
-        board::dma1_setup(
-            &dp.DMA1,
-            &dp.DMAMUX1,
-            dat_addr,
-            adc1_cr_address,
-            adc2_cr_address,
-        );
 
         // Instantiate the QUADSPI pins and peripheral interface.
 
@@ -332,20 +309,34 @@ const APP: () = {
         cp.SCB.enable_icache();
 
         // The cycle counter is used for RTFM scheduling.
-        cp.DWT.enable_cycle_counter();
+        //cp.DWT.enable_cycle_counter();
 
         init_log();
         // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
         // info!("Built on {}", build_info::BUILT_TIME_UTC);
         // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
 
-        // c.schedule.tick(Instant::now()).unwrap();
+        let mut debug_pin = gpioc.pc6.into_push_pull_output();
+        debug_pin.set_low().unwrap();
+
+        let mut dac_pin = gpiob.pb15.into_push_pull_output();
+        dac_pin.set_low().unwrap();
+
+        // Configure timer 2 to trigger conversions for the ADC
+        let mut timer2 = dp.TIM2.timer(1.khz(), &mut clocks);
+        timer2.clear_uif_bit();
+
+        timer2.listen(hal::timer::Event::TimeOut);
 
         init::LateResources {
             adc1: adc1_spi,
             dac1: dac1_spi,
             adc2: adc2_spi,
             dac2: dac2_spi,
+
+            dbg_pin: debug_pin,
+            dac_pin: dac_pin,
+            timer: timer2,
 
             _eeprom_i2c: i2c2,
 //            ethernet_periph: (
@@ -465,17 +456,19 @@ const APP: () = {
     }
     */
 
-    #[task(priority = 1, schedule = [tick])]
-    fn tick(c: tick::Context) {
-        static mut TIME: u32 = 0;
-        *TIME += 1;
-        const PERIOD: u32 = 200_000_000;
-        c.schedule.tick(c.scheduled + PERIOD.cycles()).unwrap();
-    }
+    #[task(binds = TIM2, resources = [dbg_pin, timer, adc1, adc2])]
+    fn tim2(mut c: tim2::Context) {
+        c.resources.timer.clear_uif_bit();
 
-    #[task(binds = TIM2)]
-    fn tim2(_c: tim2::Context) {
-        info!("TIM2 interrupt");
+        c.resources.dbg_pin.set_high().unwrap();
+        c.resources.dbg_pin.set_low().unwrap();
+        c.resources.dbg_pin.set_high().unwrap();
+        c.resources.dbg_pin.set_low().unwrap();
+
+        // Start a SPI transaction on ADC0 and ADC1
+        // TODO: Stagger these requests.
+        c.resources.adc1.lock(|adc| adc.spi.cr1.modify(|_, w| w.cstart().set_bit()));
+        c.resources.adc2.lock(|adc| adc.spi.cr1.modify(|_, w| w.cstart().set_bit()));
     }
 
     // seems to slow it down
@@ -500,11 +493,13 @@ const APP: () = {
             // TODO: Handle errors.
             dac.send(d).unwrap();
         }
+
+        adc.spi.ifcr.write(|w| w.eotc().set_bit());
         #[cfg(feature = "bkpt")]
         cortex_m::asm::bkpt();
     }
 
-    #[task(binds = SPI3, resources = [adc2, dac2, iir_state, iir_ch], priority = 2)]
+    #[task(binds = SPI3, resources = [adc2, dac2, iir_state, iir_ch, dac_pin], priority = 2)]
     fn spi3(c: spi3::Context) {
         #[cfg(feature = "bkpt")]
         cortex_m::asm::bkpt();
@@ -512,6 +507,7 @@ const APP: () = {
         let dac = c.resources.dac2;
         let iir_ch = c.resources.iir_ch;
         let iir_state = c.resources.iir_state;
+        c.resources.dac_pin.set_high().unwrap();
 
         // TODO: Doesn't make sense if RXP is unset.
         if adc.is_rxp() {
@@ -524,6 +520,9 @@ const APP: () = {
             // TODO: Handle errors.
             dac.send(d).unwrap();
         }
+        adc.spi.ifcr.write(|w| w.eotc().set_bit());
+
+        c.resources.dac_pin.set_low().unwrap();
         #[cfg(feature = "bkpt")]
         cortex_m::asm::bkpt();
     }
