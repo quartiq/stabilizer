@@ -47,28 +47,12 @@ use embedded_hal::{
 use stm32h7_ethernet as ethernet;
 use smoltcp as net;
 
-use core::fmt::Write;
-use heapless::{
-    consts::*,
-    String,
-    Vec
-};
-
-use serde::{
-    de::DeserializeOwned,
-    Deserialize,
-    Serialize
-};
-use serde_json_core::{
-    de::from_slice,
-    ser::to_string
-};
-
 #[link_section = ".sram3.eth"]
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 
 mod eth;
 mod pounder;
+mod server;
 
 mod iir;
 use iir::*;
@@ -494,7 +478,7 @@ const APP: () = {
             sockets.add(tcp_socket)
         };
 
-        let mut server = Server::new();
+        let mut server = server::Server::new();
 
         let mut time = 0u32;
         let mut next_ms = Instant::now();
@@ -519,14 +503,14 @@ const APP: () = {
                         .listen(1234)
                         .unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
                 } else if tick && socket.can_send() {
-                    let s = c.resources.iir_state.lock(|iir_state| Status {
+                    let s = c.resources.iir_state.lock(|iir_state| server::Status {
                         t: time,
                         x0: iir_state[0][0],
                         y0: iir_state[0][2],
                         x1: iir_state[1][0],
                         y1: iir_state[1][2],
                     });
-                    json_reply(&mut socket, &s);
+                    server::json_reply(&mut socket, &s);
                 }
             }
 
@@ -540,7 +524,7 @@ const APP: () = {
                         .listen(1235)
                         .unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
                 } else {
-                    server.poll(socket, |req: &Request| {
+                    server.poll(socket, |req: &server::Request| {
                         if req.channel < 2 {
                             c.resources.iir_ch.lock(|iir_ch| {
                                 iir_ch[req.channel as usize] = req.iir
@@ -567,11 +551,11 @@ const APP: () = {
     }
 
     /*
-    #[task(binds = ETH, resources = [ethernet_periph], priority = 1)]
+    #[task(binds = ETH, resources = [net_interface], priority = 1)]
     fn eth(c: eth::Context) {
-        let dma = &c.resources.ethernet_periph.1;
+        let dma = &c.resources.net_interface.device();
         ETHERNET_PENDING.store(true, Ordering::Relaxed);
-        unsafe { eth::interrupt_handler(dma) }
+        dma.interrupt_handler()
     }
     */
 
@@ -583,116 +567,6 @@ const APP: () = {
         fn SDMMC();
     }
 };
-
-#[derive(Deserialize, Serialize)]
-struct Request {
-    channel: u8,
-    iir: IIR,
-}
-
-#[derive(Serialize)]
-struct Response<'a> {
-    code: i32,
-    message: &'a str,
-}
-
-#[derive(Serialize)]
-struct Status {
-    t: u32,
-    x0: f32,
-    y0: f32,
-    x1: f32,
-    y1: f32,
-}
-
-fn json_reply<T: Serialize>(socket: &mut net::socket::TcpSocket, msg: &T) {
-    let mut u: String<U128> = to_string(msg).unwrap();
-    u.push('\n').unwrap();
-    socket.write_str(&u).unwrap();
-}
-
-struct Server {
-    data: Vec<u8, U256>,
-    discard: bool,
-}
-
-impl Server {
-    fn new() -> Self {
-        Self {
-            data: Vec::new(),
-            discard: false,
-        }
-    }
-
-    fn poll<T, F, R>(
-        &mut self,
-        socket: &mut net::socket::TcpSocket,
-        f: F,
-    ) -> Option<R>
-    where
-        T: DeserializeOwned,
-        F: FnOnce(&T) -> R,
-    {
-        while socket.can_recv() {
-            let found = socket
-                .recv(|buf| {
-                    let (len, found) =
-                        match buf.iter().position(|&c| c as char == '\n') {
-                            Some(end) => (end + 1, true),
-                            None => (buf.len(), false),
-                        };
-                    if self.data.len() + len >= self.data.capacity() {
-                        self.discard = true;
-                        self.data.clear();
-                    } else if !self.discard && len > 0 {
-                        self.data.extend_from_slice(&buf[..len]).unwrap();
-                    }
-                    (len, found)
-                })
-                .unwrap();
-            if found {
-                if self.discard {
-                    self.discard = false;
-                    json_reply(
-                        socket,
-                        &Response {
-                            code: 520,
-                            message: "command buffer overflow",
-                        },
-                    );
-                    self.data.clear();
-                } else {
-                    let r = from_slice::<T>(&self.data[..self.data.len() - 1]);
-                    self.data.clear();
-                    match r {
-                        Ok(res) => {
-                            let r = f(&res);
-                            json_reply(
-                                socket,
-                                &Response {
-                                    code: 200,
-                                    message: "ok",
-                                },
-                            );
-                            return Some(r);
-                        }
-                        Err(err) => {
-                            warn!("parse error {:?}", err);
-                            json_reply(
-                                socket,
-                                &Response {
-                                    code: 550,
-                                    message: "parse error",
-                                },
-                            );
-                        }
-                    }
-                }
-            }
-        }
-        None
-    }
-}
 
 #[exception]
 fn HardFault(ef: &cortex_m_rt::ExceptionFrame) -> ! {
