@@ -51,10 +51,8 @@ git = "https://github.com/quartiq/ad9959.git"
 branch = "feature/basic-driver"
 
 [dependencies.stm32h7-ethernet]
-#git = "https://github.com/quartiq/stm32h7-ethernet.git"
-#branch = "feature/device-dependency"
-path = "../stm32h7-ethernet"
-features = ["stm32h743v"]
+git = "https://github.com/quartiq/stm32h7-ethernet.git"
+branch = "feature/device-dependency"
 
 [dependencies.stm32h7xx-hal]
 git = "https://github.com/quartiq/stm32h7xx-hal.git"
