@@ -30,8 +30,10 @@ extern crate log;
 use nb;
 
 // use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
+use asm_delay;
+use rtfm::cyccnt::{Instant, U32Ext};
 use cortex_m_rt::exception;
-use cortex_m::asm;
+use cortex_m;
 use stm32h7xx_hal as hal;
 use stm32h7xx_hal::{
     prelude::*,
@@ -42,15 +44,31 @@ use embedded_hal::{
     digital::v2::OutputPin,
 };
 
-/*
-use core::fmt::Write;
-use heapless::{consts::*, String, Vec};
+use stm32h7_ethernet as ethernet;
 use smoltcp as net;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use serde_json_core::{de::from_slice, ser::to_string};
-*/
+
+use core::fmt::Write;
+use heapless::{
+    consts::*,
+    String,
+    //Vec
+};
+
+use serde::{
+    //de::DeserializeOwned,
+    Deserialize,
+    Serialize
+};
+use serde_json_core::{
+    //de::from_slice,
+    ser::to_string
+};
+
+#[link_section = ".sram3.eth"]
+static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 
 mod eth;
+mod pounder;
 
 mod iir;
 use iir::*;
@@ -81,30 +99,26 @@ mod build_info {
     // include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
+pub struct NetStorage {
+    ip_addrs: [net::wire::IpCidr; 1],
+    neighbor_cache: [Option<(net::wire::IpAddress, net::iface::Neighbor)>; 8],
+}
+
+static mut NET_STORE: NetStorage = NetStorage {
+    // Placeholder for the real IP address, which is initialized at runtime.
+    ip_addrs: [net::wire::IpCidr::Ipv6(net::wire::Ipv6Cidr::SOLICITED_NODE_PREFIX)],
+
+    neighbor_cache: [None; 8],
+};
+
 const SCALE: f32 = ((1 << 15) - 1) as f32;
 
 // static ETHERNET_PENDING: AtomicBool = AtomicBool::new(true);
 
-/*
 const TCP_RX_BUFFER_SIZE: usize = 8192;
 const TCP_TX_BUFFER_SIZE: usize = 8192;
 
-macro_rules! create_socket {
-    ($set:ident, $rx_storage:ident, $tx_storage:ident, $target:ident) => {
-        let mut $rx_storage = [0; TCP_RX_BUFFER_SIZE];
-        let mut $tx_storage = [0; TCP_TX_BUFFER_SIZE];
-        let tcp_rx_buffer =
-            net::socket::TcpSocketBuffer::new(&mut $rx_storage[..]);
-        let tcp_tx_buffer =
-            net::socket::TcpSocketBuffer::new(&mut $tx_storage[..]);
-        let tcp_socket =
-            net::socket::TcpSocket::new(tcp_rx_buffer, tcp_tx_buffer);
-        let $target = $set.add(tcp_socket);
-    };
-}
-*/
-
-#[rtfm::app(device = stm32h7xx_hal::stm32, peripherals = true)]
+#[rtfm::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtfm::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
         adc1: hal::spi::Spi<hal::stm32::SPI2>,
@@ -113,23 +127,22 @@ const APP: () = {
         adc2: hal::spi::Spi<hal::stm32::SPI3>,
         dac2: hal::spi::Spi<hal::stm32::SPI5>,
 
-        _eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
+        eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
         dbg_pin: hal::gpio::gpioc::PC6<hal::gpio::Output<hal::gpio::PushPull>>,
         dac_pin: hal::gpio::gpiob::PB15<hal::gpio::Output<hal::gpio::PushPull>>,
         timer: hal::timer::Timer<hal::stm32::TIM2>,
+        net_interface: net::iface::EthernetInterface<'static, 'static, 'static,
+                                                     ethernet::EthernetDMA<'static>>,
+        _eth_mac: ethernet::EthernetMAC,
+        mac_addr: net::wire::EthernetAddress,
 
-        // TODO: Add in pounder hardware resources.
+        pounder: pounder::PounderDevices<asm_delay::AsmDelay>,
 
-        //ethernet_periph:
-        //    (pac::ETHERNET_MAC, pac::ETHERNET_DMA, pac::ETHERNET_MTL),
         #[init([[0.; 5]; 2])]
         iir_state: [IIRState; 2],
         #[init([IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; 2])]
         iir_ch: [IIR; 2],
-        //#[link_section = ".sram3.eth"]
-        //#[init(eth::Device::new())]
-        //ethernet: eth::Device,
     }
 
     #[init]
@@ -150,6 +163,9 @@ const APP: () = {
             .pll2_p_ck(100.mhz())
             .pll2_q_ck(100.mhz())
             .freeze(vos, &dp.SYSCFG);
+
+        // Enable SRAM3 for the ethernet descriptor ring.
+        clocks.rb.ahb2enr.modify(|_, w| w.sram3en().set_bit());
 
         clocks.rb.rsr.write(|w| w.rmvf().set_bit());
 
@@ -247,15 +263,63 @@ const APP: () = {
             dp.SPI5.spi((spi_sck, spi_miso, hal::spi::NoMosi), config, 25.mhz(), &clocks)
         };
 
-        // Instantiate the QUADSPI pins and peripheral interface.
+        let pounder_devices = {
+            let ad9959 =  {
+                let qspi_interface = {
+                    // Instantiate the QUADSPI pins and peripheral interface.
+                    // TODO: Place these into a pins structure that is provided to the QSPI
+                    // constructor.
+                    let _qspi_clk = gpiob.pb2.into_alternate_af9();
+                    let _qspi_ncs = gpioc.pc11.into_alternate_af9();
+                    let _qspi_io0 = gpioe.pe7.into_alternate_af10();
+                    let _qspi_io1 = gpioe.pe8.into_alternate_af10();
+                    let _qspi_io2 = gpioe.pe9.into_alternate_af10();
+                    let _qspi_io3 = gpioe.pe10.into_alternate_af10();
 
-        // TODO: Place these into a pins structure that is provided to the QSPI constructor.
-        let _qspi_clk = gpiob.pb2.into_alternate_af9();
-        let _qspi_ncs = gpioc.pc11.into_alternate_af9();
-        let _qspi_io0 = gpioe.pe7.into_alternate_af10();
-        let _qspi_io1 = gpioe.pe8.into_alternate_af10();
-        let _qspi_io2 = gpioe.pe9.into_alternate_af10();
-        let _qspi_io3 = gpioe.pe10.into_alternate_af10();
+                    let qspi = hal::qspi::Qspi::new(dp.QUADSPI, &mut clocks, 10.mhz()).unwrap();
+                    pounder::QspiInterface {qspi}
+                };
+
+                let mut reset_pin = gpioa.pa0.into_push_pull_output();
+                let io_update = gpiog.pg7.into_push_pull_output();
+
+
+                let delay = {
+                    let frequency_hz = clocks.clocks.c_ck().0;
+                    asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz (frequency_hz))
+                };
+
+                ad9959::Ad9959::new(qspi_interface,
+                                    &mut reset_pin,
+                                    io_update,
+                                    delay,
+                                    ad9959::Mode::FourBitSerial,
+                                    100_000_000).unwrap()
+            };
+
+            let io_expander = {
+                let sda = gpiob.pb7.into_alternate_af4().set_open_drain();
+                let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
+                let i2c1 = dp.I2C1.i2c((scl, sda), 100.khz(), &clocks);
+                mcp23017::MCP23017::default(i2c1).unwrap()
+            };
+
+            let spi = {
+                let spi_mosi = gpiod.pd7.into_alternate_af5();
+                let spi_miso = gpioa.pa6.into_alternate_af5();
+                let spi_sck = gpiog.pg11.into_alternate_af5();
+
+                let config = hal::spi::Config::new(hal::spi::Mode{
+                        polarity: hal::spi::Polarity::IdleHigh,
+                        phase: hal::spi::Phase::CaptureOnSecondTransition,
+                    })
+                    .frame_size(8);
+
+                dp.SPI1.spi((spi_sck, spi_miso, spi_mosi), config, 25.mhz(), &clocks)
+            };
+
+            pounder::PounderDevices::new(io_expander, ad9959, spi).unwrap()
+        };
 
         let mut fp_led_0 = gpiod.pd5.into_push_pull_output();
         let mut fp_led_1 = gpiod.pd6.into_push_pull_output();
@@ -267,45 +331,63 @@ const APP: () = {
         fp_led_2.set_low().unwrap();
         fp_led_3.set_low().unwrap();
 
-        let _i2c1 = {
-            let sda = gpiob.pb7.into_alternate_af4().set_open_drain();
-            let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
-            dp.I2C1.i2c((scl, sda), 100.khz(), &clocks)
-        };
-
-        let i2c2 = {
+        let mut eeprom_i2c = {
             let sda = gpiof.pf0.into_alternate_af4().set_open_drain();
             let scl = gpiof.pf1.into_alternate_af4().set_open_drain();
             dp.I2C2.i2c((scl, sda), 100.khz(), &clocks)
         };
 
         // Configure ethernet pins.
+        {
+            // Reset the PHY before configuring pins.
+            let mut eth_phy_nrst = gpioe.pe3.into_push_pull_output();
+            eth_phy_nrst.set_high().unwrap();
+            eth_phy_nrst.set_low().unwrap();
+            eth_phy_nrst.set_high().unwrap();
+            let _rmii_ref_clk = gpioa.pa1.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
+            let _rmii_mdio = gpioa.pa2.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
+            let _rmii_mdc = gpioc.pc1.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
+            let _rmii_crs_dv = gpioa.pa7.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
+            let _rmii_rxd0 = gpioc.pc4.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
+            let _rmii_rxd1 = gpioc.pc5.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
+            let _rmii_tx_en = gpiob.pb11.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
+            let _rmii_txd0 = gpiob.pb12.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
+            let _rmii_txd1 = gpiog.pg14.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
+        }
 
-        // Reset the PHY before configuring pins.
-        let mut eth_phy_nrst = gpioe.pe3.into_push_pull_output();
-        eth_phy_nrst.set_high().unwrap();
-        eth_phy_nrst.set_low().unwrap();
-        eth_phy_nrst.set_high().unwrap();
-        let _rmii_ref_clk = gpioa.pa1.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_mdio = gpioa.pa2.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_mdc = gpioc.pc1.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_crs_dv = gpioa.pa7.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_rxd0 = gpioc.pc4.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_rxd1 = gpioc.pc5.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_tx_en = gpiob.pb11.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_txd0 = gpiob.pb12.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_txd1 = gpiog.pg14.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
+        let mac_addr = match eeprom::read_eui48(&mut eeprom_i2c) {
+            Err(_) => {
+                info!("Could not read EEPROM, using default MAC address");
+                net::wire::EthernetAddress([0x10, 0xE2, 0xD5, 0x00, 0x03, 0x00])
+            }
+            Ok(raw_mac) => net::wire::EthernetAddress(raw_mac),
+        };
 
-        // TODO: Configure the ethernet controller
-        // Enable the ethernet peripheral.
-        //clocks.apb4.enr().modify(|_, w| w.syscfgen().set_bit());
-        //clocks.ahb1.enr().modify(|_, w| {
-        //    w.eth1macen().set_bit()
-        //        .eth1txen().set_bit()
-        //        .eth1rxen().set_bit()
-        //});
+        let (network_interface, eth_mac) = {
+            // Configure the ethernet controller
+            let (eth_dma, eth_mac) = unsafe {
+                ethernet::ethernet_init(
+                        dp.ETHERNET_MAC,
+                        dp.ETHERNET_MTL,
+                        dp.ETHERNET_DMA,
+                        &mut DES_RING,
+                        mac_addr.clone())
+            };
 
-        //dp.SYSCFG.pmcr.modify(|_, w| unsafe { w.epis().bits(0b100) }); // RMII
+            let store = unsafe { &mut NET_STORE };
+
+            store.ip_addrs[0] = net::wire::IpCidr::new(net::wire::IpAddress::v4(10, 0, 16, 99), 24);
+
+            let neighbor_cache = net::iface::NeighborCache::new(&mut store.neighbor_cache[..]);
+
+            let interface = net::iface::EthernetInterfaceBuilder::new(eth_dma)
+                    .ethernet_addr(mac_addr)
+                    .neighbor_cache(neighbor_cache)
+                    .ip_addrs(&mut store.ip_addrs[..])
+                    .finalize();
+
+            (interface, eth_mac)
+        };
 
         cp.SCB.enable_icache();
 
@@ -313,6 +395,9 @@ const APP: () = {
         // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
         // info!("Built on {}", build_info::BUILT_TIME_UTC);
         // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
+
+        // Utilize the cycle counter for RTFM scheduling.
+        cp.DWT.enable_cycle_counter();
 
         let mut debug_pin = gpioc.pc6.into_push_pull_output();
         debug_pin.set_low().unwrap();
@@ -333,13 +418,12 @@ const APP: () = {
             dbg_pin: debug_pin,
             dac_pin: dac_pin,
             timer: timer2,
+            pounder: pounder_devices,
 
-            _eeprom_i2c: i2c2,
-//            ethernet_periph: (
-//                dp.ETHERNET_MAC,
-//                dp.ETHERNET_DMA,
-//                dp.ETHERNET_MTL,
-//            ),
+            eeprom_i2c: eeprom_i2c,
+            net_interface: network_interface,
+            _eth_mac: eth_mac,
+            mac_addr: mac_addr,
         }
     }
 
@@ -386,11 +470,69 @@ const APP: () = {
         cortex_m::asm::bkpt();
     }
 
-    #[idle]
-    fn idle(_c: idle::Context) -> ! {
-        // TODO Implement and poll ethernet interface.
+    #[idle(resources=[net_interface, mac_addr, iir_state])]
+    fn idle(mut c: idle::Context) -> ! {
+
+        let interface = c.resources.net_interface;
+        let mut socket_set_entries: [_; 8] = Default::default();
+        let mut sockets = net::socket::SocketSet::new(&mut socket_set_entries[..]);
+
+        let mut rx_storage = [0; TCP_RX_BUFFER_SIZE];
+        let mut tx_storage = [0; TCP_TX_BUFFER_SIZE];
+        let tcp_handle0 = {
+            let tcp_rx_buffer = net::socket::TcpSocketBuffer::new(&mut rx_storage[..]);
+            let tcp_tx_buffer = net::socket::TcpSocketBuffer::new(&mut tx_storage[..]);
+            let tcp_socket = net::socket::TcpSocket::new(tcp_rx_buffer, tcp_tx_buffer);
+            sockets.add(tcp_socket)
+        };
+
+        let mut time = 0u32;
+        let mut next_ms = Instant::now();
+
+        // TODO: Replace with reference to CPU clock from CCDR.
+        next_ms += 400_000.cycles();
+
         loop {
-            asm::nop();
+            let tick = Instant::now() > next_ms;
+
+            if tick {
+                next_ms += 400_000.cycles();
+                time += 1;
+            }
+
+            {
+                let mut socket = sockets.get::<net::socket::TcpSocket>(tcp_handle0);
+                if socket.state() == net::socket::TcpState::CloseWait {
+                    socket.close();
+                } else if !(socket.is_open() || socket.is_listening()) {
+                    socket
+                        .listen(1234)
+                        .unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
+                } else if tick && socket.can_send() {
+                    let s = c.resources.iir_state.lock(|iir_state| Status {
+                        t: time,
+                        x0: iir_state[0][0],
+                        y0: iir_state[0][2],
+                        x1: iir_state[1][0],
+                        y1: iir_state[1][2],
+                    });
+                    json_reply(&mut socket, &s);
+                }
+            }
+
+            let sleep = match interface.poll(&mut sockets,
+                                             net::time::Instant::from_millis(time as i64)) {
+                Ok(changed) => changed,
+                Err(net::Error::Unrecognized) => true,
+                Err(e) => {
+                    info!("iface poll error: {:?}", e);
+                    true
+                }
+            };
+
+            if sleep {
+                cortex_m::asm::wfi();
+            }
         }
     }
 
@@ -515,7 +657,6 @@ const APP: () = {
     }
 };
 
-/*
 #[derive(Deserialize, Serialize)]
 struct Request {
     channel: u8,
@@ -543,6 +684,7 @@ fn json_reply<T: Serialize>(socket: &mut net::socket::TcpSocket, msg: &T) {
     socket.write_str(&u).unwrap();
 }
 
+/*
 struct Server {
     data: Vec<u8, U256>,
     discard: bool,
