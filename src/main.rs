@@ -51,16 +51,16 @@ use core::fmt::Write;
 use heapless::{
     consts::*,
     String,
-    //Vec
+    Vec
 };
 
 use serde::{
-    //de::DeserializeOwned,
+    de::DeserializeOwned,
     Deserialize,
     Serialize
 };
 use serde_json_core::{
-    //de::from_slice,
+    de::from_slice,
     ser::to_string
 };
 
@@ -470,10 +470,9 @@ const APP: () = {
         cortex_m::asm::bkpt();
     }
 
-    #[idle(resources=[net_interface, mac_addr, iir_state])]
+    #[idle(resources=[net_interface, mac_addr, iir_state, iir_ch])]
     fn idle(mut c: idle::Context) -> ! {
 
-        let interface = c.resources.net_interface;
         let mut socket_set_entries: [_; 8] = Default::default();
         let mut sockets = net::socket::SocketSet::new(&mut socket_set_entries[..]);
 
@@ -485,6 +484,17 @@ const APP: () = {
             let tcp_socket = net::socket::TcpSocket::new(tcp_rx_buffer, tcp_tx_buffer);
             sockets.add(tcp_socket)
         };
+
+        let mut rx_storage2 = [0; TCP_RX_BUFFER_SIZE];
+        let mut tx_storage2 = [0; TCP_TX_BUFFER_SIZE];
+        let tcp_handle1 = {
+            let tcp_rx_buffer = net::socket::TcpSocketBuffer::new(&mut rx_storage2[..]);
+            let tcp_tx_buffer = net::socket::TcpSocketBuffer::new(&mut tx_storage2[..]);
+            let tcp_socket = net::socket::TcpSocket::new(tcp_rx_buffer, tcp_tx_buffer);
+            sockets.add(tcp_socket)
+        };
+
+        let mut server = Server::new();
 
         let mut time = 0u32;
         let mut next_ms = Instant::now();
@@ -520,7 +530,27 @@ const APP: () = {
                 }
             }
 
-            let sleep = match interface.poll(&mut sockets,
+            {
+                let socket =
+                    &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle1);
+                if socket.state() == net::socket::TcpState::CloseWait {
+                    socket.close();
+                } else if !(socket.is_open() || socket.is_listening()) {
+                    socket
+                        .listen(1235)
+                        .unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
+                } else {
+                    server.poll(socket, |req: &Request| {
+                        if req.channel < 2 {
+                            c.resources.iir_ch.lock(|iir_ch| {
+                                iir_ch[req.channel as usize] = req.iir
+                            });
+                        }
+                    });
+                }
+            }
+
+            let sleep = match c.resources.net_interface.poll(&mut sockets,
                                              net::time::Instant::from_millis(time as i64)) {
                 Ok(changed) => changed,
                 Err(net::Error::Unrecognized) => true,
@@ -535,109 +565,6 @@ const APP: () = {
             }
         }
     }
-
-    /*
-    #[idle(resources = [ethernet, ethernet_periph, iir_state, iir_ch, i2c])]
-    fn idle(c: idle::Context) -> ! {
-        let (MAC, DMA, MTL) = c.resources.ethernet_periph;
-
-        let hardware_addr = match eeprom::read_eui48(c.resources.i2c) {
-            Err(_) => {
-                info!("Could not read EEPROM, using default MAC address");
-                net::wire::EthernetAddress([0x10, 0xE2, 0xD5, 0x00, 0x03, 0x00])
-            }
-            Ok(raw_mac) => net::wire::EthernetAddress(raw_mac),
-        };
-        info!("MAC: {}", hardware_addr);
-
-        unsafe { c.resources.ethernet.init(hardware_addr, MAC, DMA, MTL) };
-        let mut neighbor_cache_storage = [None; 8];
-        let neighbor_cache =
-            net::iface::NeighborCache::new(&mut neighbor_cache_storage[..]);
-        let local_addr = net::wire::IpAddress::v4(10, 0, 16, 99);
-        let mut ip_addrs = [net::wire::IpCidr::new(local_addr, 24)];
-        let mut iface =
-            net::iface::EthernetInterfaceBuilder::new(c.resources.ethernet)
-                .ethernet_addr(hardware_addr)
-                .neighbor_cache(neighbor_cache)
-                .ip_addrs(&mut ip_addrs[..])
-                .finalize();
-        let mut socket_set_entries: [_; 8] = Default::default();
-        let mut sockets =
-            net::socket::SocketSet::new(&mut socket_set_entries[..]);
-        create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle0);
-        create_socket!(sockets, tcp_rx_storage0, tcp_tx_storage0, tcp_handle1);
-
-        // unsafe { eth::enable_interrupt(DMA); }
-        let mut time = 0u32;
-        let mut next_ms = Instant::now();
-        next_ms += 400_000.cycles();
-        let mut server = Server::new();
-        let mut iir_state: resources::iir_state = c.resources.iir_state;
-        let mut iir_ch: resources::iir_ch = c.resources.iir_ch;
-        loop {
-            // if ETHERNET_PENDING.swap(false, Ordering::Relaxed) { }
-            let tick = Instant::now() > next_ms;
-            if tick {
-                next_ms += 400_000.cycles();
-                time += 1;
-            }
-            {
-                let socket =
-                    &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle0);
-                if socket.state() == net::socket::TcpState::CloseWait {
-                    socket.close();
-                } else if !(socket.is_open() || socket.is_listening()) {
-                    socket
-                        .listen(1234)
-                        .unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
-                } else if tick && socket.can_send() {
-                    let s = iir_state.lock(|iir_state| Status {
-                        t: time,
-                        x0: iir_state[0][0],
-                        y0: iir_state[0][2],
-                        x1: iir_state[1][0],
-                        y1: iir_state[1][2],
-                    });
-                    json_reply(socket, &s);
-                }
-            }
-            {
-                let socket =
-                    &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle1);
-                if socket.state() == net::socket::TcpState::CloseWait {
-                    socket.close();
-                } else if !(socket.is_open() || socket.is_listening()) {
-                    socket
-                        .listen(1235)
-                        .unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
-                } else {
-                    server.poll(socket, |req: &Request| {
-                        if req.channel < 2 {
-                            iir_ch.lock(|iir_ch| {
-                                iir_ch[req.channel as usize] = req.iir
-                            });
-                        }
-                    });
-                }
-            }
-
-            if !match iface.poll(
-                &mut sockets,
-                net::time::Instant::from_millis(time as i64),
-            ) {
-                Ok(changed) => changed,
-                Err(net::Error::Unrecognized) => true,
-                Err(e) => {
-                    info!("iface poll error: {:?}", e);
-                    true
-                }
-            } {
-                // cortex_m::asm::wfi();
-            }
-        }
-    }
-    */
 
     /*
     #[task(binds = ETH, resources = [ethernet_periph], priority = 1)]
@@ -684,7 +611,6 @@ fn json_reply<T: Serialize>(socket: &mut net::socket::TcpSocket, msg: &T) {
     socket.write_str(&u).unwrap();
 }
 
-/*
 struct Server {
     data: Vec<u8, U256>,
     discard: bool,
@@ -767,7 +693,6 @@ impl Server {
         None
     }
 }
-*/
 
 #[exception]
 fn HardFault(ef: &cortex_m_rt::ExceptionFrame) -> ! {

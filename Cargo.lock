@@ -379,7 +379,7 @@ dependencies = [
  "serde 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde-json-core 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "smoltcp 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "stm32h7-ethernet 0.1.1",
+ "stm32h7-ethernet 0.1.1 (git+https://github.com/quartiq/stm32h7-ethernet.git?branch=feature/device-dependency)",
  "stm32h7xx-hal 0.4.0 (git+https://github.com/quartiq/stm32h7xx-hal.git?branch=feature/quad-spi)",
 ]
 
@@ -402,6 +402,7 @@ dependencies = [
 [[package]]
 name = "stm32h7-ethernet"
 version = "0.1.1"
+source = "git+https://github.com/quartiq/stm32h7-ethernet.git?branch=feature/device-dependency#acb5bbb23d278e614f5ea4a3cd8a28f19540fc2c"
 dependencies = [
  "cortex-m 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -525,6 +526,7 @@ dependencies = [
 "checksum smoltcp 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0fe46639fd2ec79eadf8fe719f237a7a0bd4dac5d957f1ca5bbdbc1c3c39e53a"
 "checksum stable_deref_trait 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "dba1a27d3efae4351c8051072d619e3ade2820635c3958d826bfea39d59b54c8"
 "checksum stm32h7 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e5b0045066e082648e8a7ab1dd45c92efa8d7bec2beedf72ac7b62563911f82a"
+"checksum stm32h7-ethernet 0.1.1 (git+https://github.com/quartiq/stm32h7-ethernet.git?branch=feature/device-dependency)" = "<none>"
 "checksum stm32h7xx-hal 0.4.0 (git+https://github.com/quartiq/stm32h7xx-hal.git?branch=feature/quad-spi)" = "<none>"
 "checksum stm32h7xx-hal 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "689aff61a1cf43e03cf821c5540bb540e6bd04b374e486be23b035c0afc3c15f"
 "checksum syn 1.0.17 (registry+https://github.com/rust-lang/crates.io-index)" = "0df0eb663f387145cab623dea85b09c2c5b4b0aef44e945d928e682fce71bb03"
