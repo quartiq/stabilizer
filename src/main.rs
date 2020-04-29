@@ -53,6 +53,7 @@ static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 mod eth;
 mod pounder;
 mod server;
+mod afe;
 
 mod iir;
 use iir::*;
@@ -102,14 +103,24 @@ const SCALE: f32 = ((1 << 15) - 1) as f32;
 const TCP_RX_BUFFER_SIZE: usize = 8192;
 const TCP_TX_BUFFER_SIZE: usize = 8192;
 
+type AFE1 = afe::ProgrammableGainAmplifier<
+    hal::gpio::gpiof::PF2<hal::gpio::Output<hal::gpio::PushPull>>,
+    hal::gpio::gpiof::PF5<hal::gpio::Output<hal::gpio::PushPull>>>;
+
+type AFE2 = afe::ProgrammableGainAmplifier<
+    hal::gpio::gpiod::PD14<hal::gpio::Output<hal::gpio::PushPull>>,
+    hal::gpio::gpiod::PD15<hal::gpio::Output<hal::gpio::PushPull>>>;
+
 #[rtfm::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtfm::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
         adc1: hal::spi::Spi<hal::stm32::SPI2>,
         dac1: hal::spi::Spi<hal::stm32::SPI4>,
+        _afe1: AFE1,
 
         adc2: hal::spi::Spi<hal::stm32::SPI3>,
         dac2: hal::spi::Spi<hal::stm32::SPI5>,
+        _afe2: AFE2,
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
@@ -162,6 +173,18 @@ const APP: () = {
         let gpioe = dp.GPIOE.split(&mut clocks.ahb4);
         let gpiof = dp.GPIOF.split(&mut clocks.ahb4);
         let gpiog = dp.GPIOG.split(&mut clocks.ahb4);
+
+        let afe1 = {
+            let a0_pin = gpiof.pf2.into_push_pull_output();
+            let a1_pin = gpiof.pf5.into_push_pull_output();
+            afe::ProgrammableGainAmplifier::new(a0_pin, a1_pin)
+        };
+
+        let afe2 = {
+            let a0_pin = gpiod.pd14.into_push_pull_output();
+            let a1_pin = gpiod.pd15.into_push_pull_output();
+            afe::ProgrammableGainAmplifier::new(a0_pin, a1_pin)
+        };
 
         // Configure the SPI interfaces to the ADCs and DACs.
         let adc1_spi = {
@@ -398,6 +421,8 @@ const APP: () = {
             dac1: dac1_spi,
             adc2: adc2_spi,
             dac2: dac2_spi,
+            _afe1: afe1,
+            _afe2: afe2,
 
             dbg_pin: debug_pin,
             dac_pin: dac_pin,
