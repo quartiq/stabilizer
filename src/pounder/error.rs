@@ -6,4 +6,6 @@ pub enum Error {
     Qspi,
     Bounds,
     InvalidAddress,
+    InvalidChannel,
+    Adc,
 }

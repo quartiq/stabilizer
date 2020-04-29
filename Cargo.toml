@@ -58,7 +58,7 @@ branch = "feature/device-dependency"
 [dependencies.stm32h7xx-hal]
 git = "https://github.com/quartiq/stm32h7xx-hal.git"
 branch = "feature/quad-spi"
-features = ["stm32h743v", "rt"]
+features = ["stm32h743v", "rt", "unproven"]
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]

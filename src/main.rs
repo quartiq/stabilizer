@@ -166,6 +166,8 @@ const APP: () = {
 
         clocks.rb.d2ccip1r.modify(|_, w| w.spi123sel().pll2_p().spi45sel().pll2_q());
 
+        let mut delay = hal::delay::Delay::new(cp.SYST, clocks.clocks);
+
         let gpioa = dp.GPIOA.split(&mut clocks.ahb4);
         let gpiob = dp.GPIOB.split(&mut clocks.ahb4);
         let gpioc = dp.GPIOC.split(&mut clocks.ahb4);
@@ -291,7 +293,7 @@ const APP: () = {
                 let io_update = gpiog.pg7.into_push_pull_output();
 
 
-                let delay = {
+                let asm_delay = {
                     let frequency_hz = clocks.clocks.c_ck().0;
                     asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz (frequency_hz))
                 };
@@ -299,7 +301,7 @@ const APP: () = {
                 ad9959::Ad9959::new(qspi_interface,
                                     &mut reset_pin,
                                     io_update,
-                                    delay,
+                                    asm_delay,
                                     ad9959::Mode::FourBitSerial,
                                     100_000_000).unwrap()
             };
@@ -325,7 +327,30 @@ const APP: () = {
                 dp.SPI1.spi((spi_sck, spi_miso, spi_mosi), config, 25.mhz(), &clocks)
             };
 
-            pounder::PounderDevices::new(io_expander, ad9959, spi).unwrap()
+            let adc1 = {
+                let mut adc = dp.ADC1.adc(&mut delay, &mut clocks);
+                adc.calibrate();
+
+                adc.enable()
+            };
+
+            let adc2 = {
+                let mut adc = dp.ADC2.adc(&mut delay, &mut clocks);
+                adc.calibrate();
+
+                adc.enable()
+            };
+
+            let adc1_in_p = gpiof.pf11.into_analog();
+            let adc2_in_p = gpiof.pf14.into_analog();
+
+            pounder::PounderDevices::new(io_expander,
+                                         ad9959,
+                                         spi,
+                                         adc1,
+                                         adc2,
+                                         adc1_in_p,
+                                         adc2_in_p).unwrap()
         };
 
         let mut fp_led_0 = gpiod.pd5.into_push_pull_output();

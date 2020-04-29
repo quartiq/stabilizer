@@ -1,16 +1,8 @@
 use super::error::Error;
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy)]
-pub enum Channel {
-    One = 0,
-    Two = 1,
-    Three = 2,
-    Four = 3,
-}
+use super::DdsChannel;
 
 pub trait AttenuatorInterface {
-    fn modify(&mut self, attenuation: f32, channel: Channel) -> Result<f32, Error> {
+    fn modify(&mut self, attenuation: f32, channel: DdsChannel) -> Result<f32, Error> {
         if attenuation > 31.5 {
             return Err(Error::Bounds);
         }
@@ -31,7 +23,7 @@ pub trait AttenuatorInterface {
         Ok(attenuation_code as f32 / 2.0)
     }
 
-    fn read(&mut self, channel: Channel) -> Result<f32, Error> {
+    fn read(&mut self, channel: DdsChannel) -> Result<f32, Error> {
         let mut channels = [0_u8; 4];
 
         // Reading the data always shifts data out of the staging registers, so we perform a
@@ -48,7 +40,7 @@ pub trait AttenuatorInterface {
 
     fn reset(&mut self) -> Result<(), Error>;
 
-    fn latch(&mut self, channel: Channel) -> Result<(), Error>;
+    fn latch(&mut self, channel: DdsChannel) -> Result<(), Error>;
     fn read_all(&mut self, channels: &mut [u8; 4]) -> Result<(), Error>;
     fn write_all(&mut self, channels: &[u8; 4]) -> Result<(), Error>;
 }

@@ -3,13 +3,20 @@ use ad9959;
 
 pub mod error;
 pub mod attenuators;
+mod rf_power;
+pub mod types;
 
 use super::hal;
 
 use error::Error;
-use attenuators::{AttenuatorInterface, Channel};
+use attenuators::AttenuatorInterface;
+use types::{DdsChannel, InputChannel};
+use rf_power::PowerMeasurementInterface;
 
-use embedded_hal::blocking::spi::Transfer;
+use embedded_hal::{
+    blocking::spi::Transfer,
+    adc::OneShot
+};
 
 #[allow(dead_code)]
 const OSC_EN_N_PIN: u8 = 8 + 7;
@@ -62,7 +69,11 @@ pub struct PounderDevices<DELAY> {
                                DELAY,
                                hal::gpio::gpiog::PG7<hal::gpio::Output<hal::gpio::PushPull>>>,
     mcp23017: mcp23017::MCP23017<hal::i2c::I2c<hal::stm32::I2C1>>,
-    attenuator_spi: hal::spi::Spi<hal::stm32::SPI1>
+    attenuator_spi: hal::spi::Spi<hal::stm32::SPI1>,
+    adc1: hal::adc::Adc<hal::stm32::ADC1, hal::adc::Enabled>,
+    adc2: hal::adc::Adc<hal::stm32::ADC2, hal::adc::Enabled>,
+    adc1_in_p: hal::gpio::gpiof::PF11<hal::gpio::Analog>,
+    adc2_in_p: hal::gpio::gpiof::PF14<hal::gpio::Analog>,
 }
 
 impl<DELAY> PounderDevices<DELAY>
@@ -74,11 +85,20 @@ where
                                       DELAY,
                                       hal::gpio::gpiog::PG7<
                                         hal::gpio::Output<hal::gpio::PushPull>>>,
-               attenuator_spi: hal::spi::Spi<hal::stm32::SPI1>) -> Result<Self, Error> {
+               attenuator_spi: hal::spi::Spi<hal::stm32::SPI1>,
+               adc1: hal::adc::Adc<hal::stm32::ADC1, hal::adc::Enabled>,
+               adc2: hal::adc::Adc<hal::stm32::ADC2, hal::adc::Enabled>,
+               adc1_in_p: hal::gpio::gpiof::PF11<hal::gpio::Analog>,
+               adc2_in_p: hal::gpio::gpiof::PF14<hal::gpio::Analog>,
+               ) -> Result<Self, Error> {
         let mut devices = Self {
             mcp23017,
             ad9959,
-            attenuator_spi
+            attenuator_spi,
+            adc1,
+            adc2,
+            adc1_in_p,
+            adc2_in_p,
         };
 
         // Configure power-on-default state for pounder. All LEDs are on, on-board oscillator
@@ -117,12 +137,12 @@ impl<DELAY> AttenuatorInterface for PounderDevices<DELAY>
         Ok(())
     }
 
-    fn latch(&mut self, channel: Channel) -> Result<(), Error> {
+    fn latch(&mut self, channel: DdsChannel) -> Result<(), Error> {
         let pin = match channel {
-            Channel::One => ATT_LE0_PIN,
-            Channel::Two => ATT_LE1_PIN,
-            Channel::Three => ATT_LE2_PIN,
-            Channel::Four => ATT_LE3_PIN,
+            DdsChannel::Zero => ATT_LE0_PIN,
+            DdsChannel::One => ATT_LE1_PIN,
+            DdsChannel::Two => ATT_LE2_PIN,
+            DdsChannel::Three => ATT_LE3_PIN,
         };
 
         self.mcp23017.digital_write(pin, 1).map_err(|_| Error::I2c)?;
@@ -144,5 +164,23 @@ impl<DELAY> AttenuatorInterface for PounderDevices<DELAY>
         self.attenuator_spi.transfer(&mut result).map_err(|_| Error::Spi)?;
 
         Ok(())
+    }
+}
+
+impl<DELAY> PowerMeasurementInterface for PounderDevices<DELAY> {
+    fn sample_converter(&mut self, channel: InputChannel) -> Result<f32, Error> {
+        let adc_scale = match channel {
+            InputChannel::Zero => {
+                let adc_reading: u32 = self.adc1.read(&mut self.adc1_in_p).map_err(|_| Error::Adc)?;
+                adc_reading as f32 / self.adc1.max_sample() as f32
+            },
+            InputChannel::One => {
+                let adc_reading: u32 = self.adc2.read(&mut self.adc2_in_p).map_err(|_| Error::Adc)?;
+                adc_reading as f32 / self.adc2.max_sample() as f32
+            },
+        };
+
+        // Convert analog percentage to voltage.
+        Ok(adc_scale * 3.3)
     }
 }
