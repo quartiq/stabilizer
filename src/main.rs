@@ -252,7 +252,7 @@ const APP: () = {
                 .frame_size(16)
                 .swap_mosi_miso();
 
-            dp.SPI4.spi((spi_sck, spi_miso, hal::spi::NoMosi), config, 25.mhz(), &clocks)
+            dp.SPI4.spi((spi_sck, spi_miso, hal::spi::NoMosi), config, 50.mhz(), &clocks)
         };
 
         let dac2_spi = {
@@ -269,7 +269,7 @@ const APP: () = {
                 .frame_size(16)
                 .swap_mosi_miso();
 
-            dp.SPI5.spi((spi_sck, spi_miso, hal::spi::NoMosi), config, 25.mhz(), &clocks)
+            dp.SPI5.spi((spi_sck, spi_miso, hal::spi::NoMosi), config, 50.mhz(), &clocks)
         };
 
         let pounder_devices = {
@@ -487,6 +487,7 @@ const APP: () = {
             y0 as i16 as u16 ^ 0x8000
         };
         c.resources.adc1.spi.ifcr.write(|w| w.eotc().set_bit());
+        c.resources.dac1.send(output_ch1).unwrap();
 
         let output_ch2 = {
             let a: u16 = nb::block!(c.resources.adc2.read()).unwrap();
@@ -495,8 +496,6 @@ const APP: () = {
             y0 as i16 as u16 ^ 0x8000
         };
         c.resources.adc2.spi.ifcr.write(|w| w.eotc().set_bit());
-
-        c.resources.dac1.send(output_ch1).unwrap();
         c.resources.dac2.send(output_ch2).unwrap();
 
         c.resources.dac_pin.set_low().unwrap();

@@ -1,6 +1,8 @@
 use embedded_hal;
+use core::convert::TryFrom;
+use enum_iterator::IntoEnumIterator;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, IntoEnumIterator)]
 pub enum Gain {
     G1 = 0b00,
     G2 = 0b01,
@@ -11,6 +13,20 @@ pub enum Gain {
 pub struct ProgrammableGainAmplifier<A0, A1> {
     a0: A0,
     a1: A1
+}
+
+impl TryFrom<u8> for Gain {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        for gain in Gain::into_enum_iter() {
+            if value == gain as u8 {
+                return Ok(gain)
+            }
+        }
+
+        Err(())
+    }
 }
 
 impl<A0, A1> ProgrammableGainAmplifier<A0, A1>
@@ -43,22 +59,15 @@ where
         }
     }
 
-    pub fn get_gain(&self) -> Gain {
-        let lsb_set = self.a0.is_set_high().unwrap();
-        let msb_set = self.a1.is_set_high().unwrap();
-
-        if msb_set {
-            if lsb_set {
-               Gain::G10
-            } else {
-                Gain::G5
-            }
-        } else {
-            if lsb_set {
-                Gain::G2
-            } else {
-                Gain::G1
-            }
+    pub fn get_gain(&self) -> Result<Gain, ()> {
+        let mut code: u8 = 0;
+        if self.a0.is_set_high().unwrap() {
+            code |= 0b1;
         }
+        if self.a1.is_set_high().unwrap() {
+            code |= 0b10;
+        }
+
+        Gain::try_from(code)
     }
 }
