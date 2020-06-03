@@ -1,6 +1,7 @@
 use embedded_hal;
+use serde::{Serialize, Deserialize};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum Gain {
     G1 = 0b00,
     G2 = 0b01,

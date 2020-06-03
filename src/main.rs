@@ -39,6 +39,12 @@ use stm32h7xx_hal::{
     prelude::*,
     stm32 as pac,
 };
+use pounder::Error;
+
+use heapless::{
+    String,
+    consts::*,
+};
 
 use embedded_hal::{
     digital::v2::OutputPin,
@@ -111,12 +117,64 @@ type AFE2 = afe::ProgrammableGainAmplifier<
     hal::gpio::gpiod::PD14<hal::gpio::Output<hal::gpio::PushPull>>,
     hal::gpio::gpiod::PD15<hal::gpio::Output<hal::gpio::PushPull>>>;
 
+macro_rules! route_request {
+    ($request:ident, $buffer:ident,
+            readable_attributes: [$(($read_attribute:tt, $getter:tt)),*],
+            modifiable_attributes: [$(($write_attribute:tt, $TYPE:ty, $setter:tt)),*]) => {
+        match $request {
+            server::Request::Read{attribute} => {
+                match attribute {
+                $(
+                    &$read_attribute => {
+                        let value = match $getter() {
+                            Ok(data) => data,
+                            Err(_) => return server::Response::error(attribute,
+                                                                     "Failed to set attribute"),
+                        };
+
+                        $buffer = match serde_json_core::to_string(&value) {
+                            Ok(data) => data,
+                            Err(_) => return server::Response::error(attribute,
+                                    "Failed to encode attribute value"),
+                        };
+
+                        server::Response::success(attribute, &$buffer)
+                    },
+                 )*
+                    _ => server::Response::error(attribute, "Unknown attribute")
+                }
+            },
+            server::Request::Write{attribute, value} => {
+                match attribute {
+                $(
+                    &$write_attribute => {
+                        let new_value = match serde_json_core::from_str::<$TYPE>(value) {
+                            Ok(data) => data,
+                            Err(_) => return server::Response::error(attribute,
+                                    "Failed to decode value"),
+                        };
+
+                        match $setter(new_value) {
+                            Ok(_) => server::Response::success(attribute, value),
+                            Err(_) => server::Response::error(attribute,
+                                    "Failed to set attribute"),
+                        }
+                    }
+                 )*
+                    _ => server::Response::error(attribute, "Unknown attribute")
+                }
+            }
+        }
+    }
+}
+
+
 #[rtfm::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtfm::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
         adc1: hal::spi::Spi<hal::stm32::SPI2>,
         dac1: hal::spi::Spi<hal::stm32::SPI4>,
-        _afe1: AFE1,
+        afe1: AFE1,
 
         adc2: hal::spi::Spi<hal::stm32::SPI3>,
         dac2: hal::spi::Spi<hal::stm32::SPI5>,
@@ -446,7 +504,7 @@ const APP: () = {
             dac1: dac1_spi,
             adc2: adc2_spi,
             dac2: dac2_spi,
-            _afe1: afe1,
+            afe1: afe1,
             _afe2: afe2,
 
             dbg_pin: debug_pin,
@@ -504,7 +562,7 @@ const APP: () = {
         cortex_m::asm::bkpt();
     }
 
-    #[idle(resources=[net_interface, mac_addr, iir_state, iir_ch])]
+    #[idle(resources=[net_interface, mac_addr, iir_state, iir_ch, afe1])]
     fn idle(mut c: idle::Context) -> ! {
 
         let mut socket_set_entries: [_; 8] = Default::default();
@@ -535,6 +593,8 @@ const APP: () = {
 
         // TODO: Replace with reference to CPU clock from CCDR.
         next_ms += 400_000.cycles();
+
+        let buffer: String<U512> = String::new();
 
         loop {
             let tick = Instant::now() > next_ms;
@@ -574,12 +634,16 @@ const APP: () = {
                         .listen(1235)
                         .unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
                 } else {
-                    server.poll(socket, |req: &server::Request| {
-                        if req.channel < 2 {
-                            c.resources.iir_ch.lock(|iir_ch| {
-                                iir_ch[req.channel as usize] = req.iir
-                            });
-                        }
+                    server.poll(socket, |req| {
+                        info!("Got request: {:?}", req);
+                        route_request!(req, buffer,
+                            readable_attributes: [
+                                ("stabilizer/afe0/gain", (|| Ok::<afe::Gain, ()>(c.resources.afe1.get_gain())))
+                            ],
+                            modifiable_attributes: [
+                                ("stabilizer/afe0/gain", afe::Gain, (|gain| Ok::<(), ()>(c.resources.afe1.set_gain(gain))))
+                            ]
+                        )
                     });
                 }
             }

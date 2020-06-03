@@ -33,7 +33,7 @@ log = "0.4"
 panic-semihosting = { version = "0.5", optional = true }
 panic-halt = "0.2"
 serde = { version = "1.0", features = ["derive"], default-features = false }
-heapless = "0.5"
+heapless = "0.5.4"
 serde-json-core = "0.1"
 cortex-m-rtfm = "0.5"
 embedded-hal = "0.2.3"

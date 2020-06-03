@@ -8,7 +8,6 @@ use core::fmt::Write;
 
 
 use serde::{
-    de::DeserializeOwned,
     Deserialize,
     Serialize
 };
@@ -19,18 +18,43 @@ use serde_json_core::{
 };
 
 use super::net;
-use super::iir::IIR;
 
-#[derive(Deserialize, Serialize)]
-pub struct Request {
-    pub channel: u8,
-    pub iir: IIR,
+#[derive(Deserialize, Serialize, Debug)]
+pub enum Request<'a, 'b> {
+    Read{attribute: &'a str},
+    Write{attribute: &'a str, value: &'b str},
 }
 
 #[derive(Serialize)]
-pub struct Response<'a> {
+pub struct Response<'a, 'b> {
     code: i32,
-    message: &'a str,
+    attribute: &'a str,
+    value: &'b str,
+}
+
+impl<'a, 'b> Response<'a, 'b> {
+    pub fn success<'c, 'd>(attribute: &'c str, value: &'d str) -> Self
+    where
+        'c: 'a,
+        'd: 'b,
+    {
+        Self { code: 200, attribute: attribute, value: value}
+    }
+
+    pub fn error<'c, 'd>(attribute: &'c str, message: &'d str) -> Self
+    where
+        'c: 'a,
+        'd: 'b,
+    {
+        Self { code: 400, attribute: attribute, value: message}
+    }
+
+    pub fn custom<'c>(code: i32, message : &'c str) -> Self
+    where
+        'c: 'b,
+    {
+        Self { code: code, attribute: "", value: message}
+    }
 }
 
 #[derive(Serialize)]
@@ -61,73 +85,54 @@ impl Server {
         }
     }
 
-    pub fn poll<T, F, R>(
+    pub fn poll<'a, 'b, F>(
         &mut self,
         socket: &mut net::socket::TcpSocket,
         f: F,
-    ) -> Option<R>
+    )
     where
-        T: DeserializeOwned,
-        F: FnOnce(&T) -> R,
+        F: FnOnce(&Request) -> Response<'a, 'b>
     {
         while socket.can_recv() {
-            let found = socket
-                .recv(|buf| {
-                    let (len, found) =
-                        match buf.iter().position(|&c| c as char == '\n') {
-                            Some(end) => (end + 1, true),
-                            None => (buf.len(), false),
-                        };
-                    if self.data.len() + len >= self.data.capacity() {
-                        self.discard = true;
-                        self.data.clear();
-                    } else if !self.discard && len > 0 {
-                        self.data.extend_from_slice(&buf[..len]).unwrap();
-                    }
-                    (len, found)
-                })
-                .unwrap();
+            let found = socket.recv(|buf| {
+                let (len, found) =
+                    match buf.iter().position(|&c| c as char == '\n') {
+                        Some(end) => (end + 1, true),
+                        None => (buf.len(), false),
+                    };
+                if self.data.len() + len >= self.data.capacity() {
+                    self.discard = true;
+                    self.data.clear();
+                } else if !self.discard && len > 0 {
+                    self.data.extend_from_slice(&buf[..len]).unwrap();
+                }
+                (len, found)
+            }).unwrap();
+
             if found {
                 if self.discard {
                     self.discard = false;
-                    json_reply(
-                        socket,
-                        &Response {
-                            code: 520,
-                            message: "command buffer overflow",
-                        },
+                    json_reply(socket, &Response::custom(520, "command buffer overflow"),
                     );
                     self.data.clear();
                 } else {
-                    let r = from_slice::<T>(&self.data[..self.data.len() - 1]);
+                    let r = from_slice::<Request>(&self.data[..self.data.len() - 1]);
                     self.data.clear();
                     match r {
                         Ok(res) => {
-                            let r = f(&res);
-                            json_reply(
-                                socket,
-                                &Response {
-                                    code: 200,
-                                    message: "ok",
-                                },
-                            );
-                            return Some(r);
-                        }
+                            let response = f(&res);
+                            json_reply(socket, &response);
+                            return;
+                        },
                         Err(err) => {
                             warn!("parse error {:?}", err);
-                            json_reply(
-                                socket,
-                                &Response {
-                                    code: 550,
-                                    message: "parse error",
-                                },
+                            json_reply(socket, &Response::custom(550, "parse error"),
                             );
                         }
                     }
                 }
             }
         }
-        None
     }
 }
 

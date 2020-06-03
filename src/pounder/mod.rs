@@ -1,14 +1,14 @@
 use mcp23017;
 use ad9959;
 
-pub mod error;
+mod error;
 pub mod attenuators;
 mod rf_power;
 pub mod types;
 
 use super::hal;
 
-use error::Error;
+pub use error::Error;
 use attenuators::AttenuatorInterface;
 use types::{DdsChannel, InputChannel};
 use rf_power::PowerMeasurementInterface;
