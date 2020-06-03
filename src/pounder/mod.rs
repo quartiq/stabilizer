@@ -32,20 +32,23 @@ const ATT_LE3_PIN: u8 = 8 + 3;
 
 pub struct QspiInterface {
     pub qspi: hal::qspi::Qspi,
+    mode: ad9959::Mode,
+}
+
+impl QspiInterface {
+    pub fn new(mut qspi: hal::qspi::Qspi) -> Result<Self, Error> {
+        qspi.configure_mode(hal::qspi::QspiMode::FourBit).map_err(|_| Error::Qspi)?;
+        Ok(Self { qspi: qspi, mode: ad9959::Mode::SingleBitTwoWire })
+    }
 }
 
 impl ad9959::Interface for QspiInterface {
     type Error = Error;
 
     fn configure_mode(&mut self, mode: ad9959::Mode) -> Result<(), Error> {
-        let result = match mode {
-            ad9959::Mode::SingleBitTwoWire | ad9959::Mode::SingleBitThreeWire =>
-                self.qspi.configure_mode(hal::qspi::QspiMode::OneBit),
-            ad9959::Mode::TwoBitSerial => self.qspi.configure_mode(hal::qspi::QspiMode::TwoBit),
-            ad9959::Mode::FourBitSerial => self.qspi.configure_mode(hal::qspi::QspiMode::FourBit),
-        };
+        self.mode = mode;
 
-        result.map_err(|_| Error::Qspi)
+        Ok(())
     }
 
     fn write(&mut self, addr: u8, data: &[u8]) -> Result<(), Error> {
@@ -53,13 +56,85 @@ impl ad9959::Interface for QspiInterface {
             return Err(Error::InvalidAddress);
         }
 
-        self.qspi.write(addr, &data).map_err(|_| Error::Qspi)
+        // The QSPI interface implementation always operates in 4-bit mode because the AD9959 uses
+        // IO3 as SYNC_IO in some output modes. In order for writes to be successful, SYNC_IO must
+        // be driven low. However, the QSPI peripheral forces IO3 high when operating in 1 or 2 bit
+        // modes. As a result, any writes while in single- or dual-bit modes has to instead write
+        // the data encoded into 4-bit QSPI data so that IO3 can be driven low.
+        match self.mode {
+            ad9959::Mode::SingleBitTwoWire => {
+                // Encode the data into a 4-bit QSPI pattern.
+
+                // In 4-bit mode, we can send 2 bits of address and data per byte transfer. As
+                // such, we need at least 4x more bytes than the length of data. To avoid dynamic
+                // allocation, we assume the maximum transaction length for single-bit-two-wire is
+                // 2 bytes.
+                let mut encoded_data: [u8; 12] = [0; 12];
+
+                if (data.len() * 4) > (encoded_data.len() - 4) {
+                    return Err(Error::Bounds);
+                }
+
+                // Encode the address into the first 4 bytes.
+                for address_bit in 0..8 {
+                    let offset: u8 = {
+                        if address_bit % 2 == 0 {
+                            4
+                        } else {
+                            0
+                        }
+                    };
+
+                    if addr & address_bit != 0 {
+                        encoded_data[(address_bit >> 1) as usize] |= 1 << offset;
+                    }
+                }
+
+                // Encode the data into the remaining bytes.
+                for byte_index in 0..data.len() {
+                    let byte = data[byte_index];
+                    for address_bit in 0..8 {
+                        let offset: u8 = {
+                            if address_bit % 2 == 0 {
+                                4
+                            } else {
+                                0
+                            }
+                        };
+
+                        if byte & address_bit != 0 {
+                            encoded_data[(byte_index + 1) * 4 + (address_bit >> 1) as usize] |= 1 << offset;
+                        }
+                    }
+                }
+
+                let (encoded_address, encoded_payload) = {
+                    let end_index = (1 + data.len()) * 4;
+                    (encoded_data[0], &encoded_data[1..end_index])
+                };
+
+                self.qspi.write(encoded_address, &encoded_payload).map_err(|_| Error::Qspi)
+            },
+            ad9959::Mode::FourBitSerial => {
+                self.qspi.write(addr, &data).map_err(|_| Error::Qspi)
+            },
+            _ => {
+                Err(Error::Qspi)
+            }
+        }
     }
 
     fn read(&mut self, addr: u8, mut dest: &mut [u8]) -> Result<(), Error> {
         if (addr & 0x80) != 0 {
             return Err(Error::InvalidAddress);
         }
+
+        // It is not possible to read data from the AD9959 in single bit two wire mode because the
+        // QSPI interface assumes that data is always received on IO1.
+        if self.mode == ad9959::Mode::SingleBitTwoWire {
+            return Err(Error::Qspi);
+        }
+
         self.qspi.read(0x80_u8 | addr, &mut dest).map_err(|_| Error::Qspi)
     }
 }

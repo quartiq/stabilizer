@@ -286,7 +286,7 @@ const APP: () = {
                     let _qspi_io3 = gpioe.pe10.into_alternate_af10();
 
                     let qspi = hal::qspi::Qspi::new(dp.QUADSPI, &mut clocks, 10.mhz()).unwrap();
-                    pounder::QspiInterface {qspi}
+                    pounder::QspiInterface::new(qspi).unwrap()
                 };
 
                 let mut reset_pin = gpioa.pa0.into_push_pull_output();

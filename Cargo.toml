@@ -55,11 +55,11 @@ branch = "feature/basic-driver"
 [dependencies.stm32h7-ethernet]
 git = "https://github.com/quartiq/stm32h7-ethernet.git"
 features = ["stm32h743v"]
-branch = "feature/device-dependency"
 
 [dependencies.stm32h7xx-hal]
-git = "https://github.com/quartiq/stm32h7xx-hal.git"
-branch = "feature/quad-spi"
+#git = "https://github.com/quartiq/stm32h7xx-hal.git"
+#branch = "feature/quad-spi"
+path = "../stm32h7xx-hal/"
 features = ["stm32h743v", "rt", "unproven"]
 
 [features]
