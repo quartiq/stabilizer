@@ -103,8 +103,9 @@ where
 
         // Configure power-on-default state for pounder. All LEDs are on, on-board oscillator
         // selected, attenuators out of reset.
-        devices.mcp23017.write_gpioa(0xF).map_err(|_| Error::I2c)?;
-        devices.mcp23017.write_gpiob(1_u8.wrapping_shl(5)).map_err(|_| Error::I2c)?;
+        devices.mcp23017.write_gpio(mcp23017::Port::GPIOA, 0xF).map_err(|_| Error::I2c)?;
+        devices.mcp23017.write_gpio(mcp23017::Port::GPIOB,
+                                    1_u8.wrapping_shl(5)).map_err(|_| Error::I2c)?;
         devices.mcp23017.all_pin_mode(mcp23017::PinMode::OUTPUT).map_err(|_| Error::I2c)?;
 
         devices.select_onboard_clock()?;
@@ -113,14 +114,14 @@ where
     }
 
     pub fn select_external_clock(&mut self, frequency: u32) -> Result<(), Error>{
-        self.mcp23017.digital_write(EXT_CLK_SEL_PIN, 1).map_err(|_| Error::I2c)?;
+        self.mcp23017.digital_write(EXT_CLK_SEL_PIN, true).map_err(|_| Error::I2c)?;
         self.ad9959.set_clock_frequency(frequency).map_err(|_| Error::DDS)?;
 
         Ok(())
     }
 
     pub fn select_onboard_clock(&mut self) -> Result<(), Error> {
-        self.mcp23017.digital_write(EXT_CLK_SEL_PIN, 0).map_err(|_| Error::I2c)?;
+        self.mcp23017.digital_write(EXT_CLK_SEL_PIN, false).map_err(|_| Error::I2c)?;
         self.ad9959.set_clock_frequency(100_000_000).map_err(|_| Error::DDS)?;
 
         Ok(())
@@ -130,24 +131,26 @@ where
 impl<DELAY> AttenuatorInterface for PounderDevices<DELAY>
 {
     fn reset(&mut self) -> Result<(), Error> {
-        self.mcp23017.digital_write(ATT_RST_N_PIN, 1).map_err(|_| Error::I2c)?;
-        // TODO: Delay here.
-        self.mcp23017.digital_write(ATT_RST_N_PIN, 0).map_err(|_| Error::I2c)?;
+        self.mcp23017.digital_write(ATT_RST_N_PIN, true).map_err(|_| Error::I2c)?;
+        // TODO: Measure the I2C transaction speed to the RST pin to ensure that the delay is
+        // sufficient. Document the delay here.
+        self.mcp23017.digital_write(ATT_RST_N_PIN, false).map_err(|_| Error::I2c)?;
 
         Ok(())
     }
 
     fn latch(&mut self, channel: DdsChannel) -> Result<(), Error> {
         let pin = match channel {
-            DdsChannel::Zero => ATT_LE0_PIN,
-            DdsChannel::One => ATT_LE1_PIN,
-            DdsChannel::Two => ATT_LE2_PIN,
-            DdsChannel::Three => ATT_LE3_PIN,
+            DdsChannel::Zero => ATT_LE1_PIN,
+            DdsChannel::One => ATT_LE0_PIN,
+            DdsChannel::Two => ATT_LE3_PIN,
+            DdsChannel::Three => ATT_LE2_PIN,
         };
 
-        self.mcp23017.digital_write(pin, 1).map_err(|_| Error::I2c)?;
-        // TODO: Delay here.
-        self.mcp23017.digital_write(pin, 0).map_err(|_| Error::I2c)?;
+        self.mcp23017.digital_write(pin, true).map_err(|_| Error::I2c)?;
+        // TODO: Measure the I2C transaction speed to the RST pin to ensure that the delay is
+        // sufficient. Document the delay here.
+        self.mcp23017.digital_write(pin, false).map_err(|_| Error::I2c)?;
 
         Ok(())
     }

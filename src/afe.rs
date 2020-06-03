@@ -30,23 +30,16 @@ where
     }
 
     pub fn set_gain(&mut self, gain: Gain) {
-        match gain {
-            Gain::G1 => {
-                self.a0.set_low().unwrap();
-                self.a1.set_low().unwrap();
-            },
-            Gain::G2 => {
-                self.a0.set_high().unwrap();
-                self.a1.set_low().unwrap();
-            },
-            Gain::G5 => {
-                self.a0.set_low().unwrap();
-                self.a1.set_high().unwrap();
-            },
-            Gain::G10 => {
-                self.a0.set_high().unwrap();
-                self.a1.set_high().unwrap();
-            },
+        if (gain as u8 & 0b01) != 0 {
+            self.a0.set_high().unwrap();
+        } else {
+            self.a0.set_low().unwrap();
+        }
+
+        if (gain as u8 & 0b10) != 0 {
+            self.a1.set_high().unwrap()
+        } else {
+            self.a1.set_low().unwrap();
         }
     }
 
