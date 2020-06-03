@@ -18,11 +18,18 @@ use serde_json_core::{
 };
 
 use super::net;
+use super::iir;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub enum Request<'a, 'b> {
     Read{attribute: &'a str},
     Write{attribute: &'a str, value: &'b str},
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct IirRequest {
+    pub channel: u8,
+    pub iir: iir::IIR,
 }
 
 #[derive(Serialize)]

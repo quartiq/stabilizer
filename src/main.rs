@@ -627,6 +627,28 @@ const APP: () = {
                             ],
 
                             modifiable_attributes: [
+                                ("stabilizer/iir0/state", server::IirRequest, (|req: server::IirRequest| {
+                                    c.resources.iir_ch.lock(|iir_ch| {
+                                        if req.channel > 1 {
+                                            return Err(());
+                                        }
+
+                                        iir_ch[req.channel as usize] = req.iir;
+
+                                        Ok::<server::IirRequest, ()>(req)
+                                    })
+                                })),
+                                ("stabilizer/iir1/state", server::IirRequest, (|req: server::IirRequest| {
+                                    c.resources.iir_ch.lock(|iir_ch| {
+                                        if req.channel > 1 {
+                                            return Err(());
+                                        }
+
+                                        iir_ch[req.channel as usize] = req.iir;
+
+                                        Ok::<server::IirRequest, ()>(req)
+                                    })
+                                })),
                                 ("stabilizer/afe0/gain", afe::Gain, (|gain| {
                                     Ok::<(), ()>(c.resources.afe0.set_gain(gain))
                                 })),
