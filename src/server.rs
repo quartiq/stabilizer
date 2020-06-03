@@ -26,34 +26,26 @@ pub enum Request<'a, 'b> {
 }
 
 #[derive(Serialize)]
-pub struct Response<'a, 'b> {
+pub struct Response {
     code: i32,
-    attribute: &'a str,
-    value: &'b str,
+    attribute: String<U128>,
+    value: String<U128>,
 }
 
-impl<'a, 'b> Response<'a, 'b> {
-    pub fn success<'c, 'd>(attribute: &'c str, value: &'d str) -> Self
-    where
-        'c: 'a,
-        'd: 'b,
+impl Response {
+    pub fn success<'a, 'b>(attribute: &'a str, value: &'b str) -> Self
     {
-        Self { code: 200, attribute: attribute, value: value}
+        Self { code: 200, attribute: String::from(attribute), value: String::from(value)}
     }
 
-    pub fn error<'c, 'd>(attribute: &'c str, message: &'d str) -> Self
-    where
-        'c: 'a,
-        'd: 'b,
+    pub fn error<'a, 'b>(attribute: &'a str, message: &'b str) -> Self
     {
-        Self { code: 400, attribute: attribute, value: message}
+        Self { code: 400, attribute: String::from(attribute), value: String::from(message)}
     }
 
-    pub fn custom<'c>(code: i32, message : &'c str) -> Self
-    where
-        'c: 'b,
+    pub fn custom<'a>(code: i32, message : &'a str) -> Self
     {
-        Self { code: code, attribute: "", value: message}
+        Self { code: code, attribute: String::from(""), value: String::from(message)}
     }
 }
 
@@ -85,13 +77,13 @@ impl Server {
         }
     }
 
-    pub fn poll<'a, 'b, F>(
+    pub fn poll<F>(
         &mut self,
         socket: &mut net::socket::TcpSocket,
-        f: F,
+        mut f: F,
     )
     where
-        F: FnOnce(&Request) -> Response<'a, 'b>
+        F: FnMut(&Request) -> Response
     {
         while socket.can_recv() {
             let found = socket.recv(|buf| {
@@ -112,25 +104,21 @@ impl Server {
             if found {
                 if self.discard {
                     self.discard = false;
-                    json_reply(socket, &Response::custom(520, "command buffer overflow"),
-                    );
-                    self.data.clear();
+                    json_reply(socket, &Response::custom(520, "command buffer overflow"));
                 } else {
                     let r = from_slice::<Request>(&self.data[..self.data.len() - 1]);
-                    self.data.clear();
                     match r {
                         Ok(res) => {
                             let response = f(&res);
                             json_reply(socket, &response);
-                            return;
                         },
                         Err(err) => {
                             warn!("parse error {:?}", err);
-                            json_reply(socket, &Response::custom(550, "parse error"),
-                            );
+                            json_reply(socket, &Response::custom(550, "parse error"));
                         }
                     }
                 }
+                self.data.clear();
             }
         }
     }

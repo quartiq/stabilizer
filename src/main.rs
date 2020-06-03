@@ -39,7 +39,6 @@ use stm32h7xx_hal::{
     prelude::*,
     stm32 as pac,
 };
-use pounder::Error;
 
 use heapless::{
     String,
@@ -109,16 +108,16 @@ const SCALE: f32 = ((1 << 15) - 1) as f32;
 const TCP_RX_BUFFER_SIZE: usize = 8192;
 const TCP_TX_BUFFER_SIZE: usize = 8192;
 
-type AFE1 = afe::ProgrammableGainAmplifier<
+type AFE0 = afe::ProgrammableGainAmplifier<
     hal::gpio::gpiof::PF2<hal::gpio::Output<hal::gpio::PushPull>>,
     hal::gpio::gpiof::PF5<hal::gpio::Output<hal::gpio::PushPull>>>;
 
-type AFE2 = afe::ProgrammableGainAmplifier<
+type AFE1 = afe::ProgrammableGainAmplifier<
     hal::gpio::gpiod::PD14<hal::gpio::Output<hal::gpio::PushPull>>,
     hal::gpio::gpiod::PD15<hal::gpio::Output<hal::gpio::PushPull>>>;
 
 macro_rules! route_request {
-    ($request:ident, $buffer:ident,
+    ($request:ident,
             readable_attributes: [$(($read_attribute:tt, $getter:tt)),*],
             modifiable_attributes: [$(($write_attribute:tt, $TYPE:ty, $setter:tt)),*]) => {
         match $request {
@@ -132,13 +131,13 @@ macro_rules! route_request {
                                                                      "Failed to set attribute"),
                         };
 
-                        $buffer = match serde_json_core::to_string(&value) {
+                        let encoded_data: String<U128> = match serde_json_core::to_string(&value) {
                             Ok(data) => data,
                             Err(_) => return server::Response::error(attribute,
                                     "Failed to encode attribute value"),
                         };
 
-                        server::Response::success(attribute, &$buffer)
+                        server::Response::success(attribute, &encoded_data)
                     },
                  )*
                     _ => server::Response::error(attribute, "Unknown attribute")
@@ -172,13 +171,13 @@ macro_rules! route_request {
 #[rtfm::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtfm::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
-        adc1: hal::spi::Spi<hal::stm32::SPI2>,
-        dac1: hal::spi::Spi<hal::stm32::SPI4>,
-        afe1: AFE1,
+        adc0: hal::spi::Spi<hal::stm32::SPI2>,
+        dac0: hal::spi::Spi<hal::stm32::SPI4>,
+        afe0: AFE0,
 
-        adc2: hal::spi::Spi<hal::stm32::SPI3>,
-        dac2: hal::spi::Spi<hal::stm32::SPI5>,
-        _afe2: AFE2,
+        adc1: hal::spi::Spi<hal::stm32::SPI3>,
+        dac1: hal::spi::Spi<hal::stm32::SPI5>,
+        afe1: AFE1,
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
@@ -234,20 +233,20 @@ const APP: () = {
         let gpiof = dp.GPIOF.split(&mut clocks.ahb4);
         let gpiog = dp.GPIOG.split(&mut clocks.ahb4);
 
-        let afe1 = {
+        let afe0 = {
             let a0_pin = gpiof.pf2.into_push_pull_output();
             let a1_pin = gpiof.pf5.into_push_pull_output();
             afe::ProgrammableGainAmplifier::new(a0_pin, a1_pin)
         };
 
-        let afe2 = {
+        let afe1 = {
             let a0_pin = gpiod.pd14.into_push_pull_output();
             let a1_pin = gpiod.pd15.into_push_pull_output();
             afe::ProgrammableGainAmplifier::new(a0_pin, a1_pin)
         };
 
         // Configure the SPI interfaces to the ADCs and DACs.
-        let adc1_spi = {
+        let adc0_spi = {
             let spi_miso = gpiob.pb14.into_alternate_af5().set_speed(hal::gpio::Speed::VeryHigh);
             let spi_sck = gpiob.pb10.into_alternate_af5().set_speed(hal::gpio::Speed::VeryHigh);
             let _spi_nss = gpiob.pb9.into_alternate_af5();
@@ -272,7 +271,7 @@ const APP: () = {
             spi
         };
 
-        let adc2_spi = {
+        let adc1_spi = {
             let spi_miso = gpiob.pb4.into_alternate_af6().set_speed(hal::gpio::Speed::VeryHigh);
             let spi_sck = gpioc.pc10.into_alternate_af6().set_speed(hal::gpio::Speed::VeryHigh);
             let _spi_nss = gpioa.pa15.into_alternate_af6();
@@ -296,7 +295,7 @@ const APP: () = {
             spi
         };
 
-        let dac1_spi = {
+        let dac0_spi = {
             let spi_miso = gpioe.pe5.into_alternate_af5();
             let spi_sck = gpioe.pe2.into_alternate_af5();
             let _spi_nss = gpioe.pe4.into_alternate_af5();
@@ -313,7 +312,7 @@ const APP: () = {
             dp.SPI4.spi((spi_sck, spi_miso, hal::spi::NoMosi), config, 25.mhz(), &clocks)
         };
 
-        let dac2_spi = {
+        let dac1_spi = {
             let spi_miso = gpiof.pf8.into_alternate_af5();
             let spi_sck = gpiof.pf7.into_alternate_af5();
             let _spi_nss = gpiof.pf6.into_alternate_af5();
@@ -500,12 +499,12 @@ const APP: () = {
         timer2.listen(hal::timer::Event::TimeOut);
 
         init::LateResources {
+            adc0: adc0_spi,
+            dac0: dac0_spi,
             adc1: adc1_spi,
             dac1: dac1_spi,
-            adc2: adc2_spi,
-            dac2: dac2_spi,
+            afe0: afe0,
             afe1: afe1,
-            _afe2: afe2,
 
             dbg_pin: debug_pin,
             dac_pin: dac_pin,
@@ -519,19 +518,19 @@ const APP: () = {
         }
     }
 
-    #[task(binds = TIM2, resources = [dbg_pin, timer, adc1, adc2])]
+    #[task(binds = TIM2, resources = [dbg_pin, timer, adc0, adc1])]
     fn tim2(mut c: tim2::Context) {
         c.resources.timer.clear_uif_bit();
         c.resources.dbg_pin.set_high().unwrap();
 
         // Start a SPI transaction on ADC0 and ADC1
+        c.resources.adc0.lock(|adc| adc.spi.cr1.modify(|_, w| w.cstart().set_bit()));
         c.resources.adc1.lock(|adc| adc.spi.cr1.modify(|_, w| w.cstart().set_bit()));
-        c.resources.adc2.lock(|adc| adc.spi.cr1.modify(|_, w| w.cstart().set_bit()));
 
         c.resources.dbg_pin.set_low().unwrap();
     }
 
-    #[task(binds = SPI2, resources = [adc1, dac1, adc2, dac2, iir_state, iir_ch, dac_pin], priority = 2)]
+    #[task(binds = SPI2, resources = [adc0, dac0, adc1, dac1, iir_state, iir_ch, dac_pin], priority = 2)]
     fn adc_spi(c: adc_spi::Context) {
         #[cfg(feature = "bkpt")]
         cortex_m::asm::bkpt();
@@ -539,30 +538,30 @@ const APP: () = {
         c.resources.dac_pin.set_high().unwrap();
 
         let output_ch1 = {
-            let a: u16 = c.resources.adc1.read().unwrap();
+            let a: u16 = c.resources.adc0.read().unwrap();
             let x0 = f32::from(a as i16);
             let y0 = c.resources.iir_ch[0].update(&mut c.resources.iir_state[0], x0);
             y0 as i16 as u16 ^ 0x8000
         };
-        c.resources.adc1.spi.ifcr.write(|w| w.eotc().set_bit());
+        c.resources.adc0.spi.ifcr.write(|w| w.eotc().set_bit());
 
         let output_ch2 = {
-            let a: u16 = nb::block!(c.resources.adc2.read()).unwrap();
+            let a: u16 = nb::block!(c.resources.adc1.read()).unwrap();
             let x0 = f32::from(a as i16);
             let y0 = c.resources.iir_ch[1].update(&mut c.resources.iir_state[1], x0);
             y0 as i16 as u16 ^ 0x8000
         };
-        c.resources.adc2.spi.ifcr.write(|w| w.eotc().set_bit());
+        c.resources.adc1.spi.ifcr.write(|w| w.eotc().set_bit());
 
-        c.resources.dac1.send(output_ch1).unwrap();
-        c.resources.dac2.send(output_ch2).unwrap();
+        c.resources.dac0.send(output_ch1).unwrap();
+        c.resources.dac1.send(output_ch2).unwrap();
 
         c.resources.dac_pin.set_low().unwrap();
         #[cfg(feature = "bkpt")]
         cortex_m::asm::bkpt();
     }
 
-    #[idle(resources=[net_interface, mac_addr, iir_state, iir_ch, afe1])]
+    #[idle(resources=[net_interface, mac_addr, iir_state, iir_ch, afe0, afe1])]
     fn idle(mut c: idle::Context) -> ! {
 
         let mut socket_set_entries: [_; 8] = Default::default();
@@ -593,8 +592,6 @@ const APP: () = {
 
         // TODO: Replace with reference to CPU clock from CCDR.
         next_ms += 400_000.cycles();
-
-        let buffer: String<U512> = String::new();
 
         loop {
             let tick = Instant::now() > next_ms;
@@ -636,12 +633,14 @@ const APP: () = {
                 } else {
                     server.poll(socket, |req| {
                         info!("Got request: {:?}", req);
-                        route_request!(req, buffer,
+                        route_request!(req,
                             readable_attributes: [
-                                ("stabilizer/afe0/gain", (|| Ok::<afe::Gain, ()>(c.resources.afe1.get_gain())))
+                                ("stabilizer/afe0/gain", (|| Ok::<afe::Gain, ()>(c.resources.afe0.get_gain()))),
+                                ("stabilizer/afe1/gain", (|| Ok::<afe::Gain, ()>(c.resources.afe1.get_gain())))
                             ],
                             modifiable_attributes: [
-                                ("stabilizer/afe0/gain", afe::Gain, (|gain| Ok::<(), ()>(c.resources.afe1.set_gain(gain))))
+                                ("stabilizer/afe0/gain", afe::Gain, (|gain| Ok::<(), ()>(c.resources.afe0.set_gain(gain)))),
+                                ("stabilizer/afe1/gain", afe::Gain, (|gain| Ok::<(), ()>(c.resources.afe1.set_gain(gain))))
                             ]
                         )
                     });
