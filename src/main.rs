@@ -576,15 +576,6 @@ const APP: () = {
             sockets.add(tcp_socket)
         };
 
-        let mut rx_storage2 = [0; TCP_RX_BUFFER_SIZE];
-        let mut tx_storage2 = [0; TCP_TX_BUFFER_SIZE];
-        let tcp_handle1 = {
-            let tcp_rx_buffer = net::socket::TcpSocketBuffer::new(&mut rx_storage2[..]);
-            let tcp_tx_buffer = net::socket::TcpSocketBuffer::new(&mut tx_storage2[..]);
-            let tcp_socket = net::socket::TcpSocket::new(tcp_rx_buffer, tcp_tx_buffer);
-            sockets.add(tcp_socket)
-        };
-
         let mut server = server::Server::new();
 
         let mut time = 0u32;
@@ -602,28 +593,8 @@ const APP: () = {
             }
 
             {
-                let mut socket = sockets.get::<net::socket::TcpSocket>(tcp_handle0);
-                if socket.state() == net::socket::TcpState::CloseWait {
-                    socket.close();
-                } else if !(socket.is_open() || socket.is_listening()) {
-                    socket
-                        .listen(1234)
-                        .unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
-                } else if tick && socket.can_send() {
-                    let s = c.resources.iir_state.lock(|iir_state| server::Status {
-                        t: time,
-                        x0: iir_state[0][0],
-                        y0: iir_state[0][2],
-                        x1: iir_state[1][0],
-                        y1: iir_state[1][2],
-                    });
-                    server::json_reply(&mut socket, &s);
-                }
-            }
-
-            {
                 let socket =
-                    &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle1);
+                    &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle0);
                 if socket.state() == net::socket::TcpState::CloseWait {
                     socket.close();
                 } else if !(socket.is_open() || socket.is_listening()) {
@@ -635,12 +606,33 @@ const APP: () = {
                         info!("Got request: {:?}", req);
                         route_request!(req,
                             readable_attributes: [
-                                ("stabilizer/afe0/gain", (|| Ok::<afe::Gain, ()>(c.resources.afe0.get_gain()))),
-                                ("stabilizer/afe1/gain", (|| Ok::<afe::Gain, ()>(c.resources.afe1.get_gain())))
+                                ("stabilizer/iir/state", (|| {
+                                    let state = c.resources.iir_state.lock(|iir_state|
+                                        server::Status {
+                                            t: time,
+                                            x0: iir_state[0][0],
+                                            y0: iir_state[0][2],
+                                            x1: iir_state[1][0],
+                                            y1: iir_state[1][2],
+                                    });
+
+                                    Ok::<server::Status, ()>(state)
+                                })),
+                                ("stabilizer/afe0/gain", (|| {
+                                    Ok::<afe::Gain, ()>(c.resources.afe0.get_gain())
+                                })),
+                                ("stabilizer/afe1/gain", (|| {
+                                    Ok::<afe::Gain, ()>(c.resources.afe1.get_gain())
+                                }))
                             ],
+
                             modifiable_attributes: [
-                                ("stabilizer/afe0/gain", afe::Gain, (|gain| Ok::<(), ()>(c.resources.afe0.set_gain(gain)))),
-                                ("stabilizer/afe1/gain", afe::Gain, (|gain| Ok::<(), ()>(c.resources.afe1.set_gain(gain))))
+                                ("stabilizer/afe0/gain", afe::Gain, (|gain| {
+                                    Ok::<(), ()>(c.resources.afe0.set_gain(gain))
+                                })),
+                                ("stabilizer/afe1/gain", afe::Gain, (|gain| {
+                                    Ok::<(), ()>(c.resources.afe1.set_gain(gain))
+                                }))
                             ]
                         )
                     });
