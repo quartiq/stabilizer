@@ -303,7 +303,8 @@ const APP: () = {
                                     io_update,
                                     asm_delay,
                                     ad9959::Mode::FourBitSerial,
-                                    100_000_000).unwrap()
+                                    100_000_000,
+                                    5).unwrap()
             };
 
             let io_expander = {

@@ -183,21 +183,22 @@ where
                                     1_u8.wrapping_shl(5)).map_err(|_| Error::I2c)?;
         devices.mcp23017.all_pin_mode(mcp23017::PinMode::OUTPUT).map_err(|_| Error::I2c)?;
 
-        devices.select_onboard_clock()?;
+        // Select the on-board clock with a 5x prescaler (500MHz).
+        devices.select_onboard_clock(5u8)?;
 
         Ok(devices)
     }
 
-    pub fn select_external_clock(&mut self, frequency: u32) -> Result<(), Error>{
+    pub fn select_external_clock(&mut self, frequency: u32, prescaler: u8) -> Result<(), Error>{
         self.mcp23017.digital_write(EXT_CLK_SEL_PIN, true).map_err(|_| Error::I2c)?;
-        self.ad9959.set_clock_frequency(frequency).map_err(|_| Error::DDS)?;
+        self.ad9959.configure_system_clock(frequency, prescaler).map_err(|_| Error::DDS)?;
 
         Ok(())
     }
 
-    pub fn select_onboard_clock(&mut self) -> Result<(), Error> {
+    pub fn select_onboard_clock(&mut self, prescaler: u8) -> Result<(), Error> {
         self.mcp23017.digital_write(EXT_CLK_SEL_PIN, false).map_err(|_| Error::I2c)?;
-        self.ad9959.set_clock_frequency(100_000_000).map_err(|_| Error::DDS)?;
+        self.ad9959.configure_system_clock(100_000_000, prescaler).map_err(|_| Error::DDS)?;
 
         Ok(())
     }
