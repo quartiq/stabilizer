@@ -11,7 +11,7 @@
 #[panic_handler]
 #[cfg(all(feature = "nightly", not(feature = "semihosting")))]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
-    let gpiod = unsafe { &*pac::GPIOD::ptr() };
+    let gpiod = unsafe { &*hal::stm32::GPIOD::ptr() };
     gpiod.odr.modify(|_, w| w.odr6().high().odr12().high()); // FP_LED_1, FP_LED_3
     unsafe {
         core::intrinsics::abort();
@@ -35,7 +35,6 @@ use cortex_m;
 use stm32h7xx_hal as hal;
 use stm32h7xx_hal::{
     prelude::*,
-    stm32 as pac,
 };
 
 use embedded_hal::{
@@ -48,7 +47,6 @@ use smoltcp as net;
 #[link_section = ".sram3.eth"]
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 
-mod eth;
 mod pounder;
 mod server;
 mod afe;
@@ -167,13 +165,13 @@ const APP: () = {
 
         let mut delay = hal::delay::Delay::new(cp.SYST, clocks.clocks);
 
-        let gpioa = dp.GPIOA.split(&mut clocks.ahb4);
-        let gpiob = dp.GPIOB.split(&mut clocks.ahb4);
-        let gpioc = dp.GPIOC.split(&mut clocks.ahb4);
-        let gpiod = dp.GPIOD.split(&mut clocks.ahb4);
-        let gpioe = dp.GPIOE.split(&mut clocks.ahb4);
-        let gpiof = dp.GPIOF.split(&mut clocks.ahb4);
-        let gpiog = dp.GPIOG.split(&mut clocks.ahb4);
+        let gpioa = dp.GPIOA.split(&mut clocks);
+        let gpiob = dp.GPIOB.split(&mut clocks);
+        let gpioc = dp.GPIOC.split(&mut clocks);
+        let gpiod = dp.GPIOD.split(&mut clocks);
+        let gpioe = dp.GPIOE.split(&mut clocks);
+        let gpiof = dp.GPIOF.split(&mut clocks);
+        let gpiog = dp.GPIOG.split(&mut clocks);
 
         let afe1 = {
             let a0_pin = gpiof.pf2.into_push_pull_output();
