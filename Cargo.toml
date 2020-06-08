@@ -3,6 +3,7 @@
 members = [
     "stabilizer",
     "stm32h7xx-hal",
+    "ad9959",
 ]
 
 [profile.dev]

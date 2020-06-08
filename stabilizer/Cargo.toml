@@ -49,6 +49,9 @@ version = "0.6"
 features = ["ethernet", "proto-ipv4", "socket-tcp", "proto-ipv6"]
 default-features = false
 
+[dependencies.ad9959]
+path = "../ad9959"
+
 [dependencies.stm32h7-ethernet]
 git = "https://github.com/quartiq/stm32h7-ethernet.git"
 features = ["stm32h743v"]
