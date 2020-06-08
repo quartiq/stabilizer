@@ -98,6 +98,8 @@ static mut NET_STORE: NetStorage = NetStorage {
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
 
+const SPI_START_CODE: u32 = 0x201;
+
 // static ETHERNET_PENDING: AtomicBool = AtomicBool::new(true);
 
 const TCP_RX_BUFFER_SIZE: usize = 8192;
@@ -110,6 +112,86 @@ type AFE1 = afe::ProgrammableGainAmplifier<
 type AFE2 = afe::ProgrammableGainAmplifier<
     hal::gpio::gpiod::PD14<hal::gpio::Output<hal::gpio::PushPull>>,
     hal::gpio::gpiod::PD15<hal::gpio::Output<hal::gpio::PushPull>>>;
+
+
+
+
+
+fn dma1_setup(
+    dma1: &pac::DMA1,
+    dmamux1: &pac::DMAMUX1,
+    ma: usize,
+    pa0: usize,
+    pa1: usize,
+) {
+    dma1.st[0].cr.modify(|_, w| w.en().clear_bit());
+    while dma1.st[0].cr.read().en().bit_is_set() {}
+
+    dma1.st[0].par.write(|w| unsafe { w.bits(pa0 as u32) });
+    dma1.st[0].m0ar.write(|w| unsafe { w.bits(ma as u32) });
+    dma1.st[0].ndtr.write(|w| w.ndt().bits(1));
+    dmamux1.ccr[0].modify(|_, w| w.dmareq_id().tim2_up());
+    dma1.st[0].cr.modify(|_, w| {
+        w.pl()
+            .medium()
+            .circ()
+            .enabled()
+            .msize()
+            .bits32()
+            .minc()
+            .fixed()
+            .mburst()
+            .single()
+            .psize()
+            .bits32()
+            .pinc()
+            .fixed()
+            .pburst()
+            .single()
+            .dbm()
+            .disabled()
+            .dir()
+            .memory_to_peripheral()
+            .pfctrl()
+            .dma()
+    });
+    dma1.st[0].fcr.modify(|_, w| w.dmdis().clear_bit());
+    dma1.st[0].cr.modify(|_, w| w.en().set_bit());
+
+    dma1.st[1].cr.modify(|_, w| w.en().clear_bit());
+    while dma1.st[1].cr.read().en().bit_is_set() {}
+
+    dma1.st[1].par.write(|w| unsafe { w.bits(pa1 as u32) });
+    dma1.st[1].m0ar.write(|w| unsafe { w.bits(ma as u32) });
+    dma1.st[1].ndtr.write(|w| w.ndt().bits(1));
+    dmamux1.ccr[1].modify(|_, w| w.dmareq_id().tim2_up());
+    dma1.st[1].cr.modify(|_, w| {
+        w.pl()
+            .medium()
+            .circ()
+            .enabled()
+            .msize()
+            .bits32()
+            .minc()
+            .fixed()
+            .mburst()
+            .single()
+            .psize()
+            .bits32()
+            .pinc()
+            .fixed()
+            .pburst()
+            .single()
+            .dbm()
+            .disabled()
+            .dir()
+            .memory_to_peripheral()
+            .pfctrl()
+            .dma()
+    });
+    dma1.st[1].fcr.modify(|_, w| w.dmdis().clear_bit());
+    dma1.st[1].cr.modify(|_, w| w.en().set_bit());
+}
 
 #[rtfm::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtfm::cyccnt::CYCCNT)]
 const APP: () = {
@@ -441,6 +523,12 @@ const APP: () = {
         // Configure timer 2 to trigger conversions for the ADC
         let mut timer2 = dp.TIM2.timer(500.khz(), &mut clocks);
         timer2.listen(hal::timer::Event::TimeOut);
+
+        dma1_setup(&dp.DMA1,
+                   &dp.DMAMUX1,
+                   &SPI_START_CODE as *const _ as usize,
+                   &adc1_spi.spi.cr1 as *const _ as usize,
+                   &adc2_spi.spi.cr1 as *const _ as usize);
 
         init::LateResources {
             adc1: adc1_spi,
