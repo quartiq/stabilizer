@@ -1,4 +1,4 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 #![allow(clippy::missing_safety_doc)]
 #![no_std]
 #![no_main]
@@ -27,10 +27,7 @@ extern crate panic_halt;
 #[macro_use]
 extern crate log;
 
-use nb;
-
 // use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
-use asm_delay;
 use rtfm::cyccnt::{Instant, U32Ext};
 use cortex_m_rt::exception;
 use cortex_m;
@@ -51,7 +48,6 @@ use smoltcp as net;
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 
 mod eth;
-mod pounder;
 mod server;
 mod afe;
 
@@ -133,8 +129,6 @@ const APP: () = {
         _eth_mac: ethernet::EthernetMAC,
         mac_addr: net::wire::EthernetAddress,
 
-        //pounder: pounder::PounderDevices<asm_delay::AsmDelay>,
-
         #[init([[0.; 5]; 2])]
         iir_state: [IIRState; 2],
         #[init([IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; 2])]
@@ -166,8 +160,6 @@ const APP: () = {
         clocks.rb.rsr.write(|w| w.rmvf().set_bit());
 
         clocks.rb.d2ccip1r.modify(|_, w| w.spi123sel().pll2_p().spi45sel().pll2_q());
-
-        let mut delay = hal::delay::Delay::new(cp.SYST, clocks.clocks);
 
         let gpioa = dp.GPIOA.split(&mut clocks.ahb4);
         let gpiob = dp.GPIOB.split(&mut clocks.ahb4);
@@ -282,88 +274,6 @@ const APP: () = {
             spi
         };
 
-        // let pounder_devices = {
-        //     let ad9959 =  {
-        //         let qspi_interface = {
-        //             // Instantiate the QUADSPI pins and peripheral interface.
-        //             // TODO: Place these into a pins structure that is provided to the QSPI
-        //             // constructor.
-        //             let _qspi_clk = gpiob.pb2.into_alternate_af9();
-        //             let _qspi_ncs = gpioc.pc11.into_alternate_af9();
-        //             let _qspi_io0 = gpioe.pe7.into_alternate_af10();
-        //             let _qspi_io1 = gpioe.pe8.into_alternate_af10();
-        //             let _qspi_io2 = gpioe.pe9.into_alternate_af10();
-        //             let _qspi_io3 = gpioe.pe10.into_alternate_af10();
-
-        //             let qspi = hal::qspi::Qspi::new(dp.QUADSPI, &mut clocks, 10.mhz()).unwrap();
-        //             pounder::QspiInterface::new(qspi).unwrap()
-        //         };
-
-        //         let mut reset_pin = gpioa.pa0.into_push_pull_output();
-        //         let io_update = gpiog.pg7.into_push_pull_output();
-
-
-        //         let asm_delay = {
-        //             let frequency_hz = clocks.clocks.c_ck().0;
-        //             asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz (frequency_hz))
-        //         };
-
-        //         ad9959::Ad9959::new(qspi_interface,
-        //                             &mut reset_pin,
-        //                             io_update,
-        //                             asm_delay,
-        //                             ad9959::Mode::FourBitSerial,
-        //                             100_000_000,
-        //                             5).unwrap()
-        //     };
-
-        //     let io_expander = {
-        //         let sda = gpiob.pb7.into_alternate_af4().set_open_drain();
-        //         let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
-        //         let i2c1 = dp.I2C1.i2c((scl, sda), 100.khz(), &clocks);
-        //         mcp23017::MCP23017::default(i2c1).unwrap()
-        //     };
-
-        //     let spi = {
-        //         let spi_mosi = gpiod.pd7.into_alternate_af5();
-        //         let spi_miso = gpioa.pa6.into_alternate_af5();
-        //         let spi_sck = gpiog.pg11.into_alternate_af5();
-
-        //         let config = hal::spi::Config::new(hal::spi::Mode{
-        //                 polarity: hal::spi::Polarity::IdleHigh,
-        //                 phase: hal::spi::Phase::CaptureOnSecondTransition,
-        //             })
-        //             .frame_size(8);
-
-        //         dp.SPI1.spi((spi_sck, spi_miso, spi_mosi), config, 25.mhz(), &clocks)
-        //     };
-
-        //     let adc1 = {
-        //         let mut adc = dp.ADC1.adc(&mut delay, &mut clocks);
-        //         adc.calibrate();
-
-        //         adc.enable()
-        //     };
-
-        //     let adc2 = {
-        //         let mut adc = dp.ADC2.adc(&mut delay, &mut clocks);
-        //         adc.calibrate();
-
-        //         adc.enable()
-        //     };
-
-        //     let adc1_in_p = gpiof.pf11.into_analog();
-        //     let adc2_in_p = gpiof.pf14.into_analog();
-
-        //     pounder::PounderDevices::new(io_expander,
-        //                                  ad9959,
-        //                                  spi,
-        //                                  adc1,
-        //                                  adc2,
-        //                                  adc1_in_p,
-        //                                  adc2_in_p).unwrap()
-        // };
-
         let mut fp_led_0 = gpiod.pd5.into_push_pull_output();
         let mut fp_led_1 = gpiod.pd6.into_push_pull_output();
         let mut fp_led_2 = gpiod.pd12.into_push_pull_output();
@@ -470,7 +380,6 @@ const APP: () = {
             _afe2: afe2,
 
             timer: timer2,
-            //pounder: pounder_devices,
 
             eeprom_i2c: eeprom_i2c,
             net_interface: network_interface,
