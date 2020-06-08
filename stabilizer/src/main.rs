@@ -159,13 +159,13 @@ const APP: () = {
 
         clocks.rb.d2ccip1r.modify(|_, w| w.spi123sel().pll2_p().spi45sel().pll2_q());
 
-        let gpioa = dp.GPIOA.split(&mut clocks.ahb4);
-        let gpiob = dp.GPIOB.split(&mut clocks.ahb4);
-        let gpioc = dp.GPIOC.split(&mut clocks.ahb4);
-        let gpiod = dp.GPIOD.split(&mut clocks.ahb4);
-        let gpioe = dp.GPIOE.split(&mut clocks.ahb4);
-        let gpiof = dp.GPIOF.split(&mut clocks.ahb4);
-        let gpiog = dp.GPIOG.split(&mut clocks.ahb4);
+        let gpioa = dp.GPIOA.split(&mut clocks);
+        let gpiob = dp.GPIOB.split(&mut clocks);
+        let gpioc = dp.GPIOC.split(&mut clocks);
+        let gpiod = dp.GPIOD.split(&mut clocks);
+        let gpioe = dp.GPIOE.split(&mut clocks);
+        let gpiof = dp.GPIOF.split(&mut clocks);
+        let gpiog = dp.GPIOG.split(&mut clocks);
 
         let afe1 = {
             let a0_pin = gpiof.pf2.into_push_pull_output();
