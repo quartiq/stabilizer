@@ -5,3 +5,13 @@ members = [
     "stm32h7xx-hal",
     "ad9959",
 ]
+
+[profile.dev]
+codegen-units = 1
+incremental = false
+opt-level = 3
+
+[profile.release]
+debug = true
+lto = true
+codegen-units = 1

@@ -1,4 +1,4 @@
-#![deny(warnings)]
+//#![deny(warnings)]
 #![allow(clippy::missing_safety_doc)]
 #![no_std]
 #![no_main]
@@ -114,85 +114,6 @@ type AFE2 = afe::ProgrammableGainAmplifier<
     hal::gpio::gpiod::PD15<hal::gpio::Output<hal::gpio::PushPull>>>;
 
 
-
-
-
-fn dma1_setup(
-    dma1: &pac::DMA1,
-    dmamux1: &pac::DMAMUX1,
-    ma: usize,
-    pa0: usize,
-    pa1: usize,
-) {
-    dma1.st[0].cr.modify(|_, w| w.en().clear_bit());
-    while dma1.st[0].cr.read().en().bit_is_set() {}
-
-    dma1.st[0].par.write(|w| unsafe { w.bits(pa0 as u32) });
-    dma1.st[0].m0ar.write(|w| unsafe { w.bits(ma as u32) });
-    dma1.st[0].ndtr.write(|w| w.ndt().bits(1));
-    dmamux1.ccr[0].modify(|_, w| w.dmareq_id().tim2_up());
-    dma1.st[0].cr.modify(|_, w| {
-        w.pl()
-            .medium()
-            .circ()
-            .enabled()
-            .msize()
-            .bits32()
-            .minc()
-            .fixed()
-            .mburst()
-            .single()
-            .psize()
-            .bits32()
-            .pinc()
-            .fixed()
-            .pburst()
-            .single()
-            .dbm()
-            .disabled()
-            .dir()
-            .memory_to_peripheral()
-            .pfctrl()
-            .dma()
-    });
-    dma1.st[0].fcr.modify(|_, w| w.dmdis().clear_bit());
-    dma1.st[0].cr.modify(|_, w| w.en().set_bit());
-
-    dma1.st[1].cr.modify(|_, w| w.en().clear_bit());
-    while dma1.st[1].cr.read().en().bit_is_set() {}
-
-    dma1.st[1].par.write(|w| unsafe { w.bits(pa1 as u32) });
-    dma1.st[1].m0ar.write(|w| unsafe { w.bits(ma as u32) });
-    dma1.st[1].ndtr.write(|w| w.ndt().bits(1));
-    dmamux1.ccr[1].modify(|_, w| w.dmareq_id().tim2_up());
-    dma1.st[1].cr.modify(|_, w| {
-        w.pl()
-            .medium()
-            .circ()
-            .enabled()
-            .msize()
-            .bits32()
-            .minc()
-            .fixed()
-            .mburst()
-            .single()
-            .psize()
-            .bits32()
-            .pinc()
-            .fixed()
-            .pburst()
-            .single()
-            .dbm()
-            .disabled()
-            .dir()
-            .memory_to_peripheral()
-            .pfctrl()
-            .dma()
-    });
-    dma1.st[1].fcr.modify(|_, w| w.dmdis().clear_bit());
-    dma1.st[1].cr.modify(|_, w| w.en().set_bit());
-}
-
 #[rtfm::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtfm::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
@@ -206,15 +127,13 @@ const APP: () = {
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
-        dbg_pin: hal::gpio::gpioc::PC6<hal::gpio::Output<hal::gpio::PushPull>>,
-        dac_pin: hal::gpio::gpiob::PB15<hal::gpio::Output<hal::gpio::PushPull>>,
         timer: hal::timer::Timer<hal::stm32::TIM2>,
         net_interface: net::iface::EthernetInterface<'static, 'static, 'static,
                                                      ethernet::EthernetDMA<'static>>,
         _eth_mac: ethernet::EthernetMAC,
         mac_addr: net::wire::EthernetAddress,
 
-        pounder: pounder::PounderDevices<asm_delay::AsmDelay>,
+        //pounder: pounder::PounderDevices<asm_delay::AsmDelay>,
 
         #[init([[0.; 5]; 2])]
         iir_state: [IIRState; 2],
@@ -282,8 +201,9 @@ const APP: () = {
                 })
                 .communication_mode(hal::spi::CommunicationMode::Receiver)
                 .manage_cs()
-                .cs_delay(220e-9)
-                .frame_size(16);
+                .transfer_size(1)
+                .frame_size(16)
+                .cs_delay(220e-9);
 
             let mut spi = dp.SPI2.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
@@ -291,7 +211,7 @@ const APP: () = {
                     50.mhz(),
                     &clocks);
 
-            spi.listen(hal::spi::Event::Rxp);
+            spi.listen(hal::spi::Event::Eot);
 
             spi
         };
@@ -308,21 +228,24 @@ const APP: () = {
                 })
                 .communication_mode(hal::spi::CommunicationMode::Receiver)
                 .manage_cs()
+                .transfer_size(1)
                 .frame_size(16)
                 .cs_delay(220e-9);
 
-            let spi = dp.SPI3.spi(
+            let mut spi = dp.SPI3.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
                     50.mhz(),
                     &clocks);
 
+            spi.listen(hal::spi::Event::Eot);
+
             spi
         };
 
         let dac1_spi = {
-            let spi_miso = gpioe.pe5.into_alternate_af5();
-            let spi_sck = gpioe.pe2.into_alternate_af5();
+            let spi_miso = gpioe.pe5.into_alternate_af5().set_speed(hal::gpio::Speed::VeryHigh);
+            let spi_sck = gpioe.pe2.into_alternate_af5().set_speed(hal::gpio::Speed::VeryHigh);
             let _spi_nss = gpioe.pe4.into_alternate_af5();
 
             let config = hal::spi::Config::new(hal::spi::Mode{
@@ -331,15 +254,17 @@ const APP: () = {
                 })
                 .communication_mode(hal::spi::CommunicationMode::Transmitter)
                 .manage_cs()
+                .transfer_size(1)
                 .frame_size(16)
                 .swap_mosi_miso();
 
-            dp.SPI4.spi((spi_sck, spi_miso, hal::spi::NoMosi), config, 50.mhz(), &clocks)
+            let spi = dp.SPI4.spi((spi_sck, spi_miso, hal::spi::NoMosi), config, 50.mhz(), &clocks);
+            spi
         };
 
         let dac2_spi = {
-            let spi_miso = gpiof.pf8.into_alternate_af5();
-            let spi_sck = gpiof.pf7.into_alternate_af5();
+            let spi_miso = gpiof.pf8.into_alternate_af5().set_speed(hal::gpio::Speed::VeryHigh);
+            let spi_sck = gpiof.pf7.into_alternate_af5().set_speed(hal::gpio::Speed::VeryHigh);
             let _spi_nss = gpiof.pf6.into_alternate_af5();
 
             let config = hal::spi::Config::new(hal::spi::Mode{
@@ -348,93 +273,96 @@ const APP: () = {
                 })
                 .communication_mode(hal::spi::CommunicationMode::Transmitter)
                 .manage_cs()
+                .transfer_size(1)
                 .frame_size(16)
                 .swap_mosi_miso();
 
-            dp.SPI5.spi((spi_sck, spi_miso, hal::spi::NoMosi), config, 50.mhz(), &clocks)
+            let spi = dp.SPI5.spi((spi_sck, spi_miso, hal::spi::NoMosi), config, 50.mhz(), &clocks);
+
+            spi
         };
 
-        let pounder_devices = {
-            let ad9959 =  {
-                let qspi_interface = {
-                    // Instantiate the QUADSPI pins and peripheral interface.
-                    // TODO: Place these into a pins structure that is provided to the QSPI
-                    // constructor.
-                    let _qspi_clk = gpiob.pb2.into_alternate_af9();
-                    let _qspi_ncs = gpioc.pc11.into_alternate_af9();
-                    let _qspi_io0 = gpioe.pe7.into_alternate_af10();
-                    let _qspi_io1 = gpioe.pe8.into_alternate_af10();
-                    let _qspi_io2 = gpioe.pe9.into_alternate_af10();
-                    let _qspi_io3 = gpioe.pe10.into_alternate_af10();
+        // let pounder_devices = {
+        //     let ad9959 =  {
+        //         let qspi_interface = {
+        //             // Instantiate the QUADSPI pins and peripheral interface.
+        //             // TODO: Place these into a pins structure that is provided to the QSPI
+        //             // constructor.
+        //             let _qspi_clk = gpiob.pb2.into_alternate_af9();
+        //             let _qspi_ncs = gpioc.pc11.into_alternate_af9();
+        //             let _qspi_io0 = gpioe.pe7.into_alternate_af10();
+        //             let _qspi_io1 = gpioe.pe8.into_alternate_af10();
+        //             let _qspi_io2 = gpioe.pe9.into_alternate_af10();
+        //             let _qspi_io3 = gpioe.pe10.into_alternate_af10();
 
-                    let qspi = hal::qspi::Qspi::new(dp.QUADSPI, &mut clocks, 10.mhz()).unwrap();
-                    pounder::QspiInterface::new(qspi).unwrap()
-                };
+        //             let qspi = hal::qspi::Qspi::new(dp.QUADSPI, &mut clocks, 10.mhz()).unwrap();
+        //             pounder::QspiInterface::new(qspi).unwrap()
+        //         };
 
-                let mut reset_pin = gpioa.pa0.into_push_pull_output();
-                let io_update = gpiog.pg7.into_push_pull_output();
+        //         let mut reset_pin = gpioa.pa0.into_push_pull_output();
+        //         let io_update = gpiog.pg7.into_push_pull_output();
 
 
-                let asm_delay = {
-                    let frequency_hz = clocks.clocks.c_ck().0;
-                    asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz (frequency_hz))
-                };
+        //         let asm_delay = {
+        //             let frequency_hz = clocks.clocks.c_ck().0;
+        //             asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz (frequency_hz))
+        //         };
 
-                ad9959::Ad9959::new(qspi_interface,
-                                    &mut reset_pin,
-                                    io_update,
-                                    asm_delay,
-                                    ad9959::Mode::FourBitSerial,
-                                    100_000_000,
-                                    5).unwrap()
-            };
+        //         ad9959::Ad9959::new(qspi_interface,
+        //                             &mut reset_pin,
+        //                             io_update,
+        //                             asm_delay,
+        //                             ad9959::Mode::FourBitSerial,
+        //                             100_000_000,
+        //                             5).unwrap()
+        //     };
 
-            let io_expander = {
-                let sda = gpiob.pb7.into_alternate_af4().set_open_drain();
-                let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
-                let i2c1 = dp.I2C1.i2c((scl, sda), 100.khz(), &clocks);
-                mcp23017::MCP23017::default(i2c1).unwrap()
-            };
+        //     let io_expander = {
+        //         let sda = gpiob.pb7.into_alternate_af4().set_open_drain();
+        //         let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
+        //         let i2c1 = dp.I2C1.i2c((scl, sda), 100.khz(), &clocks);
+        //         mcp23017::MCP23017::default(i2c1).unwrap()
+        //     };
 
-            let spi = {
-                let spi_mosi = gpiod.pd7.into_alternate_af5();
-                let spi_miso = gpioa.pa6.into_alternate_af5();
-                let spi_sck = gpiog.pg11.into_alternate_af5();
+        //     let spi = {
+        //         let spi_mosi = gpiod.pd7.into_alternate_af5();
+        //         let spi_miso = gpioa.pa6.into_alternate_af5();
+        //         let spi_sck = gpiog.pg11.into_alternate_af5();
 
-                let config = hal::spi::Config::new(hal::spi::Mode{
-                        polarity: hal::spi::Polarity::IdleHigh,
-                        phase: hal::spi::Phase::CaptureOnSecondTransition,
-                    })
-                    .frame_size(8);
+        //         let config = hal::spi::Config::new(hal::spi::Mode{
+        //                 polarity: hal::spi::Polarity::IdleHigh,
+        //                 phase: hal::spi::Phase::CaptureOnSecondTransition,
+        //             })
+        //             .frame_size(8);
 
-                dp.SPI1.spi((spi_sck, spi_miso, spi_mosi), config, 25.mhz(), &clocks)
-            };
+        //         dp.SPI1.spi((spi_sck, spi_miso, spi_mosi), config, 25.mhz(), &clocks)
+        //     };
 
-            let adc1 = {
-                let mut adc = dp.ADC1.adc(&mut delay, &mut clocks);
-                adc.calibrate();
+        //     let adc1 = {
+        //         let mut adc = dp.ADC1.adc(&mut delay, &mut clocks);
+        //         adc.calibrate();
 
-                adc.enable()
-            };
+        //         adc.enable()
+        //     };
 
-            let adc2 = {
-                let mut adc = dp.ADC2.adc(&mut delay, &mut clocks);
-                adc.calibrate();
+        //     let adc2 = {
+        //         let mut adc = dp.ADC2.adc(&mut delay, &mut clocks);
+        //         adc.calibrate();
 
-                adc.enable()
-            };
+        //         adc.enable()
+        //     };
 
-            let adc1_in_p = gpiof.pf11.into_analog();
-            let adc2_in_p = gpiof.pf14.into_analog();
+        //     let adc1_in_p = gpiof.pf11.into_analog();
+        //     let adc2_in_p = gpiof.pf14.into_analog();
 
-            pounder::PounderDevices::new(io_expander,
-                                         ad9959,
-                                         spi,
-                                         adc1,
-                                         adc2,
-                                         adc1_in_p,
-                                         adc2_in_p).unwrap()
-        };
+        //     pounder::PounderDevices::new(io_expander,
+        //                                  ad9959,
+        //                                  spi,
+        //                                  adc1,
+        //                                  adc2,
+        //                                  adc1_in_p,
+        //                                  adc2_in_p).unwrap()
+        // };
 
         let mut fp_led_0 = gpiod.pd5.into_push_pull_output();
         let mut fp_led_1 = gpiod.pd6.into_push_pull_output();
@@ -514,21 +442,24 @@ const APP: () = {
         // Utilize the cycle counter for RTFM scheduling.
         cp.DWT.enable_cycle_counter();
 
-        let mut debug_pin = gpioc.pc6.into_push_pull_output();
-        debug_pin.set_low().unwrap();
+        let mut dma = hal::dma::Dma::dma(dp.DMA1, dp.DMAMUX1, &clocks);
+        dma.configure_m2p_stream(hal::dma::Stream::One,
+                             &SPI_START_CODE as *const _ as u32,
+                             &adc1_spi.spi.cr1 as *const _ as u32,
+                             hal::dma::DMAREQ_ID::TIM2_CH1);
 
-        let mut dac_pin = gpiob.pb15.into_push_pull_output();
-        dac_pin.set_low().unwrap();
+        dma.configure_m2p_stream(hal::dma::Stream::Two,
+                             &SPI_START_CODE as *const _ as u32,
+                             &adc2_spi.spi.cr1 as *const _ as u32,
+                             hal::dma::DMAREQ_ID::TIM2_CH2);
 
         // Configure timer 2 to trigger conversions for the ADC
         let mut timer2 = dp.TIM2.timer(500.khz(), &mut clocks);
-        timer2.listen(hal::timer::Event::TimeOut);
+        timer2.configure_channel(hal::timer::Channel::One, 0.25);
+        timer2.configure_channel(hal::timer::Channel::Two, 0.75);
 
-        dma1_setup(&dp.DMA1,
-                   &dp.DMAMUX1,
-                   &SPI_START_CODE as *const _ as usize,
-                   &adc1_spi.spi.cr1 as *const _ as usize,
-                   &adc2_spi.spi.cr1 as *const _ as usize);
+        timer2.listen(hal::timer::Event::ChannelOneDma);
+        timer2.listen(hal::timer::Event::ChannelTwoDma);
 
         init::LateResources {
             adc1: adc1_spi,
@@ -538,10 +469,8 @@ const APP: () = {
             _afe1: afe1,
             _afe2: afe2,
 
-            dbg_pin: debug_pin,
-            dac_pin: dac_pin,
             timer: timer2,
-            pounder: pounder_devices,
+            //pounder: pounder_devices,
 
             eeprom_i2c: eeprom_i2c,
             net_interface: network_interface,
@@ -550,46 +479,34 @@ const APP: () = {
         }
     }
 
-    #[task(binds = TIM2, resources = [dbg_pin, timer, adc1, adc2])]
-    fn tim2(mut c: tim2::Context) {
-        c.resources.timer.clear_uif_bit();
-        c.resources.dbg_pin.set_high().unwrap();
+    #[task(binds = SPI3, resources = [adc2, dac2, iir_state, iir_ch], priority = 2)]
+    fn spi3(c: spi3::Context) {
+        c.resources.adc2.spi.ifcr.write(|w| w.eotc().set_bit());
 
-        // Start a SPI transaction on ADC0 and ADC1
-        c.resources.adc1.lock(|adc| adc.spi.cr1.modify(|_, w| w.cstart().set_bit()));
-        c.resources.adc2.lock(|adc| adc.spi.cr1.modify(|_, w| w.cstart().set_bit()));
+        let output: u16 = {
+            let a: u16 = c.resources.adc2.read().unwrap();
+            let x0 = f32::from(a as i16);
+            let y0 = c.resources.iir_ch[1].update(&mut c.resources.iir_state[1], x0);
+            y0 as i16 as u16 ^ 0x8000
+        };
 
-        c.resources.dbg_pin.set_low().unwrap();
+        c.resources.dac2.spi.ifcr.write(|w| w.eotc().set_bit().txtfc().set_bit());
+        c.resources.dac2.send(output).unwrap();
     }
 
-    #[task(binds = SPI2, resources = [adc1, dac1, adc2, dac2, iir_state, iir_ch, dac_pin], priority = 2)]
-    fn adc_spi(c: adc_spi::Context) {
-        #[cfg(feature = "bkpt")]
-        cortex_m::asm::bkpt();
+    #[task(binds = SPI2, resources = [adc1, dac1, iir_state, iir_ch], priority = 2)]
+    fn spi2(c: spi2::Context) {
+        c.resources.adc1.spi.ifcr.write(|w| w.eotc().set_bit());
 
-        c.resources.dac_pin.set_high().unwrap();
-
-        let output_ch1 = {
+        let output: u16 = {
             let a: u16 = c.resources.adc1.read().unwrap();
             let x0 = f32::from(a as i16);
             let y0 = c.resources.iir_ch[0].update(&mut c.resources.iir_state[0], x0);
             y0 as i16 as u16 ^ 0x8000
         };
-        c.resources.adc1.spi.ifcr.write(|w| w.eotc().set_bit());
-        c.resources.dac1.send(output_ch1).unwrap();
 
-        let output_ch2 = {
-            let a: u16 = nb::block!(c.resources.adc2.read()).unwrap();
-            let x0 = f32::from(a as i16);
-            let y0 = c.resources.iir_ch[1].update(&mut c.resources.iir_state[1], x0);
-            y0 as i16 as u16 ^ 0x8000
-        };
-        c.resources.adc2.spi.ifcr.write(|w| w.eotc().set_bit());
-        c.resources.dac2.send(output_ch2).unwrap();
-
-        c.resources.dac_pin.set_low().unwrap();
-        #[cfg(feature = "bkpt")]
-        cortex_m::asm::bkpt();
+        c.resources.dac1.spi.ifcr.write(|w| w.eotc().set_bit().txtfc().set_bit());
+        c.resources.dac1.send(output).unwrap();
     }
 
     #[idle(resources=[net_interface, mac_addr, iir_state, iir_ch])]

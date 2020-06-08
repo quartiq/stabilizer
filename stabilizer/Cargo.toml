@@ -65,12 +65,3 @@ semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
 bkpt = [ ]
 nightly = ["cortex-m/inline-asm"]
 
-[profile.dev]
-codegen-units = 1
-incremental = false
-opt-level = 3
-
-[profile.release]
-debug = true
-lto = true
-codegen-units = 1
