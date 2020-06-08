@@ -11,7 +11,7 @@
 #[panic_handler]
 #[cfg(all(feature = "nightly", not(feature = "semihosting")))]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
-    let gpiod = unsafe { &*pac::GPIOD::ptr() };
+    let gpiod = unsafe { &*hal::stm32::GPIOD::ptr() };
     gpiod.odr.modify(|_, w| w.odr6().high().odr12().high()); // FP_LED_1, FP_LED_3
     unsafe {
         core::intrinsics::abort();
@@ -34,7 +34,6 @@ use cortex_m;
 use stm32h7xx_hal as hal;
 use stm32h7xx_hal::{
     prelude::*,
-    stm32 as pac,
 };
 
 use embedded_hal::{
@@ -47,7 +46,6 @@ use smoltcp as net;
 #[link_section = ".sram3.eth"]
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 
-mod eth;
 mod server;
 mod afe;
 
