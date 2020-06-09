@@ -113,47 +113,59 @@ macro_rules! route_request {
     ($request:ident,
             readable_attributes: [$(($read_attribute:tt, $getter:tt)),*],
             modifiable_attributes: [$(($write_attribute:tt, $TYPE:ty, $setter:tt)),*]) => {
-        match $request {
-            server::Request::Read{attribute} => {
-                match attribute {
+        match $request.req {
+            server::AccessRequest::Read => {
+                match $request.attribute {
                 $(
-                    &$read_attribute => {
+                    $read_attribute => {
                         let value = match $getter() {
                             Ok(data) => data,
-                            Err(_) => return server::Response::error(attribute,
+                            Err(_) => return server::Response::error($request.attribute,
                                                                      "Failed to set attribute"),
                         };
 
                         let encoded_data: String<U128> = match serde_json_core::to_string(&value) {
                             Ok(data) => data,
-                            Err(_) => return server::Response::error(attribute,
+                            Err(_) => return server::Response::error($request.attribute,
                                     "Failed to encode attribute value"),
                         };
 
-                        server::Response::success(attribute, &encoded_data)
+                        // Encoding data into a string surrounds it with qutotations. Because this
+                        // value is then serialzed into another string, we remove the double
+                        // quotations because they cannot be properly escaped.
+                        server::Response::success($request.attribute,
+                                &encoded_data[1..encoded_data.len()-1])
                     },
                  )*
-                    _ => server::Response::error(attribute, "Unknown attribute")
+                    _ => server::Response::error($request.attribute, "Unknown attribute")
                 }
             },
-            server::Request::Write{attribute, value} => {
-                match attribute {
+            server::AccessRequest::Write => {
+                match $request.attribute {
                 $(
-                    &$write_attribute => {
-                        let new_value = match serde_json_core::from_str::<$TYPE>(value) {
+                    $write_attribute => {
+                        // To avoid sending double quotations in the request, they are eliminated on
+                        // the sender side. However, to properly deserialize the data, quotes need
+                        // to be added back.
+                        let mut value: String<U128> = String::new();
+                        value.push('"').unwrap();
+                        value.push_str($request.value).unwrap();
+                        value.push('"').unwrap();
+
+                        let new_value = match serde_json_core::from_str::<$TYPE>(value.as_str()) {
                             Ok(data) => data,
-                            Err(_) => return server::Response::error(attribute,
+                            Err(_) => return server::Response::error($request.attribute,
                                     "Failed to decode value"),
                         };
 
                         match $setter(new_value) {
-                            Ok(_) => server::Response::success(attribute, value),
-                            Err(_) => server::Response::error(attribute,
+                            Ok(_) => server::Response::success($request.attribute, $request.value),
+                            Err(_) => server::Response::error($request.attribute,
                                     "Failed to set attribute"),
                         }
                     }
                  )*
-                    _ => server::Response::error(attribute, "Unknown attribute")
+                    _ => server::Response::error($request.attribute, "Unknown attribute")
                 }
             }
         }
@@ -176,7 +188,7 @@ const APP: () = {
         timer: hal::timer::Timer<hal::stm32::TIM2>,
         net_interface: net::iface::EthernetInterface<'static, 'static, 'static,
                                                      ethernet::EthernetDMA<'static>>,
-        _eth_mac: ethernet::EthernetMAC,
+        eth_mac: ethernet::EthernetMAC,
         mac_addr: net::wire::EthernetAddress,
 
         #[init([[0.; 5]; 2])]
@@ -210,6 +222,8 @@ const APP: () = {
         clocks.rb.rsr.write(|w| w.rmvf().set_bit());
 
         clocks.rb.d2ccip1r.modify(|_, w| w.spi123sel().pll2_p().spi45sel().pll2_q());
+
+        let mut delay = hal::delay::Delay::new(cp.SYST, clocks.clocks);
 
         let gpioa = dp.GPIOA.split(&mut clocks);
         let gpiob = dp.GPIOB.split(&mut clocks);
@@ -326,8 +340,8 @@ const APP: () = {
 
         let mut fp_led_0 = gpiod.pd5.into_push_pull_output();
         let mut fp_led_1 = gpiod.pd6.into_push_pull_output();
-        let mut fp_led_2 = gpiod.pd12.into_push_pull_output();
-        let mut fp_led_3 = gpiog.pg4.into_push_pull_output();
+        let mut fp_led_2 = gpiog.pg4.into_push_pull_output();
+        let mut fp_led_3 = gpiod.pd12.into_push_pull_output();
 
         fp_led_0.set_low().unwrap();
         fp_led_1.set_low().unwrap();
@@ -344,8 +358,8 @@ const APP: () = {
         {
             // Reset the PHY before configuring pins.
             let mut eth_phy_nrst = gpioe.pe3.into_push_pull_output();
-            eth_phy_nrst.set_high().unwrap();
             eth_phy_nrst.set_low().unwrap();
+            delay.delay_us(200u8);
             eth_phy_nrst.set_high().unwrap();
             let _rmii_ref_clk = gpioa.pa1.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
             let _rmii_mdio = gpioa.pa2.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
@@ -377,6 +391,8 @@ const APP: () = {
                         mac_addr.clone())
             };
 
+            unsafe { ethernet::enable_interrupt() };
+
             let store = unsafe { &mut NET_STORE };
 
             store.ip_addrs[0] = net::wire::IpCidr::new(net::wire::IpAddress::v4(10, 0, 16, 99), 24);
@@ -394,7 +410,6 @@ const APP: () = {
 
         cp.SCB.enable_icache();
 
-        init_log();
         // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
         // info!("Built on {}", build_info::BUILT_TIME_UTC);
         // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
@@ -433,7 +448,7 @@ const APP: () = {
 
             eeprom_i2c: eeprom_i2c,
             net_interface: network_interface,
-            _eth_mac: eth_mac,
+            eth_mac: eth_mac,
             mac_addr: mac_addr,
         }
     }
@@ -468,7 +483,7 @@ const APP: () = {
         c.resources.dac1.send(output).unwrap();
     }
 
-    #[idle(resources=[net_interface, mac_addr, iir_state, iir_ch, afe1, afe2])]
+    #[idle(resources=[net_interface, mac_addr, eth_mac, iir_state, iir_ch, afe1, afe2])]
     fn idle(mut c: idle::Context) -> ! {
 
         let mut socket_set_entries: [_; 8] = Default::default();
@@ -566,7 +581,7 @@ const APP: () = {
 
             let sleep = match c.resources.net_interface.poll(&mut sockets,
                                              net::time::Instant::from_millis(time as i64)) {
-                Ok(changed) => changed,
+                Ok(changed) => changed == false,
                 Err(net::Error::Unrecognized) => true,
                 Err(e) => {
                     info!("iface poll error: {:?}", e);
@@ -580,14 +595,10 @@ const APP: () = {
         }
     }
 
-    /*
-    #[task(binds = ETH, resources = [net_interface], priority = 1)]
-    fn eth(c: eth::Context) {
-        let dma = &c.resources.net_interface.device();
-        ETHERNET_PENDING.store(true, Ordering::Relaxed);
-        dma.interrupt_handler()
+    #[task(binds = ETH, priority = 1)]
+    fn eth(_: eth::Context) {
+        unsafe { ethernet::interrupt_handler() }
     }
-    */
 
     extern "C" {
         // hw interrupt handlers for RTFM to use for scheduling tasks

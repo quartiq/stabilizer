@@ -21,9 +21,16 @@ use super::net;
 use super::iir;
 
 #[derive(Deserialize, Serialize, Debug)]
-pub enum Request<'a, 'b> {
-    Read{attribute: &'a str},
-    Write{attribute: &'a str, value: &'b str},
+pub enum AccessRequest {
+    Read,
+    Write,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct Request<'a, 'b> {
+    pub req: AccessRequest,
+    pub attribute: &'a str,
+    pub value: &'b str,
 }
 
 #[derive(Serialize, Deserialize)]
