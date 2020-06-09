@@ -216,6 +216,8 @@ const APP: () = {
             .pll2_q_ck(100.mhz())
             .freeze(vos, &dp.SYSCFG);
 
+        init_log();
+
         // Enable SRAM3 for the ethernet descriptor ring.
         clocks.rb.ahb2enr.modify(|_, w| w.sram3en().set_bit());
 
