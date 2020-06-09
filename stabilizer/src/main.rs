@@ -44,17 +44,19 @@ use embedded_hal::{
 use stm32h7_ethernet as ethernet;
 use smoltcp as net;
 
+use heapless::{
+    String,
+    consts::*,
+};
+
 #[link_section = ".sram3.eth"]
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 
+mod afe;
+mod eeprom;
+mod iir;
 mod pounder;
 mod server;
-mod afe;
-
-mod iir;
-use iir::*;
-
-mod eeprom;
 
 #[cfg(not(feature = "semihosting"))]
 fn init_log() {}
@@ -109,32 +111,94 @@ type AFE2 = afe::ProgrammableGainAmplifier<
     hal::gpio::gpiod::PD14<hal::gpio::Output<hal::gpio::PushPull>>,
     hal::gpio::gpiod::PD15<hal::gpio::Output<hal::gpio::PushPull>>>;
 
+macro_rules! route_request {
+    ($request:ident,
+            readable_attributes: [$(($read_attribute:tt, $getter:tt)),*],
+            modifiable_attributes: [$(($write_attribute:tt, $TYPE:ty, $setter:tt)),*]) => {
+        match $request.req {
+            server::AccessRequest::Read => {
+                match $request.attribute {
+                $(
+                    $read_attribute => {
+                        let value = match $getter() {
+                            Ok(data) => data,
+                            Err(_) => return server::Response::error($request.attribute,
+                                                                     "Failed to set attribute"),
+                        };
+
+                        let encoded_data: String<U128> = match serde_json_core::to_string(&value) {
+                            Ok(data) => data,
+                            Err(_) => return server::Response::error($request.attribute,
+                                    "Failed to encode attribute value"),
+                        };
+
+                        // Encoding data into a string surrounds it with qutotations. Because this
+                        // value is then serialzed into another string, we remove the double
+                        // quotations because they cannot be properly escaped.
+                        server::Response::success($request.attribute,
+                                &encoded_data[1..encoded_data.len()-1])
+                    },
+                 )*
+                    _ => server::Response::error($request.attribute, "Unknown attribute")
+                }
+            },
+            server::AccessRequest::Write => {
+                match $request.attribute {
+                $(
+                    $write_attribute => {
+                        // To avoid sending double quotations in the request, they are eliminated on
+                        // the sender side. However, to properly deserialize the data, quotes need
+                        // to be added back.
+                        let mut value: String<U128> = String::new();
+                        value.push('"').unwrap();
+                        value.push_str($request.value).unwrap();
+                        value.push('"').unwrap();
+
+                        let new_value = match serde_json_core::from_str::<$TYPE>(value.as_str()) {
+                            Ok(data) => data,
+                            Err(_) => return server::Response::error($request.attribute,
+                                    "Failed to decode value"),
+                        };
+
+                        match $setter(new_value) {
+                            Ok(_) => server::Response::success($request.attribute, $request.value),
+                            Err(_) => server::Response::error($request.attribute,
+                                    "Failed to set attribute"),
+                        }
+                    }
+                 )*
+                    _ => server::Response::error($request.attribute, "Unknown attribute")
+                }
+            }
+        }
+    }
+}
 
 #[rtfm::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtfm::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
         adc1: hal::spi::Spi<hal::stm32::SPI2>,
         dac1: hal::spi::Spi<hal::stm32::SPI4>,
-        _afe1: AFE1,
+        afe1: AFE1,
 
         adc2: hal::spi::Spi<hal::stm32::SPI3>,
         dac2: hal::spi::Spi<hal::stm32::SPI5>,
-        _afe2: AFE2,
+        afe2: AFE2,
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
         timer: hal::timer::Timer<hal::stm32::TIM2>,
         net_interface: net::iface::EthernetInterface<'static, 'static, 'static,
                                                      ethernet::EthernetDMA<'static>>,
-        _eth_mac: ethernet::EthernetMAC,
+        eth_mac: ethernet::EthernetMAC,
         mac_addr: net::wire::EthernetAddress,
 
         pounder: pounder::PounderDevices<asm_delay::AsmDelay>,
 
         #[init([[0.; 5]; 2])]
-        iir_state: [IIRState; 2],
-        #[init([IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; 2])]
-        iir_ch: [IIR; 2],
+        iir_state: [iir::IIRState; 2],
+        #[init([iir::IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; 2])]
+        iir_ch: [iir::IIR; 2],
     }
 
     #[init]
@@ -155,6 +219,8 @@ const APP: () = {
             .pll2_p_ck(100.mhz())
             .pll2_q_ck(100.mhz())
             .freeze(vos, &dp.SYSCFG);
+
+        init_log();
 
         // Enable SRAM3 for the ethernet descriptor ring.
         clocks.rb.ahb2enr.modify(|_, w| w.sram3en().set_bit());
@@ -362,8 +428,8 @@ const APP: () = {
 
         let mut fp_led_0 = gpiod.pd5.into_push_pull_output();
         let mut fp_led_1 = gpiod.pd6.into_push_pull_output();
-        let mut fp_led_2 = gpiod.pd12.into_push_pull_output();
-        let mut fp_led_3 = gpiog.pg4.into_push_pull_output();
+        let mut fp_led_2 = gpiog.pg4.into_push_pull_output();
+        let mut fp_led_3 = gpiod.pd12.into_push_pull_output();
 
         fp_led_0.set_low().unwrap();
         fp_led_1.set_low().unwrap();
@@ -380,8 +446,8 @@ const APP: () = {
         {
             // Reset the PHY before configuring pins.
             let mut eth_phy_nrst = gpioe.pe3.into_push_pull_output();
-            eth_phy_nrst.set_high().unwrap();
             eth_phy_nrst.set_low().unwrap();
+            delay.delay_us(200u8);
             eth_phy_nrst.set_high().unwrap();
             let _rmii_ref_clk = gpioa.pa1.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
             let _rmii_mdio = gpioa.pa2.into_alternate_af11().set_speed(hal::gpio::Speed::VeryHigh);
@@ -413,6 +479,8 @@ const APP: () = {
                         mac_addr.clone())
             };
 
+            unsafe { ethernet::enable_interrupt() };
+
             let store = unsafe { &mut NET_STORE };
 
             store.ip_addrs[0] = net::wire::IpCidr::new(net::wire::IpAddress::v4(10, 0, 16, 99), 24);
@@ -430,7 +498,6 @@ const APP: () = {
 
         cp.SCB.enable_icache();
 
-        init_log();
         // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
         // info!("Built on {}", build_info::BUILT_TIME_UTC);
         // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
@@ -462,15 +529,15 @@ const APP: () = {
             dac1: dac1_spi,
             adc2: adc2_spi,
             dac2: dac2_spi,
-            _afe1: afe1,
-            _afe2: afe2,
+            afe1: afe1,
+            afe2: afe2,
 
             timer: timer2,
             pounder: pounder_devices,
 
             eeprom_i2c: eeprom_i2c,
             net_interface: network_interface,
-            _eth_mac: eth_mac,
+            eth_mac: eth_mac,
             mac_addr: mac_addr,
         }
     }
@@ -505,7 +572,7 @@ const APP: () = {
         c.resources.dac1.send(output).unwrap();
     }
 
-    #[idle(resources=[net_interface, mac_addr, iir_state, iir_ch])]
+    #[idle(resources=[net_interface, mac_addr, eth_mac, iir_state, iir_ch, afe1, afe2])]
     fn idle(mut c: idle::Context) -> ! {
 
         let mut socket_set_entries: [_; 8] = Default::default();
@@ -513,18 +580,9 @@ const APP: () = {
 
         let mut rx_storage = [0; TCP_RX_BUFFER_SIZE];
         let mut tx_storage = [0; TCP_TX_BUFFER_SIZE];
-        let tcp_handle0 = {
+        let tcp_handle = {
             let tcp_rx_buffer = net::socket::TcpSocketBuffer::new(&mut rx_storage[..]);
             let tcp_tx_buffer = net::socket::TcpSocketBuffer::new(&mut tx_storage[..]);
-            let tcp_socket = net::socket::TcpSocket::new(tcp_rx_buffer, tcp_tx_buffer);
-            sockets.add(tcp_socket)
-        };
-
-        let mut rx_storage2 = [0; TCP_RX_BUFFER_SIZE];
-        let mut tx_storage2 = [0; TCP_TX_BUFFER_SIZE];
-        let tcp_handle1 = {
-            let tcp_rx_buffer = net::socket::TcpSocketBuffer::new(&mut rx_storage2[..]);
-            let tcp_tx_buffer = net::socket::TcpSocketBuffer::new(&mut tx_storage2[..]);
             let tcp_socket = net::socket::TcpSocket::new(tcp_rx_buffer, tcp_tx_buffer);
             sockets.add(tcp_socket)
         };
@@ -546,28 +604,8 @@ const APP: () = {
             }
 
             {
-                let mut socket = sockets.get::<net::socket::TcpSocket>(tcp_handle0);
-                if socket.state() == net::socket::TcpState::CloseWait {
-                    socket.close();
-                } else if !(socket.is_open() || socket.is_listening()) {
-                    socket
-                        .listen(1234)
-                        .unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
-                } else if tick && socket.can_send() {
-                    let s = c.resources.iir_state.lock(|iir_state| server::Status {
-                        t: time,
-                        x0: iir_state[0][0],
-                        y0: iir_state[0][2],
-                        x1: iir_state[1][0],
-                        y1: iir_state[1][2],
-                    });
-                    server::json_reply(&mut socket, &s);
-                }
-            }
-
-            {
                 let socket =
-                    &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle1);
+                    &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle);
                 if socket.state() == net::socket::TcpState::CloseWait {
                     socket.close();
                 } else if !(socket.is_open() || socket.is_listening()) {
@@ -575,19 +613,64 @@ const APP: () = {
                         .listen(1235)
                         .unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
                 } else {
-                    server.poll(socket, |req: &server::Request| {
-                        if req.channel < 2 {
-                            c.resources.iir_ch.lock(|iir_ch| {
-                                iir_ch[req.channel as usize] = req.iir
-                            });
-                        }
+                    server.poll(socket, |req| {
+                        info!("Got request: {:?}", req);
+                        route_request!(req,
+                            readable_attributes: [
+                                ("stabilizer/iir/state", (|| {
+                                    let state = c.resources.iir_state.lock(|iir_state|
+                                        server::Status {
+                                            t: time,
+                                            x0: iir_state[0][0],
+                                            y0: iir_state[0][2],
+                                            x1: iir_state[1][0],
+                                            y1: iir_state[1][2],
+                                    });
+
+                                    Ok::<server::Status, ()>(state)
+                                })),
+                                ("stabilizer/afe1/gain", (|| c.resources.afe1.get_gain())),
+                                ("stabilizer/afe2/gain", (|| c.resources.afe2.get_gain()))
+                            ],
+
+                            modifiable_attributes: [
+                                ("stabilizer/iir1/state", server::IirRequest, (|req: server::IirRequest| {
+                                    c.resources.iir_ch.lock(|iir_ch| {
+                                        if req.channel > 1 {
+                                            return Err(());
+                                        }
+
+                                        iir_ch[req.channel as usize] = req.iir;
+
+                                        Ok::<server::IirRequest, ()>(req)
+                                    })
+                                })),
+                                ("stabilizer/iir2/state", server::IirRequest, (|req: server::IirRequest| {
+                                    c.resources.iir_ch.lock(|iir_ch| {
+                                        if req.channel > 1 {
+                                            return Err(());
+                                        }
+
+                                        iir_ch[req.channel as usize] = req.iir;
+
+                                        Ok::<server::IirRequest, ()>(req)
+                                    })
+                                })),
+                                ("stabilizer/afe1/gain", afe::Gain, (|gain| {
+                                    Ok::<(), ()>(c.resources.afe1.set_gain(gain))
+                                })),
+                                ("stabilizer/afe2/gain", afe::Gain, (|gain| {
+                                    Ok::<(), ()>(c.resources.afe2.set_gain(gain))
+                                }))
+                            ]
+                        )
                     });
                 }
             }
 
             let sleep = match c.resources.net_interface.poll(&mut sockets,
                                              net::time::Instant::from_millis(time as i64)) {
-                Ok(changed) => changed,
+                Ok(changed) => changed == false,
                 Err(net::Error::Unrecognized) => true,
                 Err(e) => {
                     info!("iface poll error: {:?}", e);
@@ -601,14 +684,10 @@ const APP: () = {
         }
     }
 
-    /*
-    #[task(binds = ETH, resources = [net_interface], priority = 1)]
-    fn eth(c: eth::Context) {
-        let dma = &c.resources.net_interface.device();
-        ETHERNET_PENDING.store(true, Ordering::Relaxed);
-        dma.interrupt_handler()
+    #[task(binds = ETH, priority = 1)]
+    fn eth(_: eth::Context) {
+        unsafe { ethernet::interrupt_handler() }
     }
-    */
 
     extern "C" {
         // hw interrupt handlers for RTFM to use for scheduling tasks

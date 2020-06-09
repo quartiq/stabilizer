@@ -1,8 +1,10 @@
 use embedded_hal;
+use serde::{Serialize, Deserialize};
+
 use core::convert::TryFrom;
 use enum_iterator::IntoEnumIterator;
 
-#[derive(Copy, Clone, Debug, IntoEnumIterator)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, IntoEnumIterator)]
 pub enum Gain {
     G1 = 0b00,
     G2 = 0b01,
