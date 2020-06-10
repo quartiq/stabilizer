@@ -1,8 +1,7 @@
-use super::error::Error;
-use super::DdsChannel;
+use super::{Channel, Error};
 
 pub trait AttenuatorInterface {
-    fn modify(&mut self, attenuation: f32, channel: DdsChannel) -> Result<f32, Error> {
+    fn set_attenuation(&mut self, channel: Channel, attenuation: f32) -> Result<f32, Error> {
         if attenuation > 31.5 || attenuation < 0.0 {
             return Err(Error::Bounds);
         }
@@ -14,28 +13,28 @@ pub trait AttenuatorInterface {
         // Read all the channels, modify the channel of interest, and write all the channels back.
         // This ensures the staging register and the output register are always in sync.
         let mut channels = [0_u8; 4];
-        self.read_all(&mut channels)?;
+        self.read_all_attenuators(&mut channels)?;
 
         // The lowest 2 bits of the 8-bit shift register on the attenuator are ignored. Shift the
         // attenuator code into the upper 6 bits of the register value. Note that the attenuator
         // treats inputs as active-low, so the code is inverted before writing.
-        channels[channel as usize] = !attenuation_code.wrapping_shl(2);
-        self.write_all(&channels)?;
+        channels[channel as usize] = (!attenuation_code) << 2;
+        self.write_all_attenuators(&channels)?;
 
         // Finally, latch the output of the updated channel to force it into an active state.
-        self.latch(channel)?;
+        self.latch_attenuators(channel)?;
 
         Ok(attenuation_code as f32 / 2.0)
     }
 
-    fn read(&mut self, channel: DdsChannel) -> Result<f32, Error> {
+    fn get_attenuation(&mut self, channel: Channel) -> Result<f32, Error> {
         let mut channels = [0_u8; 4];
 
         // Reading the data always shifts data out of the staging registers, so we perform a
         // duplicate write-back to ensure the staging register is always equal to the output
         // register.
-        self.read_all(&mut channels)?;
-        self.write_all(&channels)?;
+        self.read_all_attenuators(&mut channels)?;
+        self.write_all_attenuators(&channels)?;
 
         // The attenuation code is stored in the upper 6 bits of the register, where each LSB
         // represents 0.5 dB. The attenuator stores the code as active-low, so inverting the result
@@ -43,15 +42,15 @@ pub trait AttenuatorInterface {
         // dont-care bits) into an active-high state and then masking off the don't care bits. If
         // the shift occurs before the inversion, the upper 2 bits (which would then be don't
         // care) would contain erroneous data.
-        let attenuation_code = (!channels[channel as usize]).wrapping_shr(2);
+        let attenuation_code = (!channels[channel as usize]) >> 2;
 
         // Convert the desired channel code into dB of attenuation.
         Ok(attenuation_code as f32 / 2.0)
     }
 
-    fn reset(&mut self) -> Result<(), Error>;
+    fn reset_attenuators(&mut self) -> Result<(), Error>;
 
-    fn latch(&mut self, channel: DdsChannel) -> Result<(), Error>;
-    fn read_all(&mut self, channels: &mut [u8; 4]) -> Result<(), Error>;
-    fn write_all(&mut self, channels: &[u8; 4]) -> Result<(), Error>;
+    fn latch_attenuators(&mut self, channel: Channel) -> Result<(), Error>;
+    fn read_all_attenuators(&mut self, channels: &mut [u8; 4]) -> Result<(), Error>;
+    fn write_all_attenuators(&mut self, channels: &[u8; 4]) -> Result<(), Error>;
 }

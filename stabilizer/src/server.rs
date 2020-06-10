@@ -27,10 +27,10 @@ pub enum AccessRequest {
 }
 
 #[derive(Deserialize, Serialize, Debug)]
-pub struct Request<'a, 'b> {
+pub struct Request<'a> {
     pub req: AccessRequest,
     pub attribute: &'a str,
-    pub value: &'b str,
+    pub value: String<U256>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -42,24 +42,74 @@ pub struct IirRequest {
 #[derive(Serialize)]
 pub struct Response {
     code: i32,
-    attribute: String<U128>,
-    value: String<U128>,
+    attribute: String<U256>,
+    value: String<U256>,
+}
+
+impl<'a> Request<'a> {
+    pub fn restore_value(&mut self) {
+        let mut new_value: String<U256> = String::new();
+        for byte in self.value.as_str().chars() {
+            if byte == '\'' {
+                new_value.push('"').unwrap();
+            } else {
+                new_value.push(byte).unwrap();
+            }
+        }
+
+        self.value = new_value;
+    }
 }
 
 impl Response {
+
+    fn sanitize_value(&mut self) {
+        let mut new_value: String<U256> = String::new();
+        for byte in self.value.as_str().chars() {
+            if byte == '"' {
+                new_value.push('\'').unwrap();
+            } else {
+                new_value.push(byte).unwrap();
+            }
+        }
+
+        self.value = new_value;
+    }
+
+    fn wrap_and_sanitize_value(&mut self) {
+        let mut new_value: String<U256> = String::new();
+        new_value.push('\'').unwrap();
+        for byte in self.value.as_str().chars() {
+            if byte == '"' {
+                new_value.push('\'').unwrap();
+            } else {
+                new_value.push(byte).unwrap();
+            }
+        }
+        new_value.push('\'').unwrap();
+
+        self.value = new_value;
+    }
+
     pub fn success<'a, 'b>(attribute: &'a str, value: &'b str) -> Self
     {
-        Self { code: 200, attribute: String::from(attribute), value: String::from(value)}
+        let mut res = Self { code: 200, attribute: String::from(attribute), value: String::from(value)};
+        res.sanitize_value();
+        res
     }
 
     pub fn error<'a, 'b>(attribute: &'a str, message: &'b str) -> Self
     {
-        Self { code: 400, attribute: String::from(attribute), value: String::from(message)}
+        let mut res = Self { code: 400, attribute: String::from(attribute), value: String::from(message)};
+        res.wrap_and_sanitize_value();
+        res
     }
 
     pub fn custom<'a>(code: i32, message : &'a str) -> Self
     {
-        Self { code: code, attribute: String::from(""), value: String::from(message)}
+        let mut res = Self { code: code, attribute: String::from(""), value: String::from(message)};
+        res.wrap_and_sanitize_value();
+        res
     }
 }
 
@@ -73,7 +123,7 @@ pub struct Status {
 }
 
 pub fn json_reply<T: Serialize>(socket: &mut net::socket::TcpSocket, msg: &T) {
-    let mut u: String<U128> = to_string(msg).unwrap();
+    let mut u: String<U512> = to_string(msg).unwrap();
     u.push('\n').unwrap();
     socket.write_str(&u).unwrap();
 }
@@ -122,7 +172,8 @@ impl Server {
                 } else {
                     let r = from_slice::<Request>(&self.data[..self.data.len() - 1]);
                     match r {
-                        Ok(res) => {
+                        Ok(mut res) => {
+                            res.restore_value();
                             let response = f(&res);
                             json_reply(socket, &response);
                         },

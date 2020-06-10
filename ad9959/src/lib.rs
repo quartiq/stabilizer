@@ -19,7 +19,7 @@ use embedded_hal::{
 pub struct Ad9959<INTERFACE, DELAY, UPDATE> {
     interface: INTERFACE,
     delay: DELAY,
-    reference_clock_frequency: u32,
+    reference_clock_frequency: f32,
     system_clock_multiplier: u8,
     io_update: UPDATE,
 }
@@ -84,6 +84,7 @@ pub enum Channel {
 #[derive(Debug)]
 pub enum Error<InterfaceE> {
     Interface(InterfaceE),
+    Check,
     Bounds,
     Pin,
     Frequency,
@@ -107,7 +108,7 @@ where
                     io_update: UPDATE,
                     delay: DELAY,
                     desired_mode: Mode,
-                    clock_frequency: u32,
+                    clock_frequency: f32,
                     multiplier: u8) -> Result<Self, Error<InterfaceE>>
     where
         RST: OutputPin,
@@ -120,7 +121,7 @@ where
             system_clock_multiplier: 1,
         };
 
-       ad9959.io_update.set_low().or_else(|_| Err(Error::Pin))?;
+        ad9959.io_update.set_low().or_else(|_| Err(Error::Pin))?;
 
         // Reset the AD9959
         reset_pin.set_high().or_else(|_| Err(Error::Pin))?;
@@ -130,12 +131,12 @@ where
 
         reset_pin.set_low().or_else(|_| Err(Error::Pin))?;
 
-       ad9959.interface.configure_mode(Mode::SingleBitTwoWire)?;
+        ad9959.interface.configure_mode(Mode::SingleBitTwoWire)?;
 
         // Program the interface configuration in the AD9959. Default to all channels enabled.
         let mut csr: [u8; 1] = [0xF0];
-         csr[0].set_bits(1..3, desired_mode as u8);
-        ad9959.interface.write(0, &csr)?;
+        csr[0].set_bits(1..3, desired_mode as u8);
+        ad9959.interface.write(Register::CSR as u8, &csr)?;
 
          // Configure the interface to the desired mode.
         ad9959.interface.configure_mode(Mode::FourBitSerial)?;
@@ -144,6 +145,13 @@ where
         ad9959.latch_configuration()?;
 
         ad9959.interface.configure_mode(desired_mode)?;
+
+        // Read back the CSR to ensure it specifies the mode correctly.
+        let mut updated_csr: [u8; 1] = [0];
+        ad9959.interface.read(Register::CSR as u8, &mut updated_csr)?;
+        if updated_csr[0] != csr[0] {
+            return Err(Error::Check);
+        }
 
         // Set the clock frequency to configure the device as necessary.
         ad9959.configure_system_clock(clock_frequency, multiplier)?;
@@ -164,21 +172,21 @@ where
     ///
     /// Arguments:
     /// * `reference_clock_frequency` - The reference clock frequency provided to the AD9959 core.
-    /// * `prescaler` - The frequency prescaler of the system clock. Must be 1 or 4-20.
+    /// * `multiplier` - The frequency multiplier of the system clock. Must be 1 or 4-20.
     ///
     /// Returns:
     /// The actual frequency configured for the internal system clock.
     pub fn configure_system_clock(&mut self,
-                                  reference_clock_frequency: u32,
-                                  prescaler: u8) -> Result<f64, Error<InterfaceE>>
+                                  reference_clock_frequency: f32,
+                                  multiplier: u8) -> Result<f64, Error<InterfaceE>>
     {
         self.reference_clock_frequency = reference_clock_frequency;
 
-        if prescaler != 1 && (prescaler > 20 || prescaler < 4) {
+        if multiplier != 1 && (multiplier > 20 || multiplier < 4) {
             return Err(Error::Bounds);
         }
 
-        let frequency = prescaler as f64 * self.reference_clock_frequency as f64;
+        let frequency = multiplier as f64 * self.reference_clock_frequency as f64;
         if frequency > 500_000_000.0f64 {
             return Err(Error::Frequency);
         }
@@ -186,15 +194,26 @@ where
         // TODO: Update / disable any enabled channels?
         let mut fr1: [u8; 3] = [0, 0, 0];
         self.interface.read(Register::FR1 as u8, &mut fr1)?;
-        fr1[0].set_bits(2..=6, prescaler);
+        fr1[0].set_bits(2..=6, multiplier);
 
         let vco_range = frequency > 255e6;
         fr1[0].set_bit(7, vco_range);
 
         self.interface.write(Register::FR1 as u8, &fr1)?;
-        self.system_clock_multiplier = prescaler;
+        self.system_clock_multiplier = multiplier;
 
         Ok(self.system_clock_frequency())
+    }
+
+    pub fn get_reference_clock_frequency(&self) -> f32 {
+        self.reference_clock_frequency
+    }
+
+    pub fn get_reference_clock_multiplier(&mut self) -> Result<u8, Error<InterfaceE>> {
+        let mut fr1: [u8; 3] = [0, 0, 0];
+        self.interface.read(Register::FR1 as u8, &mut fr1)?;
+
+        Ok(fr1[0].get_bits(2..=6) as u8)
     }
 
     /// Perform a self-test of the communication interface.
@@ -262,6 +281,13 @@ where
         Ok(())
     }
 
+    pub fn is_enabled(&mut self, channel: Channel) -> Result<bool, Error<InterfaceE>> {
+        let mut csr: [u8; 1] = [0; 1];
+        self.interface.read(Register::CSR as u8, &mut csr)?;
+
+        Ok(csr[0].get_bit(channel as usize + 4))
+    }
+
     fn modify_channel(&mut self, channel: Channel, register: Register, data: &[u8]) -> Result<(), Error<InterfaceE>> {
         let mut csr: [u8; 1] = [0];
         self.interface.read(Register::CSR as u8, &mut csr)?;
@@ -282,22 +308,48 @@ where
         Ok(())
     }
 
+    fn read_channel(&mut self, channel: Channel, register: Register, mut data: &mut [u8]) -> Result<(), Error<InterfaceE>> {
+        let mut csr: [u8; 1] = [0];
+        self.interface.read(Register::CSR as u8, &mut csr)?;
+
+        let mut new_csr = csr;
+        new_csr[0].set_bits(4..8, 0);
+        new_csr[0].set_bit(4 + channel as usize, true);
+
+        self.interface.write(Register::CSR as u8, &new_csr)?;
+
+        self.interface.read(register as u8, &mut data)?;
+
+        // Restore the previous CSR. Note that the re-enable of the channel happens immediately, so
+        // the CSR update does not need to be latched.
+        self.interface.write(Register::CSR as u8, &csr)?;
+
+        Ok(())
+    }
+
     /// Configure the phase of a specified channel.
     ///
     /// Arguments:
     /// * `channel` - The channel to configure the frequency of.
-    /// * `phase_turns` - The desired phase offset in normalized turns.
+    /// * `phase_turns` - The desired phase offset in turns.
     ///
     /// Returns:
-    /// The actual programmed phase offset of the channel in degrees.
+    /// The actual programmed phase offset of the channel in turns.
     pub fn set_phase(&mut self, channel: Channel, phase_turns: f32) -> Result<f32, Error<InterfaceE>> {
-        if phase_turns > 1.0 || phase_turns < 0.0 {
-            return Err(Error::Bounds);
-        }
+        let phase_offset: u16 = (phase_turns * (1 << 14) as f32) as u16 & 0x3FFFu16;
 
-        let phase_offset: u16 = (phase_turns * 1u32.wrapping_shl(14) as f32) as u16;
         self.modify_channel(channel, Register::CPOW0, &phase_offset.to_be_bytes())?;
-        Ok((phase_offset as f32 / 1u32.wrapping_shl(14) as f32) * 360.0)
+
+        Ok((phase_offset as f32) / ((1 << 14) as f32))
+    }
+
+    pub fn get_phase(&mut self, channel: Channel) -> Result<f32, Error<InterfaceE>> {
+        let mut phase_offset: [u8; 2] = [0; 2];
+        self.read_channel(channel, Register::CPOW0, &mut phase_offset)?;
+
+        let phase_offset = u16::from_be_bytes(phase_offset) & 0x3FFFu16;
+
+        Ok((phase_offset as f32) / ((1 << 14) as f32))
     }
 
     /// Configure the amplitude of a specified channel.
@@ -313,17 +365,38 @@ where
             return Err(Error::Bounds);
         }
 
-        let amplitude_control: u16 = (amplitude / 1u16.wrapping_shl(10) as f32) as u16;
-        let mut acr: [u8; 3] = [0, amplitude_control.to_be_bytes()[0], amplitude_control.to_be_bytes()[1]];
+        let amplitude_control: u16 = (amplitude * (1 << 10) as f32) as u16;
+
+        let mut acr: [u8; 3] = [0; 3];
 
         // Enable the amplitude multiplier for the channel if required. The amplitude control has
         // full-scale at 0x3FF (amplitude of 1), so the multiplier should be disabled whenever
         // full-scale is used.
-        acr[1].set_bit(4, amplitude_control >= 1u16.wrapping_shl(10));
+        if amplitude_control < (1 << 10) {
+
+            let masked_control = amplitude_control & 0x3FF;
+            acr[1] = masked_control.to_be_bytes()[0];
+            acr[2] = masked_control.to_be_bytes()[1];
+
+            // Enable the amplitude multiplier
+            acr[1].set_bit(4, true);
+        }
 
         self.modify_channel(channel, Register::ACR, &acr)?;
 
-        Ok(amplitude_control as f32 / 1_u16.wrapping_shl(10) as f32)
+        Ok(amplitude_control as f32 / (1 << 10) as f32)
+    }
+
+    pub fn get_amplitude(&mut self, channel: Channel) -> Result<f32, Error<InterfaceE>> {
+        let mut acr: [u8; 3] = [0; 3];
+        self.read_channel(channel, Register::ACR, &mut acr)?;
+
+        if acr[1].get_bit(4) {
+            let amplitude_control: u16 = (((acr[1] as u16) << 8) | (acr[2] as u16)) & 0x3FF;
+            Ok(amplitude_control as f32 / (1 << 10) as f32)
+        } else {
+            Ok(1.0)
+        }
     }
 
     /// Configure the frequency of a specified channel.
@@ -346,5 +419,15 @@ where
 
         self.modify_channel(channel, Register::CFTW0, &tuning_word.to_be_bytes())?;
         Ok((tuning_word as f64 / 1u64.wrapping_shl(32) as f64) * self.system_clock_frequency())
+    }
+
+    pub fn get_frequency(&mut self, channel: Channel) -> Result<f64, Error<InterfaceE>> {
+        // Read the frequency tuning word for the channel.
+        let mut tuning_word: [u8; 4] = [0; 4];
+        self.read_channel(channel, Register::CFTW0, &mut tuning_word)?;
+        let tuning_word = u32::from_be_bytes(tuning_word);
+
+        // Convert the tuning word into a frequency.
+        Ok(tuning_word as f64 * self.system_clock_frequency() / ((1u64 << 32)) as f64)
     }
 }

@@ -1,16 +1,13 @@
 use mcp23017;
 use ad9959;
 
-pub mod error;
-pub mod attenuators;
+use serde::{Serialize, Deserialize};
+mod attenuators;
 mod rf_power;
-pub mod types;
 
 use super::hal;
 
-use error::Error;
 use attenuators::AttenuatorInterface;
-use types::{DdsChannel, InputChannel};
 use rf_power::PowerMeasurementInterface;
 
 use embedded_hal::{
@@ -18,17 +15,79 @@ use embedded_hal::{
     adc::OneShot
 };
 
+const EXT_CLK_SEL_PIN: u8 = 8 + 7;
 #[allow(dead_code)]
-const OSC_EN_N_PIN: u8 = 8 + 7;
-
-const EXT_CLK_SEL_PIN: u8 = 8 + 6;
-
+const OSC_EN_N_PIN: u8 = 8 + 6;
 const ATT_RST_N_PIN: u8 = 8 + 5;
-
-const ATT_LE0_PIN: u8 = 8 + 0;
-const ATT_LE1_PIN: u8 = 8 + 1;
-const ATT_LE2_PIN: u8 = 8 + 2;
 const ATT_LE3_PIN: u8 = 8 + 3;
+const ATT_LE2_PIN: u8 = 8 + 2;
+const ATT_LE1_PIN: u8 = 8 + 1;
+const ATT_LE0_PIN: u8 = 8 + 0;
+
+#[derive(Debug, Copy, Clone)]
+pub enum Error {
+    Spi,
+    I2c,
+    Dds,
+    Qspi,
+    Bounds,
+    InvalidAddress,
+    InvalidChannel,
+    Adc,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum Channel {
+    In0,
+    In1,
+    Out0,
+    Out1,
+}
+
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+pub struct DdsChannelState {
+    pub phase_offset: f32,
+    pub frequency: f64,
+    pub amplitude: f32,
+    pub enabled: bool,
+}
+
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+pub struct ChannelState {
+    pub parameters: DdsChannelState,
+    pub attenuation: f32,
+}
+
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+pub struct InputChannelState {
+    pub attenuation: f32,
+    pub power: f32,
+    pub mixer: DdsChannelState,
+}
+
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+pub struct OutputChannelState {
+    pub attenuation: f32,
+    pub channel: DdsChannelState,
+}
+
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+pub struct DdsClockConfig {
+    pub multiplier: u8,
+    pub reference_clock: f32,
+    pub external_clock: bool,
+}
+
+impl Into<ad9959::Channel> for Channel {
+    fn into(self) -> ad9959::Channel {
+        match self {
+            Channel::In0 => ad9959::Channel::Two,
+            Channel::In1 => ad9959::Channel::Four,
+            Channel::Out0 => ad9959::Channel::One,
+            Channel::Out1 => ad9959::Channel::Three,
+        }
+    }
+}
 
 pub struct QspiInterface {
     pub qspi: hal::qspi::Qspi,
@@ -78,32 +137,40 @@ impl ad9959::Interface for QspiInterface {
                 // Encode the address into the first 4 bytes.
                 for address_bit in 0..8 {
                     let offset: u8 = {
-                        if address_bit % 2 == 0 {
+                        if address_bit % 2 != 0 {
                             4
                         } else {
                             0
                         }
                     };
 
-                    if addr & address_bit != 0 {
-                        encoded_data[(address_bit >> 1) as usize] |= 1 << offset;
+                    // Encode MSB first. Least significant bits are placed at the most significant
+                    // byte.
+                    let byte_position = 3 - (address_bit >> 1) as usize;
+
+                    if addr & (1 << address_bit) != 0 {
+                        encoded_data[byte_position] |= 1 << offset;
                     }
                 }
 
                 // Encode the data into the remaining bytes.
                 for byte_index in 0..data.len() {
                     let byte = data[byte_index];
-                    for address_bit in 0..8 {
+                    for bit in 0..8 {
                         let offset: u8 = {
-                            if address_bit % 2 == 0 {
+                            if bit % 2 != 0 {
                                 4
                             } else {
                                 0
                             }
                         };
 
-                        if byte & address_bit != 0 {
-                            encoded_data[(byte_index + 1) * 4 + (address_bit >> 1) as usize] |= 1 << offset;
+                        // Encode MSB first. Least significant bits are placed at the most
+                        // significant byte.
+                        let byte_position = 3 - (bit >> 1) as usize;
+
+                        if byte & (1 << bit) != 0 {
+                            encoded_data[(byte_index + 1) * 4 + byte_position] |= 1 << offset;
                         }
                     }
                 }
@@ -129,9 +196,8 @@ impl ad9959::Interface for QspiInterface {
             return Err(Error::InvalidAddress);
         }
 
-        // It is not possible to read data from the AD9959 in single bit two wire mode because the
-        // QSPI interface assumes that data is always received on IO1.
-        if self.mode == ad9959::Mode::SingleBitTwoWire {
+        // This implementation only supports operation (read) in four-bit-serial mode.
+        if self.mode != ad9959::Mode::FourBitSerial {
             return Err(Error::Qspi);
         }
 
@@ -178,27 +244,100 @@ where
 
         // Configure power-on-default state for pounder. All LEDs are on, on-board oscillator
         // selected, attenuators out of reset.
-        devices.mcp23017.write_gpio(mcp23017::Port::GPIOA, 0xF).map_err(|_| Error::I2c)?;
-        devices.mcp23017.write_gpio(mcp23017::Port::GPIOB,
-                                    1_u8.wrapping_shl(5)).map_err(|_| Error::I2c)?;
+        devices.mcp23017.write_gpio(mcp23017::Port::GPIOA, 0x3F).map_err(|_| Error::I2c)?;
+        devices.mcp23017.write_gpio(mcp23017::Port::GPIOB, 1 << 5).map_err(|_| Error::I2c)?;
         devices.mcp23017.all_pin_mode(mcp23017::PinMode::OUTPUT).map_err(|_| Error::I2c)?;
 
         // Select the on-board clock with a 5x prescaler (500MHz).
-        devices.select_onboard_clock(5u8)?;
+        devices.select_onboard_clock(4u8)?;
 
         Ok(devices)
     }
 
-    pub fn select_external_clock(&mut self, frequency: u32, prescaler: u8) -> Result<(), Error>{
+    fn select_external_clock(&mut self, frequency: f32, prescaler: u8) -> Result<(), Error>{
         self.mcp23017.digital_write(EXT_CLK_SEL_PIN, true).map_err(|_| Error::I2c)?;
-        self.ad9959.configure_system_clock(frequency, prescaler).map_err(|_| Error::DDS)?;
+        self.ad9959.configure_system_clock(frequency, prescaler).map_err(|_| Error::Dds)?;
 
         Ok(())
     }
 
-    pub fn select_onboard_clock(&mut self, prescaler: u8) -> Result<(), Error> {
+    fn select_onboard_clock(&mut self, prescaler: u8) -> Result<(), Error> {
         self.mcp23017.digital_write(EXT_CLK_SEL_PIN, false).map_err(|_| Error::I2c)?;
-        self.ad9959.configure_system_clock(100_000_000, prescaler).map_err(|_| Error::DDS)?;
+        self.ad9959.configure_system_clock(100_000_000f32, prescaler).map_err(|_| Error::Dds)?;
+
+        Ok(())
+    }
+
+    pub fn configure_dds_clock(&mut self, config: DdsClockConfig) -> Result<(), Error> {
+        if config.external_clock {
+            self.select_external_clock(config.reference_clock, config.multiplier)
+        } else {
+            self.select_onboard_clock(config.multiplier)
+        }
+    }
+
+    pub fn get_dds_clock_config(&mut self) -> Result<DdsClockConfig, Error> {
+        let external_clock = self.mcp23017.digital_read(EXT_CLK_SEL_PIN).map_err(|_| Error::I2c)?;
+        let multiplier = self.ad9959.get_reference_clock_multiplier().map_err(|_| Error::Dds)?;
+        let reference_clock = self.ad9959.get_reference_clock_frequency();
+
+        Ok(DdsClockConfig{multiplier, reference_clock, external_clock})
+    }
+
+    pub fn get_input_channel_state(&mut self, channel: Channel) -> Result<InputChannelState, Error> {
+        match channel {
+            Channel::In0 | Channel::In1 => {
+                let channel_state = self.get_dds_channel_state(channel)?;
+
+                let attenuation = self.get_attenuation(channel)?;
+                let power = self.measure_power(channel)?;
+
+                Ok(InputChannelState {
+                    attenuation: attenuation,
+                    power: power,
+                    mixer: channel_state
+                })
+            }
+            _ => Err(Error::InvalidChannel),
+        }
+    }
+
+    fn get_dds_channel_state(&mut self, channel: Channel) -> Result<DdsChannelState, Error> {
+        let frequency = self.ad9959.get_frequency(channel.into()).map_err(|_| Error::Dds)?;
+        let phase_offset = self.ad9959.get_phase(channel.into()).map_err(|_| Error::Dds)?;
+        let amplitude = self.ad9959.get_amplitude(channel.into()).map_err(|_| Error::Dds)?;
+        let enabled = self.ad9959.is_enabled(channel.into()).map_err(|_| Error::Dds)?;
+
+        Ok(DdsChannelState {phase_offset, frequency, amplitude, enabled})
+    }
+
+    pub fn get_output_channel_state(&mut self, channel: Channel) -> Result<OutputChannelState, Error> {
+        match channel {
+            Channel::Out0 | Channel::Out1 => {
+                let channel_state = self.get_dds_channel_state(channel)?;
+                let attenuation = self.get_attenuation(channel)?;
+
+                Ok(OutputChannelState {
+                    attenuation: attenuation,
+                    channel: channel_state,
+                })
+            }
+            _ => Err(Error::InvalidChannel),
+        }
+    }
+
+    pub fn set_channel_state(&mut self, channel: Channel, state: ChannelState) -> Result<(), Error> {
+        self.ad9959.set_frequency(channel.into(), state.parameters.frequency).map_err(|_| Error::Dds)?;
+        self.ad9959.set_phase(channel.into(), state.parameters.phase_offset).map_err(|_| Error::Dds)?;
+        self.ad9959.set_amplitude(channel.into(), state.parameters.amplitude).map_err(|_| Error::Dds)?;
+
+        if state.parameters.enabled {
+            self.ad9959.enable_channel(channel.into()).map_err(|_| Error::Dds)?;
+        } else {
+            self.ad9959.disable_channel(channel.into()).map_err(|_| Error::Dds)?;
+        }
+
+        self.set_attenuation(channel, state.attenuation)?;
 
         Ok(())
     }
@@ -206,21 +345,21 @@ where
 
 impl<DELAY> AttenuatorInterface for PounderDevices<DELAY>
 {
-    fn reset(&mut self) -> Result<(), Error> {
-        self.mcp23017.digital_write(ATT_RST_N_PIN, true).map_err(|_| Error::I2c)?;
+    fn reset_attenuators(&mut self) -> Result<(), Error> {
+        self.mcp23017.digital_write(ATT_RST_N_PIN, false).map_err(|_| Error::I2c)?;
         // TODO: Measure the I2C transaction speed to the RST pin to ensure that the delay is
         // sufficient. Document the delay here.
-        self.mcp23017.digital_write(ATT_RST_N_PIN, false).map_err(|_| Error::I2c)?;
+        self.mcp23017.digital_write(ATT_RST_N_PIN, true).map_err(|_| Error::I2c)?;
 
         Ok(())
     }
 
-    fn latch(&mut self, channel: DdsChannel) -> Result<(), Error> {
+    fn latch_attenuators(&mut self, channel: Channel) -> Result<(), Error> {
         let pin = match channel {
-            DdsChannel::Zero => ATT_LE1_PIN,
-            DdsChannel::One => ATT_LE0_PIN,
-            DdsChannel::Two => ATT_LE3_PIN,
-            DdsChannel::Three => ATT_LE2_PIN,
+            Channel::In0 => ATT_LE0_PIN,
+            Channel::In1 => ATT_LE2_PIN,
+            Channel::Out0 => ATT_LE1_PIN,
+            Channel::Out1 => ATT_LE3_PIN,
         };
 
         self.mcp23017.digital_write(pin, true).map_err(|_| Error::I2c)?;
@@ -231,13 +370,13 @@ impl<DELAY> AttenuatorInterface for PounderDevices<DELAY>
         Ok(())
     }
 
-    fn read_all(&mut self, channels: &mut [u8; 4]) -> Result<(), Error> {
+    fn read_all_attenuators(&mut self, channels: &mut [u8; 4]) -> Result<(), Error> {
         self.attenuator_spi.transfer(channels).map_err(|_| Error::Spi)?;
 
         Ok(())
     }
 
-    fn write_all(&mut self, channels: &[u8; 4]) -> Result<(), Error> {
+    fn write_all_attenuators(&mut self, channels: &[u8; 4]) -> Result<(), Error> {
         let mut result = [0_u8; 4];
         result.clone_from_slice(channels);
         self.attenuator_spi.transfer(&mut result).map_err(|_| Error::Spi)?;
@@ -247,16 +386,17 @@ impl<DELAY> AttenuatorInterface for PounderDevices<DELAY>
 }
 
 impl<DELAY> PowerMeasurementInterface for PounderDevices<DELAY> {
-    fn sample_converter(&mut self, channel: InputChannel) -> Result<f32, Error> {
+    fn sample_converter(&mut self, channel: Channel) -> Result<f32, Error> {
         let adc_scale = match channel {
-            InputChannel::Zero => {
+            Channel::In0 => {
                 let adc_reading: u32 = self.adc1.read(&mut self.adc1_in_p).map_err(|_| Error::Adc)?;
                 adc_reading as f32 / self.adc1.max_sample() as f32
             },
-            InputChannel::One => {
+            Channel::In1 => {
                 let adc_reading: u32 = self.adc2.read(&mut self.adc2_in_p).map_err(|_| Error::Adc)?;
                 adc_reading as f32 / self.adc2.max_sample() as f32
             },
+            _ => return Err(Error::InvalidChannel),
         };
 
         // Convert analog percentage to voltage.

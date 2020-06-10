@@ -113,8 +113,8 @@ type AFE2 = afe::ProgrammableGainAmplifier<
 
 macro_rules! route_request {
     ($request:ident,
-            readable_attributes: [$(($read_attribute:tt, $getter:tt)),*],
-            modifiable_attributes: [$(($write_attribute:tt, $TYPE:ty, $setter:tt)),*]) => {
+            readable_attributes: [$($read_attribute:tt: $getter:tt),*],
+            modifiable_attributes: [$($write_attribute:tt: $TYPE:ty, $setter:tt),*]) => {
         match $request.req {
             server::AccessRequest::Read => {
                 match $request.attribute {
@@ -126,17 +126,13 @@ macro_rules! route_request {
                                                                      "Failed to set attribute"),
                         };
 
-                        let encoded_data: String<U128> = match serde_json_core::to_string(&value) {
+                        let encoded_data: String<U256> = match serde_json_core::to_string(&value) {
                             Ok(data) => data,
                             Err(_) => return server::Response::error($request.attribute,
                                     "Failed to encode attribute value"),
                         };
 
-                        // Encoding data into a string surrounds it with qutotations. Because this
-                        // value is then serialzed into another string, we remove the double
-                        // quotations because they cannot be properly escaped.
-                        server::Response::success($request.attribute,
-                                &encoded_data[1..encoded_data.len()-1])
+                        server::Response::success($request.attribute, &encoded_data)
                     },
                  )*
                     _ => server::Response::error($request.attribute, "Unknown attribute")
@@ -146,22 +142,14 @@ macro_rules! route_request {
                 match $request.attribute {
                 $(
                     $write_attribute => {
-                        // To avoid sending double quotations in the request, they are eliminated on
-                        // the sender side. However, to properly deserialize the data, quotes need
-                        // to be added back.
-                        let mut value: String<U128> = String::new();
-                        value.push('"').unwrap();
-                        value.push_str($request.value).unwrap();
-                        value.push('"').unwrap();
-
-                        let new_value = match serde_json_core::from_str::<$TYPE>(value.as_str()) {
+                        let new_value = match serde_json_core::from_str::<$TYPE>(&$request.value) {
                             Ok(data) => data,
                             Err(_) => return server::Response::error($request.attribute,
                                     "Failed to decode value"),
                         };
 
                         match $setter(new_value) {
-                            Ok(_) => server::Response::success($request.attribute, $request.value),
+                            Ok(_) => server::Response::success($request.attribute, &$request.value),
                             Err(_) => server::Response::error($request.attribute,
                                     "Failed to set attribute"),
                         }
@@ -344,6 +332,17 @@ const APP: () = {
             spi
         };
 
+        let mut fp_led_0 = gpiod.pd5.into_push_pull_output();
+        let mut fp_led_1 = gpiod.pd6.into_push_pull_output();
+        let mut fp_led_2 = gpiog.pg4.into_push_pull_output();
+        let mut fp_led_3 = gpiod.pd12.into_push_pull_output();
+
+        fp_led_0.set_low().unwrap();
+        fp_led_1.set_low().unwrap();
+        fp_led_2.set_low().unwrap();
+        fp_led_3.set_low().unwrap();
+
+
         let pounder_devices = {
             let ad9959 =  {
                 let qspi_interface = {
@@ -375,7 +374,7 @@ const APP: () = {
                                     io_update,
                                     asm_delay,
                                     ad9959::Mode::FourBitSerial,
-                                    100_000_000,
+                                    100_000_000f32,
                                     5).unwrap()
             };
 
@@ -425,16 +424,6 @@ const APP: () = {
                                          adc1_in_p,
                                          adc2_in_p).unwrap()
         };
-
-        let mut fp_led_0 = gpiod.pd5.into_push_pull_output();
-        let mut fp_led_1 = gpiod.pd6.into_push_pull_output();
-        let mut fp_led_2 = gpiog.pg4.into_push_pull_output();
-        let mut fp_led_3 = gpiod.pd12.into_push_pull_output();
-
-        fp_led_0.set_low().unwrap();
-        fp_led_1.set_low().unwrap();
-        fp_led_2.set_low().unwrap();
-        fp_led_3.set_low().unwrap();
 
         let mut eeprom_i2c = {
             let sda = gpiof.pf0.into_alternate_af4().set_open_drain();
@@ -517,7 +506,7 @@ const APP: () = {
                              hal::dma::DMAREQ_ID::TIM2_CH2);
 
         // Configure timer 2 to trigger conversions for the ADC
-        let mut timer2 = dp.TIM2.timer(500.khz(), &mut clocks);
+        let mut timer2 = dp.TIM2.timer(50.khz(), &mut clocks);
         timer2.configure_channel(hal::timer::Channel::One, 0.25);
         timer2.configure_channel(hal::timer::Channel::Two, 0.75);
 
@@ -572,7 +561,7 @@ const APP: () = {
         c.resources.dac1.send(output).unwrap();
     }
 
-    #[idle(resources=[net_interface, mac_addr, eth_mac, iir_state, iir_ch, afe1, afe2])]
+    #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afe1, afe2])]
     fn idle(mut c: idle::Context) -> ! {
 
         let mut socket_set_entries: [_; 8] = Default::default();
@@ -617,7 +606,7 @@ const APP: () = {
                         info!("Got request: {:?}", req);
                         route_request!(req,
                             readable_attributes: [
-                                ("stabilizer/iir/state", (|| {
+                                "stabilizer/iir/state": (|| {
                                     let state = c.resources.iir_state.lock(|iir_state|
                                         server::Status {
                                             t: time,
@@ -628,13 +617,32 @@ const APP: () = {
                                     });
 
                                     Ok::<server::Status, ()>(state)
-                                })),
-                                ("stabilizer/afe1/gain", (|| c.resources.afe1.get_gain())),
-                                ("stabilizer/afe2/gain", (|| c.resources.afe2.get_gain()))
+                                }),
+                                "stabilizer/afe1/gain": (|| c.resources.afe1.get_gain()),
+                                "stabilizer/afe2/gain": (|| c.resources.afe2.get_gain()),
+                                "pounder/in0": (|| {
+                                    c.resources.pounder.get_input_channel_state(
+                                            pounder::Channel::In0)
+                                }),
+                                "pounder/in1": (|| {
+                                    c.resources.pounder.get_input_channel_state(
+                                            pounder::Channel::In1)
+                                }),
+                                "pounder/out0": (|| {
+                                    c.resources.pounder.get_output_channel_state(
+                                            pounder::Channel::Out0)
+                                }),
+                                "pounder/out1": (|| {
+                                    c.resources.pounder.get_output_channel_state(
+                                            pounder::Channel::Out1)
+                                }),
+                                "pounder/dds/clock": (|| {
+                                    c.resources.pounder.get_dds_clock_config()
+                                })
                             ],
 
                             modifiable_attributes: [
-                                ("stabilizer/iir1/state", server::IirRequest, (|req: server::IirRequest| {
+                                "stabilizer/iir1/state": server::IirRequest, (|req: server::IirRequest| {
                                     c.resources.iir_ch.lock(|iir_ch| {
                                         if req.channel > 1 {
                                             return Err(());
@@ -644,8 +652,8 @@ const APP: () = {
 
                                         Ok::<server::IirRequest, ()>(req)
                                     })
-                                })),
-                                ("stabilizer/iir2/state", server::IirRequest, (|req: server::IirRequest| {
+                                }),
+                                "stabilizer/iir2/state": server::IirRequest, (|req: server::IirRequest| {
                                     c.resources.iir_ch.lock(|iir_ch| {
                                         if req.channel > 1 {
                                             return Err(());
@@ -655,13 +663,32 @@ const APP: () = {
 
                                         Ok::<server::IirRequest, ()>(req)
                                     })
-                                })),
-                                ("stabilizer/afe1/gain", afe::Gain, (|gain| {
+                                }),
+                                "pounder/in0": pounder::ChannelState, (|state| {
+                                    c.resources.pounder.set_channel_state(pounder::Channel::In0,
+                                            state)
+                                }),
+                                "pounder/in1": pounder::ChannelState, (|state| {
+                                    c.resources.pounder.set_channel_state(pounder::Channel::In1,
+                                            state)
+                                }),
+                                "pounder/out0": pounder::ChannelState, (|state| {
+                                    c.resources.pounder.set_channel_state(pounder::Channel::Out0,
+                                            state)
+                                }),
+                                "pounder/out1": pounder::ChannelState, (|state| {
+                                    c.resources.pounder.set_channel_state(pounder::Channel::Out1,
+                                            state)
+                                }),
+                                "pounder/dds/clock": pounder::DdsClockConfig, (|config| {
+                                    c.resources.pounder.configure_dds_clock(config)
+                                }),
+                                "stabilizer/afe1/gain": afe::Gain, (|gain| {
                                     Ok::<(), ()>(c.resources.afe1.set_gain(gain))
-                                })),
-                                ("stabilizer/afe2/gain", afe::Gain, (|gain| {
+                                }),
+                                "stabilizer/afe2/gain": afe::Gain, (|gain| {
                                     Ok::<(), ()>(c.resources.afe2.set_gain(gain))
-                                }))
+                                })
                             ]
                         )
                     });
