@@ -80,6 +80,7 @@ pub struct DdsClockConfig {
 }
 
 impl Into<ad9959::Channel> for Channel {
+    /// Translate pounder channels to DDS output channels.
     fn into(self) -> ad9959::Channel {
         match self {
             Channel::In0 => ad9959::Channel::Two,
@@ -90,13 +91,21 @@ impl Into<ad9959::Channel> for Channel {
     }
 }
 
+/// A structure for the QSPI interface for the DDS.
 pub struct QspiInterface {
     pub qspi: hal::qspi::Qspi,
     mode: ad9959::Mode,
 }
 
 impl QspiInterface {
+    /// Initialize the QSPI interface.
+    ///
+    /// Args:
+    /// * `qspi` - The QSPI peripheral driver.
     pub fn new(mut qspi: hal::qspi::Qspi) -> Result<Self, Error> {
+        // This driver only supports operation in 4-bit mode due to bus inconsistencies between the
+        // QSPI peripheral and the DDS. Instead, we will bit-bang communications in
+        // single-bit-two-wire to the DDS to configure it to 4-bit operation.
         qspi.configure_mode(hal::qspi::QspiMode::FourBit).map_err(|_| Error::Qspi)?;
         Ok(Self { qspi: qspi, mode: ad9959::Mode::SingleBitTwoWire })
     }
@@ -105,12 +114,21 @@ impl QspiInterface {
 impl ad9959::Interface for QspiInterface {
     type Error = Error;
 
+    /// Configure the operations mode of the interface.
+    ///
+    /// Args:
+    /// * `mode` - The newly desired operational mode.
     fn configure_mode(&mut self, mode: ad9959::Mode) -> Result<(), Error> {
         self.mode = mode;
 
         Ok(())
     }
 
+    /// Write data over QSPI to the DDS.
+    ///
+    /// Args:
+    /// * `addr` - The address to write over QSPI to the DDS.
+    /// * `data` - The data to write.
     fn write(&mut self, addr: u8, data: &[u8]) -> Result<(), Error> {
         if (addr & 0x80) != 0 {
             return Err(Error::InvalidAddress);
@@ -206,6 +224,7 @@ impl ad9959::Interface for QspiInterface {
     }
 }
 
+/// A structure containing implementation for Pounder hardware.
 pub struct PounderDevices<DELAY> {
     pub ad9959: ad9959::Ad9959<QspiInterface,
                                DELAY,
@@ -222,6 +241,15 @@ impl<DELAY> PounderDevices<DELAY>
 where
     DELAY: embedded_hal::blocking::delay::DelayMs<u8>,
 {
+    /// Construct and initialize pounder-specific hardware.
+    ///
+    /// Args:
+    /// * `ad9959` - The DDS driver for the pounder hardware.
+    /// * `attenuator_spi` - A SPI interface to control digital attenuators.
+    /// * `adc1` - The ADC1 peripheral for measuring power.
+    /// * `adc2` - The ADC2 peripheral for measuring power.
+    /// * `adc1_in_p` - The input channel for the RF power measurement on IN0.
+    /// * `adc2_in_p` - The input channel for the RF power measurement on IN1.
     pub fn new(mcp23017: mcp23017::MCP23017<hal::i2c::I2c<hal::stm32::I2C1>>,
                ad9959: ad9959::Ad9959<QspiInterface,
                                       DELAY,
@@ -256,6 +284,11 @@ where
         Ok(devices)
     }
 
+    /// Select the an external for the DDS reference clock source.
+    ///
+    /// Args:
+    /// * `frequency` - The frequency of the external clock source.
+    /// * `multiplier` - The multiplier of the reference clock to use in the DDS.
     fn select_external_clock(&mut self, frequency: f32, prescaler: u8) -> Result<(), Error>{
         self.mcp23017.digital_write(EXT_CLK_SEL_PIN, true).map_err(|_| Error::I2c)?;
         self.ad9959.configure_system_clock(frequency, prescaler).map_err(|_| Error::Dds)?;
@@ -263,13 +296,21 @@ where
         Ok(())
     }
 
-    fn select_onboard_clock(&mut self, prescaler: u8) -> Result<(), Error> {
+    /// Select the onboard oscillator for the DDS reference clock source.
+    ///
+    /// Args:
+    /// * `multiplier` - The multiplier of the reference clock to use in the DDS.
+    fn select_onboard_clock(&mut self, multiplier: u8) -> Result<(), Error> {
         self.mcp23017.digital_write(EXT_CLK_SEL_PIN, false).map_err(|_| Error::I2c)?;
-        self.ad9959.configure_system_clock(100_000_000f32, prescaler).map_err(|_| Error::Dds)?;
+        self.ad9959.configure_system_clock(100_000_000f32, multiplier).map_err(|_| Error::Dds)?;
 
         Ok(())
     }
 
+    /// Configure the Pounder DDS clock.
+    ///
+    /// Args:
+    /// * `config` - The configuration of the DDS clock desired.
     pub fn configure_dds_clock(&mut self, config: DdsClockConfig) -> Result<(), Error> {
         if config.external_clock {
             self.select_external_clock(config.reference_clock, config.multiplier)
@@ -278,6 +319,10 @@ where
         }
     }
 
+    /// Get the pounder DDS clock configuration
+    ///
+    /// Returns:
+    /// The current pounder DDS clock configuration.
     pub fn get_dds_clock_config(&mut self) -> Result<DdsClockConfig, Error> {
         let external_clock = self.mcp23017.digital_read(EXT_CLK_SEL_PIN).map_err(|_| Error::I2c)?;
         let multiplier = self.ad9959.get_reference_clock_multiplier().map_err(|_| Error::Dds)?;
@@ -286,6 +331,13 @@ where
         Ok(DdsClockConfig{multiplier, reference_clock, external_clock})
     }
 
+    /// Get the state of a Pounder input channel.
+    ///
+    /// Args:
+    /// * `channel` - The pounder channel to get the state of. Must be an input channel
+    ///
+    /// Returns:
+    /// The read-back channel input state.
     pub fn get_input_channel_state(&mut self, channel: Channel) -> Result<InputChannelState, Error> {
         match channel {
             Channel::In0 | Channel::In1 => {
@@ -304,6 +356,13 @@ where
         }
     }
 
+    /// Get the state of a DDS channel.
+    ///
+    /// Args:
+    /// * `channel` - The pounder channel to get the state of.
+    ///
+    /// Returns:
+    /// The read-back channel state.
     fn get_dds_channel_state(&mut self, channel: Channel) -> Result<DdsChannelState, Error> {
         let frequency = self.ad9959.get_frequency(channel.into()).map_err(|_| Error::Dds)?;
         let phase_offset = self.ad9959.get_phase(channel.into()).map_err(|_| Error::Dds)?;
@@ -313,6 +372,13 @@ where
         Ok(DdsChannelState {phase_offset, frequency, amplitude, enabled})
     }
 
+    /// Get the state of a DDS output channel.
+    ///
+    /// Args:
+    /// * `channel` - The pounder channel to get the output state of. Must be an output channel.
+    ///
+    /// Returns:
+    /// The read-back output channel state.
     pub fn get_output_channel_state(&mut self, channel: Channel) -> Result<OutputChannelState, Error> {
         match channel {
             Channel::Out0 | Channel::Out1 => {
@@ -328,6 +394,11 @@ where
         }
     }
 
+    /// Configure a DDS channel.
+    ///
+    /// Args:
+    /// * `channel` - The pounder channel to configure.
+    /// * `state` - The state to configure the channel for.
     pub fn set_channel_state(&mut self, channel: Channel, state: ChannelState) -> Result<(), Error> {
         self.ad9959.set_frequency(channel.into(), state.parameters.frequency).map_err(|_| Error::Dds)?;
         self.ad9959.set_phase(channel.into(), state.parameters.phase_offset).map_err(|_| Error::Dds)?;
@@ -347,6 +418,7 @@ where
 
 impl<DELAY> AttenuatorInterface for PounderDevices<DELAY>
 {
+    /// Reset all of the attenuators to a power-on default state.
     fn reset_attenuators(&mut self) -> Result<(), Error> {
         self.mcp23017.digital_write(ATT_RST_N_PIN, false).map_err(|_| Error::I2c)?;
         // TODO: Measure the I2C transaction speed to the RST pin to ensure that the delay is
@@ -356,6 +428,10 @@ impl<DELAY> AttenuatorInterface for PounderDevices<DELAY>
         Ok(())
     }
 
+    /// Latch a configuration into a digital attenuator.
+    ///
+    /// Args:
+    /// * `channel` - The attenuator channel to latch.
     fn latch_attenuators(&mut self, channel: Channel) -> Result<(), Error> {
         let pin = match channel {
             Channel::In0 => ATT_LE0_PIN,
@@ -372,12 +448,20 @@ impl<DELAY> AttenuatorInterface for PounderDevices<DELAY>
         Ok(())
     }
 
+    /// Read the raw attenuation codes stored in the attenuator shift registers.
+    ///
+    /// Args:
+    /// * `channels` - A slice to store the channel readings into.
     fn read_all_attenuators(&mut self, channels: &mut [u8; 4]) -> Result<(), Error> {
         self.attenuator_spi.transfer(channels).map_err(|_| Error::Spi)?;
 
         Ok(())
     }
 
+    /// Write the attenuator shift registers.
+    ///
+    /// Args:
+    /// * `channels` - The data to write into the attenuators.
     fn write_all_attenuators(&mut self, channels: &[u8; 4]) -> Result<(), Error> {
         let mut result = [0_u8; 4];
         result.clone_from_slice(channels);
@@ -388,6 +472,13 @@ impl<DELAY> AttenuatorInterface for PounderDevices<DELAY>
 }
 
 impl<DELAY> PowerMeasurementInterface for PounderDevices<DELAY> {
+    /// Sample an ADC channel.
+    ///
+    /// Args:
+    /// * `channel` - The channel to sample.
+    ///
+    /// Returns:
+    /// The sampled voltage of the specified channel.
     fn sample_converter(&mut self, channel: Channel) -> Result<f32, Error> {
         let adc_scale = match channel {
             Channel::In0 => {

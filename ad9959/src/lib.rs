@@ -24,6 +24,7 @@ pub struct Ad9959<INTERFACE, DELAY, UPDATE> {
     io_update: UPDATE,
 }
 
+/// A trait that allows a HAL to provide a means of communicating with the AD9959.
 pub trait Interface {
     type Error;
 
@@ -34,6 +35,8 @@ pub trait Interface {
     fn read(&mut self, addr: u8, dest: &mut [u8]) -> Result<(), Self::Error>;
 }
 
+/// Indicates various communication modes of the DDS. The value of this enumeration is equivalent to
+/// the configuration bits of the DDS CSR register.
 #[derive(Copy, Clone, PartialEq)]
 pub enum Mode {
     SingleBitTwoWire = 0b00,
@@ -103,6 +106,17 @@ where
     UPDATE: OutputPin<Error = PinE>,
 
 {
+    /// Construct and initialize the DDS.
+    ///
+    /// Args:
+    /// * `interface` - An interface to the DDS.
+    /// * `reset_pin` - A pin connected to the DDS reset input.
+    /// * `io_update` - A pin connected to the DDS io_update input.
+    /// * `delay` - A delay implementation for blocking operation for specific amounts of time.
+    /// * `desired_mode` - The desired communication mode of the interface to the DDS.
+    /// * `clock_frequency` - The clock frequency of the reference clock input.
+    /// * `multiplier` - The desired clock multiplier for the system clock. This multiplies
+    ///   `clock_frequency` to generate the system clock.
     pub fn new<RST>(interface: INTERFACE,
                     reset_pin: &mut RST,
                     io_update: UPDATE,
@@ -158,6 +172,7 @@ where
         Ok(ad9959)
     }
 
+    /// Latch the DDS configuration to ensure it is active on the output channels.
     fn latch_configuration(&mut self) -> Result<(), Error<InterfaceE>> {
        self.io_update.set_high().or_else(|_| Err(Error::Pin))?;
        // The SYNC_CLK is 1/4 the system clock frequency. The IO_UPDATE pin must be latched for one
@@ -205,10 +220,12 @@ where
         Ok(self.system_clock_frequency())
     }
 
+    /// Get the current reference clock frequency in Hz.
     pub fn get_reference_clock_frequency(&self) -> f32 {
         self.reference_clock_frequency
     }
 
+    /// Get the current reference clock multiplier.
     pub fn get_reference_clock_multiplier(&mut self) -> Result<u8, Error<InterfaceE>> {
         let mut fr1: [u8; 3] = [0, 0, 0];
         self.interface.read(Register::FR1 as u8, &mut fr1)?;
@@ -257,6 +274,7 @@ where
         Ok(true)
     }
 
+    /// Get the current system clock frequency in Hz.
     fn system_clock_frequency(&self) -> f64 {
         self.system_clock_multiplier as f64 * self.reference_clock_frequency as f64
     }
@@ -281,6 +299,7 @@ where
         Ok(())
     }
 
+    /// Determine if an output channel is enabled.
     pub fn is_enabled(&mut self, channel: Channel) -> Result<bool, Error<InterfaceE>> {
         let mut csr: [u8; 1] = [0; 1];
         self.interface.read(Register::CSR as u8, &mut csr)?;
@@ -288,7 +307,15 @@ where
         Ok(csr[0].get_bit(channel as usize + 4))
     }
 
+    /// Update an output channel configuration register.
+    ///
+    /// Args:
+    /// * `channel` - The channel to configure.
+    /// * `register` - The register to update.
+    /// * `data` - The contents to write to the provided register.
     fn modify_channel(&mut self, channel: Channel, register: Register, data: &[u8]) -> Result<(), Error<InterfaceE>> {
+        // Disable all other outputs so that we can update the configuration register of only the
+        // specified channel.
         let mut csr: [u8; 1] = [0];
         self.interface.read(Register::CSR as u8, &mut csr)?;
 
@@ -308,7 +335,15 @@ where
         Ok(())
     }
 
+    /// Read a configuration register of a specific channel.
+    ///
+    /// Args:
+    /// * `channel` - The channel to read.
+    /// * `register` - The register to read.
+    /// * `data` - A location to store the read register contents.
     fn read_channel(&mut self, channel: Channel, register: Register, mut data: &mut [u8]) -> Result<(), Error<InterfaceE>> {
+        // Disable all other channels in the CSR so that we can read the configuration register of
+        // only the desired channel.
         let mut csr: [u8; 1] = [0];
         self.interface.read(Register::CSR as u8, &mut csr)?;
 
@@ -343,6 +378,13 @@ where
         Ok((phase_offset as f32) / ((1 << 14) as f32))
     }
 
+    /// Get the current phase of a specified channel.
+    ///
+    /// Args:
+    /// * `channel` - The channel to get the phase of.
+    ///
+    /// Returns:
+    /// The phase of the channel in turns.
     pub fn get_phase(&mut self, channel: Channel) -> Result<f32, Error<InterfaceE>> {
         let mut phase_offset: [u8; 2] = [0; 2];
         self.read_channel(channel, Register::CPOW0, &mut phase_offset)?;
@@ -387,6 +429,13 @@ where
         Ok(amplitude_control as f32 / (1 << 10) as f32)
     }
 
+    /// Get the configured amplitude of a channel.
+    ///
+    /// Args:
+    /// * `channel` - The channel to get the amplitude of.
+    ///
+    /// Returns:
+    /// The normalized amplitude of the channel.
     pub fn get_amplitude(&mut self, channel: Channel) -> Result<f32, Error<InterfaceE>> {
         let mut acr: [u8; 3] = [0; 3];
         self.read_channel(channel, Register::ACR, &mut acr)?;
@@ -421,6 +470,13 @@ where
         Ok((tuning_word as f64 / 1u64.wrapping_shl(32) as f64) * self.system_clock_frequency())
     }
 
+    /// Get the frequency of a channel.
+    ///
+    /// Arguments:
+    /// * `channel` - The channel to get the frequency of.
+    ///
+    /// Returns:
+    /// The frequency of the channel in Hz.
     pub fn get_frequency(&mut self, channel: Channel) -> Result<f64, Error<InterfaceE>> {
         // Read the frequency tuning word for the channel.
         let mut tuning_word: [u8; 4] = [0; 4];

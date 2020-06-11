@@ -1,6 +1,20 @@
 use super::{Channel, Error};
 
+/// Provide an interface for managing digital attenuators on Pounder hardware.
+///
+/// Note: The digital attenuators do not allow read-back of attenuation. To circumvent this, this
+/// driver maintains the attenuation code in both the shift register as well as the latched output
+/// register of the attenuators. This allows the "active" attenuation code to be read back by
+/// reading the shfit register. The downside of this approach is that any read is destructive, so a
+/// read-writeback approach is employed.
 pub trait AttenuatorInterface {
+
+    /// Set the attenuation of a single channel.
+    ///
+    /// Args:
+    /// * `channel` - The pounder channel to configure the attenuation of.
+    /// * `attenuation` - The desired attenuation of the channel in dB. This has a resolution of
+    ///   0.5dB.
     fn set_attenuation(&mut self, channel: Channel, attenuation: f32) -> Result<f32, Error> {
         if attenuation > 31.5 || attenuation < 0.0 {
             return Err(Error::Bounds);
@@ -27,6 +41,13 @@ pub trait AttenuatorInterface {
         Ok(attenuation_code as f32 / 2.0)
     }
 
+    /// Get the attenuation of a channel.
+    ///
+    /// Args:
+    /// * `channel` - The channel to get the attenuation of.
+    ///
+    /// Returns:
+    /// The programmed attenuation of the channel in dB.
     fn get_attenuation(&mut self, channel: Channel) -> Result<f32, Error> {
         let mut channels = [0_u8; 4];
 

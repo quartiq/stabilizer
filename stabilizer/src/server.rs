@@ -63,6 +63,7 @@ impl<'a> Request<'a> {
 
 impl Response {
 
+    /// Remove all double quotation marks from the `value` field of a response.
     fn sanitize_value(&mut self) {
         let mut new_value: String<U256> = String::new();
         for byte in self.value.as_str().chars() {
@@ -76,6 +77,8 @@ impl Response {
         self.value = new_value;
     }
 
+    /// Remove all double quotation marks from the `value` field of a response and wrap it in single
+    /// quotes.
     fn wrap_and_sanitize_value(&mut self) {
         let mut new_value: String<U256> = String::new();
         new_value.push('\'').unwrap();
@@ -91,6 +94,13 @@ impl Response {
         self.value = new_value;
     }
 
+    /// Construct a successful reply.
+    ///
+    /// Note: `value` will be sanitized to convert all single quotes to double quotes.
+    ///
+    /// Args:
+    /// * `attrbute` - The attribute of the success.
+    /// * `value` - The value of the attribute.
     pub fn success<'a, 'b>(attribute: &'a str, value: &'b str) -> Self
     {
         let mut res = Self { code: 200, attribute: String::from(attribute), value: String::from(value)};
@@ -98,6 +108,13 @@ impl Response {
         res
     }
 
+    /// Construct an error reply.
+    ///
+    /// Note: `message` will be sanitized to convert all single quotes to double quotes.
+    ///
+    /// Args:
+    /// * `attrbute` - The attribute of the success.
+    /// * `message` - The message denoting the error.
     pub fn error<'a, 'b>(attribute: &'a str, message: &'b str) -> Self
     {
         let mut res = Self { code: 400, attribute: String::from(attribute), value: String::from(message)};
@@ -105,6 +122,13 @@ impl Response {
         res
     }
 
+    /// Construct a custom reply.
+    ///
+    /// Note: `message` will be sanitized to convert all single quotes to double quotes.
+    ///
+    /// Args:
+    /// * `attrbute` - The attribute of the success.
+    /// * `message` - The message denoting the status.
     pub fn custom<'a>(code: i32, message : &'a str) -> Self
     {
         let mut res = Self { code: code, attribute: String::from(""), value: String::from(message)};
@@ -134,6 +158,7 @@ pub struct Server {
 }
 
 impl Server {
+    /// Construct a new server object for managing requests.
     pub fn new() -> Self {
         Self {
             data: Vec::new(),
@@ -141,6 +166,11 @@ impl Server {
         }
     }
 
+    /// Poll the server for potential data updates.
+    ///
+    /// Args:
+    /// * `socket` - The socket to check contents from.
+    /// * `f` - A closure that can be called if a request has been received on the server.
     pub fn poll<F>(
         &mut self,
         socket: &mut net::socket::TcpSocket,
@@ -173,6 +203,10 @@ impl Server {
                     let r = from_slice::<Request>(&self.data[..self.data.len() - 1]);
                     match r {
                         Ok(mut res) => {
+                            // Note that serde_json_core doesn't escape quotations within a string.
+                            // To account for this, we manually translate all single quotes to
+                            // double quotes. This occurs because we doubly-serialize this field in
+                            // some cases.
                             res.restore_value();
                             let response = f(&res);
                             json_reply(socket, &response);
