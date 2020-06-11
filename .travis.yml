@@ -22,6 +22,7 @@ before_script:
   - rustup target add thumbv7em-none-eabihf
   - rustup component add clippy
   - rustup component add rustfmt
+  - git submodule init && git submodule update
 
 script:
   - "cargo build --target thumbv7em-none-eabihf --features \"$FEATURES\" $ARGS"
