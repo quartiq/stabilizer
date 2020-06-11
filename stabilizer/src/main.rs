@@ -123,7 +123,7 @@ macro_rules! route_request {
                         let value = match $getter() {
                             Ok(data) => data,
                             Err(_) => return server::Response::error($request.attribute,
-                                                                     "Failed to set attribute"),
+                                                                     "Failed to read attribute"),
                         };
 
                         let encoded_data: String<U256> = match serde_json_core::to_string(&value) {

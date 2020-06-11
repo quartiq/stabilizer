@@ -152,11 +152,12 @@ where
         ad9959.interface.configure_mode(desired_mode).map_err(|_| Error::Interface)?;
 
         // Read back the CSR to ensure it specifies the mode correctly.
-        let mut updated_csr: [u8; 1] = [0];
-        ad9959.interface.read(Register::CSR as u8, &mut updated_csr).map_err(|_| Error::Interface)?;
-        if updated_csr[0] != csr[0] {
-            return Err(Error::Check);
-        }
+        // TODO: This is disabled until QSPI readback issues have been resolved.
+        //let mut updated_csr: [u8; 1] = [0];
+        //ad9959.interface.read(Register::CSR as u8, &mut updated_csr).map_err(|_| Error::Interface)?;
+        //if updated_csr[0] != csr[0] {
+        //    return Err(Error::Check);
+        //}
 
         // Set the clock frequency to configure the device as necessary.
         ad9959.configure_system_clock(clock_frequency, multiplier)?;
