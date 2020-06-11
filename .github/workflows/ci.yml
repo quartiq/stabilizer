@@ -22,6 +22,6 @@ jobs:
     - name: Build release
       run: cargo build --verbose --release
     - name: Build semihosting
-      run: cargo build --verbose --features semihosting
+      run: cd stabilizer/ && cargo build --verbose --features semihosting
     - name: Build bkpt
-      run: cargo build --verbose --features bkpt,semihosting
+      run: cd stabilizer/ && cargo build --verbose --features bkpt,semihosting
