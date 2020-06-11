@@ -349,12 +349,12 @@ const APP: () = {
                     // Instantiate the QUADSPI pins and peripheral interface.
                     // TODO: Place these into a pins structure that is provided to the QSPI
                     // constructor.
-                    let _qspi_clk = gpiob.pb2.into_alternate_af9();
-                    let _qspi_ncs = gpioc.pc11.into_alternate_af9();
-                    let _qspi_io0 = gpioe.pe7.into_alternate_af10();
-                    let _qspi_io1 = gpioe.pe8.into_alternate_af10();
-                    let _qspi_io2 = gpioe.pe9.into_alternate_af10();
-                    let _qspi_io3 = gpioe.pe10.into_alternate_af10();
+                    let _qspi_clk = gpiob.pb2.into_alternate_af9().set_speed(hal::gpio::Speed::VeryHigh);
+                    let _qspi_ncs = gpioc.pc11.into_alternate_af9().set_speed(hal::gpio::Speed::VeryHigh);
+                    let _qspi_io0 = gpioe.pe7.into_alternate_af10().set_speed(hal::gpio::Speed::VeryHigh);
+                    let _qspi_io1 = gpioe.pe8.into_alternate_af10().set_speed(hal::gpio::Speed::VeryHigh);
+                    let _qspi_io2 = gpioe.pe9.into_alternate_af10().set_speed(hal::gpio::Speed::VeryHigh);
+                    let _qspi_io3 = gpioe.pe10.into_alternate_af10().set_speed(hal::gpio::Speed::VeryHigh);
 
                     let qspi = hal::qspi::Qspi::new(dp.QUADSPI, &mut clocks, 10.mhz()).unwrap();
                     pounder::QspiInterface::new(qspi).unwrap()
