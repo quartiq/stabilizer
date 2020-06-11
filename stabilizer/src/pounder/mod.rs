@@ -2,6 +2,7 @@ use mcp23017;
 use ad9959;
 
 use serde::{Serialize, Deserialize};
+
 mod attenuators;
 mod rf_power;
 
@@ -12,7 +13,7 @@ use rf_power::PowerMeasurementInterface;
 
 use embedded_hal::{
     blocking::spi::Transfer,
-    adc::OneShot
+    adc::OneShot,
 };
 
 const EXT_CLK_SEL_PIN: u8 = 8 + 7;
@@ -243,12 +244,13 @@ where
         };
 
         // Configure power-on-default state for pounder. All LEDs are on, on-board oscillator
-        // selected, attenuators out of reset.
+        // selected, attenuators out of reset. Note that testing indicates the output state needs to
+        // be set first to properly update the output registers.
+        devices.mcp23017.all_pin_mode(mcp23017::PinMode::OUTPUT).map_err(|_| Error::I2c)?;
         devices.mcp23017.write_gpio(mcp23017::Port::GPIOA, 0x3F).map_err(|_| Error::I2c)?;
         devices.mcp23017.write_gpio(mcp23017::Port::GPIOB, 1 << 5).map_err(|_| Error::I2c)?;
-        devices.mcp23017.all_pin_mode(mcp23017::PinMode::OUTPUT).map_err(|_| Error::I2c)?;
 
-        // Select the on-board clock with a 5x prescaler (500MHz).
+        // Select the on-board clock with a 4x prescaler (400MHz).
         devices.select_onboard_clock(4u8)?;
 
         Ok(devices)

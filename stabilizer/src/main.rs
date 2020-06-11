@@ -386,9 +386,9 @@ const APP: () = {
             };
 
             let spi = {
-                let spi_mosi = gpiod.pd7.into_alternate_af5();
-                let spi_miso = gpioa.pa6.into_alternate_af5();
-                let spi_sck = gpiog.pg11.into_alternate_af5();
+                let spi_mosi = gpiod.pd7.into_alternate_af5().set_speed(hal::gpio::Speed::VeryHigh);
+                let spi_miso = gpioa.pa6.into_alternate_af5().set_speed(hal::gpio::Speed::VeryHigh);
+                let spi_sck = gpiog.pg11.into_alternate_af5().set_speed(hal::gpio::Speed::VeryHigh);
 
                 let config = hal::spi::Config::new(hal::spi::Mode{
                         polarity: hal::spi::Polarity::IdleHigh,
