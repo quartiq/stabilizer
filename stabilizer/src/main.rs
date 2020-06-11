@@ -396,7 +396,9 @@ const APP: () = {
                     })
                     .frame_size(8);
 
-                dp.SPI1.spi((spi_sck, spi_miso, spi_mosi), config, 25.mhz(), &clocks)
+                // The maximum frequency of this SPI must be limited due to capacitance on the MISO
+                // line causing a long RC decay.
+                dp.SPI1.spi((spi_sck, spi_miso, spi_mosi), config, 5.mhz(), &clocks)
             };
 
             let adc1 = {
