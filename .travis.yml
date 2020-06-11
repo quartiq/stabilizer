@@ -18,9 +18,6 @@ branches:
     - trying
     - master
 
-before_install:
-  - git submodule update --init
-
 before_script:
   - rustup target add thumbv7em-none-eabihf
   - rustup component add clippy
