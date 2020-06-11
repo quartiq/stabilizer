@@ -508,7 +508,7 @@ const APP: () = {
                              hal::dma::DMAREQ_ID::TIM2_CH2);
 
         // Configure timer 2 to trigger conversions for the ADC
-        let mut timer2 = dp.TIM2.timer(50.khz(), &mut clocks);
+        let mut timer2 = dp.TIM2.timer(500.khz(), &mut clocks);
         timer2.configure_channel(hal::timer::Channel::One, 0.25);
         timer2.configure_channel(hal::timer::Channel::Two, 0.75);
 
