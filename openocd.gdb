@@ -16,7 +16,7 @@ break rust_begin_unwind
 
 load
 # tbreak cortex_m_rt::reset_handler
-# monitor reset halt
+monitor reset halt
 
 # cycle counter delta tool, place two bkpts around the section
 set var $cc=0xe0001004
@@ -26,4 +26,3 @@ set var $t0=*$cc
 continue
 end
 #set var $t0=*$cc
-continue
