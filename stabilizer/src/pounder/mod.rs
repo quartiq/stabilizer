@@ -401,7 +401,8 @@ impl<DELAY> PowerMeasurementInterface for PounderDevices<DELAY> {
             _ => return Err(Error::InvalidChannel),
         };
 
-        // Convert analog percentage to voltage.
-        Ok(adc_scale * 3.3)
+        // Convert analog percentage to voltage. Note that the ADC uses an external 2.048V analog
+        // reference.
+        Ok(adc_scale * 2.048)
     }
 }
