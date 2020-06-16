@@ -6,20 +6,89 @@ on:
       - trying
       - master
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  build:
+  style:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - name: Install toolchain
-      run: rustup toolchain install nightly
-    - name: Use toolchain
-      run: rustup override add nightly
-    - name: Install target
-      run: rustup target add thumbv7em-none-eabihf
-    - name: Build release
-      run: cargo build --verbose --release
-    - name: Build semihosting
-      run: cargo build --verbose --features semihosting
-    - name: Build bkpt
-      run: cargo build --verbose --features bkpt,semihosting
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+      - name: cargo fmt --check
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+      - name: cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+
+  compile:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - thumbv7em-none-eabihf
+        toolchain:
+          - stable
+          - 1.41.0
+          - 1.40.0
+          - 1.38.0
+          - 1.36.0
+          - beta
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Rust ${{ matrix.toolchain }} with target (${{ matrix.target }})
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          target: ${{ matrix.target }}
+          override: true
+      - name: cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --verbose
+      - name: cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --verbose
+      - name: cargo build release
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --verbose --release
+      - name: cargo build release+semihosting
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --verbose --release --features semihosting
+
+  ci-success:
+    name: ci
+    if: github.event_name == 'push' && success()
+    needs:
+      - style
+      - compile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark the job as a success
+      - run: exit 0
+  ci-failure:
+    name: ci
+    if: github.event_name == 'push' && !success()
+    needs:
+      - style
+      - compile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark the job as a failure
+        run: exit 1

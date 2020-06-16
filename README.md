@@ -1,3 +1,5 @@
+![CI](https://github.com/quartiq/stabilizer/workflows/ci/badge.svg)
+
 # Stabilizer Firmware
 
 ![Flow diagram](stabilizer_pid.svg)
