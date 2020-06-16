@@ -81,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Mark the job as a success
-      - run: exit 0
+        run: exit 0
   ci-failure:
     name: ci
     if: github.event_name == 'push' && !success()
