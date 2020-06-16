@@ -38,10 +38,6 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - 1.41.0
-          - 1.40.0
-          - 1.38.0
-          - 1.37.0
           - beta
     steps:
       - uses: actions/checkout@v2
