@@ -18,6 +18,7 @@ jobs:
         with:
           profile: minimal
           toolchain: stable
+          target: thumbv7em-none-eabihf
           override: true
           components: rustfmt, clippy
       - name: cargo fmt --check
@@ -27,29 +28,28 @@ jobs:
           args: --all -- --check
       - name: cargo clippy
         uses: actions-rs/cargo@v1
+        continue-on-error: true
         with:
-          command: clippy
+          command: clippy        
 
   compile:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target:
-          - thumbv7em-none-eabihf
         toolchain:
           - stable
           - 1.41.0
           - 1.40.0
           - 1.38.0
-          - 1.36.0
+          - 1.37.0
           - beta
     steps:
       - uses: actions/checkout@v2
-      - name: Install Rust ${{ matrix.toolchain }} with target (${{ matrix.target }})
+      - name: Install Rust ${{ matrix.toolchain }}
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.toolchain }}
-          target: ${{ matrix.target }}
+          target: thumbv7em-none-eabihf
           override: true
       - name: cargo check
         uses: actions-rs/cargo@v1
