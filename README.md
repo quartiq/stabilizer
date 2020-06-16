@@ -1,4 +1,4 @@
-![Continuous Integration](https://github.com/quartiq/stabilizer/workflows/ci/badge.svg)
+![Continuous Integration](https://github.com/quartiq/stabilizer/workflows/Continuous%20Integration/badge.svg)
 
 # Stabilizer Firmware
 
