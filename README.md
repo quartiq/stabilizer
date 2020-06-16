@@ -1,3 +1,5 @@
+![Continuous Integration](https://github.com/quartiq/stabilizer/workflows/Continuous%20Integration/badge.svg)
+
 # Stabilizer Firmware
 
 ![Flow diagram](stabilizer_pid.svg)

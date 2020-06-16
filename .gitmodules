@@ -1,3 +1,0 @@
-[submodule "stm32h7xx-hal"]
-	path = stm32h7xx-hal
-	url = https://github.com/quartiq/stm32h7xx-hal.git

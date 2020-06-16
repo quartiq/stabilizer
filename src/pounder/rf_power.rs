@@ -1,4 +1,4 @@
-use super::{Error, Channel};
+use super::{Channel, Error};
 
 /// Provide an interface to measure RF input power in dB.
 pub trait PowerMeasurementInterface {

@@ -285,15 +285,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de96540e0ebde571dc55c73d60ef407c653844e6f9a1e2fdbd40c07b9252d812"
 
 [[package]]
-name = "panic-itm"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98830d17a95587207e41edaa3009b143d326ce134b0e3538ac98246a67d66cc3"
-dependencies = [
- "cortex-m",
-]
-
-[[package]]
 name = "panic-semihosting"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -460,7 +451,7 @@ dependencies = [
  "serde-json-core",
  "smoltcp",
  "stm32h7-ethernet",
- "stm32h7xx-hal 0.5.0",
+ "stm32h7xx-hal 0.5.0 (git+https://github.com/quartiq/stm32h7xx-hal.git?branch=feature/pounder-support)",
 ]
 
 [[package]]
@@ -495,16 +486,14 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.5.0"
+source = "git+https://github.com/quartiq/stm32h7xx-hal.git?branch=feature/pounder-support#ff00e938f2b226211c178f26c092f36462c44404"
 dependencies = [
  "bare-metal",
  "cast",
  "cortex-m",
- "cortex-m-log",
  "cortex-m-rt",
- "cortex-m-rtfm",
  "embedded-hal",
  "nb",
- "panic-itm",
  "paste",
  "stm32h7",
  "void",
