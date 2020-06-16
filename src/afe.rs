@@ -1,5 +1,5 @@
 use embedded_hal;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use core::convert::TryFrom;
 use enum_iterator::IntoEnumIterator;
@@ -9,13 +9,13 @@ pub enum Gain {
     G1 = 0b00,
     G2 = 0b01,
     G5 = 0b10,
-    G10 = 0b11
+    G10 = 0b11,
 }
 
 /// A programmable gain amplifier that allows for setting the gain via GPIO.
 pub struct ProgrammableGainAmplifier<A0, A1> {
     a0: A0,
-    a1: A1
+    a1: A1,
 }
 
 impl TryFrom<u8> for Gain {
@@ -24,7 +24,7 @@ impl TryFrom<u8> for Gain {
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         for gain in Gain::into_enum_iter() {
             if value == gain as u8 {
-                return Ok(gain)
+                return Ok(gain);
             }
         }
 
@@ -44,9 +44,8 @@ where
     /// Args:
     /// * `a0` - An output connected to the A0 input of the amplifier.
     /// * `a1` - An output connected to the A1 input of the amplifier.
-    pub fn new(a0: A0, a1: A1) -> Self
-    {
-        let mut afe = Self { a0: a0, a1: a1};
+    pub fn new(a0: A0, a1: A1) -> Self {
+        let mut afe = Self { a0: a0, a1: a1 };
 
         afe.set_gain(Gain::G1);
 

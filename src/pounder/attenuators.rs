@@ -8,14 +8,17 @@ use super::{Channel, Error};
 /// reading the shfit register. The downside of this approach is that any read is destructive, so a
 /// read-writeback approach is employed.
 pub trait AttenuatorInterface {
-
     /// Set the attenuation of a single channel.
     ///
     /// Args:
     /// * `channel` - The pounder channel to configure the attenuation of.
     /// * `attenuation` - The desired attenuation of the channel in dB. This has a resolution of
     ///   0.5dB.
-    fn set_attenuation(&mut self, channel: Channel, attenuation: f32) -> Result<f32, Error> {
+    fn set_attenuation(
+        &mut self,
+        channel: Channel,
+        attenuation: f32,
+    ) -> Result<f32, Error> {
         if attenuation > 31.5 || attenuation < 0.0 {
             return Err(Error::Bounds);
         }
@@ -72,6 +75,12 @@ pub trait AttenuatorInterface {
     fn reset_attenuators(&mut self) -> Result<(), Error>;
 
     fn latch_attenuators(&mut self, channel: Channel) -> Result<(), Error>;
-    fn read_all_attenuators(&mut self, channels: &mut [u8; 4]) -> Result<(), Error>;
-    fn write_all_attenuators(&mut self, channels: &[u8; 4]) -> Result<(), Error>;
+    fn read_all_attenuators(
+        &mut self,
+        channels: &mut [u8; 4],
+    ) -> Result<(), Error>;
+    fn write_all_attenuators(
+        &mut self,
+        channels: &[u8; 4],
+    ) -> Result<(), Error>;
 }
