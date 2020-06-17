@@ -30,9 +30,9 @@ dependencies = [
 
 [[package]]
 name = "asm-delay"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bc4896200a8422e15fbb1899cb436889d215954d376bf32d311a2330ac13440"
+checksum = "b8b7c70ec6ea4def14d530d75900bbf8909ed49dafeb1448c3ee7122543964f6"
 dependencies = [
  "bitrate",
  "cortex-m",
