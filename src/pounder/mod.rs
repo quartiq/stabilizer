@@ -1,6 +1,3 @@
-use ad9959;
-use mcp23017;
-
 use serde::{Deserialize, Serialize};
 
 mod attenuators;
@@ -106,7 +103,7 @@ impl QspiInterface {
         qspi.configure_mode(hal::qspi::QspiMode::FourBit)
             .map_err(|_| Error::Qspi)?;
         Ok(Self {
-            qspi: qspi,
+            qspi,
             mode: ad9959::Mode::SingleBitTwoWire,
         })
     }
@@ -396,8 +393,8 @@ where
                 let power = self.measure_power(channel)?;
 
                 Ok(InputChannelState {
-                    attenuation: attenuation,
-                    power: power,
+                    attenuation,
+                    power,
                     mixer: channel_state,
                 })
             }
@@ -458,7 +455,7 @@ where
                 let attenuation = self.get_attenuation(channel)?;
 
                 Ok(OutputChannelState {
-                    attenuation: attenuation,
+                    attenuation,
                     channel: channel_state,
                 })
             }
