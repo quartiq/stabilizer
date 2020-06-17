@@ -31,7 +31,7 @@ extern crate log;
 use asm_delay;
 use cortex_m;
 use cortex_m_rt::exception;
-use rtfm::cyccnt::{Instant, U32Ext};
+use rtic::cyccnt::{Instant, U32Ext};
 use stm32h7xx_hal as hal;
 use stm32h7xx_hal::prelude::*;
 
@@ -159,7 +159,7 @@ macro_rules! route_request {
     }
 }
 
-#[rtfm::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtfm::cyccnt::CYCCNT)]
+#[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
         adc1: hal::spi::Spi<hal::stm32::SPI2>,
@@ -604,7 +604,7 @@ const APP: () = {
         // info!("Built on {}", build_info::BUILT_TIME_UTC);
         // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
 
-        // Utilize the cycle counter for RTFM scheduling.
+        // Utilize the cycle counter for RTIC scheduling.
         cp.DWT.enable_cycle_counter();
 
         let mut dma = hal::dma::Dma::dma(dp.DMA1, dp.DMAMUX1, &clocks);
@@ -849,7 +849,7 @@ const APP: () = {
     }
 
     extern "C" {
-        // hw interrupt handlers for RTFM to use for scheduling tasks
+        // hw interrupt handlers for RTIC to use for scheduling tasks
         // one per priority
         fn DCMI();
         fn JPEG();
