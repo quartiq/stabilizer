@@ -125,7 +125,7 @@ impl Response {
     /// * `message` - The message denoting the status.
     pub fn custom<'a>(code: i32, message: &'a str) -> Self {
         let mut res = Self {
-            code: code,
+            code,
             attribute: String::from(""),
             value: String::from(message),
         };

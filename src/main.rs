@@ -28,8 +28,6 @@ extern crate panic_halt;
 extern crate log;
 
 // use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
-use asm_delay;
-use cortex_m;
 use cortex_m_rt::exception;
 use rtic::cyccnt::{Instant, U32Ext};
 use stm32h7xx_hal as hal;
@@ -331,13 +329,12 @@ const APP: () = {
             .frame_size(16)
             .swap_mosi_miso();
 
-            let spi = dp.SPI4.spi(
+            dp.SPI4.spi(
                 (spi_sck, spi_miso, hal::spi::NoMosi),
                 config,
                 50.mhz(),
                 &clocks,
-            );
-            spi
+            )
         };
 
         let dac2_spi = {
@@ -361,14 +358,12 @@ const APP: () = {
             .frame_size(16)
             .swap_mosi_miso();
 
-            let spi = dp.SPI5.spi(
+            dp.SPI5.spi(
                 (spi_sck, spi_miso, hal::spi::NoMosi),
                 config,
                 50.mhz(),
                 &clocks,
-            );
-
-            spi
+            )
         };
 
         let mut fp_led_0 = gpiod.pd5.into_push_pull_output();
@@ -635,16 +630,16 @@ const APP: () = {
             dac1: dac1_spi,
             adc2: adc2_spi,
             dac2: dac2_spi,
-            afe1: afe1,
-            afe2: afe2,
+            afe1,
+            afe2,
 
             timer: timer2,
             pounder: pounder_devices,
 
-            eeprom_i2c: eeprom_i2c,
+            eeprom_i2c,
             net_interface: network_interface,
-            eth_mac: eth_mac,
-            mac_addr: mac_addr,
+            eth_mac,
+            mac_addr,
         }
     }
 

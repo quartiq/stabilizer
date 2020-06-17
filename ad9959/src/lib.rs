@@ -120,9 +120,9 @@ where
         RST: OutputPin,
     {
         let mut ad9959 = Ad9959 {
-            interface: interface,
-            io_update: io_update,
-            delay: delay,
+            interface,
+            io_update,
+            delay,
             reference_clock_frequency: clock_frequency,
             system_clock_multiplier: 1,
         };

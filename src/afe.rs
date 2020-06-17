@@ -1,4 +1,3 @@
-use embedded_hal;
 use serde::{Deserialize, Serialize};
 
 use core::convert::TryFrom;
@@ -45,7 +44,7 @@ where
     /// * `a0` - An output connected to the A0 input of the amplifier.
     /// * `a1` - An output connected to the A1 input of the amplifier.
     pub fn new(a0: A0, a1: A1) -> Self {
-        let mut afe = Self { a0: a0, a1: a1 };
+        let mut afe = Self { a0, a1 };
 
         afe.set_gain(Gain::G1);
 
