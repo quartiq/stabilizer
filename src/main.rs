@@ -180,7 +180,7 @@ const APP: () = {
         eth_mac: ethernet::EthernetMAC,
         mac_addr: net::wire::EthernetAddress,
 
-        pounder: pounder::PounderDevices<asm_delay::AsmDelay>,
+        pounder: Option<pounder::PounderDevices<asm_delay::AsmDelay>>,
 
         #[init([[0.; 5]; 2])]
         iir_state: [iir::IIRState; 2],
@@ -376,7 +376,18 @@ const APP: () = {
         fp_led_2.set_low().unwrap();
         fp_led_3.set_low().unwrap();
 
-        let pounder_devices = {
+        // Attempt to instantiate the I2C GPIO expander on pounder.
+        let pounder_gpio_expander = {
+            let sda = gpiob.pb7.into_alternate_af4().set_open_drain();
+            let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
+            let i2c1 = dp.I2C1.i2c((scl, sda), 100.khz(), &clocks);
+            mcp23017::MCP23017::default(i2c1)
+        };
+
+        // If instantiating the GPIO expander was successful, we were able to communicate with the
+        // IO expander and pounder is available. If the GPIO expander did not communicate with I2C,
+        // we will assume that pounder is not available.
+        let pounder_devices = if let Ok(io_expander) = pounder_gpio_expander {
             let ad9959 = {
                 let qspi_interface = {
                     // Instantiate the QUADSPI pins and peripheral interface.
@@ -435,13 +446,6 @@ const APP: () = {
                 .unwrap()
             };
 
-            let io_expander = {
-                let sda = gpiob.pb7.into_alternate_af4().set_open_drain();
-                let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
-                let i2c1 = dp.I2C1.i2c((scl, sda), 100.khz(), &clocks);
-                mcp23017::MCP23017::default(i2c1).unwrap()
-            };
-
             let spi = {
                 let spi_mosi = gpiod
                     .pd7
@@ -489,16 +493,20 @@ const APP: () = {
             let adc1_in_p = gpiof.pf11.into_analog();
             let adc2_in_p = gpiof.pf14.into_analog();
 
-            pounder::PounderDevices::new(
-                io_expander,
-                ad9959,
-                spi,
-                adc1,
-                adc2,
-                adc1_in_p,
-                adc2_in_p,
+            Some(
+                pounder::PounderDevices::new(
+                    io_expander,
+                    ad9959,
+                    spi,
+                    adc1,
+                    adc2,
+                    adc1_in_p,
+                    adc2_in_p,
+                )
+                .unwrap(),
             )
-            .unwrap()
+        } else {
+            None
         };
 
         let mut eeprom_i2c = {
@@ -746,23 +754,38 @@ const APP: () = {
                                 "stabilizer/afe1/gain": (|| c.resources.afe1.get_gain()),
                                 "stabilizer/afe2/gain": (|| c.resources.afe2.get_gain()),
                                 "pounder/in0": (|| {
-                                    c.resources.pounder.get_input_channel_state(
-                                            pounder::Channel::In0)
+                                    match c.resources.pounder {
+                                        Some(pounder) =>
+                                            pounder.get_input_channel_state(pounder::Channel::In0),
+                                        _ => Err(pounder::Error::Access),
+                                    }
                                 }),
                                 "pounder/in1": (|| {
-                                    c.resources.pounder.get_input_channel_state(
-                                            pounder::Channel::In1)
+                                    match c.resources.pounder {
+                                        Some(pounder) =>
+                                            pounder.get_input_channel_state(pounder::Channel::In1),
+                                        _ => Err(pounder::Error::Access),
+                                    }
                                 }),
                                 "pounder/out0": (|| {
-                                    c.resources.pounder.get_output_channel_state(
-                                            pounder::Channel::Out0)
+                                    match c.resources.pounder {
+                                        Some(pounder) =>
+                                            pounder.get_output_channel_state(pounder::Channel::Out0),
+                                        _ => Err(pounder::Error::Access),
+                                    }
                                 }),
                                 "pounder/out1": (|| {
-                                    c.resources.pounder.get_output_channel_state(
-                                            pounder::Channel::Out1)
+                                    match c.resources.pounder {
+                                        Some(pounder) =>
+                                            pounder.get_output_channel_state(pounder::Channel::Out1),
+                                        _ => Err(pounder::Error::Access),
+                                    }
                                 }),
                                 "pounder/dds/clock": (|| {
-                                    c.resources.pounder.get_dds_clock_config()
+                                    match c.resources.pounder {
+                                        Some(pounder) => pounder.get_dds_clock_config(),
+                                        _ => Err(pounder::Error::Access),
+                                    }
                                 })
                             ],
 
@@ -790,23 +813,38 @@ const APP: () = {
                                     })
                                 }),
                                 "pounder/in0": pounder::ChannelState, (|state| {
-                                    c.resources.pounder.set_channel_state(pounder::Channel::In0,
-                                            state)
+                                    match c.resources.pounder {
+                                        Some(pounder) =>
+                                            pounder.set_channel_state(pounder::Channel::In0, state),
+                                        _ => Err(pounder::Error::Access),
+                                    }
                                 }),
                                 "pounder/in1": pounder::ChannelState, (|state| {
-                                    c.resources.pounder.set_channel_state(pounder::Channel::In1,
-                                            state)
+                                    match c.resources.pounder {
+                                        Some(pounder) =>
+                                            pounder.set_channel_state(pounder::Channel::In1, state),
+                                        _ => Err(pounder::Error::Access),
+                                    }
                                 }),
                                 "pounder/out0": pounder::ChannelState, (|state| {
-                                    c.resources.pounder.set_channel_state(pounder::Channel::Out0,
-                                            state)
+                                    match c.resources.pounder {
+                                        Some(pounder) =>
+                                            pounder.set_channel_state(pounder::Channel::Out0, state),
+                                        _ => Err(pounder::Error::Access),
+                                    }
                                 }),
                                 "pounder/out1": pounder::ChannelState, (|state| {
-                                    c.resources.pounder.set_channel_state(pounder::Channel::Out1,
-                                            state)
+                                    match c.resources.pounder {
+                                        Some(pounder) =>
+                                            pounder.set_channel_state(pounder::Channel::Out1, state),
+                                        _ => Err(pounder::Error::Access),
+                                    }
                                 }),
                                 "pounder/dds/clock": pounder::DdsClockConfig, (|config| {
-                                    c.resources.pounder.configure_dds_clock(config)
+                                    match c.resources.pounder {
+                                        Some(pounder) => pounder.configure_dds_clock(config),
+                                        _ => Err(pounder::Error::Access),
+                                    }
                                 }),
                                 "stabilizer/afe1/gain": afe::Gain, (|gain| {
                                     Ok::<(), ()>(c.resources.afe1.set_gain(gain))
