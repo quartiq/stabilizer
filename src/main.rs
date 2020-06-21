@@ -33,7 +33,7 @@ use rtic::cyccnt::{Instant, U32Ext};
 use stm32h7xx_hal as hal;
 use stm32h7xx_hal::prelude::*;
 
-use embedded_hal::digital::v2::OutputPin;
+use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use smoltcp as net;
 use stm32h7_ethernet as ethernet;
@@ -175,8 +175,7 @@ const APP: () = {
             'static,
             'static,
             'static,
-            ethernet::EthernetDMA<'static>,
-        >,
+            ethernet::EthernetDMA<'static>>,
         eth_mac: ethernet::EthernetMAC,
         mac_addr: net::wire::EthernetAddress,
 
@@ -376,18 +375,10 @@ const APP: () = {
         fp_led_2.set_low().unwrap();
         fp_led_3.set_low().unwrap();
 
-        // Attempt to instantiate the I2C GPIO expander on pounder.
-        let pounder_gpio_expander = {
-            let sda = gpiob.pb7.into_alternate_af4().set_open_drain();
-            let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
-            let i2c1 = dp.I2C1.i2c((scl, sda), 100.khz(), &clocks);
-            mcp23017::MCP23017::default(i2c1)
-        };
-
-        // If instantiating the GPIO expander was successful, we were able to communicate with the
-        // IO expander and pounder is available. If the GPIO expander did not communicate with I2C,
-        // we will assume that pounder is not available.
-        let pounder_devices = if let Ok(io_expander) = pounder_gpio_expander {
+        // Measure the Pounder PGOOD output to detect if pounder is present on Stabilizer.
+        let pounder_pgood = gpiob.pb13.into_pull_down_input();
+        delay.delay_ms(2u8);
+        let pounder_devices = if pounder_pgood.is_high().unwrap() {
             let ad9959 = {
                 let qspi_interface = {
                     // Instantiate the QUADSPI pins and peripheral interface.
@@ -444,6 +435,13 @@ const APP: () = {
                     5,
                 )
                 .unwrap()
+            };
+
+            let io_expander = {
+                let sda = gpiob.pb7.into_alternate_af4().set_open_drain();
+                let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
+                let i2c1 = dp.I2C1.i2c((scl, sda), 100.khz(), &clocks);
+                mcp23017::MCP23017::default(i2c1).unwrap()
             };
 
             let spi = {
