@@ -171,6 +171,9 @@ const APP: () = {
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
         timer: hal::timer::Timer<hal::stm32::TIM2>,
+
+        // Note: Do not rustfmt the following definition, as it appears to cause a bug in GDB that
+        // results in failing to set breakpoints at correct locations.
         net_interface: net::iface::EthernetInterface<
             'static,
             'static,
@@ -197,8 +200,7 @@ const APP: () = {
 
         let rcc = dp.RCC.constrain();
         let mut clocks = rcc
-            //TODO: Re-enable HSE for Stabilizer platform.
-            //            .use_hse(8.mhz())
+            .use_hse(8.mhz())
             .sysclk(400.mhz())
             .hclk(200.mhz())
             .per_ck(100.mhz())
