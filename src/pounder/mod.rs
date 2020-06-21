@@ -29,6 +29,7 @@ pub enum Error {
     InvalidAddress,
     InvalidChannel,
     Adc,
+    Access,
 }
 
 #[derive(Debug, Copy, Clone)]
