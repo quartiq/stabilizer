@@ -172,13 +172,23 @@ const APP: () = {
 
         timer: hal::timer::Timer<hal::stm32::TIM2>,
 
-        // Note: Do not rustfmt the following definition, as it appears to cause a bug in GDB that
-        // results in failing to set breakpoints at correct locations.
+        // Note: It appears that rustfmt generates a format that GDB cannot recognize, which
+        // results in GDB breakpoints being set improperly. To debug, redefine the following
+        // definition to:
+        //
+        // ```rust
+        // net_interface: net::iface::EthernetInterface<
+        //     'static,
+        //     'static,
+        //     'static,
+        //     ethernet::EthernetDMA<'static>>,
+        // ```
         net_interface: net::iface::EthernetInterface<
             'static,
             'static,
             'static,
-            ethernet::EthernetDMA<'static>>,
+            ethernet::EthernetDMA<'static>,
+        >,
         eth_mac: ethernet::EthernetMAC,
         mac_addr: net::wire::EthernetAddress,
 
