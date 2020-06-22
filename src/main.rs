@@ -96,12 +96,12 @@ const SPI_START_CODE: u32 = 0x201;
 const TCP_RX_BUFFER_SIZE: usize = 8192;
 const TCP_TX_BUFFER_SIZE: usize = 8192;
 
-type AFE1 = afe::ProgrammableGainAmplifier<
+type AFE0 = afe::ProgrammableGainAmplifier<
     hal::gpio::gpiof::PF2<hal::gpio::Output<hal::gpio::PushPull>>,
     hal::gpio::gpiof::PF5<hal::gpio::Output<hal::gpio::PushPull>>,
 >;
 
-type AFE2 = afe::ProgrammableGainAmplifier<
+type AFE1 = afe::ProgrammableGainAmplifier<
     hal::gpio::gpiod::PD14<hal::gpio::Output<hal::gpio::PushPull>>,
     hal::gpio::gpiod::PD15<hal::gpio::Output<hal::gpio::PushPull>>,
 >;
@@ -160,13 +160,13 @@ macro_rules! route_request {
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
-        adc1: hal::spi::Spi<hal::stm32::SPI2>,
-        dac1: hal::spi::Spi<hal::stm32::SPI4>,
-        afe1: AFE1,
+        adc0: hal::spi::Spi<hal::stm32::SPI2>,
+        dac0: hal::spi::Spi<hal::stm32::SPI4>,
+        afe0: AFE0,
 
-        adc2: hal::spi::Spi<hal::stm32::SPI3>,
-        dac2: hal::spi::Spi<hal::stm32::SPI5>,
-        afe2: AFE2,
+        adc1: hal::spi::Spi<hal::stm32::SPI3>,
+        dac1: hal::spi::Spi<hal::stm32::SPI5>,
+        afe1: AFE1,
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
@@ -240,20 +240,20 @@ const APP: () = {
         let gpiof = dp.GPIOF.split(&mut clocks);
         let gpiog = dp.GPIOG.split(&mut clocks);
 
-        let afe1 = {
+        let afe0 = {
             let a0_pin = gpiof.pf2.into_push_pull_output();
             let a1_pin = gpiof.pf5.into_push_pull_output();
             afe::ProgrammableGainAmplifier::new(a0_pin, a1_pin)
         };
 
-        let afe2 = {
+        let afe1 = {
             let a0_pin = gpiod.pd14.into_push_pull_output();
             let a1_pin = gpiod.pd15.into_push_pull_output();
             afe::ProgrammableGainAmplifier::new(a0_pin, a1_pin)
         };
 
         // Configure the SPI interfaces to the ADCs and DACs.
-        let adc1_spi = {
+        let adc0_spi = {
             let spi_miso = gpiob
                 .pb14
                 .into_alternate_af5()
@@ -286,7 +286,7 @@ const APP: () = {
             spi
         };
 
-        let adc2_spi = {
+        let adc1_spi = {
             let spi_miso = gpiob
                 .pb4
                 .into_alternate_af6()
@@ -319,7 +319,7 @@ const APP: () = {
             spi
         };
 
-        let dac1_spi = {
+        let dac0_spi = {
             let spi_miso = gpioe
                 .pe5
                 .into_alternate_af5()
@@ -348,7 +348,7 @@ const APP: () = {
             )
         };
 
-        let dac2_spi = {
+        let dac1_spi = {
             let spi_miso = gpiof
                 .pf8
                 .into_alternate_af5()
@@ -624,14 +624,14 @@ const APP: () = {
         dma.configure_m2p_stream(
             hal::dma::Stream::One,
             &SPI_START_CODE as *const _ as u32,
-            &adc1_spi.spi.cr1 as *const _ as u32,
+            &adc0_spi.spi.cr1 as *const _ as u32,
             hal::dma::DMAREQ_ID::TIM2_CH1,
         );
 
         dma.configure_m2p_stream(
             hal::dma::Stream::Two,
             &SPI_START_CODE as *const _ as u32,
-            &adc2_spi.spi.cr1 as *const _ as u32,
+            &adc1_spi.spi.cr1 as *const _ as u32,
             hal::dma::DMAREQ_ID::TIM2_CH2,
         );
 
@@ -644,12 +644,13 @@ const APP: () = {
         timer2.listen(hal::timer::Event::ChannelTwoDma);
 
         init::LateResources {
+            afe0: afe0,
+            adc0: adc0_spi,
+            dac0: dac0_spi,
+
+            afe1: afe1,
             adc1: adc1_spi,
             dac1: dac1_spi,
-            adc2: adc2_spi,
-            dac2: dac2_spi,
-            afe1,
-            afe2,
 
             timer: timer2,
             pounder: pounder_devices,
@@ -661,35 +662,15 @@ const APP: () = {
         }
     }
 
-    #[task(binds = SPI3, resources = [adc2, dac2, iir_state, iir_ch], priority = 2)]
+    #[task(binds = SPI3, resources = [adc1, dac1, iir_state, iir_ch], priority = 2)]
     fn spi3(c: spi3::Context) {
-        c.resources.adc2.spi.ifcr.write(|w| w.eotc().set_bit());
-
-        let output: u16 = {
-            let a: u16 = c.resources.adc2.read().unwrap();
-            let x0 = f32::from(a as i16);
-            let y0 =
-                c.resources.iir_ch[1].update(&mut c.resources.iir_state[1], x0);
-            y0 as i16 as u16 ^ 0x8000
-        };
-
-        c.resources
-            .dac2
-            .spi
-            .ifcr
-            .write(|w| w.eotc().set_bit().txtfc().set_bit());
-        c.resources.dac2.send(output).unwrap();
-    }
-
-    #[task(binds = SPI2, resources = [adc1, dac1, iir_state, iir_ch], priority = 2)]
-    fn spi2(c: spi2::Context) {
         c.resources.adc1.spi.ifcr.write(|w| w.eotc().set_bit());
 
         let output: u16 = {
             let a: u16 = c.resources.adc1.read().unwrap();
             let x0 = f32::from(a as i16);
             let y0 =
-                c.resources.iir_ch[0].update(&mut c.resources.iir_state[0], x0);
+                c.resources.iir_ch[1].update(&mut c.resources.iir_state[1], x0);
             y0 as i16 as u16 ^ 0x8000
         };
 
@@ -701,7 +682,27 @@ const APP: () = {
         c.resources.dac1.send(output).unwrap();
     }
 
-    #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afe1, afe2])]
+    #[task(binds = SPI2, resources = [adc0, dac0, iir_state, iir_ch], priority = 2)]
+    fn spi2(c: spi2::Context) {
+        c.resources.adc0.spi.ifcr.write(|w| w.eotc().set_bit());
+
+        let output: u16 = {
+            let a: u16 = c.resources.adc0.read().unwrap();
+            let x0 = f32::from(a as i16);
+            let y0 =
+                c.resources.iir_ch[0].update(&mut c.resources.iir_state[0], x0);
+            y0 as i16 as u16 ^ 0x8000
+        };
+
+        c.resources
+            .dac0
+            .spi
+            .ifcr
+            .write(|w| w.eotc().set_bit().txtfc().set_bit());
+        c.resources.dac0.send(output).unwrap();
+    }
+
+    #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afe0, afe1])]
     fn idle(mut c: idle::Context) -> ! {
         let mut socket_set_entries: [_; 8] = Default::default();
         let mut sockets =
@@ -761,8 +762,8 @@ const APP: () = {
 
                                     Ok::<server::Status, ()>(state)
                                 }),
+                                "stabilizer/afe0/gain": (|| c.resources.afe0.get_gain()),
                                 "stabilizer/afe1/gain": (|| c.resources.afe1.get_gain()),
-                                "stabilizer/afe2/gain": (|| c.resources.afe2.get_gain()),
                                 "pounder/in0": (|| {
                                     match c.resources.pounder {
                                         Some(pounder) =>
@@ -800,7 +801,7 @@ const APP: () = {
                             ],
 
                             modifiable_attributes: [
-                                "stabilizer/iir1/state": server::IirRequest, (|req: server::IirRequest| {
+                                "stabilizer/iir0/state": server::IirRequest, (|req: server::IirRequest| {
                                     c.resources.iir_ch.lock(|iir_ch| {
                                         if req.channel > 1 {
                                             return Err(());
@@ -811,7 +812,7 @@ const APP: () = {
                                         Ok::<server::IirRequest, ()>(req)
                                     })
                                 }),
-                                "stabilizer/iir2/state": server::IirRequest, (|req: server::IirRequest| {
+                                "stabilizer/iir1/state": server::IirRequest, (|req: server::IirRequest| {
                                     c.resources.iir_ch.lock(|iir_ch| {
                                         if req.channel > 1 {
                                             return Err(());
@@ -856,11 +857,11 @@ const APP: () = {
                                         _ => Err(pounder::Error::Access),
                                     }
                                 }),
+                                "stabilizer/afe0/gain": afe::Gain, (|gain| {
+                                    Ok::<(), ()>(c.resources.afe0.set_gain(gain))
+                                }),
                                 "stabilizer/afe1/gain": afe::Gain, (|gain| {
                                     Ok::<(), ()>(c.resources.afe1.set_gain(gain))
-                                }),
-                                "stabilizer/afe2/gain": afe::Gain, (|gain| {
-                                    Ok::<(), ()>(c.resources.afe2.set_gain(gain))
                                 })
                             ]
                         )
