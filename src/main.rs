@@ -325,9 +325,9 @@ const APP: () = {
             spi
         };
 
-        let _dac_clr_n = gpioe.pe12.into_push_pull_output().set_high();
-        let _dac0_ldac_n = gpioe.pe11.into_push_pull_output().set_low();
-        let _dac1_ldac_n = gpioe.pe15.into_push_pull_output().set_low();
+        let _dac_clr_n = gpioe.pe12.into_push_pull_output().set_high().unwrap();
+        let _dac0_ldac_n = gpioe.pe11.into_push_pull_output().set_low().unwrap();
+        let _dac1_ldac_n = gpioe.pe15.into_push_pull_output().set_low().unwrap();
 
         let dac0_spi = {
             let spi_miso = gpioe
