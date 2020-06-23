@@ -262,7 +262,10 @@ const APP: () = {
                 .pb10
                 .into_alternate_af5()
                 .set_speed(hal::gpio::Speed::VeryHigh);
-            let _spi_nss = gpiob.pb9.into_alternate_af5();
+            let _spi_nss = gpiob
+                .pb9
+                .into_alternate_af5()
+                .set_speed(hal::gpio::Speed::VeryHigh);
 
             let config = hal::spi::Config::new(hal::spi::Mode {
                 polarity: hal::spi::Polarity::IdleHigh,
@@ -295,7 +298,10 @@ const APP: () = {
                 .pc10
                 .into_alternate_af6()
                 .set_speed(hal::gpio::Speed::VeryHigh);
-            let _spi_nss = gpioa.pa15.into_alternate_af6();
+            let _spi_nss = gpioa
+                .pa15
+                .into_alternate_af6()
+                .set_speed(hal::gpio::Speed::VeryHigh);
 
             let config = hal::spi::Config::new(hal::spi::Mode {
                 polarity: hal::spi::Polarity::IdleHigh,
@@ -328,7 +334,10 @@ const APP: () = {
                 .pe2
                 .into_alternate_af5()
                 .set_speed(hal::gpio::Speed::VeryHigh);
-            let _spi_nss = gpioe.pe4.into_alternate_af5();
+            let _spi_nss = gpioe
+                .pe4
+                .into_alternate_af5()
+                .set_speed(hal::gpio::Speed::VeryHigh);
 
             let config = hal::spi::Config::new(hal::spi::Mode {
                 polarity: hal::spi::Polarity::IdleHigh,
@@ -357,7 +366,10 @@ const APP: () = {
                 .pf7
                 .into_alternate_af5()
                 .set_speed(hal::gpio::Speed::VeryHigh);
-            let _spi_nss = gpiof.pf6.into_alternate_af5();
+            let _spi_nss = gpiof
+                .pf6
+                .into_alternate_af5()
+                .set_speed(hal::gpio::Speed::VeryHigh);
 
             let config = hal::spi::Config::new(hal::spi::Mode {
                 polarity: hal::spi::Polarity::IdleHigh,
