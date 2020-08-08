@@ -177,7 +177,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee4908a155094da7723c2d60d617b820061e3b4efcc3d9e293d206a5a76c170b"
 dependencies = [
- "nb",
+ "nb 0.1.2",
  "void",
 ]
 
@@ -278,6 +278,12 @@ name = "nb"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1411551beb3c11dedfb0a90a0fa256b47d28b9ec2cdff34c25a2fa59e45dbdc"
+
+[[package]]
+name = "nb"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "546c37ac5d9e56f55e73b677106873d9d9f5190605e41a856503623648488cae"
 
 [[package]]
 name = "panic-halt"
@@ -442,7 +448,7 @@ dependencies = [
  "heapless",
  "log",
  "mcp23017",
- "nb",
+ "nb 1.0.0",
  "panic-halt",
  "panic-semihosting",
  "serde",
@@ -491,7 +497,7 @@ dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "embedded-hal",
- "nb",
+ "nb 0.1.2",
  "paste",
  "stm32h7",
  "void",
@@ -508,7 +514,7 @@ dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "embedded-hal",
- "nb",
+ "nb 0.1.2",
  "paste",
  "stm32h7",
  "void",
