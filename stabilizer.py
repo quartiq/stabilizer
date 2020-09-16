@@ -17,11 +17,16 @@ class StabilizerConfig:
         self.reader, self.writer = await asyncio.open_connection(host, port)
 
     async def set(self, channel, iir):
-        up = OD([("channel", channel), ("iir", iir.as_dict())])
-        s = json.dumps(up, separators=(",", ":"))
+        value = OD([("channel", channel), ("iir", iir.as_dict())])
+        request = {
+            "req": "Write",
+            "attribute": "stabilizer/iir{}/state".format(channel),
+            "value": json.dumps(value, separators=[',', ':']).replace('"', "'"),
+        }
+        s = json.dumps(request, separators=[',', ':'])
         assert "\n" not in s
         logger.debug("send %s", s)
-        self.writer.write(s.encode() + b"\n")
+        self.writer.write(s.encode("ascii") + b"\n")
         r = (await self.reader.readline()).decode()
         logger.debug("recv %s", r)
         ret = json.loads(r, object_pairs_hook=OD)
