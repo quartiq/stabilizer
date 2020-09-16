@@ -203,7 +203,7 @@ const APP: () = {
     #[init]
     fn init(c: init::Context) -> init::LateResources {
         let dp = c.device;
-        let mut cp = cortex_m::Peripherals::take().unwrap();
+        let mut cp = c.core;
 
         let pwr = dp.PWR.constrain();
         let vos = pwr.freeze();
