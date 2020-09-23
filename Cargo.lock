@@ -237,9 +237,9 @@ dependencies = [
 
 [[package]]
 name = "heapless"
-version = "0.5.5"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73a8a2391a3bc70b31f60e7a90daa5755a360559c0b6b9c5cfc0fee482362dc0"
+checksum = "74911a68a1658cfcfb61bc0ccfbd536e3b6e906f8c2f7883ee50157e3e2184f1"
 dependencies = [
  "as-slice",
  "generic-array 0.13.2",
@@ -462,7 +462,7 @@ dependencies = [
  "serde-json-core",
  "smoltcp",
  "stm32h7-ethernet",
- "stm32h7xx-hal 0.5.0 (git+https://github.com/quartiq/stm32h7xx-hal.git?branch=feature/pounder-support)",
+ "stm32h7xx-hal",
 ]
 
 [[package]]
@@ -491,30 +491,13 @@ dependencies = [
  "cortex-m",
  "log",
  "smoltcp",
- "stm32h7xx-hal 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "stm32h7xx-hal",
 ]
 
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.5.0"
 source = "git+https://github.com/quartiq/stm32h7xx-hal.git?branch=feature/pounder-support#ff00e938f2b226211c178f26c092f36462c44404"
-dependencies = [
- "bare-metal",
- "cast",
- "cortex-m",
- "cortex-m-rt",
- "embedded-hal",
- "nb 0.1.2",
- "paste",
- "stm32h7",
- "void",
-]
-
-[[package]]
-name = "stm32h7xx-hal"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "987c66628f30012ed9a41cc738421c5caece03292c0cc8fd1e99956f122735bd"
 dependencies = [
  "bare-metal",
  "cast",
