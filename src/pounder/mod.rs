@@ -235,7 +235,7 @@ pub struct PounderDevices<DELAY> {
         hal::gpio::gpiog::PG7<hal::gpio::Output<hal::gpio::PushPull>>,
     >,
     mcp23017: mcp23017::MCP23017<hal::i2c::I2c<hal::stm32::I2C1>>,
-    attenuator_spi: hal::spi::Spi<hal::stm32::SPI1>,
+    attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
     adc1: hal::adc::Adc<hal::stm32::ADC1, hal::adc::Enabled>,
     adc2: hal::adc::Adc<hal::stm32::ADC2, hal::adc::Enabled>,
     adc1_in_p: hal::gpio::gpiof::PF11<hal::gpio::Analog>,
@@ -262,7 +262,7 @@ where
             DELAY,
             hal::gpio::gpiog::PG7<hal::gpio::Output<hal::gpio::PushPull>>,
         >,
-        attenuator_spi: hal::spi::Spi<hal::stm32::SPI1>,
+        attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
         adc1: hal::adc::Adc<hal::stm32::ADC1, hal::adc::Enabled>,
         adc2: hal::adc::Adc<hal::stm32::ADC2, hal::adc::Enabled>,
         adc1_in_p: hal::gpio::gpiof::PF11<hal::gpio::Analog>,
@@ -474,12 +474,8 @@ where
         channel: Channel,
         state: ChannelState,
     ) -> Result<(), Error> {
-        self.ad9959
-            .set_frequency(channel.into(), state.parameters.frequency)
-            .map_err(|_| Error::Dds)?;
-        self.ad9959
-            .set_phase(channel.into(), state.parameters.phase_offset)
-            .map_err(|_| Error::Dds)?;
+        self.ad9959.write_profile(channel.into(), state.parameters.frequency,
+                state.parameters.phase_offset).map_err(|_| Error::Dds)?;
         self.ad9959
             .set_amplitude(channel.into(), state.parameters.amplitude)
             .map_err(|_| Error::Dds)?;

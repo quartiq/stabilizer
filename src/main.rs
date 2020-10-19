@@ -36,7 +36,7 @@ use stm32h7xx_hal::prelude::*;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use smoltcp as net;
-use stm32h7_ethernet as ethernet;
+use hal::ethernet as ethernet;
 
 use heapless::{consts::*, String};
 
@@ -160,12 +160,12 @@ macro_rules! route_request {
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
-        adc0: hal::spi::Spi<hal::stm32::SPI2>,
-        dac0: hal::spi::Spi<hal::stm32::SPI4>,
+        adc0: hal::spi::Spi<hal::stm32::SPI2, hal::spi::Enabled, u16>,
+        dac0: hal::spi::Spi<hal::stm32::SPI4, hal::spi::Enabled, u16>,
         afe0: AFE0,
 
-        adc1: hal::spi::Spi<hal::stm32::SPI3>,
-        dac1: hal::spi::Spi<hal::stm32::SPI5>,
+        adc1: hal::spi::Spi<hal::stm32::SPI3, hal::spi::Enabled, u16>,
+        dac1: hal::spi::Spi<hal::stm32::SPI5, hal::spi::Enabled, u16>,
         afe1: AFE1,
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
@@ -208,8 +208,19 @@ const APP: () = {
         let pwr = dp.PWR.constrain();
         let vos = pwr.freeze();
 
+        // Enable SRAM3 for the ethernet descriptor ring.
+        dp.RCC.ahb2enr.modify(|_, w| w.sram3en().set_bit());
+
+        // Clear reset flags.
+        dp.RCC.rsr.write(|w| w.rmvf().set_bit());
+
+        // Select the PLLs for SPI.
+        dp.RCC
+            .d2ccip1r
+            .modify(|_, w| w.spi123sel().pll2_p().spi45sel().pll2_q());
+
         let rcc = dp.RCC.constrain();
-        let mut clocks = rcc
+        let clocks = rcc
             .use_hse(8.mhz())
             .sysclk(400.mhz())
             .hclk(200.mhz())
@@ -220,25 +231,15 @@ const APP: () = {
 
         init_log();
 
-        // Enable SRAM3 for the ethernet descriptor ring.
-        clocks.rb.ahb2enr.modify(|_, w| w.sram3en().set_bit());
-
-        clocks.rb.rsr.write(|w| w.rmvf().set_bit());
-
-        clocks
-            .rb
-            .d2ccip1r
-            .modify(|_, w| w.spi123sel().pll2_p().spi45sel().pll2_q());
-
         let mut delay = hal::delay::Delay::new(cp.SYST, clocks.clocks);
 
-        let gpioa = dp.GPIOA.split(&mut clocks);
-        let gpiob = dp.GPIOB.split(&mut clocks);
-        let gpioc = dp.GPIOC.split(&mut clocks);
-        let gpiod = dp.GPIOD.split(&mut clocks);
-        let gpioe = dp.GPIOE.split(&mut clocks);
-        let gpiof = dp.GPIOF.split(&mut clocks);
-        let gpiog = dp.GPIOG.split(&mut clocks);
+        let gpioa = dp.GPIOA.split(clocks.peripheral.GPIOA);
+        let gpiob = dp.GPIOB.split(clocks.peripheral.GPIOB);
+        let gpioc = dp.GPIOC.split(clocks.peripheral.GPIOC);
+        let gpiod = dp.GPIOD.split(clocks.peripheral.GPIOD);
+        let gpioe = dp.GPIOE.split(clocks.peripheral.GPIOE);
+        let gpiof = dp.GPIOF.split(clocks.peripheral.GPIOF);
+        let gpiog = dp.GPIOG.split(clocks.peripheral.GPIOG);
 
         let afe0 = {
             let a0_pin = gpiof.pf2.into_push_pull_output();
@@ -274,14 +275,14 @@ const APP: () = {
             .communication_mode(hal::spi::CommunicationMode::Receiver)
             .manage_cs()
             .transfer_size(1)
-            .frame_size(16)
             .cs_delay(220e-9);
 
-            let mut spi = dp.SPI2.spi(
+            let mut spi: hal::spi::Spi<_, _, u16> = dp.SPI2.spi(
                 (spi_sck, spi_miso, hal::spi::NoMosi),
                 config,
                 50.mhz(),
-                &clocks,
+                clocks.peripheral.SPI2,
+                &clocks.clocks,
             );
 
             spi.listen(hal::spi::Event::Eot);
@@ -310,14 +311,14 @@ const APP: () = {
             .communication_mode(hal::spi::CommunicationMode::Receiver)
             .manage_cs()
             .transfer_size(1)
-            .frame_size(16)
             .cs_delay(220e-9);
 
-            let mut spi = dp.SPI3.spi(
+            let mut spi: hal::spi::Spi<_, _, u16> = dp.SPI3.spi(
                 (spi_sck, spi_miso, hal::spi::NoMosi),
                 config,
                 50.mhz(),
-                &clocks,
+                clocks.peripheral.SPI3,
+                &clocks.clocks,
             );
 
             spi.listen(hal::spi::Event::Eot);
@@ -352,14 +353,14 @@ const APP: () = {
             .communication_mode(hal::spi::CommunicationMode::Transmitter)
             .manage_cs()
             .transfer_size(1)
-            .frame_size(16)
             .swap_mosi_miso();
 
             dp.SPI4.spi(
                 (spi_sck, spi_miso, hal::spi::NoMosi),
                 config,
                 50.mhz(),
-                &clocks,
+                clocks.peripheral.SPI4,
+                &clocks.clocks,
             )
         };
 
@@ -384,14 +385,14 @@ const APP: () = {
             .communication_mode(hal::spi::CommunicationMode::Transmitter)
             .manage_cs()
             .transfer_size(1)
-            .frame_size(16)
             .swap_mosi_miso();
 
             dp.SPI5.spi(
                 (spi_sck, spi_miso, hal::spi::NoMosi),
                 config,
                 50.mhz(),
-                &clocks,
+                clocks.peripheral.SPI5,
+                &clocks.clocks,
             )
         };
 
@@ -412,36 +413,39 @@ const APP: () = {
             let ad9959 = {
                 let qspi_interface = {
                     // Instantiate the QUADSPI pins and peripheral interface.
-                    // TODO: Place these into a pins structure that is provided to the QSPI
-                    // constructor.
-                    let _qspi_clk = gpiob
-                        .pb2
-                        .into_alternate_af9()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
-                    let _qspi_ncs = gpioc
-                        .pc11
-                        .into_alternate_af9()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
-                    let _qspi_io0 = gpioe
-                        .pe7
-                        .into_alternate_af10()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
-                    let _qspi_io1 = gpioe
-                        .pe8
-                        .into_alternate_af10()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
-                    let _qspi_io2 = gpioe
-                        .pe9
-                        .into_alternate_af10()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
-                    let _qspi_io3 = gpioe
-                        .pe10
-                        .into_alternate_af10()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
+                    let qspi_pins = {
 
-                    let qspi =
-                        hal::qspi::Qspi::new(dp.QUADSPI, &mut clocks, 10.mhz())
-                            .unwrap();
+                        let _qspi_ncs = gpioc
+                            .pc11
+                            .into_alternate_af9()
+                            .set_speed(hal::gpio::Speed::VeryHigh);
+
+                        let clk = gpiob
+                            .pb2
+                            .into_alternate_af9()
+                            .set_speed(hal::gpio::Speed::VeryHigh);
+                        let io0 = gpioe
+                            .pe7
+                            .into_alternate_af10()
+                            .set_speed(hal::gpio::Speed::VeryHigh);
+                        let io1 = gpioe
+                            .pe8
+                            .into_alternate_af10()
+                            .set_speed(hal::gpio::Speed::VeryHigh);
+                        let io2 = gpioe
+                            .pe9
+                            .into_alternate_af10()
+                            .set_speed(hal::gpio::Speed::VeryHigh);
+                        let io3 = gpioe
+                            .pe10
+                            .into_alternate_af10()
+                            .set_speed(hal::gpio::Speed::VeryHigh);
+
+                        (clk, io0, io1, io2, io3)
+                    };
+
+                    let qspi = hal::qspi::Qspi::bank2(dp.QUADSPI, qspi_pins, 11.mhz(), &clocks.clocks,
+                            clocks.peripheral.QSPI);
                     pounder::QspiInterface::new(qspi).unwrap()
                 };
 
@@ -470,7 +474,7 @@ const APP: () = {
             let io_expander = {
                 let sda = gpiob.pb7.into_alternate_af4().set_open_drain();
                 let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
-                let i2c1 = dp.I2C1.i2c((scl, sda), 100.khz(), &clocks);
+                let i2c1 = dp.I2C1.i2c((scl, sda), 100.khz(), clocks.peripheral.I2C1, &clocks.clocks);
                 mcp23017::MCP23017::default(i2c1).unwrap()
             };
 
@@ -491,8 +495,7 @@ const APP: () = {
                 let config = hal::spi::Config::new(hal::spi::Mode {
                     polarity: hal::spi::Polarity::IdleHigh,
                     phase: hal::spi::Phase::CaptureOnSecondTransition,
-                })
-                .frame_size(8);
+                });
 
                 // The maximum frequency of this SPI must be limited due to capacitance on the MISO
                 // line causing a long RC decay.
@@ -500,22 +503,25 @@ const APP: () = {
                     (spi_sck, spi_miso, spi_mosi),
                     config,
                     5.mhz(),
-                    &clocks,
+                    clocks.peripheral.SPI1,
+                    &clocks.clocks,
                 )
             };
 
-            let adc1 = {
-                let mut adc = dp.ADC1.adc(&mut delay, &mut clocks);
-                adc.calibrate();
+            let (adc1, adc2) = {
+                let (mut adc1, mut adc2) = hal::adc::adc12(dp.ADC1, dp.ADC2, &mut delay, clocks.peripheral.ADC12, &clocks.clocks);
 
-                adc.enable()
-            };
+                let adc1 = {
+                    adc1.calibrate();
+                    adc1.enable()
+                };
 
-            let adc2 = {
-                let mut adc = dp.ADC2.adc(&mut delay, &mut clocks);
-                adc.calibrate();
+                let adc2 = {
+                    adc2.calibrate();
+                    adc2.enable()
+                };
 
-                adc.enable()
+                (adc1, adc2)
             };
 
             let adc1_in_p = gpiof.pf11.into_analog();
@@ -540,16 +546,16 @@ const APP: () = {
         let mut eeprom_i2c = {
             let sda = gpiof.pf0.into_alternate_af4().set_open_drain();
             let scl = gpiof.pf1.into_alternate_af4().set_open_drain();
-            dp.I2C2.i2c((scl, sda), 100.khz(), &clocks)
+            dp.I2C2.i2c((scl, sda), 100.khz(), clocks.peripheral.I2C2, &clocks.clocks)
         };
 
         // Configure ethernet pins.
         {
             // Reset the PHY before configuring pins.
-            let mut eth_phy_nrst = gpioe.pe3.into_push_pull_output();
-            eth_phy_nrst.set_low().unwrap();
-            delay.delay_us(200u8);
-            eth_phy_nrst.set_high().unwrap();
+            //let mut eth_phy_nrst = gpioe.pe3.into_push_pull_output();
+            //eth_phy_nrst.set_low().unwrap();
+            //delay.delay_ms(200u8);
+            //eth_phy_nrst.set_high().unwrap();
             let _rmii_ref_clk = gpioa
                 .pa1
                 .into_alternate_af11()
@@ -598,8 +604,8 @@ const APP: () = {
 
         let (network_interface, eth_mac) = {
             // Configure the ethernet controller
-            let (eth_dma, eth_mac) = unsafe {
-                ethernet::ethernet_init(
+            let (eth_dma, mut eth_mac) = unsafe {
+                ethernet::new_unchecked(
                     dp.ETHERNET_MAC,
                     dp.ETHERNET_MTL,
                     dp.ETHERNET_DMA,
@@ -607,6 +613,8 @@ const APP: () = {
                     mac_addr.clone(),
                 )
             };
+
+            eth_mac.block_until_link();
 
             unsafe { ethernet::enable_interrupt() };
 
@@ -638,7 +646,7 @@ const APP: () = {
         // Utilize the cycle counter for RTIC scheduling.
         cp.DWT.enable_cycle_counter();
 
-        let mut dma = hal::dma::Dma::dma(dp.DMA1, dp.DMAMUX1, &clocks);
+        let mut dma = hal::dma::Dma::dma(dp.DMA1, dp.DMAMUX1, clocks.peripheral.DMA1);
         dma.configure_m2p_stream(
             hal::dma::Stream::One,
             &SPI_START_CODE as *const _ as u32,
@@ -654,7 +662,7 @@ const APP: () = {
         );
 
         // Configure timer 2 to trigger conversions for the ADC
-        let mut timer2 = dp.TIM2.timer(500.khz(), &mut clocks);
+        let mut timer2 = dp.TIM2.timer(50.khz(), clocks.peripheral.TIM2, &clocks.clocks);
         timer2.configure_channel(hal::timer::Channel::One, 0.25);
         timer2.configure_channel(hal::timer::Channel::Two, 0.75);
 
