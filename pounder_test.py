@@ -91,11 +91,11 @@ def main():
 
         # A sample configuration for an output channel.
         channel_config = {
-            'attenuation': 31.5,
+            'attenuation': 0.0,
             'parameters': {
                 'phase_offset': 0.5,
                 'frequency': 100.0e6,
-                'amplitude': 0.2,
+                'amplitude': 1.0,
                 'enabled': True,
             }
         }

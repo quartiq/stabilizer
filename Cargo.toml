@@ -59,9 +59,8 @@ features = ["stm32h743v"]
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "unproven"]
-
-[patch.crates-io]
-stm32h7xx-hal = { git = "https://github.com/quartiq/stm32h7xx-hal.git", branch = "feature/pounder-support" }
+git = "https://github.com/quartiq/stm32h7xx-hal.git"
+branch = "feature/pounder-support"
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]

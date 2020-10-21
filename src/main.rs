@@ -187,8 +187,7 @@ const APP: () = {
             'static,
             'static,
             'static,
-            ethernet::EthernetDMA<'static>,
-        >,
+            ethernet::EthernetDMA<'static>>,
         eth_mac: ethernet::EthernetMAC,
         mac_addr: net::wire::EthernetAddress,
 
@@ -654,7 +653,7 @@ const APP: () = {
         );
 
         // Configure timer 2 to trigger conversions for the ADC
-        let mut timer2 = dp.TIM2.timer(500.khz(), &mut clocks);
+        let mut timer2 = dp.TIM2.timer(50.khz(), &mut clocks);
         timer2.configure_channel(hal::timer::Channel::One, 0.25);
         timer2.configure_channel(hal::timer::Channel::Two, 0.75);
 
@@ -745,6 +744,35 @@ const APP: () = {
 
         // TODO: Replace with reference to CPU clock from CCDR.
         next_ms += 400_000.cycles();
+
+        match c.resources.pounder {
+            Some(pounder) => {
+
+                let state = pounder::ChannelState {
+                    parameters: pounder::DdsChannelState {
+                        phase_offset: 0.0,
+                        frequency: 100_000_000.0,
+                        amplitude: 1.0,
+                        enabled: true,
+                    },
+                    attenuation: 10.0,
+                };
+
+                let state1 = pounder::ChannelState {
+                    parameters: pounder::DdsChannelState {
+                        phase_offset: 0.5,
+                        frequency: 50_000_000.0,
+                        amplitude: 1.0,
+                        enabled: true,
+                    },
+                    attenuation: 10.0,
+                };
+
+                pounder.set_channel_state(pounder::Channel::Out0, state).unwrap();
+                pounder.set_channel_state(pounder::Channel::Out1, state1).unwrap();
+            },
+            _ => panic!("Failed"),
+        }
 
         loop {
             let tick = Instant::now() > next_ms;

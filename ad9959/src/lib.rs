@@ -376,9 +376,6 @@ where
         // Latch the configuration and restore the previous CSR. Note that the re-enable of the
         // channel happens immediately, so the CSR update does not need to be latched.
         self.latch_configuration()?;
-        self.interface
-            .write(Register::CSR as u8, &csr)
-            .map_err(|_| Error::Interface)?;
 
         Ok(())
     }
@@ -570,5 +567,70 @@ where
         // Convert the tuning word into a frequency.
         Ok(tuning_word as f64 * self.system_clock_frequency()
             / (1u64 << 32) as f64)
+    }
+
+    pub fn write_profile(&mut self, channel: Channel, freq: f64, turns: f32, amplitude: f32) -> Result<(), Error> {
+        // The function for channel frequency is `f_out = FTW * f_s / 2^32`, where FTW is the
+        // frequency tuning word and f_s is the system clock rate.
+        let tuning_word: u32 =
+            ((freq as f64 / self.system_clock_frequency())
+                * 1u64.wrapping_shl(32) as f64) as u32;
+
+        let phase_offset: u16 = (turns * (1 << 14) as f32) as u16 & 0x3FFFu16;
+
+        let amplitude_control: u16 = (amplitude * (1 << 10) as f32) as u16;
+        let mut acr: [u8; 3] = [0; 3];
+
+        // Enable the amplitude multiplier for the channel if required. The amplitude control has
+        // full-scale at 0x3FF (amplitude of 1), so the multiplier should be disabled whenever
+        // full-scale is used.
+        if amplitude_control < (1 << 10) {
+            let masked_control = amplitude_control & 0x3FF;
+            acr[1] = masked_control.to_be_bytes()[0];
+            acr[2] = masked_control.to_be_bytes()[1];
+
+            // Enable the amplitude multiplier
+            acr[1].set_bit(4, true);
+        }
+
+        self.modify_channel_closure(channel, |interface| {
+            let mut data: [u8; 11] = [0; 11];
+            data[0..2].copy_from_slice(&phase_offset.to_be_bytes());
+            data[2] = Register::CFTW0 as u8;
+            data[3..7].copy_from_slice(&tuning_word.to_be_bytes());
+            data[7] = Register::ACR as u8;
+            data[8..11].copy_from_slice(&acr);
+            interface.write(Register::CPOW0 as u8, &data).map_err(|_| Error::Interface)
+        })?;
+
+        Ok(())
+    }
+
+    fn modify_channel_closure<F>(&mut self, channel: Channel, f: F) -> Result<(), Error>
+    where
+        F: FnOnce(&mut INTERFACE) -> Result<(), Error>,
+    {
+        // Disable all other outputs so that we can update the configuration register of only the
+        // specified channel.
+        let mut csr: [u8; 1] = [0];
+        self.interface
+            .read(Register::CSR as u8, &mut csr)
+            .map_err(|_| Error::Interface)?;
+
+        let mut new_csr = csr;
+        new_csr[0].set_bits(4..8, 0);
+        new_csr[0].set_bit(4 + channel as usize, true);
+
+        self.interface
+            .write(Register::CSR as u8, &new_csr)
+            .map_err(|_| Error::Interface)?;
+
+        let result = f(&mut self.interface);
+
+        // Latch the configuration and restore the previous CSR. Note that the re-enable of the
+        // channel happens immediately, so the CSR update does not need to be latched.
+        self.latch_configuration()?;
+
+        result
     }
 }
