@@ -43,7 +43,7 @@ pub enum Channel {
 #[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub struct DdsChannelState {
     pub phase_offset: f32,
-    pub frequency: f64,
+    pub frequency: f32,
     pub amplitude: f32,
     pub enabled: bool,
 }
@@ -90,6 +90,7 @@ impl Into<ad9959::Channel> for Channel {
 pub struct QspiInterface {
     pub qspi: hal::qspi::Qspi,
     mode: ad9959::Mode,
+    streaming: bool,
 }
 
 impl QspiInterface {
@@ -106,7 +107,13 @@ impl QspiInterface {
         Ok(Self {
             qspi,
             mode: ad9959::Mode::SingleBitTwoWire,
+            streaming: false,
         })
+    }
+
+    pub fn start_stream(&mut self) {
+        self.streaming = true;
+        self.qspi.enter_write_stream_mode().unwrap();
     }
 }
 
@@ -205,13 +212,23 @@ impl ad9959::Interface for QspiInterface {
                     .map_err(|_| Error::Qspi)
             }
             ad9959::Mode::FourBitSerial => {
-                self.qspi.write(addr, &data).map_err(|_| Error::Qspi)
+                if self.streaming {
+                    Err(Error::Qspi)
+                } else {
+                    self.qspi.write(addr, data).map_err(|_| Error::Qspi)?;
+                    Ok(())
+                }
             }
             _ => Err(Error::Qspi),
         }
     }
 
-    fn read(&mut self, addr: u8, mut dest: &mut [u8]) -> Result<(), Error> {
+    fn write_profile(&mut self, data: [u32; 4]) -> Result<(), Error> {
+        self.qspi.write_profile(data);
+        Ok(())
+    }
+
+    fn read(&mut self, addr: u8, dest: &mut [u8]) -> Result<(), Error> {
         if (addr & 0x80) != 0 {
             return Err(Error::InvalidAddress);
         }
@@ -221,9 +238,7 @@ impl ad9959::Interface for QspiInterface {
             return Err(Error::Qspi);
         }
 
-        self.qspi
-            .read(0x80_u8 | addr, &mut dest)
-            .map_err(|_| Error::Qspi)
+        self.qspi.read(0x80_u8 | addr, dest).map_err(|_| Error::Qspi)
     }
 }
 
@@ -426,16 +441,12 @@ where
             .ad9959
             .get_amplitude(channel.into())
             .map_err(|_| Error::Dds)?;
-        let enabled = self
-            .ad9959
-            .is_enabled(channel.into())
-            .map_err(|_| Error::Dds)?;
 
         Ok(DdsChannelState {
             phase_offset,
             frequency,
             amplitude,
-            enabled,
+            enabled: true,
         })
     }
 
@@ -477,17 +488,7 @@ where
         self.ad9959.write_profile(channel.into(), state.parameters.frequency,
                 state.parameters.phase_offset, state.parameters.amplitude).map_err(|_| Error::Dds)?;
 
-        if state.parameters.enabled {
-            self.ad9959
-                .enable_channel(channel.into())
-                .map_err(|_| Error::Dds)?;
-        } else {
-            self.ad9959
-                .disable_channel(channel.into())
-                .map_err(|_| Error::Dds)?;
-        }
-
-        self.set_attenuation(channel, state.attenuation)?;
+        //self.set_attenuation(channel, state.attenuation)?;
 
         Ok(())
     }

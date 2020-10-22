@@ -629,6 +629,7 @@ const APP: () = {
         };
 
         cp.SCB.enable_icache();
+        //cp.SCB.enable_dcache(&mut cp.CPUID);
 
         // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
         // info!("Built on {}", build_info::BUILT_TIME_UTC);
@@ -747,6 +748,7 @@ const APP: () = {
 
         match c.resources.pounder {
             Some(pounder) => {
+                pounder.ad9959.interface.start_stream();
 
                 let state = pounder::ChannelState {
                     parameters: pounder::DdsChannelState {
@@ -755,21 +757,23 @@ const APP: () = {
                         amplitude: 1.0,
                         enabled: true,
                     },
-                    attenuation: 10.0,
+                    attenuation: 0.0,
                 };
 
                 let state1 = pounder::ChannelState {
                     parameters: pounder::DdsChannelState {
                         phase_offset: 0.5,
-                        frequency: 50_000_000.0,
+                        frequency: 100_000_000.0,
                         amplitude: 1.0,
                         enabled: true,
                     },
-                    attenuation: 10.0,
+                    attenuation: 0.0,
                 };
 
                 pounder.set_channel_state(pounder::Channel::Out0, state).unwrap();
                 pounder.set_channel_state(pounder::Channel::Out1, state1).unwrap();
+
+                pounder.ad9959.latch_configuration().unwrap();
             },
             _ => panic!("Failed"),
         }

@@ -59,8 +59,9 @@ features = ["stm32h743v"]
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "unproven"]
-git = "https://github.com/quartiq/stm32h7xx-hal.git"
-branch = "feature/pounder-support"
+# git = "https://github.com/quartiq/stm32h7xx-hal.git"
+# branch = "feature/pounder-support"
+path = "../stm32h7xx-hal"
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]

@@ -462,7 +462,7 @@ dependencies = [
  "serde-json-core",
  "smoltcp",
  "stm32h7-ethernet",
- "stm32h7xx-hal 0.5.0 (git+https://github.com/quartiq/stm32h7xx-hal.git?branch=feature/pounder-support)",
+ "stm32h7xx-hal 0.5.0",
 ]
 
 [[package]]
@@ -497,7 +497,6 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.5.0"
-source = "git+https://github.com/quartiq/stm32h7xx-hal.git?branch=feature/pounder-support#ff00e938f2b226211c178f26c092f36462c44404"
 dependencies = [
  "bare-metal",
  "cast",
