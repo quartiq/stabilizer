@@ -36,7 +36,10 @@ use stm32h7xx_hal::prelude::*;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use smoltcp as net;
-use hal::ethernet as ethernet;
+use hal::{
+    ethernet,
+    dma::{DmaExt, DmaChannel, DmaInternal},
+};
 
 use heapless::{consts::*, String};
 
@@ -253,6 +256,8 @@ const APP: () = {
             afe::ProgrammableGainAmplifier::new(a0_pin, a1_pin)
         };
 
+        let mut dma_channels = dp.DMA1.split();
+
         // Configure the SPI interfaces to the ADCs and DACs.
         let adc0_spi = {
             let spi_miso = gpiob
@@ -272,10 +277,17 @@ const APP: () = {
                 polarity: hal::spi::Polarity::IdleHigh,
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
-            .communication_mode(hal::spi::CommunicationMode::Receiver)
             .manage_cs()
-            .transfer_size(1)
             .cs_delay(220e-9);
+
+            dma_channels.0.set_peripheral_address(&dp.SPI2.cr1 as *const _ as u32, false);
+            dma_channels.0.set_memory_address(&SPI_START_CODE as *const _ as u32, false);
+            dma_channels.0.set_direction(hal::dma::Direction::MemoryToPeripherial);
+            dma_channels.0.set_transfer_length(1);
+            dma_channels.0.cr().modify(|_, w| w.circ().enabled());
+            dma_channels.0.dmamux().modify(|_, w|
+                    w.dmareq_id().variant(hal::stm32::dmamux1::ccr::DMAREQ_ID_A::TIM2_UP));
+            dma_channels.0.start();
 
             let mut spi: hal::spi::Spi<_, _, u16> = dp.SPI2.spi(
                 (spi_sck, spi_miso, hal::spi::NoMosi),
@@ -285,7 +297,7 @@ const APP: () = {
                 &clocks.clocks,
             );
 
-            spi.listen(hal::spi::Event::Eot);
+            spi.listen(hal::spi::Event::Rxp);
 
             spi
         };
@@ -308,10 +320,17 @@ const APP: () = {
                 polarity: hal::spi::Polarity::IdleHigh,
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
-            .communication_mode(hal::spi::CommunicationMode::Receiver)
             .manage_cs()
-            .transfer_size(1)
             .cs_delay(220e-9);
+
+            dma_channels.1.set_peripheral_address(&dp.SPI3.cr1 as *const _ as u32, false);
+            dma_channels.1.set_memory_address(&SPI_START_CODE as *const _ as u32, false);
+            dma_channels.1.set_direction(hal::dma::Direction::MemoryToPeripherial);
+            dma_channels.1.dmamux().modify(|_, w|
+                    w.dmareq_id().variant(hal::stm32::dmamux1::ccr::DMAREQ_ID_A::TIM2_UP));
+            dma_channels.1.set_transfer_length(1);
+            dma_channels.1.cr().modify(|_, w| w.circ().enabled());
+            dma_channels.1.start();
 
             let mut spi: hal::spi::Spi<_, _, u16> = dp.SPI3.spi(
                 (spi_sck, spi_miso, hal::spi::NoMosi),
@@ -321,7 +340,7 @@ const APP: () = {
                 &clocks.clocks,
             );
 
-            spi.listen(hal::spi::Event::Eot);
+            spi.listen(hal::spi::Event::Rxp);
 
             spi
         };
@@ -350,9 +369,7 @@ const APP: () = {
                 polarity: hal::spi::Polarity::IdleHigh,
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
-            .communication_mode(hal::spi::CommunicationMode::Transmitter)
             .manage_cs()
-            .transfer_size(1)
             .swap_mosi_miso();
 
             dp.SPI4.spi(
@@ -382,9 +399,7 @@ const APP: () = {
                 polarity: hal::spi::Polarity::IdleHigh,
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
-            .communication_mode(hal::spi::CommunicationMode::Transmitter)
             .manage_cs()
-            .transfer_size(1)
             .swap_mosi_miso();
 
             dp.SPI5.spi(
@@ -646,28 +661,12 @@ const APP: () = {
         // Utilize the cycle counter for RTIC scheduling.
         cp.DWT.enable_cycle_counter();
 
-        let mut dma = hal::dma::Dma::dma(dp.DMA1, dp.DMAMUX1, clocks.peripheral.DMA1);
-        dma.configure_m2p_stream(
-            hal::dma::Stream::One,
-            &SPI_START_CODE as *const _ as u32,
-            &adc0_spi.spi.cr1 as *const _ as u32,
-            hal::dma::DMAREQ_ID::TIM2_CH1,
-        );
-
-        dma.configure_m2p_stream(
-            hal::dma::Stream::Two,
-            &SPI_START_CODE as *const _ as u32,
-            &adc1_spi.spi.cr1 as *const _ as u32,
-            hal::dma::DMAREQ_ID::TIM2_CH2,
-        );
-
         // Configure timer 2 to trigger conversions for the ADC
-        let mut timer2 = dp.TIM2.timer(50.khz(), clocks.peripheral.TIM2, &clocks.clocks);
-        timer2.configure_channel(hal::timer::Channel::One, 0.25);
-        timer2.configure_channel(hal::timer::Channel::Two, 0.75);
-
-        timer2.listen(hal::timer::Event::ChannelOneDma);
-        timer2.listen(hal::timer::Event::ChannelTwoDma);
+        let timer2 = dp.TIM2.timer(500.khz(), clocks.peripheral.TIM2, &clocks.clocks);
+        {
+            let t2_regs = unsafe { &*hal::stm32::TIM2::ptr() };
+            t2_regs.dier.modify(|_, w| w.ude().set_bit());
+        }
 
         init::LateResources {
             afe0: afe0,
@@ -690,8 +689,6 @@ const APP: () = {
 
     #[task(binds = SPI3, resources = [adc1, dac1, iir_state, iir_ch], priority = 2)]
     fn spi3(c: spi3::Context) {
-        c.resources.adc1.spi.ifcr.write(|w| w.eotc().set_bit());
-
         let output: u16 = {
             let a: u16 = c.resources.adc1.read().unwrap();
             let x0 = f32::from(a as i16);
@@ -700,18 +697,11 @@ const APP: () = {
             y0 as i16 as u16 ^ 0x8000
         };
 
-        c.resources
-            .dac1
-            .spi
-            .ifcr
-            .write(|w| w.eotc().set_bit().txtfc().set_bit());
         c.resources.dac1.send(output).unwrap();
     }
 
     #[task(binds = SPI2, resources = [adc0, dac0, iir_state, iir_ch], priority = 2)]
     fn spi2(c: spi2::Context) {
-        c.resources.adc0.spi.ifcr.write(|w| w.eotc().set_bit());
-
         let output: u16 = {
             let a: u16 = c.resources.adc0.read().unwrap();
             let x0 = f32::from(a as i16);
@@ -720,11 +710,6 @@ const APP: () = {
             y0 as i16 as u16 ^ 0x8000
         };
 
-        c.resources
-            .dac0
-            .spi
-            .ifcr
-            .write(|w| w.eotc().set_bit().txtfc().set_bit());
         c.resources.dac0.send(output).unwrap();
     }
 
