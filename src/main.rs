@@ -500,7 +500,7 @@ const APP: () = {
                     let qspi = hal::qspi::Qspi::bank2(
                         dp.QUADSPI,
                         qspi_pins,
-                        11.mhz(),
+                        10.mhz(),
                         &ccdr.clocks,
                         ccdr.peripheral.QSPI,
                     );
@@ -511,7 +511,7 @@ const APP: () = {
                 let io_update = gpiog.pg7.into_push_pull_output();
 
                 let asm_delay = {
-                    let frequency_hz = ccdr.ccdr.c_ck().0;
+                    let frequency_hz = ccdr.clocks.c_ck().0;
                     asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(
                         frequency_hz,
                     ))
