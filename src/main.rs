@@ -626,10 +626,10 @@ const APP: () = {
         // Configure ethernet pins.
         {
             // Reset the PHY before configuring pins.
-            //let mut eth_phy_nrst = gpioe.pe3.into_push_pull_output();
-            //eth_phy_nrst.set_low().unwrap();
-            //delay.delay_ms(200u8);
-            //eth_phy_nrst.set_high().unwrap();
+            let mut eth_phy_nrst = gpioe.pe3.into_push_pull_output();
+            eth_phy_nrst.set_low().unwrap();
+            delay.delay_us(200u8);
+            eth_phy_nrst.set_high().unwrap();
             let _rmii_ref_clk = gpioa
                 .pa1
                 .into_alternate_af11()
