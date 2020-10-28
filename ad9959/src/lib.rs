@@ -572,12 +572,17 @@ where
             / (1u64 << 32) as f64)
     }
 
-    pub fn write_profile(&mut self, channel: Channel, freq: f64, turns: f32) -> Result<(), Error> {
+    pub fn write_profile(
+        &mut self,
+        channel: Channel,
+        freq: f64,
+        turns: f32,
+    ) -> Result<(), Error> {
         // The function for channel frequency is `f_out = FTW * f_s / 2^32`, where FTW is the
         // frequency tuning word and f_s is the system clock rate.
-        let tuning_word: u32 =
-            ((freq as f64 / self.system_clock_frequency())
-                * 1u64.wrapping_shl(32) as f64) as u32;
+        let tuning_word: u32 = ((freq as f64 / self.system_clock_frequency())
+            * 1u64.wrapping_shl(32) as f64)
+            as u32;
 
         let phase_offset: u16 = (turns * (1 << 14) as f32) as u16 & 0x3FFFu16;
 
@@ -586,13 +591,19 @@ where
             data[0..2].copy_from_slice(&phase_offset.to_be_bytes());
             data[3] = Register::CFTW0 as u8;
             data[4..7].copy_from_slice(&tuning_word.to_be_bytes());
-            interface.write(Register::CPOW0 as u8, &data).map_err(|_| Error::Interface)
+            interface
+                .write(Register::CPOW0 as u8, &data)
+                .map_err(|_| Error::Interface)
         })?;
 
         Ok(())
     }
 
-    fn modify_channel_closure<F>(&mut self, channel: Channel, f: F) -> Result<(), Error>
+    fn modify_channel_closure<F>(
+        &mut self,
+        channel: Channel,
+        f: F,
+    ) -> Result<(), Error>
     where
         F: FnOnce(&mut INTERFACE) -> Result<(), Error>,
     {

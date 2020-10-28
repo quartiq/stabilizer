@@ -474,8 +474,13 @@ where
         channel: Channel,
         state: ChannelState,
     ) -> Result<(), Error> {
-        self.ad9959.write_profile(channel.into(), state.parameters.frequency,
-                state.parameters.phase_offset).map_err(|_| Error::Dds)?;
+        self.ad9959
+            .write_profile(
+                channel.into(),
+                state.parameters.frequency,
+                state.parameters.phase_offset,
+            )
+            .map_err(|_| Error::Dds)?;
         self.ad9959
             .set_amplitude(channel.into(), state.parameters.amplitude)
             .map_err(|_| Error::Dds)?;

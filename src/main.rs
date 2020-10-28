@@ -1,4 +1,3 @@
-#![deny(warnings)]
 #![allow(clippy::missing_safety_doc)]
 #![no_std]
 #![no_main]
@@ -35,11 +34,12 @@ use stm32h7xx_hal::prelude::*;
 
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 
-use smoltcp as net;
 use hal::{
+    dma::{DmaChannel, DmaExt, DmaInternal},
     ethernet,
-    dma::{DmaExt, DmaChannel, DmaInternal},
+    rcc::rec::ResetEnable,
 };
+use smoltcp as net;
 
 use heapless::{consts::*, String};
 
@@ -92,7 +92,7 @@ static mut NET_STORE: NetStorage = NetStorage {
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
 
-const SPI_START_CODE: u32 = 0x201;
+const SPI_START: u32 = 0x00;
 
 // static ETHERNET_PENDING: AtomicBool = AtomicBool::new(true);
 
@@ -176,22 +176,13 @@ const APP: () = {
         timer: hal::timer::Timer<hal::stm32::TIM2>,
 
         // Note: It appears that rustfmt generates a format that GDB cannot recognize, which
-        // results in GDB breakpoints being set improperly. To debug, redefine the following
-        // definition to:
-        //
-        // ```rust
-        // net_interface: net::iface::EthernetInterface<
-        //     'static,
-        //     'static,
-        //     'static,
-        //     ethernet::EthernetDMA<'static>>,
-        // ```
+        // results in GDB breakpoints being set improperly.
+        #[rustfmt::skip]
         net_interface: net::iface::EthernetInterface<
             'static,
             'static,
             'static,
-            ethernet::EthernetDMA<'static>,
-        >,
+            ethernet::EthernetDMA<'static>>,
         eth_mac: ethernet::EthernetMAC,
         mac_addr: net::wire::EthernetAddress,
 
@@ -256,6 +247,7 @@ const APP: () = {
             afe::ProgrammableGainAmplifier::new(a0_pin, a1_pin)
         };
 
+        clocks.peripheral.DMA1.reset().enable();
         let mut dma_channels = dp.DMA1.split();
 
         // Configure the SPI interfaces to the ADCs and DACs.
@@ -278,16 +270,34 @@ const APP: () = {
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
             .manage_cs()
+            .suspend_when_inactive()
             .cs_delay(220e-9);
 
-            dma_channels.0.set_peripheral_address(&dp.SPI2.cr1 as *const _ as u32, false);
-            dma_channels.0.set_memory_address(&SPI_START_CODE as *const _ as u32, false);
-            dma_channels.0.set_direction(hal::dma::Direction::MemoryToPeripherial);
+            dma_channels.0.set_peripheral_address(
+                &dp.SPI2.txdr as *const _ as u32,
+                false,
+            );
+            dma_channels
+                .0
+                .set_memory_address(&SPI_START as *const _ as u32, false);
+            dma_channels
+                .0
+                .set_direction(hal::dma::Direction::MemoryToPeripherial);
             dma_channels.0.set_transfer_length(1);
-            dma_channels.0.cr().modify(|_, w| w.circ().enabled());
-            dma_channels.0.dmamux().modify(|_, w|
-                    w.dmareq_id().variant(hal::stm32::dmamux1::ccr::DMAREQ_ID_A::TIM2_UP));
-            dma_channels.0.start();
+            dma_channels.0.cr().modify(|_, w| {
+                w.circ()
+                    .enabled()
+                    .psize()
+                    .bits16()
+                    .msize()
+                    .bits16()
+                    .pfctrl()
+                    .dma()
+            });
+            dma_channels.0.dmamux().modify(|_, w| {
+                w.dmareq_id()
+                    .variant(hal::stm32::dmamux1::ccr::DMAREQ_ID_A::TIM2_UP)
+            });
 
             let mut spi: hal::spi::Spi<_, _, u16> = dp.SPI2.spi(
                 (spi_sck, spi_miso, hal::spi::NoMosi),
@@ -296,6 +306,10 @@ const APP: () = {
                 clocks.peripheral.SPI2,
                 &clocks.clocks,
             );
+
+            // Kick-start the SPI transaction - we will add data to the TXFIFO to read from the ADC.
+            let spi_regs = unsafe { &*hal::stm32::SPI2::ptr() };
+            spi_regs.cr1.modify(|_, w| w.cstart().started());
 
             spi.listen(hal::spi::Event::Rxp);
 
@@ -321,16 +335,34 @@ const APP: () = {
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
             .manage_cs()
+            .suspend_when_inactive()
             .cs_delay(220e-9);
 
-            dma_channels.1.set_peripheral_address(&dp.SPI3.cr1 as *const _ as u32, false);
-            dma_channels.1.set_memory_address(&SPI_START_CODE as *const _ as u32, false);
-            dma_channels.1.set_direction(hal::dma::Direction::MemoryToPeripherial);
-            dma_channels.1.dmamux().modify(|_, w|
-                    w.dmareq_id().variant(hal::stm32::dmamux1::ccr::DMAREQ_ID_A::TIM2_UP));
+            dma_channels.1.set_peripheral_address(
+                &dp.SPI3.txdr as *const _ as u32,
+                false,
+            );
+            dma_channels
+                .1
+                .set_memory_address(&SPI_START as *const _ as u32, false);
+            dma_channels
+                .1
+                .set_direction(hal::dma::Direction::MemoryToPeripherial);
+            dma_channels.1.dmamux().modify(|_, w| {
+                w.dmareq_id()
+                    .variant(hal::stm32::dmamux1::ccr::DMAREQ_ID_A::TIM2_UP)
+            });
             dma_channels.1.set_transfer_length(1);
-            dma_channels.1.cr().modify(|_, w| w.circ().enabled());
-            dma_channels.1.start();
+            dma_channels.1.cr().modify(|_, w| {
+                w.circ()
+                    .enabled()
+                    .psize()
+                    .bits16()
+                    .msize()
+                    .bits16()
+                    .pfctrl()
+                    .dma()
+            });
 
             let mut spi: hal::spi::Spi<_, _, u16> = dp.SPI3.spi(
                 (spi_sck, spi_miso, hal::spi::NoMosi),
@@ -339,6 +371,9 @@ const APP: () = {
                 clocks.peripheral.SPI3,
                 &clocks.clocks,
             );
+
+            let spi_regs = unsafe { &*hal::stm32::SPI3::ptr() };
+            spi_regs.cr1.modify(|_, w| w.cstart().started());
 
             spi.listen(hal::spi::Event::Rxp);
 
@@ -370,6 +405,8 @@ const APP: () = {
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
             .manage_cs()
+            .suspend_when_inactive()
+            .communication_mode(hal::spi::CommunicationMode::Transmitter)
             .swap_mosi_miso();
 
             dp.SPI4.spi(
@@ -400,6 +437,8 @@ const APP: () = {
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
             .manage_cs()
+            .suspend_when_inactive()
+            .communication_mode(hal::spi::CommunicationMode::Transmitter)
             .swap_mosi_miso();
 
             dp.SPI5.spi(
@@ -429,7 +468,6 @@ const APP: () = {
                 let qspi_interface = {
                     // Instantiate the QUADSPI pins and peripheral interface.
                     let qspi_pins = {
-
                         let _qspi_ncs = gpioc
                             .pc11
                             .into_alternate_af9()
@@ -459,8 +497,13 @@ const APP: () = {
                         (clk, io0, io1, io2, io3)
                     };
 
-                    let qspi = hal::qspi::Qspi::bank2(dp.QUADSPI, qspi_pins, 11.mhz(), &clocks.clocks,
-                            clocks.peripheral.QSPI);
+                    let qspi = hal::qspi::Qspi::bank2(
+                        dp.QUADSPI,
+                        qspi_pins,
+                        11.mhz(),
+                        &clocks.clocks,
+                        clocks.peripheral.QSPI,
+                    );
                     pounder::QspiInterface::new(qspi).unwrap()
                 };
 
@@ -489,7 +532,12 @@ const APP: () = {
             let io_expander = {
                 let sda = gpiob.pb7.into_alternate_af4().set_open_drain();
                 let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
-                let i2c1 = dp.I2C1.i2c((scl, sda), 100.khz(), clocks.peripheral.I2C1, &clocks.clocks);
+                let i2c1 = dp.I2C1.i2c(
+                    (scl, sda),
+                    100.khz(),
+                    clocks.peripheral.I2C1,
+                    &clocks.clocks,
+                );
                 mcp23017::MCP23017::default(i2c1).unwrap()
             };
 
@@ -524,7 +572,13 @@ const APP: () = {
             };
 
             let (adc1, adc2) = {
-                let (mut adc1, mut adc2) = hal::adc::adc12(dp.ADC1, dp.ADC2, &mut delay, clocks.peripheral.ADC12, &clocks.clocks);
+                let (mut adc1, mut adc2) = hal::adc::adc12(
+                    dp.ADC1,
+                    dp.ADC2,
+                    &mut delay,
+                    clocks.peripheral.ADC12,
+                    &clocks.clocks,
+                );
 
                 let adc1 = {
                     adc1.calibrate();
@@ -561,7 +615,12 @@ const APP: () = {
         let mut eeprom_i2c = {
             let sda = gpiof.pf0.into_alternate_af4().set_open_drain();
             let scl = gpiof.pf1.into_alternate_af4().set_open_drain();
-            dp.I2C2.i2c((scl, sda), 100.khz(), clocks.peripheral.I2C2, &clocks.clocks)
+            dp.I2C2.i2c(
+                (scl, sda),
+                100.khz(),
+                clocks.peripheral.I2C2,
+                &clocks.clocks,
+            )
         };
 
         // Configure ethernet pins.
@@ -619,17 +678,17 @@ const APP: () = {
 
         let (network_interface, eth_mac) = {
             // Configure the ethernet controller
-            let (eth_dma, mut eth_mac) = unsafe {
+            let (eth_dma, eth_mac) = unsafe {
                 ethernet::new_unchecked(
                     dp.ETHERNET_MAC,
                     dp.ETHERNET_MTL,
                     dp.ETHERNET_DMA,
                     &mut DES_RING,
                     mac_addr.clone(),
+                    clocks.peripheral.ETH1MAC,
+                    &clocks.clocks,
                 )
             };
-
-            eth_mac.block_until_link();
 
             unsafe { ethernet::enable_interrupt() };
 
@@ -662,11 +721,17 @@ const APP: () = {
         cp.DWT.enable_cycle_counter();
 
         // Configure timer 2 to trigger conversions for the ADC
-        let timer2 = dp.TIM2.timer(500.khz(), clocks.peripheral.TIM2, &clocks.clocks);
+        let timer2 =
+            dp.TIM2
+                .timer(500.khz(), clocks.peripheral.TIM2, &clocks.clocks);
         {
             let t2_regs = unsafe { &*hal::stm32::TIM2::ptr() };
             t2_regs.dier.modify(|_, w| w.ude().set_bit());
         }
+
+        // Start the SPI transfers.
+        dma_channels.0.start();
+        dma_channels.1.start();
 
         init::LateResources {
             afe0: afe0,
