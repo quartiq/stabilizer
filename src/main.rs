@@ -214,7 +214,7 @@ const APP: () = {
             .modify(|_, w| w.spi123sel().pll2_p().spi45sel().pll2_q());
 
         let rcc = dp.RCC.constrain();
-        let clocks = rcc
+        let ccdr = rcc
             .use_hse(8.mhz())
             .sysclk(400.mhz())
             .hclk(200.mhz())
@@ -225,15 +225,15 @@ const APP: () = {
 
         init_log();
 
-        let mut delay = hal::delay::Delay::new(cp.SYST, clocks.clocks);
+        let mut delay = hal::delay::Delay::new(cp.SYST, ccdr.clocks);
 
-        let gpioa = dp.GPIOA.split(clocks.peripheral.GPIOA);
-        let gpiob = dp.GPIOB.split(clocks.peripheral.GPIOB);
-        let gpioc = dp.GPIOC.split(clocks.peripheral.GPIOC);
-        let gpiod = dp.GPIOD.split(clocks.peripheral.GPIOD);
-        let gpioe = dp.GPIOE.split(clocks.peripheral.GPIOE);
-        let gpiof = dp.GPIOF.split(clocks.peripheral.GPIOF);
-        let gpiog = dp.GPIOG.split(clocks.peripheral.GPIOG);
+        let gpioa = dp.GPIOA.split(ccdr.peripheral.GPIOA);
+        let gpiob = dp.GPIOB.split(ccdr.peripheral.GPIOB);
+        let gpioc = dp.GPIOC.split(ccdr.peripheral.GPIOC);
+        let gpiod = dp.GPIOD.split(ccdr.peripheral.GPIOD);
+        let gpioe = dp.GPIOE.split(ccdr.peripheral.GPIOE);
+        let gpiof = dp.GPIOF.split(ccdr.peripheral.GPIOF);
+        let gpiog = dp.GPIOG.split(ccdr.peripheral.GPIOG);
 
         let afe0 = {
             let a0_pin = gpiof.pf2.into_push_pull_output();
@@ -247,7 +247,7 @@ const APP: () = {
             afe::ProgrammableGainAmplifier::new(a0_pin, a1_pin)
         };
 
-        clocks.peripheral.DMA1.reset().enable();
+        ccdr.peripheral.DMA1.reset().enable();
         let mut dma_channels = dp.DMA1.split();
 
         // Configure the SPI interfaces to the ADCs and DACs.
@@ -303,8 +303,8 @@ const APP: () = {
                 (spi_sck, spi_miso, hal::spi::NoMosi),
                 config,
                 50.mhz(),
-                clocks.peripheral.SPI2,
-                &clocks.clocks,
+                ccdr.peripheral.SPI2,
+                &ccdr.clocks,
             );
 
             // Kick-start the SPI transaction - we will add data to the TXFIFO to read from the ADC.
@@ -368,8 +368,8 @@ const APP: () = {
                 (spi_sck, spi_miso, hal::spi::NoMosi),
                 config,
                 50.mhz(),
-                clocks.peripheral.SPI3,
-                &clocks.clocks,
+                ccdr.peripheral.SPI3,
+                &ccdr.clocks,
             );
 
             let spi_regs = unsafe { &*hal::stm32::SPI3::ptr() };
@@ -413,8 +413,8 @@ const APP: () = {
                 (spi_sck, spi_miso, hal::spi::NoMosi),
                 config,
                 50.mhz(),
-                clocks.peripheral.SPI4,
-                &clocks.clocks,
+                ccdr.peripheral.SPI4,
+                &ccdr.clocks,
             )
         };
 
@@ -445,8 +445,8 @@ const APP: () = {
                 (spi_sck, spi_miso, hal::spi::NoMosi),
                 config,
                 50.mhz(),
-                clocks.peripheral.SPI5,
-                &clocks.clocks,
+                ccdr.peripheral.SPI5,
+                &ccdr.clocks,
             )
         };
 
@@ -501,8 +501,8 @@ const APP: () = {
                         dp.QUADSPI,
                         qspi_pins,
                         11.mhz(),
-                        &clocks.clocks,
-                        clocks.peripheral.QSPI,
+                        &ccdr.clocks,
+                        ccdr.peripheral.QSPI,
                     );
                     pounder::QspiInterface::new(qspi).unwrap()
                 };
@@ -511,7 +511,7 @@ const APP: () = {
                 let io_update = gpiog.pg7.into_push_pull_output();
 
                 let asm_delay = {
-                    let frequency_hz = clocks.clocks.c_ck().0;
+                    let frequency_hz = ccdr.ccdr.c_ck().0;
                     asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(
                         frequency_hz,
                     ))
@@ -535,8 +535,8 @@ const APP: () = {
                 let i2c1 = dp.I2C1.i2c(
                     (scl, sda),
                     100.khz(),
-                    clocks.peripheral.I2C1,
-                    &clocks.clocks,
+                    ccdr.peripheral.I2C1,
+                    &ccdr.clocks,
                 );
                 mcp23017::MCP23017::default(i2c1).unwrap()
             };
@@ -566,8 +566,8 @@ const APP: () = {
                     (spi_sck, spi_miso, spi_mosi),
                     config,
                     5.mhz(),
-                    clocks.peripheral.SPI1,
-                    &clocks.clocks,
+                    ccdr.peripheral.SPI1,
+                    &ccdr.clocks,
                 )
             };
 
@@ -576,8 +576,8 @@ const APP: () = {
                     dp.ADC1,
                     dp.ADC2,
                     &mut delay,
-                    clocks.peripheral.ADC12,
-                    &clocks.clocks,
+                    ccdr.peripheral.ADC12,
+                    &ccdr.clocks,
                 );
 
                 let adc1 = {
@@ -618,8 +618,8 @@ const APP: () = {
             dp.I2C2.i2c(
                 (scl, sda),
                 100.khz(),
-                clocks.peripheral.I2C2,
-                &clocks.clocks,
+                ccdr.peripheral.I2C2,
+                &ccdr.clocks,
             )
         };
 
@@ -685,8 +685,8 @@ const APP: () = {
                     dp.ETHERNET_DMA,
                     &mut DES_RING,
                     mac_addr.clone(),
-                    clocks.peripheral.ETH1MAC,
-                    &clocks.clocks,
+                    ccdr.peripheral.ETH1MAC,
+                    &ccdr.clocks,
                 )
             };
 
@@ -722,8 +722,7 @@ const APP: () = {
 
         // Configure timer 2 to trigger conversions for the ADC
         let timer2 =
-            dp.TIM2
-                .timer(500.khz(), clocks.peripheral.TIM2, &clocks.clocks);
+            dp.TIM2.timer(500.khz(), ccdr.peripheral.TIM2, &ccdr.clocks);
         {
             let t2_regs = unsafe { &*hal::stm32::TIM2::ptr() };
             t2_regs.dier.modify(|_, w| w.ude().set_bit());
