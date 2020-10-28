@@ -36,7 +36,7 @@ use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use hal::{
     dma::{DmaChannel, DmaExt, DmaInternal},
-    ethernet,
+    ethernet::{self, PHY},
     rcc::rec::ResetEnable,
 };
 use smoltcp as net;
@@ -183,7 +183,7 @@ const APP: () = {
             'static,
             'static,
             ethernet::EthernetDMA<'static>>,
-        eth_mac: ethernet::EthernetMAC,
+        eth_mac: ethernet::phy::LAN8742A<ethernet::EthernetMAC>,
         mac_addr: net::wire::EthernetAddress,
 
         pounder: Option<pounder::PounderDevices<asm_delay::AsmDelay>>,
@@ -690,6 +690,12 @@ const APP: () = {
                 )
             };
 
+            // Reset and initialize the ethernet phy.
+            let mut lan8742a =
+                ethernet::phy::LAN8742A::new(eth_mac.set_phy_addr(0));
+            lan8742a.phy_reset();
+            lan8742a.phy_init();
+
             unsafe { ethernet::enable_interrupt() };
 
             let store = unsafe { &mut NET_STORE };
@@ -708,7 +714,7 @@ const APP: () = {
                 .ip_addrs(&mut store.ip_addrs[..])
                 .finalize();
 
-            (interface, eth_mac)
+            (interface, lan8742a)
         };
 
         cp.SCB.enable_icache();
