@@ -757,9 +757,7 @@ const APP: () = {
             {
                 let socket =
                     &mut *sockets.get::<net::socket::TcpSocket>(tcp_handle);
-                if socket.state() == net::socket::TcpState::CloseWait {
-                    socket.close();
-                } else if !(socket.is_open() || socket.is_listening()) {
+                if !socket.is_active() {
                     socket
                         .listen(1235)
                         .unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));

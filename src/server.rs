@@ -1,7 +1,5 @@
 use heapless::{consts::*, String, Vec};
 
-use core::fmt::Write;
-
 use serde::{Deserialize, Serialize};
 
 use serde_json_core::{de::from_slice, ser::to_string};
@@ -144,9 +142,10 @@ pub struct Status {
 }
 
 pub fn json_reply<T: Serialize>(socket: &mut net::socket::TcpSocket, msg: &T) {
-    let mut u: String<U512> = to_string(msg).unwrap();
-    u.push('\n').unwrap();
-    socket.write_str(&u).unwrap();
+    if socket.can_send() {
+        let u: String<U256> = to_string(msg).unwrap();
+        socket.send_slice(&*u.as_bytes()).unwrap();
+    }
 }
 
 pub struct Server {
@@ -172,7 +171,7 @@ impl Server {
     where
         F: FnMut(&Request) -> Response,
     {
-        while socket.can_recv() {
+        if socket.may_recv() {
             let found = socket
                 .recv(|buf| {
                     let (len, found) =
@@ -222,6 +221,8 @@ impl Server {
                 }
                 self.data.clear();
             }
+        } else if socket.may_send() {
+            socket.close();
         }
     }
 }
