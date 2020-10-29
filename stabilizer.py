@@ -27,6 +27,7 @@ class StabilizerConfig:
         assert "\n" not in s
         logger.debug("send %s", s)
         self.writer.write(s.encode("ascii") + b"\n")
+        self.writer.write_eof()
         r = (await self.reader.readline()).decode()
         logger.debug("recv %s", r)
         ret = json.loads(r, object_pairs_hook=OD)
