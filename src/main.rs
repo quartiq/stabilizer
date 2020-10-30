@@ -36,6 +36,9 @@ use stm32h7xx_hal::prelude::*;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use smoltcp as net;
+use smoltcp::iface::Routes;
+use smoltcp::wire::Ipv4Address;
+
 use stm32h7_ethernet as ethernet;
 
 use heapless::{consts::*, String};
@@ -76,6 +79,7 @@ mod build_info {
 pub struct NetStorage {
     ip_addrs: [net::wire::IpCidr; 1],
     neighbor_cache: [Option<(net::wire::IpAddress, net::iface::Neighbor)>; 8],
+    routes_storage: [Option<(smoltcp::wire::IpCidr, smoltcp::iface::Route)>; 1],
 }
 
 static mut NET_STORE: NetStorage = NetStorage {
@@ -85,6 +89,8 @@ static mut NET_STORE: NetStorage = NetStorage {
     )],
 
     neighbor_cache: [None; 8],
+
+    routes_storage: [None; 1],
 };
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
@@ -617,6 +623,10 @@ const APP: () = {
                 24,
             );
 
+            let default_v4_gw = Ipv4Address::new(10, 0, 16, 1);
+            let mut routes = Routes::new(&mut store.routes_storage[..]);
+            routes.add_default_ipv4_route(default_v4_gw).unwrap();
+
             let neighbor_cache =
                 net::iface::NeighborCache::new(&mut store.neighbor_cache[..]);
 
@@ -624,6 +634,7 @@ const APP: () = {
                 .ethernet_addr(mac_addr)
                 .neighbor_cache(neighbor_cache)
                 .ip_addrs(&mut store.ip_addrs[..])
+                .routes(routes)
                 .finalize();
 
             (interface, eth_mac)
