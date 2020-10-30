@@ -79,7 +79,7 @@ mod build_info {
 pub struct NetStorage {
     ip_addrs: [net::wire::IpCidr; 1],
     neighbor_cache: [Option<(net::wire::IpAddress, net::iface::Neighbor)>; 8],
-    routes_storage: [Option<(smoltcp::wire::IpCidr, smoltcp::iface::Route)>; 2],
+    routes_storage: [Option<(smoltcp::wire::IpCidr, smoltcp::iface::Route)>; 1],
 }
 
 static mut NET_STORE: NetStorage = NetStorage {
@@ -90,7 +90,7 @@ static mut NET_STORE: NetStorage = NetStorage {
 
     neighbor_cache: [None; 8],
 
-    routes_storage: [None; 2],
+    routes_storage: [None; 1],
 };
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
