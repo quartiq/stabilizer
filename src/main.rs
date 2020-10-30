@@ -36,8 +36,9 @@ use stm32h7xx_hal::prelude::*;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use smoltcp as net;
-use smoltcp::wire::Ipv4Address;
 use smoltcp::iface::Routes;
+use smoltcp::wire::Ipv4Address;
+
 use stm32h7_ethernet as ethernet;
 
 use heapless::{consts::*, String};
@@ -622,7 +623,7 @@ const APP: () = {
                 24,
             );
 
-            let default_v4_gw = Ipv4Address::new(10,0,16,1);
+            let default_v4_gw = Ipv4Address::new(10, 0, 16, 1);
             let mut routes = Routes::new(&mut store.routes_storage[..]);
             routes.add_default_ipv4_route(default_v4_gw).unwrap();
 
