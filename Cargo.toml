@@ -60,7 +60,7 @@ features = ["stm32h743v"]
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]
 git = "https://github.com/quartiq/stm32h7xx-hal"
-branch = "rs/issue-158/managed-spi"
+branch = "feature/stabilizer-dma"
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
@@ -70,7 +70,7 @@ nightly = ["cortex-m/inline-asm"]
 [profile.dev]
 codegen-units = 1
 incremental = false
-opt-level = 3
+opt-level = 1
 
 [profile.release]
 opt-level = 3
