@@ -37,7 +37,7 @@ use embedded_hal::digital::v2::{InputPin, OutputPin};
 use hal::{
     dma::{
         dma::{DMAReq, DmaConfig},
-        traits::{Stream, TargetAddress},
+        traits::TargetAddress,
         MemoryToPeripheral, PeripheralToMemory, Transfer,
     },
     ethernet::{self, PHY},
@@ -45,6 +45,8 @@ use hal::{
 use smoltcp as net;
 
 use heapless::{consts::*, String};
+
+const SAMPLE_FREQUENCY_KHZ: u32 = 800;
 
 #[link_section = ".sram3.eth"]
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
@@ -362,7 +364,8 @@ const APP: () = {
                 )
             };
 
-            Dac0Output::new(dac0_spi)
+            let timer = dp.TIM3.timer(SAMPLE_FREQUENCY_KHZ.khz(), ccdr.peripheral.TIM3, &ccdr.clocks);
+            Dac0Output::new(dac0_spi, timer)
         };
 
         let dac1 = {
@@ -398,7 +401,8 @@ const APP: () = {
                 )
             };
 
-            Dac1Output::new(dac1_spi)
+            let timer = dp.TIM4.timer(SAMPLE_FREQUENCY_KHZ.khz(), ccdr.peripheral.TIM4, &ccdr.clocks);
+            Dac1Output::new(dac1_spi, timer)
         };
 
         let mut fp_led_0 = gpiod.pd5.into_push_pull_output();
@@ -679,7 +683,7 @@ const APP: () = {
 
         // Configure timer 2 to trigger conversions for the ADC
         let timer2 =
-            dp.TIM2.timer(50.khz(), ccdr.peripheral.TIM2, &ccdr.clocks);
+            dp.TIM2.timer(SAMPLE_FREQUENCY_KHZ.khz(), ccdr.peripheral.TIM2, &ccdr.clocks);
         {
             let t2_regs = unsafe { &*hal::stm32::TIM2::ptr() };
             t2_regs.dier.modify(|_, w| w.ude().set_bit());
@@ -704,36 +708,30 @@ const APP: () = {
         }
     }
 
-    #[task(binds=DMA1_STR3, resources=[adc1, dac1, iir_state, iir_ch], priority=2)]
-    fn adc1(c: adc1::Context) {
-        let samples = c.resources.adc1.transfer_complete_handler();
-
-        let mut last_result: u16 = 0;
-        for sample in samples {
-            let x0 = f32::from(*sample as i16);
-            let y0 =
-                c.resources.iir_ch[1].update(&mut c.resources.iir_state[1], x0);
-            last_result = y0 as i16 as u16 ^ 0x8000;
-            //c.resources.dac0.push(last_result);
-        }
-
-        c.resources.dac1.write(last_result);
-    }
-
     #[task(binds=DMA1_STR1, resources=[adc0, dac0, iir_state, iir_ch], priority=2)]
-    fn adc0(c: adc0::Context) {
+    fn adc0(mut c: adc0::Context) {
         let samples = c.resources.adc0.transfer_complete_handler();
 
-        let mut last_result: u16 = 0;
         for sample in samples {
             let x0 = f32::from(*sample as i16);
             let y0 =
                 c.resources.iir_ch[0].update(&mut c.resources.iir_state[0], x0);
-            last_result = y0 as i16 as u16 ^ 0x8000;
-            //c.resources.dac0.push(last_result);
+            let result = y0 as i16 as u16 ^ 0x8000;
+            c.resources.dac0.lock(|dac| dac.push(result));
         }
+    }
 
-        c.resources.dac0.write(last_result);
+    #[task(binds=DMA1_STR3, resources=[adc1, dac1, iir_state, iir_ch], priority=2)]
+    fn adc1(mut c: adc1::Context) {
+        let samples = c.resources.adc1.transfer_complete_handler();
+
+        for sample in samples {
+            let x0 = f32::from(*sample as i16);
+            let y0 =
+                c.resources.iir_ch[1].update(&mut c.resources.iir_state[1], x0);
+            let result = y0 as i16 as u16 ^ 0x8000;
+            c.resources.dac1.lock(|dac| dac.push(result));
+        }
     }
 
     #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afe0, afe1])]
@@ -934,6 +932,16 @@ const APP: () = {
     #[task(binds = SPI3, priority = 1)]
     fn spi3(_: spi3::Context) {
         panic!("ADC0 input overrun");
+    }
+
+    #[task(binds = TIM3, resources=[dac0], priority = 3)]
+    fn dac0(c: dac0::Context) {
+        c.resources.dac0.update();
+    }
+
+    #[task(binds = TIM4, resources=[dac1], priority = 3)]
+    fn dac1(c: dac1::Context) {
+        c.resources.dac1.update();
     }
 
     extern "C" {

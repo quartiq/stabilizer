@@ -1,9 +1,8 @@
 use super::{
-    hal, DMAReq, DmaConfig, MemoryToPeripheral, PeripheralToMemory, Stream,
-    TargetAddress, Transfer,
+    hal, DMAReq, DmaConfig, MemoryToPeripheral, PeripheralToMemory, TargetAddress, Transfer,
 };
 
-const INPUT_BUFFER_SIZE: usize = 1;
+const INPUT_BUFFER_SIZE: usize = 25;
 
 #[link_section = ".axisram.buffers"]
 static mut SPI_START: [u16; 1] = [0x00];
