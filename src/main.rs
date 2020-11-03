@@ -36,13 +36,9 @@ use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use hal::{
     dma::{
-        Transfer,
-        PeripheralToMemory, MemoryToPeripheral,
+        dma::{DMAReq, DmaConfig},
         traits::{Stream, TargetAddress},
-        dma::{
-            DmaConfig,
-            DMAReq,
-        },
+        MemoryToPeripheral, PeripheralToMemory, Transfer,
     },
     ethernet::{self, PHY},
 };
@@ -53,16 +49,16 @@ use heapless::{consts::*, String};
 #[link_section = ".sram3.eth"]
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 
-mod dac;
 mod adc;
 mod afe;
+mod dac;
 mod eeprom;
 mod iir;
 mod pounder;
 mod server;
 
-use dac::{Dac0Output, Dac1Output};
 use adc::{Adc0Input, Adc1Input};
+use dac::{Dac0Output, Dac1Output};
 
 #[cfg(not(feature = "semihosting"))]
 fn init_log() {}
@@ -257,7 +253,8 @@ const APP: () = {
             afe::ProgrammableGainAmplifier::new(a0_pin, a1_pin)
         };
 
-        let dma_streams = hal::dma::dma::StreamsTuple::new(dp.DMA1, ccdr.peripheral.DMA1);
+        let dma_streams =
+            hal::dma::dma::StreamsTuple::new(dp.DMA1, ccdr.peripheral.DMA1);
 
         // Configure the SPI interfaces to the ADCs and DACs.
         let adc0 = {
@@ -714,7 +711,8 @@ const APP: () = {
         let mut last_result: u16 = 0;
         for sample in samples {
             let x0 = f32::from(*sample as i16);
-            let y0 = c.resources.iir_ch[1].update(&mut c.resources.iir_state[1], x0);
+            let y0 =
+                c.resources.iir_ch[1].update(&mut c.resources.iir_state[1], x0);
             last_result = y0 as i16 as u16 ^ 0x8000;
             //c.resources.dac0.push(last_result);
         }
@@ -729,7 +727,8 @@ const APP: () = {
         let mut last_result: u16 = 0;
         for sample in samples {
             let x0 = f32::from(*sample as i16);
-            let y0 = c.resources.iir_ch[0].update(&mut c.resources.iir_state[0], x0);
+            let y0 =
+                c.resources.iir_ch[0].update(&mut c.resources.iir_state[0], x0);
             last_result = y0 as i16 as u16 ^ 0x8000;
             //c.resources.dac0.push(last_result);
         }
