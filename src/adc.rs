@@ -1,8 +1,9 @@
 use super::{
-    hal, DMAReq, DmaConfig, MemoryToPeripheral, PeripheralToMemory, TargetAddress, Transfer,
+    hal, DMAReq, DmaConfig, MemoryToPeripheral, PeripheralToMemory, Priority,
+    Stream, TargetAddress, Transfer,
 };
 
-const INPUT_BUFFER_SIZE: usize = 25;
+const INPUT_BUFFER_SIZE: usize = 1;
 
 #[link_section = ".axisram.buffers"]
 static mut SPI_START: [u16; 1] = [0x00];
@@ -57,6 +58,25 @@ unsafe impl TargetAddress<MemoryToPeripheral> for SPI3 {
     }
 }
 
+pub struct AdcInputs {
+    adc0: Adc0Input,
+    adc1: Adc1Input,
+}
+
+impl AdcInputs {
+    pub fn new(adc0: Adc0Input, adc1: Adc1Input) -> Self {
+        Self { adc0, adc1 }
+    }
+
+    pub fn transfer_complete_handler(
+        &mut self,
+    ) -> (&[u16; INPUT_BUFFER_SIZE], &[u16; INPUT_BUFFER_SIZE]) {
+        let adc0_buffer = self.adc0.transfer_complete_handler();
+        let adc1_buffer = self.adc1.transfer_complete_handler();
+        (adc0_buffer, adc1_buffer)
+    }
+}
+
 pub struct Adc0Input {
     next_buffer: Option<&'static mut [u16; INPUT_BUFFER_SIZE]>,
     transfer: Transfer<
@@ -76,6 +96,7 @@ impl Adc0Input {
         let trigger_config = DmaConfig::default()
             .memory_increment(false)
             .peripheral_increment(false)
+            .priority(Priority::High)
             .circular_buffer(true);
 
         let mut trigger_transfer: Transfer<_, _, MemoryToPeripheral, _> =
@@ -89,7 +110,7 @@ impl Adc0Input {
 
         let data_config = DmaConfig::default()
             .memory_increment(true)
-            .transfer_complete_interrupt(true)
+            .priority(Priority::VeryHigh)
             .peripheral_increment(false);
 
         let mut spi = spi.disable();
@@ -121,6 +142,8 @@ impl Adc0Input {
 
     pub fn transfer_complete_handler(&mut self) -> &[u16; INPUT_BUFFER_SIZE] {
         let next_buffer = self.next_buffer.take().unwrap();
+        while hal::dma::dma::Stream1::<hal::stm32::DMA1>::is_enabled() {}
+        self.transfer.clear_interrupts();
         let (prev_buffer, _) =
             self.transfer.next_transfer(next_buffer).unwrap();
         self.next_buffer.replace(prev_buffer);
@@ -147,6 +170,7 @@ impl Adc1Input {
         let trigger_config = DmaConfig::default()
             .memory_increment(false)
             .peripheral_increment(false)
+            .priority(Priority::High)
             .circular_buffer(true);
 
         let mut trigger_transfer: Transfer<_, _, MemoryToPeripheral, _> =
@@ -161,6 +185,7 @@ impl Adc1Input {
         let data_config = DmaConfig::default()
             .memory_increment(true)
             .transfer_complete_interrupt(true)
+            .priority(Priority::VeryHigh)
             .peripheral_increment(false);
 
         let mut spi = spi.disable();
@@ -192,6 +217,8 @@ impl Adc1Input {
 
     pub fn transfer_complete_handler(&mut self) -> &[u16; INPUT_BUFFER_SIZE] {
         let next_buffer = self.next_buffer.take().unwrap();
+        while hal::dma::dma::Stream3::<hal::stm32::DMA1>::is_enabled() {}
+        self.transfer.clear_interrupts();
         let (prev_buffer, _) =
             self.transfer.next_transfer(next_buffer).unwrap();
         self.next_buffer.replace(prev_buffer);

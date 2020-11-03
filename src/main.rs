@@ -36,8 +36,9 @@ use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use hal::{
     dma::{
+        config::Priority,
         dma::{DMAReq, DmaConfig},
-        traits::TargetAddress,
+        traits::{Stream, TargetAddress},
         MemoryToPeripheral, PeripheralToMemory, Transfer,
     },
     ethernet::{self, PHY},
@@ -46,7 +47,7 @@ use smoltcp as net;
 
 use heapless::{consts::*, String};
 
-const SAMPLE_FREQUENCY_KHZ: u32 = 800;
+const SAMPLE_FREQUENCY_KHZ: u32 = 500;
 
 #[link_section = ".sram3.eth"]
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
@@ -59,8 +60,8 @@ mod iir;
 mod pounder;
 mod server;
 
-use adc::{Adc0Input, Adc1Input};
-use dac::{Dac0Output, Dac1Output};
+use adc::{Adc0Input, Adc1Input, AdcInputs};
+use dac::DacOutputs;
 
 #[cfg(not(feature = "semihosting"))]
 fn init_log() {}
@@ -171,13 +172,11 @@ macro_rules! route_request {
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
-        adc0: Adc0Input,
-        dac0: Dac0Output,
         afe0: AFE0,
-
-        adc1: Adc1Input,
-        dac1: Dac1Output,
         afe1: AFE1,
+
+        adcs: AdcInputs,
+        dacs: DacOutputs,
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
@@ -259,79 +258,84 @@ const APP: () = {
             hal::dma::dma::StreamsTuple::new(dp.DMA1, ccdr.peripheral.DMA1);
 
         // Configure the SPI interfaces to the ADCs and DACs.
-        let adc0 = {
-            let spi_miso = gpiob
-                .pb14
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let spi_sck = gpiob
-                .pb10
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let _spi_nss = gpiob
-                .pb9
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
+        let adcs = {
+            let adc0 = {
+                let spi_miso = gpiob
+                    .pb14
+                    .into_alternate_af5()
+                    .set_speed(hal::gpio::Speed::VeryHigh);
+                let spi_sck = gpiob
+                    .pb10
+                    .into_alternate_af5()
+                    .set_speed(hal::gpio::Speed::VeryHigh);
+                let _spi_nss = gpiob
+                    .pb9
+                    .into_alternate_af5()
+                    .set_speed(hal::gpio::Speed::VeryHigh);
 
-            let config = hal::spi::Config::new(hal::spi::Mode {
-                polarity: hal::spi::Polarity::IdleHigh,
-                phase: hal::spi::Phase::CaptureOnSecondTransition,
-            })
-            .manage_cs()
-            .suspend_when_inactive()
-            .cs_delay(220e-9);
+                let config = hal::spi::Config::new(hal::spi::Mode {
+                    polarity: hal::spi::Polarity::IdleHigh,
+                    phase: hal::spi::Phase::CaptureOnSecondTransition,
+                })
+                .manage_cs()
+                .suspend_when_inactive()
+                .cs_delay(220e-9);
 
-            let spi: hal::spi::Spi<_, _, u16> = dp.SPI2.spi(
-                (spi_sck, spi_miso, hal::spi::NoMosi),
-                config,
-                50.mhz(),
-                ccdr.peripheral.SPI2,
-                &ccdr.clocks,
-            );
+                let spi: hal::spi::Spi<_, _, u16> = dp.SPI2.spi(
+                    (spi_sck, spi_miso, hal::spi::NoMosi),
+                    config,
+                    50.mhz(),
+                    ccdr.peripheral.SPI2,
+                    &ccdr.clocks,
+                );
 
-            Adc0Input::new(spi, dma_streams.0, dma_streams.1)
+                Adc0Input::new(spi, dma_streams.0, dma_streams.1)
+            };
+
+            let adc1 = {
+                let spi_miso = gpiob
+                    .pb4
+                    .into_alternate_af6()
+                    .set_speed(hal::gpio::Speed::VeryHigh);
+                let spi_sck = gpioc
+                    .pc10
+                    .into_alternate_af6()
+                    .set_speed(hal::gpio::Speed::VeryHigh);
+                let _spi_nss = gpioa
+                    .pa15
+                    .into_alternate_af6()
+                    .set_speed(hal::gpio::Speed::VeryHigh);
+
+                let config = hal::spi::Config::new(hal::spi::Mode {
+                    polarity: hal::spi::Polarity::IdleHigh,
+                    phase: hal::spi::Phase::CaptureOnSecondTransition,
+                })
+                .manage_cs()
+                .suspend_when_inactive()
+                .cs_delay(220e-9);
+
+                let spi: hal::spi::Spi<_, _, u16> = dp.SPI3.spi(
+                    (spi_sck, spi_miso, hal::spi::NoMosi),
+                    config,
+                    50.mhz(),
+                    ccdr.peripheral.SPI3,
+                    &ccdr.clocks,
+                );
+
+                Adc1Input::new(spi, dma_streams.2, dma_streams.3)
+            };
+
+            AdcInputs::new(adc0, adc1)
         };
 
-        let adc1 = {
-            let spi_miso = gpiob
-                .pb4
-                .into_alternate_af6()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let spi_sck = gpioc
-                .pc10
-                .into_alternate_af6()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let _spi_nss = gpioa
-                .pa15
-                .into_alternate_af6()
-                .set_speed(hal::gpio::Speed::VeryHigh);
+        let dacs = {
+            let _dac_clr_n =
+                gpioe.pe12.into_push_pull_output().set_high().unwrap();
+            let _dac0_ldac_n =
+                gpioe.pe11.into_push_pull_output().set_low().unwrap();
+            let _dac1_ldac_n =
+                gpioe.pe15.into_push_pull_output().set_low().unwrap();
 
-            let config = hal::spi::Config::new(hal::spi::Mode {
-                polarity: hal::spi::Polarity::IdleHigh,
-                phase: hal::spi::Phase::CaptureOnSecondTransition,
-            })
-            .manage_cs()
-            .suspend_when_inactive()
-            .cs_delay(220e-9);
-
-            let spi: hal::spi::Spi<_, _, u16> = dp.SPI3.spi(
-                (spi_sck, spi_miso, hal::spi::NoMosi),
-                config,
-                50.mhz(),
-                ccdr.peripheral.SPI3,
-                &ccdr.clocks,
-            );
-
-            Adc1Input::new(spi, dma_streams.2, dma_streams.3)
-        };
-
-        let _dac_clr_n = gpioe.pe12.into_push_pull_output().set_high().unwrap();
-        let _dac0_ldac_n =
-            gpioe.pe11.into_push_pull_output().set_low().unwrap();
-        let _dac1_ldac_n =
-            gpioe.pe15.into_push_pull_output().set_low().unwrap();
-
-        let dac0 = {
             let dac0_spi = {
                 let spi_miso = gpioe
                     .pe5
@@ -364,11 +368,6 @@ const APP: () = {
                 )
             };
 
-            let timer = dp.TIM3.timer(SAMPLE_FREQUENCY_KHZ.khz(), ccdr.peripheral.TIM3, &ccdr.clocks);
-            Dac0Output::new(dac0_spi, timer)
-        };
-
-        let dac1 = {
             let dac1_spi = {
                 let spi_miso = gpiof
                     .pf8
@@ -401,8 +400,13 @@ const APP: () = {
                 )
             };
 
-            let timer = dp.TIM4.timer(SAMPLE_FREQUENCY_KHZ.khz(), ccdr.peripheral.TIM4, &ccdr.clocks);
-            Dac1Output::new(dac1_spi, timer)
+            let timer = dp.TIM3.timer(
+                SAMPLE_FREQUENCY_KHZ.khz(),
+                ccdr.peripheral.TIM3,
+                &ccdr.clocks,
+            );
+
+            DacOutputs::new(dac0_spi, dac1_spi, timer)
         };
 
         let mut fp_led_0 = gpiod.pd5.into_push_pull_output();
@@ -682,8 +686,11 @@ const APP: () = {
         cp.DWT.enable_cycle_counter();
 
         // Configure timer 2 to trigger conversions for the ADC
-        let timer2 =
-            dp.TIM2.timer(SAMPLE_FREQUENCY_KHZ.khz(), ccdr.peripheral.TIM2, &ccdr.clocks);
+        let timer2 = dp.TIM2.timer(
+            SAMPLE_FREQUENCY_KHZ.khz(),
+            ccdr.peripheral.TIM2,
+            &ccdr.clocks,
+        );
         {
             let t2_regs = unsafe { &*hal::stm32::TIM2::ptr() };
             t2_regs.dier.modify(|_, w| w.ude().set_bit());
@@ -691,12 +698,10 @@ const APP: () = {
 
         init::LateResources {
             afe0: afe0,
-            adc0: adc0,
-            dac0: dac0,
-
             afe1: afe1,
-            adc1: adc1,
-            dac1: dac1,
+
+            adcs,
+            dacs,
 
             timer: timer2,
             pounder: pounder_devices,
@@ -708,29 +713,26 @@ const APP: () = {
         }
     }
 
-    #[task(binds=DMA1_STR1, resources=[adc0, dac0, iir_state, iir_ch], priority=2)]
-    fn adc0(mut c: adc0::Context) {
-        let samples = c.resources.adc0.transfer_complete_handler();
-
-        for sample in samples {
-            let x0 = f32::from(*sample as i16);
-            let y0 =
-                c.resources.iir_ch[0].update(&mut c.resources.iir_state[0], x0);
-            let result = y0 as i16 as u16 ^ 0x8000;
-            c.resources.dac0.lock(|dac| dac.push(result));
-        }
+    #[task(binds = TIM3, resources=[dacs], priority = 3)]
+    fn dac_update(c: dac_update::Context) {
+        c.resources.dacs.update();
     }
 
-    #[task(binds=DMA1_STR3, resources=[adc1, dac1, iir_state, iir_ch], priority=2)]
-    fn adc1(mut c: adc1::Context) {
-        let samples = c.resources.adc1.transfer_complete_handler();
+    #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch], priority=2)]
+    fn adc_update(mut c: adc_update::Context) {
+        let (adc0_samples, adc1_samples) =
+            c.resources.adcs.transfer_complete_handler();
 
-        for sample in samples {
-            let x0 = f32::from(*sample as i16);
-            let y0 =
-                c.resources.iir_ch[1].update(&mut c.resources.iir_state[1], x0);
-            let result = y0 as i16 as u16 ^ 0x8000;
-            c.resources.dac1.lock(|dac| dac.push(result));
+        for (adc0, adc1) in adc0_samples.iter().zip(adc1_samples.iter()) {
+            let result_adc0 = c.resources.iir_ch[0]
+                .update_from_adc_sample(*adc0, &mut c.resources.iir_state[0]);
+
+            let result_adc1 = c.resources.iir_ch[1]
+                .update_from_adc_sample(*adc1, &mut c.resources.iir_state[1]);
+
+            c.resources
+                .dacs
+                .lock(|dacs| dacs.push(result_adc0, result_adc1));
         }
     }
 
@@ -932,16 +934,6 @@ const APP: () = {
     #[task(binds = SPI3, priority = 1)]
     fn spi3(_: spi3::Context) {
         panic!("ADC0 input overrun");
-    }
-
-    #[task(binds = TIM3, resources=[dac0], priority = 3)]
-    fn dac0(c: dac0::Context) {
-        c.resources.dac0.update();
-    }
-
-    #[task(binds = TIM4, resources=[dac1], priority = 3)]
-    fn dac1(c: dac1::Context) {
-        c.resources.dac1.update();
     }
 
     extern "C" {
