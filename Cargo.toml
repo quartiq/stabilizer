@@ -52,15 +52,9 @@ default-features = false
 [dependencies.ad9959]
 path = "ad9959"
 
-[dependencies.stm32h7-ethernet]
-git = "https://github.com/quartiq/stm32h7-ethernet.git"
-branch = "master"
-features = ["stm32h743v"]
-
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]
-git = "https://github.com/quartiq/stm32h7xx-hal"
-branch = "rs/issue-158/managed-spi"
+git = "https://github.com/stm32-rs/stm32h7xx-hal"
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
