@@ -445,6 +445,19 @@ const APP: () = {
                 };
 
                 let mut reset_pin = gpioa.pa0.into_push_pull_output();
+
+                // Configure the IO_Update signal for the DDS.
+                let mut hrtimer = HighResTimerE::new(dp.HRTIM_TIME, ccdr.clocks, ccdr.peripheral.HRTIM);
+
+                // IO_Update should be latched for 50ns after the QSPI profile write. Profile writes
+                // are always 16 bytes, with 2 cycles required per byte, coming out to a total of 32
+                // QSPI clock cycles. The QSPI is configured for 10MHz, so this comes out to an
+                // offset of 3.2uS.
+                // TODO: This currently does not meet the 2uS timing that we have for profile
+                // updates, since we want to send a profile update for every DAC update. We should
+                // increase the QSPI clock frequency.
+                hrtimer.configure_single_shot(hrtimer::Channel::Two, 50e-9, 3.2e-6);
+
                 let io_update = gpiog.pg7.into_push_pull_output();
 
                 let asm_delay = {
