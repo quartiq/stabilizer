@@ -462,7 +462,7 @@ const APP: () = {
                     let qspi = hal::qspi::Qspi::bank2(
                         dp.QUADSPI,
                         qspi_pins,
-                        50.mhz(),
+                        40.mhz(),
                         &ccdr.clocks,
                         ccdr.peripheral.QSPI,
                     );
@@ -576,8 +576,10 @@ const APP: () = {
 
                 // IO_Update should be latched for 50ns after the QSPI profile write. Profile writes
                 // are always 16 bytes, with 2 cycles required per byte, coming out to a total of 32
-                // QSPI clock cycles. The QSPI is configured for 50MHz, so this comes out to an
-                // offset of 640nS. We use 900ns to be safe.
+                // QSPI clock cycles. The QSPI is configured for 40MHz, so this comes out to an
+                // offset of 800nS. We use 900ns to be safe - note that the timer is triggered after
+                // the QSPI write, which can take approximately 120nS, so there is additional
+                // margin.
                 hrtimer.configure_single_shot(
                     hrtimer::Channel::Two,
                     50_e-9,
