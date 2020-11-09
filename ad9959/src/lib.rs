@@ -13,12 +13,10 @@ use embedded_hal::{blocking::delay::DelayMs, digital::v2::OutputPin};
 ///
 /// The chip supports a number of serial interfaces to improve data throughput, including normal,
 /// dual, and quad SPI configurations.
-pub struct Ad9959<INTERFACE, DELAY, UPDATE> {
+pub struct Ad9959<INTERFACE> {
     pub interface: INTERFACE,
-    delay: DELAY,
     reference_clock_frequency: f32,
     system_clock_multiplier: u8,
-    io_update: UPDATE,
     communication_mode: Mode,
 }
 
@@ -31,8 +29,6 @@ pub trait Interface {
     fn write(&mut self, addr: u8, data: &[u8]) -> Result<(), Self::Error>;
 
     fn read(&mut self, addr: u8, dest: &mut [u8]) -> Result<(), Self::Error>;
-
-    fn write_profile(&mut self, data: [u32; 4]) -> Result<(), Self::Error>;
 }
 
 /// Indicates various communication modes of the DDS. The value of this enumeration is equivalent to
@@ -93,12 +89,7 @@ pub enum Error {
     Frequency,
 }
 
-impl<PinE, INTERFACE, DELAY, UPDATE> Ad9959<INTERFACE, DELAY, UPDATE>
-where
-    INTERFACE: Interface,
-    DELAY: DelayMs<u8>,
-    UPDATE: OutputPin<Error = PinE>,
-{
+impl<I: Interface> Ad9959<I> {
     /// Construct and initialize the DDS.
     ///
     /// Args:
@@ -110,36 +101,26 @@ where
     /// * `clock_frequency` - The clock frequency of the reference clock input.
     /// * `multiplier` - The desired clock multiplier for the system clock. This multiplies
     ///   `clock_frequency` to generate the system clock.
-    pub fn new<RST>(
-        interface: INTERFACE,
-        reset_pin: &mut RST,
-        io_update: UPDATE,
-        delay: DELAY,
+    pub fn new(
+        interface: I,
+        reset_pin: &mut impl OutputPin,
+        delay: &mut impl DelayMs<u8>,
         desired_mode: Mode,
         clock_frequency: f32,
         multiplier: u8,
-    ) -> Result<Self, Error>
-    where
-        RST: OutputPin,
-    {
+    ) -> Result<Self, Error> {
         let mut ad9959 = Ad9959 {
             interface,
-            io_update,
-            delay,
             reference_clock_frequency: clock_frequency,
             system_clock_multiplier: 1,
             communication_mode: desired_mode,
         };
 
-        ad9959.io_update.set_low().or_else(|_| Err(Error::Pin))?;
-
         // Reset the AD9959
         reset_pin.set_high().or_else(|_| Err(Error::Pin))?;
 
         // Delay for a clock cycle to allow the device to reset.
-        ad9959
-            .delay
-            .delay_ms((1000.0 / clock_frequency as f32) as u8);
+        delay.delay_ms((1000.0 / clock_frequency as f32) as u8);
 
         reset_pin.set_low().or_else(|_| Err(Error::Pin))?;
 
@@ -155,9 +136,6 @@ where
             .interface
             .write(Register::CSR as u8, &csr)
             .map_err(|_| Error::Interface)?;
-
-        // Latch the configuration registers to make them active.
-        ad9959.latch_configuration()?;
 
         ad9959
             .interface
@@ -177,19 +155,6 @@ where
         // Set the clock frequency to configure the device as necessary.
         ad9959.configure_system_clock(clock_frequency, multiplier)?;
         Ok(ad9959)
-    }
-
-    /// Latch the DDS configuration to ensure it is active on the output channels.
-    pub fn latch_configuration(&mut self) -> Result<(), Error> {
-        self.delay.delay_ms(2);
-        self.io_update.set_high().or_else(|_| Err(Error::Pin))?;
-        // The SYNC_CLK is 1/4 the system clock frequency. The IO_UPDATE pin must be latched for one
-        // full SYNC_CLK pulse to register. For safety, we latch for 5 here.
-        self.delay
-            .delay_ms((5000.0 / self.system_clock_frequency()) as u8);
-        self.io_update.set_low().or_else(|_| Err(Error::Pin))?;
-
-        Ok(())
     }
 
     /// Configure the internal system clock of the chip.
@@ -231,8 +196,6 @@ where
             .write(Register::FR1 as u8, &fr1)
             .map_err(|_| Error::Interface)?;
         self.system_clock_multiplier = multiplier;
-
-        self.latch_configuration()?;
 
         Ok(self.system_clock_frequency())
     }
@@ -336,10 +299,6 @@ where
         self.interface
             .write(register as u8, &data)
             .map_err(|_| Error::Interface)?;
-
-        // Latch the configuration and restore the previous CSR. Note that the re-enable of the
-        // channel happens immediately, so the CSR update does not need to be latched.
-        self.latch_configuration()?;
 
         Ok(())
     }
@@ -529,43 +488,55 @@ where
         let tuning_word = u32::from_be_bytes(tuning_word);
 
         // Convert the tuning word into a frequency.
-        Ok((tuning_word as f32 * self.system_clock_frequency()) / (1u64 << 32) as f32)
+        Ok((tuning_word as f32 * self.system_clock_frequency())
+            / (1u64 << 32) as f32)
     }
 
-    pub fn write_profile(&mut self, channel: Channel, freq: f32, turns: f32, amplitude: f32) -> Result<(), Error> {
-
+    pub fn serialize_profile(
+        &self,
+        channel: Channel,
+        freq: f32,
+        turns: f32,
+        amplitude: f32,
+    ) -> Result<[u32; 4], Error> {
         let csr: u8 = *0x00_u8
             .set_bits(1..=2, self.communication_mode as u8)
             .set_bit(4 + channel as usize, true);
 
         // The function for channel frequency is `f_out = FTW * f_s / 2^32`, where FTW is the
         // frequency tuning word and f_s is the system clock rate.
-        let tuning_word: u32 = ((freq * (1u64 << 32) as f32) / self.system_clock_frequency()) as u32;
+        let tuning_word: u32 = ((freq * (1u64 << 32) as f32)
+            / self.system_clock_frequency())
+            as u32;
 
         let phase_offset: u16 = (turns * (1 << 14) as f32) as u16 & 0x3FFFu16;
-        let pow: u32 = *0u32.set_bits(24..32, Register::CPOW0 as u32)
-                         .set_bits(8..24, phase_offset as u32)
-                         .set_bits(0..8, Register::CFTW0 as u32);
-
+        let pow: u32 = *0u32
+            .set_bits(24..32, Register::CPOW0 as u32)
+            .set_bits(8..24, phase_offset as u32)
+            .set_bits(0..8, Register::CFTW0 as u32);
 
         // Enable the amplitude multiplier for the channel if required. The amplitude control has
         // full-scale at 0x3FF (amplitude of 1), so the multiplier should be disabled whenever
         // full-scale is used.
         let amplitude_control: u16 = (amplitude * (1 << 10) as f32) as u16;
 
-        let acr: u32 = *0u32.set_bits(24..32, Register::ACR as u32)
+        let acr: u32 = *0u32
+            .set_bits(24..32, Register::ACR as u32)
             .set_bits(0..10, amplitude_control as u32 & 0x3FF)
             .set_bit(12, amplitude_control < (1 << 10));
 
         let serialized: [u32; 4] = [
-            u32::from_le_bytes([Register::CSR as u8, csr, Register::CSR as u8, csr]),
+            u32::from_le_bytes([
+                Register::CSR as u8,
+                csr,
+                Register::CSR as u8,
+                csr,
+            ]),
             acr.to_be(),
             pow.to_be(),
             tuning_word.to_be(),
         ];
 
-        self.interface.write_profile(serialized).map_err(|_| Error::Interface)?;
-
-        Ok(())
+        Ok(serialized)
     }
 }

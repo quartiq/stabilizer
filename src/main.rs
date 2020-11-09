@@ -45,6 +45,7 @@ static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 
 mod afe;
 mod eeprom;
+mod hrtimer;
 mod iir;
 mod pounder;
 mod server;
@@ -187,11 +188,12 @@ const APP: () = {
             'static,
             'static,
             'static,
-            ethernet::EthernetDMA<'static>>,
+            ethernet::EthernetDMA<'static>,
+        >,
         eth_mac: ethernet::EthernetMAC,
         mac_addr: net::wire::EthernetAddress,
 
-        pounder: Option<pounder::PounderDevices<asm_delay::AsmDelay>>,
+        pounder: Option<pounder::PounderDevices>,
 
         #[init([[0.; 5]; 2])]
         iir_state: [iir::IIRState; 2],
@@ -439,41 +441,19 @@ const APP: () = {
                         .set_speed(hal::gpio::Speed::VeryHigh);
 
                     let qspi =
-                        hal::qspi::Qspi::new(dp.QUADSPI, &mut clocks, 10.mhz())
+                        hal::qspi::Qspi::new(dp.QUADSPI, &mut clocks, 50.mhz())
                             .unwrap();
                     pounder::QspiInterface::new(qspi).unwrap()
                 };
 
                 let mut reset_pin = gpioa.pa0.into_push_pull_output();
 
-                // Configure the IO_Update signal for the DDS.
-                let mut hrtimer = HighResTimerE::new(dp.HRTIM_TIME, ccdr.clocks, ccdr.peripheral.HRTIM);
-
-                // IO_Update should be latched for 50ns after the QSPI profile write. Profile writes
-                // are always 16 bytes, with 2 cycles required per byte, coming out to a total of 32
-                // QSPI clock cycles. The QSPI is configured for 10MHz, so this comes out to an
-                // offset of 3.2uS.
-                // TODO: This currently does not meet the 2uS timing that we have for profile
-                // updates, since we want to send a profile update for every DAC update. We should
-                // increase the QSPI clock frequency.
-                hrtimer.configure_single_shot(hrtimer::Channel::Two, 50e-9, 3.2e-6);
-
-                let io_update = gpiog.pg7.into_push_pull_output();
-
-                let asm_delay = {
-                    let frequency_hz = clocks.clocks.c_ck().0;
-                    asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(
-                        frequency_hz,
-                    ))
-                };
-
                 ad9959::Ad9959::new(
                     qspi_interface,
                     &mut reset_pin,
-                    io_update,
-                    asm_delay,
+                    &mut delay,
                     ad9959::Mode::FourBitSerial,
-                    100_000_000f32,
+                    100_000_000_f32,
                     5,
                 )
                 .unwrap()
@@ -533,10 +513,39 @@ const APP: () = {
             let adc1_in_p = gpiof.pf11.into_analog();
             let adc2_in_p = gpiof.pf14.into_analog();
 
+            let io_update_trigger = {
+                let _io_update = gpiog
+                    .pg7
+                    .into_alternate_af2()
+                    .set_speed(hal::gpio::Speed::VeryHigh);
+
+                // Configure the IO_Update signal for the DDS.
+                let mut hrtimer = hrtimer::HighResTimerE::new(
+                    dp.HRTIM_TIME,
+                    dp.HRTIM_MASTER,
+                    dp.HRTIM_COMMON,
+                    clocks.clocks,
+                    clocks.peripheral.HRTIM,
+                );
+
+                // IO_Update should be latched for 50ns after the QSPI profile write. Profile writes
+                // are always 16 bytes, with 2 cycles required per byte, coming out to a total of 32
+                // QSPI clock cycles. The QSPI is configured for 50MHz, so this comes out to an
+                // offset of 640nS. We use 900ns to be safe.
+                hrtimer.configure_single_shot(
+                    hrtimer::Channel::Two,
+                    50_e-9,
+                    900_e-9,
+                );
+
+                hrtimer
+            };
+
             Some(
                 pounder::PounderDevices::new(
                     io_expander,
                     ad9959,
+                    io_update_trigger,
                     spi,
                     adc1,
                     adc2,
@@ -759,38 +768,6 @@ const APP: () = {
         // TODO: Replace with reference to CPU clock from CCDR.
         next_ms += 400_000.cycles();
 
-        match c.resources.pounder {
-            Some(pounder) => {
-                pounder.ad9959.interface.start_stream();
-
-                let state = pounder::ChannelState {
-                    parameters: pounder::DdsChannelState {
-                        phase_offset: 0.0,
-                        frequency: 100_000_000.0,
-                        amplitude: 1.0,
-                        enabled: true,
-                    },
-                    attenuation: 0.0,
-                };
-
-                let state1 = pounder::ChannelState {
-                    parameters: pounder::DdsChannelState {
-                        phase_offset: 0.5,
-                        frequency: 100_000_000.0,
-                        amplitude: 1.0,
-                        enabled: true,
-                    },
-                    attenuation: 0.0,
-                };
-
-                pounder.set_channel_state(pounder::Channel::Out0, state).unwrap();
-                pounder.set_channel_state(pounder::Channel::Out1, state1).unwrap();
-
-                pounder.ad9959.latch_configuration().unwrap();
-            },
-            _ => panic!("Failed"),
-        }
-
         loop {
             let tick = Instant::now() > next_ms;
 
@@ -827,34 +804,6 @@ const APP: () = {
                                 }),
                                 "stabilizer/afe0/gain": (|| c.resources.afe0.get_gain()),
                                 "stabilizer/afe1/gain": (|| c.resources.afe1.get_gain()),
-                                "pounder/in0": (|| {
-                                    match c.resources.pounder {
-                                        Some(pounder) =>
-                                            pounder.get_input_channel_state(pounder::Channel::In0),
-                                        _ => Err(pounder::Error::Access),
-                                    }
-                                }),
-                                "pounder/in1": (|| {
-                                    match c.resources.pounder {
-                                        Some(pounder) =>
-                                            pounder.get_input_channel_state(pounder::Channel::In1),
-                                        _ => Err(pounder::Error::Access),
-                                    }
-                                }),
-                                "pounder/out0": (|| {
-                                    match c.resources.pounder {
-                                        Some(pounder) =>
-                                            pounder.get_output_channel_state(pounder::Channel::Out0),
-                                        _ => Err(pounder::Error::Access),
-                                    }
-                                }),
-                                "pounder/out1": (|| {
-                                    match c.resources.pounder {
-                                        Some(pounder) =>
-                                            pounder.get_output_channel_state(pounder::Channel::Out1),
-                                        _ => Err(pounder::Error::Access),
-                                    }
-                                }),
                                 "pounder/dds/clock": (|| {
                                     match c.resources.pounder {
                                         Some(pounder) => pounder.get_dds_clock_config(),
