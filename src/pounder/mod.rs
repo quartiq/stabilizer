@@ -349,7 +349,7 @@ impl PounderDevices {
         devices.select_onboard_clock(4u8)?;
 
         // Run the DDS in stream-only mode (no read support).
-        devices.ad9959.interface.start_stream();
+        devices.ad9959.interface.start_stream().unwrap();
 
         Ok(devices)
     }

@@ -559,8 +559,8 @@ const APP: () = {
                     dp.HRTIM_TIME,
                     dp.HRTIM_MASTER,
                     dp.HRTIM_COMMON,
-                    clocks.clocks,
-                    clocks.peripheral.HRTIM,
+                    ccdr.clocks,
+                    ccdr.peripheral.HRTIM,
                 );
 
                 // IO_Update should be latched for 50ns after the QSPI profile write. Profile writes
