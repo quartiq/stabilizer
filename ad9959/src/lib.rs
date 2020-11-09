@@ -104,6 +104,7 @@ impl<I: Interface> Ad9959<I> {
     pub fn new(
         interface: I,
         reset_pin: &mut impl OutputPin,
+        io_update: &mut impl OutputPin,
         delay: &mut impl DelayMs<u8>,
         desired_mode: Mode,
         clock_frequency: f32,
@@ -118,6 +119,8 @@ impl<I: Interface> Ad9959<I> {
 
         // Reset the AD9959
         reset_pin.set_high().or_else(|_| Err(Error::Pin))?;
+
+        io_update.set_low().or_else(|_| Err(Error::Pin))?;
 
         // Delay for a clock cycle to allow the device to reset.
         delay.delay_ms((1000.0 / clock_frequency as f32) as u8);
@@ -136,6 +139,12 @@ impl<I: Interface> Ad9959<I> {
             .interface
             .write(Register::CSR as u8, &csr)
             .map_err(|_| Error::Interface)?;
+
+        // Latch the new interface configuration.
+        io_update.set_high().or_else(|_| Err(Error::Pin))?;
+        // Delay for a clock cycle to allow the device to reset.
+        delay.delay_ms(2 * (1000.0 / clock_frequency as f32) as u8);
+        io_update.set_low().or_else(|_| Err(Error::Pin))?;
 
         ad9959
             .interface

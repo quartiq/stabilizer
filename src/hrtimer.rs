@@ -47,7 +47,7 @@ impl HighResTimerE {
         let minimum_duration = set_duration + set_offset;
 
         let source_frequency: u32 = self.clocks.timy_ker_ck().0;
-        let source_cycles = (minimum_duration * source_frequency as f32) as u32;
+        let source_cycles = (minimum_duration * source_frequency as f32) as u32 + 1;
 
         // Determine the clock divider, which may be 1, 2, or 4. We will choose a clock divider that
         // allows us the highest resolution per tick, so lower dividers are favored.
@@ -68,7 +68,7 @@ impl HighResTimerE {
         // We now have the prescaler and the period registers. Configure the timer.
         self.timer
             .timecr
-            .modify(|_, w| unsafe { w.ck_pscx().bits(divider) });
+            .modify(|_, w| unsafe { w.ck_pscx().bits(divider + 4) });
         self.timer.perer.write(|w| unsafe { w.perx().bits(period) });
 
         // Configure the comparator 1 level.
@@ -83,12 +83,15 @@ impl HighResTimerE {
             Channel::One => {
                 self.timer.sete1r.write(|w| w.cmp1().set_bit());
                 self.timer.rste1r.write(|w| w.per().set_bit());
+                self.common.oenr.write(|w| w.te1oen().set_bit());
             }
             Channel::Two => {
                 self.timer.sete2r.write(|w| w.cmp1().set_bit());
                 self.timer.rste2r.write(|w| w.per().set_bit());
+                self.common.oenr.write(|w| w.te2oen().set_bit());
             }
         }
+
 
         // Enable the timer now that it is configured.
         self.master.mcr.modify(|_, w| w.tecen().set_bit());

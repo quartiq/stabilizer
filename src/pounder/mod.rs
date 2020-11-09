@@ -126,7 +126,7 @@ impl QspiInterface {
             qspi_regs.dlr.write(|w| w.dl().bits(0xFFFF_FFFF));
             qspi_regs
                 .ccr
-                .modify(|_, w| w.imode().bits(0).fmode().bits(1));
+                .modify(|_, w| w.imode().bits(0).fmode().bits(0).admode().bits(0));
         }
 
         self.streaming = true;
