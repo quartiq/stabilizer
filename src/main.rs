@@ -1,5 +1,4 @@
 #![deny(warnings)]
-#![allow(deprecated)]
 #![allow(clippy::missing_safety_doc)]
 #![no_std]
 #![no_main]
@@ -18,6 +17,9 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
         core::intrinsics::abort();
     }
 }
+
+// Deprecation warnings are temporarily allowed as the HAL DMA goes through updates.
+#![allow(deprecated)]
 
 #[cfg(feature = "semihosting")]
 extern crate panic_semihosting;
