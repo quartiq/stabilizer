@@ -2,10 +2,9 @@ name: Continuous Integration
 
 on:
   push:
-    branches:
-      - staging
-      - trying
-      - master
+    branches: [master, staging, trying]
+  pull_request:
+    branches: [master]
 
 env:
   CARGO_TERM_COLOR: always
@@ -42,7 +41,7 @@ jobs:
         uses: actions-rs/cargo@v1
         continue-on-error: true
         with:
-          command: clippy        
+          command: clippy
 
   compile:
     runs-on: ubuntu-latest

@@ -346,34 +346,9 @@ dependencies = [
 
 [[package]]
 name = "paste"
-version = "0.1.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45ca20c77d80be666aef2b45486da86238fabe33e38306bd3118fe4af33fa880"
-dependencies = [
- "paste-impl",
- "proc-macro-hack",
-]
-
-[[package]]
-name = "paste"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba7ae1a2180ed02ddfdb5ab70c70d596a26dd642e097bb6fe78b1bde8588ed97"
-
-[[package]]
-name = "paste-impl"
-version = "0.1.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d95a7db200b97ef370c8e6de0088252f7e0dfff7d047a28528e47456c0fc98b6"
-dependencies = [
- "proc-macro-hack",
-]
-
-[[package]]
-name = "proc-macro-hack"
-version = "0.5.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbf0c48bc1d91375ae5c3cd81e3722dff1abcf81a30960240640d223f59fe0e5"
 
 [[package]]
 name = "proc-macro2"
@@ -478,7 +453,6 @@ checksum = "0fe46639fd2ec79eadf8fe719f237a7a0bd4dac5d957f1ca5bbdbc1c3c39e53a"
 dependencies = [
  "bitflags",
  "byteorder",
- "log",
  "managed",
 ]
 
@@ -503,8 +477,7 @@ dependencies = [
  "serde",
  "serde-json-core",
  "smoltcp",
- "stm32h7-ethernet",
- "stm32h7xx-hal 0.8.0",
+ "stm32h7xx-hal",
 ]
 
 [[package]]
@@ -512,17 +485,6 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
-
-[[package]]
-name = "stm32h7"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9beb5e2a223c82f263c3051bba4614aebc6e98bd40217df3cd8817c83ac7bd8"
-dependencies = [
- "bare-metal 0.2.5",
- "cortex-m",
- "vcell",
-]
 
 [[package]]
 name = "stm32h7"
@@ -537,34 +499,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "stm32h7-ethernet"
-version = "0.1.1"
-source = "git+https://github.com/quartiq/stm32h7-ethernet.git#cf9b8bb2e1b440d8ada6ac6048f48dc4ed9c269a"
-dependencies = [
- "cortex-m",
- "log",
- "smoltcp",
- "stm32h7xx-hal 0.5.0",
-]
-
-[[package]]
-name = "stm32h7xx-hal"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "987c66628f30012ed9a41cc738421c5caece03292c0cc8fd1e99956f122735bd"
-dependencies = [
- "bare-metal 0.2.5",
- "cast",
- "cortex-m",
- "cortex-m-rt",
- "embedded-hal",
- "nb 0.1.3",
- "paste 0.1.18",
- "stm32h7 0.11.0",
- "void",
-]
-
-[[package]]
 name = "stm32h7xx-hal"
 version = "0.8.0"
 source = "git+https://github.com/quartiq/stm32h7xx-hal?branch=feature/stabilizer-dma#5fbbfa9352f720994c210e5c21601f3acf9dc40c"
@@ -576,9 +510,9 @@ dependencies = [
  "embedded-dma",
  "embedded-hal",
  "nb 1.0.0",
- "paste 1.0.2",
+ "paste",
  "smoltcp",
- "stm32h7 0.12.1",
+ "stm32h7",
  "void",
 ]
 
