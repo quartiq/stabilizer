@@ -1,7 +1,7 @@
 #![deny(warnings)]
-#![allow(clippy::missing_safety_doc)]
 // Deprecation warnings are temporarily allowed as the HAL DMA goes through updates.
 #![allow(deprecated)]
+#![allow(clippy::missing_safety_doc)]
 #![no_std]
 #![no_main]
 #![cfg_attr(feature = "nightly", feature(asm))]
