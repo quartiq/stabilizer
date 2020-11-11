@@ -14,8 +14,8 @@
 ///! both transfers are completed before reading the data. This is usually not significant for
 ///! busy-waiting because the transfers should complete at approximately the same time.
 use super::{
-    hal, DMAReq, DmaConfig, MemoryToPeripheral, PeripheralToMemory, Priority, TargetAddress,
-        Transfer,
+    hal, DMAReq, DmaConfig, MemoryToPeripheral, PeripheralToMemory, Priority,
+    TargetAddress, Transfer,
 };
 
 // The desired ADC input buffer size. This is use configurable.

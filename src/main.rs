@@ -954,6 +954,16 @@ const APP: () = {
         panic!("ADC0 input overrun");
     }
 
+    #[task(binds = SPI4, priority = 1)]
+    fn spi4(_: spi4::Context) {
+        panic!("DAC0 output error");
+    }
+
+    #[task(binds = SPI5, priority = 1)]
+    fn spi5(_: spi5::Context) {
+        panic!("DAC1 output error");
+    }
+
     extern "C" {
         // hw interrupt handlers for RTIC to use for scheduling tasks
         // one per priority
