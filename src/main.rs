@@ -1,6 +1,4 @@
 #![deny(warnings)]
-// Deprecation warnings are temporarily allowed as the HAL DMA goes through updates.
-#![allow(deprecated)]
 #![allow(clippy::missing_safety_doc)]
 #![no_std]
 #![no_main]
@@ -41,7 +39,7 @@ use hal::{
     dma::{
         config::Priority,
         dma::{DMAReq, DmaConfig},
-        traits::{Stream, TargetAddress},
+        traits::TargetAddress,
         MemoryToPeripheral, PeripheralToMemory, Transfer,
     },
     ethernet::{self, PHY},
@@ -706,8 +704,14 @@ const APP: () = {
             &ccdr.clocks,
         );
         {
+            // Listen to the CH1 and CH2 comparison events. These channels should have a value of
+            // zero loaded into them, so the event should occur whenever the timer overflows. Note
+            // that we use channels instead of timer updates because each SPI DMA transfer needs a
+            // unique request line.
             let t2_regs = unsafe { &*hal::stm32::TIM2::ptr() };
-            t2_regs.dier.modify(|_, w| w.ude().set_bit());
+            t2_regs
+                .dier
+                .modify(|_, w| w.cc1de().set_bit().cc2de().set_bit());
         }
 
         init::LateResources {

@@ -501,7 +501,7 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.8.0"
-source = "git+https://github.com/quartiq/stm32h7xx-hal?branch=feature/stabilizer-dma#5fbbfa9352f720994c210e5c21601f3acf9dc40c"
+source = "git+https://github.com/quartiq/stm32h7xx-hal?branch=feature/dma-rtic-example#d8cb6fa5099282665f5e5068a9dcdc9ebaa63240"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",
