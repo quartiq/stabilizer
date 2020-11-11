@@ -14,8 +14,8 @@
 ///! both transfers are completed before reading the data. This is usually not significant for
 ///! busy-waiting because the transfers should complete at approximately the same time.
 use super::{
-    hal, DMAReq, DmaConfig, MemoryToPeripheral, PeripheralToMemory, Priority,
-    TargetAddress, Transfer,
+    hal, sampling_timer, DMAReq, DmaConfig, MemoryToPeripheral,
+    PeripheralToMemory, Priority, TargetAddress, Transfer,
 };
 
 // The desired ADC input buffer size. This is use configurable.
@@ -142,11 +142,18 @@ impl Adc0Input {
     /// * `trigger_stream` - The DMA stream used to trigger each ADC transfer by writing a word into
     ///   the SPI TX FIFO.
     /// * `data_stream` - The DMA stream used to read samples received over SPI into a data buffer.
+    /// * `_trigger_channel` - The ADC sampling timer output compare channel for read triggers.
     pub fn new(
         spi: hal::spi::Spi<hal::stm32::SPI2, hal::spi::Enabled, u16>,
         trigger_stream: hal::dma::dma::Stream0<hal::stm32::DMA1>,
         data_stream: hal::dma::dma::Stream1<hal::stm32::DMA1>,
+        trigger_channel: sampling_timer::Timer2Channel1,
     ) -> Self {
+        // Generate DMA events when an output compare of the timer hitting zero (timer roll over)
+        // occurs.
+        trigger_channel.listen_dma();
+        trigger_channel.to_output_compare(0);
+
         // The trigger stream constantly writes to the TX FIFO using a static word (dont-care
         // contents). Thus, neither the memory or peripheral address ever change. This is run in
         // circular mode to be completed at every DMA request.
@@ -256,11 +263,18 @@ impl Adc1Input {
     /// * `spi` - The SPI interface connected to ADC1.
     /// * `trigger_stream` - The DMA stream used to trigger ADC conversions on the SPI interface.
     /// * `data_stream` - The DMA stream used to read ADC samples from the SPI RX FIFO.
+    /// * `trigger_channel` - The ADC sampling timer output compare channel for read triggers.
     pub fn new(
         spi: hal::spi::Spi<hal::stm32::SPI3, hal::spi::Enabled, u16>,
         trigger_stream: hal::dma::dma::Stream2<hal::stm32::DMA1>,
         data_stream: hal::dma::dma::Stream3<hal::stm32::DMA1>,
+        trigger_channel: sampling_timer::Timer2Channel2,
     ) -> Self {
+        // Generate DMA events when an output compare of the timer hitting zero (timer roll over)
+        // occurs.
+        trigger_channel.listen_dma();
+        trigger_channel.to_output_compare(0);
+
         // The trigger stream constantly writes to the TX FIFO using a static word (dont-care
         // contents). Thus, neither the memory or peripheral address ever change. This is run in
         // circular mode to be completed at every DMA request.

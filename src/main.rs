@@ -62,6 +62,7 @@ mod dac;
 mod eeprom;
 mod iir;
 mod pounder;
+mod sampling_timer;
 mod server;
 
 use adc::{Adc0Input, Adc1Input, AdcInputs};
@@ -187,8 +188,6 @@ const APP: () = {
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
-        timer: hal::timer::Timer<hal::stm32::TIM2>,
-
         // Note: It appears that rustfmt generates a format that GDB cannot recognize, which
         // results in GDB breakpoints being set improperly.
         #[rustfmt::skip]
@@ -264,6 +263,16 @@ const APP: () = {
         let dma_streams =
             hal::dma::dma::StreamsTuple::new(dp.DMA1, ccdr.peripheral.DMA1);
 
+        // Configure timer 2 to trigger conversions for the ADC
+        let timer2 = dp.TIM2.timer(
+            SAMPLE_FREQUENCY_KHZ.khz(),
+            ccdr.peripheral.TIM2,
+            &ccdr.clocks,
+        );
+
+        let mut sampling_timer = sampling_timer::SamplingTimer::new(timer2);
+        let sampling_timer_channels = sampling_timer.channels();
+
         // Configure the SPI interfaces to the ADCs and DACs.
         let adcs = {
             let adc0 = {
@@ -296,7 +305,12 @@ const APP: () = {
                     &ccdr.clocks,
                 );
 
-                Adc0Input::new(spi, dma_streams.0, dma_streams.1)
+                Adc0Input::new(
+                    spi,
+                    dma_streams.0,
+                    dma_streams.1,
+                    sampling_timer_channels.ch1,
+                )
             };
 
             let adc1 = {
@@ -329,7 +343,12 @@ const APP: () = {
                     &ccdr.clocks,
                 );
 
-                Adc1Input::new(spi, dma_streams.2, dma_streams.3)
+                Adc1Input::new(
+                    spi,
+                    dma_streams.2,
+                    dma_streams.3,
+                    sampling_timer_channels.ch2,
+                )
             };
 
             AdcInputs::new(adc0, adc1)
@@ -697,22 +716,8 @@ const APP: () = {
         // Utilize the cycle counter for RTIC scheduling.
         cp.DWT.enable_cycle_counter();
 
-        // Configure timer 2 to trigger conversions for the ADC
-        let timer2 = dp.TIM2.timer(
-            SAMPLE_FREQUENCY_KHZ.khz(),
-            ccdr.peripheral.TIM2,
-            &ccdr.clocks,
-        );
-        {
-            // Listen to the CH1 and CH2 comparison events. These channels should have a value of
-            // zero loaded into them, so the event should occur whenever the timer overflows. Note
-            // that we use channels instead of timer updates because each SPI DMA transfer needs a
-            // unique request line.
-            let t2_regs = unsafe { &*hal::stm32::TIM2::ptr() };
-            t2_regs
-                .dier
-                .modify(|_, w| w.cc1de().set_bit().cc2de().set_bit());
-        }
+        // Start sampling ADCs.
+        sampling_timer.start();
 
         init::LateResources {
             afe0: afe0,
@@ -721,7 +726,6 @@ const APP: () = {
             adcs,
             dacs,
 
-            timer: timer2,
             pounder: pounder_devices,
 
             eeprom_i2c,
