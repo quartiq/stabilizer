@@ -52,15 +52,10 @@ default-features = false
 [dependencies.ad9959]
 path = "ad9959"
 
-[dependencies.stm32h7-ethernet]
-git = "https://github.com/quartiq/stm32h7-ethernet.git"
-branch = "master"
-features = ["stm32h743v"]
-
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]
 git = "https://github.com/quartiq/stm32h7xx-hal"
-branch = "feature/stabilizer-dma"
+branch = "feature/dma-rtic-example"
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
@@ -70,7 +65,7 @@ nightly = ["cortex-m/inline-asm"]
 [profile.dev]
 codegen-units = 1
 incremental = false
-opt-level = 1
+opt-level = 3
 
 [profile.release]
 opt-level = 3

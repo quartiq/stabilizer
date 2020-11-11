@@ -1,3 +1,4 @@
+#![deny(warnings)]
 #![allow(clippy::missing_safety_doc)]
 #![no_std]
 #![no_main]
@@ -38,12 +39,15 @@ use hal::{
     dma::{
         config::Priority,
         dma::{DMAReq, DmaConfig},
-        traits::{Stream, TargetAddress},
+        traits::TargetAddress,
         MemoryToPeripheral, PeripheralToMemory, Transfer,
     },
     ethernet::{self, PHY},
 };
+
 use smoltcp as net;
+use smoltcp::iface::Routes;
+use smoltcp::wire::Ipv4Address;
 
 use heapless::{consts::*, String};
 
@@ -91,6 +95,7 @@ mod build_info {
 pub struct NetStorage {
     ip_addrs: [net::wire::IpCidr; 1],
     neighbor_cache: [Option<(net::wire::IpAddress, net::iface::Neighbor)>; 8],
+    routes_storage: [Option<(smoltcp::wire::IpCidr, smoltcp::iface::Route)>; 1],
 }
 
 static mut NET_STORE: NetStorage = NetStorage {
@@ -100,6 +105,8 @@ static mut NET_STORE: NetStorage = NetStorage {
     )],
 
     neighbor_cache: [None; 8],
+
+    routes_storage: [None; 1],
 };
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
@@ -702,6 +709,10 @@ const APP: () = {
                 24,
             );
 
+            let default_v4_gw = Ipv4Address::new(10, 0, 16, 1);
+            let mut routes = Routes::new(&mut store.routes_storage[..]);
+            routes.add_default_ipv4_route(default_v4_gw).unwrap();
+
             let neighbor_cache =
                 net::iface::NeighborCache::new(&mut store.neighbor_cache[..]);
 
@@ -709,6 +720,7 @@ const APP: () = {
                 .ethernet_addr(mac_addr)
                 .neighbor_cache(neighbor_cache)
                 .ip_addrs(&mut store.ip_addrs[..])
+                .routes(routes)
                 .finalize();
 
             (interface, lan8742a)
@@ -731,8 +743,14 @@ const APP: () = {
             &ccdr.clocks,
         );
         {
+            // Listen to the CH1 and CH2 comparison events. These channels should have a value of
+            // zero loaded into them, so the event should occur whenever the timer overflows. Note
+            // that we use channels instead of timer updates because each SPI DMA transfer needs a
+            // unique request line.
             let t2_regs = unsafe { &*hal::stm32::TIM2::ptr() };
-            t2_regs.dier.modify(|_, w| w.ude().set_bit());
+            t2_regs
+                .dier
+                .modify(|_, w| w.cc1de().set_bit().cc2de().set_bit());
         }
 
         init::LateResources {
@@ -772,11 +790,19 @@ const APP: () = {
             c.resources.adcs.transfer_complete_handler();
 
         for (adc0, adc1) in adc0_samples.iter().zip(adc1_samples.iter()) {
-            let result_adc0 = c.resources.iir_ch[0]
-                .update_from_adc_sample(*adc0, &mut c.resources.iir_state[0]);
+            let result_adc0 = {
+                let x0 = f32::from(*adc0 as i16);
+                let y0 = c.resources.iir_ch[0]
+                    .update(&mut c.resources.iir_state[0], x0);
+                y0 as i16 as u16 ^ 0x8000
+            };
 
-            let result_adc1 = c.resources.iir_ch[1]
-                .update_from_adc_sample(*adc1, &mut c.resources.iir_state[1]);
+            let result_adc1 = {
+                let x1 = f32::from(*adc1 as i16);
+                let y1 = c.resources.iir_ch[1]
+                    .update(&mut c.resources.iir_state[1], x1);
+                y1 as i16 as u16 ^ 0x8000
+            };
 
             c.resources
                 .dacs
@@ -980,6 +1006,16 @@ const APP: () = {
     #[task(binds = SPI3, priority = 1)]
     fn spi3(_: spi3::Context) {
         panic!("ADC0 input overrun");
+    }
+
+    #[task(binds = SPI4, priority = 1)]
+    fn spi4(_: spi4::Context) {
+        panic!("DAC0 output error");
+    }
+
+    #[task(binds = SPI5, priority = 1)]
+    fn spi5(_: spi5::Context) {
+        panic!("DAC1 output error");
     }
 
     extern "C" {

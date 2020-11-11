@@ -105,14 +105,4 @@ impl IIR {
         xy[xy.len() / 2] = y0;
         y0
     }
-
-    pub fn update_from_adc_sample(
-        &mut self,
-        sample: u16,
-        state: &mut IIRState,
-    ) -> u16 {
-        let x0 = f32::from(sample as i16);
-        let y0 = self.update(state, x0);
-        y0 as i16 as u16 ^ 0x8000
-    }
 }
