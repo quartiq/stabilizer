@@ -742,11 +742,19 @@ const APP: () = {
             c.resources.adcs.transfer_complete_handler();
 
         for (adc0, adc1) in adc0_samples.iter().zip(adc1_samples.iter()) {
-            let result_adc0 = c.resources.iir_ch[0]
-                .update_from_adc_sample(*adc0, &mut c.resources.iir_state[0]);
+            let result_adc0 = {
+                let x0 = f32::from(*adc0 as i16);
+                let y0 = c.resources.iir_ch[0]
+                    .update(&mut c.resources.iir_state[0], x0);
+                y0 as i16 as u16 ^ 0x8000
+            };
 
-            let result_adc1 = c.resources.iir_ch[1]
-                .update_from_adc_sample(*adc1, &mut c.resources.iir_state[1]);
+            let result_adc1 = {
+                let x1 = f32::from(*adc1 as i16);
+                let y1 = c.resources.iir_ch[1]
+                    .update(&mut c.resources.iir_state[1], x1);
+                y1 as i16 as u16 ^ 0x8000
+            };
 
             c.resources
                 .dacs
