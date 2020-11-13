@@ -15,11 +15,8 @@
 ///! busy-waiting because the transfers should complete at approximately the same time.
 use super::{
     hal, sampling_timer, DMAReq, DmaConfig, MemoryToPeripheral,
-    PeripheralToMemory, Priority, TargetAddress, Transfer,
+    PeripheralToMemory, Priority, TargetAddress, Transfer, SAMPLE_BUFFER_SIZE,
 };
-
-// The desired ADC input buffer size. This is use configurable.
-const INPUT_BUFFER_SIZE: usize = 1;
 
 // The following data is written by the timer ADC sample trigger into each of the SPI TXFIFOs. Note
 // that because the SPI MOSI line is not connected, this data is dont-care. Data in AXI SRAM is not
@@ -32,16 +29,16 @@ static mut SPI_START: [u16; 1] = [0x00];
 // processed). Note that the contents of AXI SRAM is uninitialized, so the buffer contents on
 // startup are undefined.
 #[link_section = ".axisram.buffers"]
-static mut ADC0_BUF0: [u16; INPUT_BUFFER_SIZE] = [0; INPUT_BUFFER_SIZE];
+static mut ADC0_BUF0: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
 
 #[link_section = ".axisram.buffers"]
-static mut ADC0_BUF1: [u16; INPUT_BUFFER_SIZE] = [0; INPUT_BUFFER_SIZE];
+static mut ADC0_BUF1: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
 
 #[link_section = ".axisram.buffers"]
-static mut ADC1_BUF0: [u16; INPUT_BUFFER_SIZE] = [0; INPUT_BUFFER_SIZE];
+static mut ADC1_BUF0: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
 
 #[link_section = ".axisram.buffers"]
-static mut ADC1_BUF1: [u16; INPUT_BUFFER_SIZE] = [0; INPUT_BUFFER_SIZE];
+static mut ADC1_BUF1: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
 
 /// SPI2 is used as a ZST (zero-sized type) for indicating a DMA transfer into the SPI2 TX FIFO
 /// whenever the tim2 update dma request occurs.
@@ -110,7 +107,7 @@ impl AdcInputs {
     /// are returned - one for each ADC sample stream.
     pub fn transfer_complete_handler(
         &mut self,
-    ) -> (&[u16; INPUT_BUFFER_SIZE], &[u16; INPUT_BUFFER_SIZE]) {
+    ) -> (&[u16; SAMPLE_BUFFER_SIZE], &[u16; SAMPLE_BUFFER_SIZE]) {
         let adc0_buffer = self.adc0.transfer_complete_handler();
         let adc1_buffer = self.adc1.transfer_complete_handler();
         (adc0_buffer, adc1_buffer)
@@ -119,12 +116,12 @@ impl AdcInputs {
 
 /// Represents data associated with ADC0.
 pub struct Adc0Input {
-    next_buffer: Option<&'static mut [u16; INPUT_BUFFER_SIZE]>,
+    next_buffer: Option<&'static mut [u16; SAMPLE_BUFFER_SIZE]>,
     transfer: Transfer<
         hal::dma::dma::Stream1<hal::stm32::DMA1>,
         hal::spi::Spi<hal::stm32::SPI2, hal::spi::Disabled, u16>,
         PeripheralToMemory,
-        &'static mut [u16; INPUT_BUFFER_SIZE],
+        &'static mut [u16; SAMPLE_BUFFER_SIZE],
     >,
     _trigger_transfer: Transfer<
         hal::dma::dma::Stream0<hal::stm32::DMA1>,
@@ -223,7 +220,7 @@ impl Adc0Input {
     ///
     /// # Returns
     /// A reference to the underlying buffer that has been filled with ADC samples.
-    pub fn transfer_complete_handler(&mut self) -> &[u16; INPUT_BUFFER_SIZE] {
+    pub fn transfer_complete_handler(&mut self) -> &[u16; SAMPLE_BUFFER_SIZE] {
         let next_buffer = self.next_buffer.take().unwrap();
 
         // Wait for the transfer to fully complete before continuing.
@@ -241,12 +238,12 @@ impl Adc0Input {
 
 /// Represents the data input stream from ADC1
 pub struct Adc1Input {
-    next_buffer: Option<&'static mut [u16; INPUT_BUFFER_SIZE]>,
+    next_buffer: Option<&'static mut [u16; SAMPLE_BUFFER_SIZE]>,
     transfer: Transfer<
         hal::dma::dma::Stream3<hal::stm32::DMA1>,
         hal::spi::Spi<hal::stm32::SPI3, hal::spi::Disabled, u16>,
         PeripheralToMemory,
-        &'static mut [u16; INPUT_BUFFER_SIZE],
+        &'static mut [u16; SAMPLE_BUFFER_SIZE],
     >,
     _trigger_transfer: Transfer<
         hal::dma::dma::Stream2<hal::stm32::DMA1>,
@@ -345,7 +342,7 @@ impl Adc1Input {
     ///
     /// # Returns
     /// A reference to the underlying buffer that has been filled with ADC samples.
-    pub fn transfer_complete_handler(&mut self) -> &[u16; INPUT_BUFFER_SIZE] {
+    pub fn transfer_complete_handler(&mut self) -> &[u16; SAMPLE_BUFFER_SIZE] {
         let next_buffer = self.next_buffer.take().unwrap();
 
         // Wait for the transfer to fully complete before continuing.

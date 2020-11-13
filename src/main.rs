@@ -51,7 +51,11 @@ use smoltcp::wire::Ipv4Address;
 
 use heapless::{consts::*, String};
 
+// The desired sampling frequency of the ADCs.
 const SAMPLE_FREQUENCY_KHZ: u32 = 500;
+
+// The desired ADC sample processing buffer size.
+const SAMPLE_BUFFER_SIZE: usize = 1;
 
 #[link_section = ".sram3.eth"]
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
@@ -66,7 +70,7 @@ mod sampling_timer;
 mod server;
 
 use adc::{Adc0Input, Adc1Input, AdcInputs};
-use dac::DacOutputs;
+use dac::{Dac0Output, Dac1Output, DacOutputs};
 
 #[cfg(not(feature = "semihosting"))]
 fn init_log() {}
@@ -426,13 +430,17 @@ const APP: () = {
                 )
             };
 
-            let timer = dp.TIM3.timer(
-                SAMPLE_FREQUENCY_KHZ.khz(),
-                ccdr.peripheral.TIM3,
-                &ccdr.clocks,
+            let dac0 = Dac0Output::new(
+                dac0_spi,
+                dma_streams.4,
+                sampling_timer_channels.ch3,
             );
-
-            DacOutputs::new(dac0_spi, dac1_spi, timer)
+            let dac1 = Dac1Output::new(
+                dac1_spi,
+                dma_streams.5,
+                sampling_timer_channels.ch4,
+            );
+            DacOutputs::new(dac0, dac1)
         };
 
         let mut fp_led_0 = gpiod.pd5.into_push_pull_output();
@@ -735,35 +743,33 @@ const APP: () = {
         }
     }
 
-    #[task(binds = TIM3, resources=[dacs], priority = 3)]
-    fn dac_update(c: dac_update::Context) {
-        c.resources.dacs.update();
-    }
-
     #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch], priority=2)]
-    fn adc_update(mut c: adc_update::Context) {
+    fn adc_update(c: adc_update::Context) {
         let (adc0_samples, adc1_samples) =
             c.resources.adcs.transfer_complete_handler();
 
-        for (adc0, adc1) in adc0_samples.iter().zip(adc1_samples.iter()) {
-            let result_adc0 = {
+        let mut dac0: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
+        let mut dac1: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
+
+        for (i, (adc0, adc1)) in
+            adc0_samples.iter().zip(adc1_samples.iter()).enumerate()
+        {
+            dac0[i] = {
                 let x0 = f32::from(*adc0 as i16);
                 let y0 = c.resources.iir_ch[0]
                     .update(&mut c.resources.iir_state[0], x0);
                 y0 as i16 as u16 ^ 0x8000
             };
 
-            let result_adc1 = {
+            dac1[i] = {
                 let x1 = f32::from(*adc1 as i16);
                 let y1 = c.resources.iir_ch[1]
                     .update(&mut c.resources.iir_state[1], x1);
                 y1 as i16 as u16 ^ 0x8000
             };
-
-            c.resources
-                .dacs
-                .lock(|dacs| dacs.push(result_adc0, result_adc1));
         }
+
+        c.resources.dacs.next_data(&dac0, &dac1);
     }
 
     #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afe0, afe1])]

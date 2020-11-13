@@ -54,8 +54,8 @@ path = "ad9959"
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]
-git = "https://github.com/quartiq/stm32h7xx-hal"
-branch = "feature/dma-rtic-example"
+git = "https://github.com/stm32-rs/stm32h7xx-hal"
+branch = "dma"
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]

@@ -103,5 +103,45 @@ impl Timer2Channel2 {
 /// Representation of CH3 of TIM2.
 pub struct Timer2Channel3 {}
 
+impl Timer2Channel3 {
+    /// Allow CH4 to generate DMA requests.
+    pub fn listen_dma(&self) {
+        let regs = unsafe { &*hal::stm32::TIM2::ptr() };
+        regs.dier.modify(|_, w| w.cc3de().set_bit());
+    }
+
+    /// Operate CH2 as an output-compare.
+    ///
+    /// # Args
+    /// * `value` - The value to compare the sampling timer's counter against.
+    pub fn to_output_compare(&self, value: u32) {
+        let regs = unsafe { &*hal::stm32::TIM2::ptr() };
+        assert!(value <= regs.arr.read().bits());
+        regs.ccr3.write(|w| w.ccr().bits(value));
+        regs.ccmr2_output()
+            .modify(|_, w| unsafe { w.cc3s().bits(0) });
+    }
+}
+
 /// Representation of CH4 of TIM2.
 pub struct Timer2Channel4 {}
+
+impl Timer2Channel4 {
+    /// Allow CH4 to generate DMA requests.
+    pub fn listen_dma(&self) {
+        let regs = unsafe { &*hal::stm32::TIM2::ptr() };
+        regs.dier.modify(|_, w| w.cc4de().set_bit());
+    }
+
+    /// Operate CH2 as an output-compare.
+    ///
+    /// # Args
+    /// * `value` - The value to compare the sampling timer's counter against.
+    pub fn to_output_compare(&self, value: u32) {
+        let regs = unsafe { &*hal::stm32::TIM2::ptr() };
+        assert!(value <= regs.arr.read().bits());
+        regs.ccr4.write(|w| w.ccr().bits(value));
+        regs.ccmr2_output()
+            .modify(|_, w| unsafe { w.cc4s().bits(0) });
+    }
+}
