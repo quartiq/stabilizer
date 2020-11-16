@@ -1,4 +1,5 @@
 ![Continuous Integration](https://github.com/quartiq/stabilizer/workflows/Continuous%20Integration/badge.svg)
+![QUARTIQ Matrix Chat](https://img.shields.io/matrix/quartiq:matrix.org?style=plastic)
 
 # Stabilizer Firmware
 
