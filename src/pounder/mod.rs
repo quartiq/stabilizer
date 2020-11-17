@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 mod attenuators;
+mod dds_output;
 mod rf_power;
+
+pub use dds_output::DdsOutput;
 
 use super::hal;
 use super::hrtimer::HighResTimerE;
@@ -124,9 +127,9 @@ impl QspiInterface {
 
         unsafe {
             qspi_regs.dlr.write(|w| w.dl().bits(0xFFFF_FFFF));
-            qspi_regs
-                .ccr
-                .modify(|_, w| w.imode().bits(0).fmode().bits(0).admode().bits(0));
+            qspi_regs.ccr.modify(|_, w| {
+                w.imode().bits(0).fmode().bits(0).admode().bits(0)
+            });
         }
 
         self.streaming = true;

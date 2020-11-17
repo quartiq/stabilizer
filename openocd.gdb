@@ -26,6 +26,3 @@ set var $t0=*$cc
 continue
 end
 #set var $t0=*$cc
-
-source ../../PyCortexMDebug/cmdebug/svd_gdb.py
-svd_load ~/Downloads/STM32H743x.svd

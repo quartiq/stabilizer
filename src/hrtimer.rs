@@ -47,7 +47,8 @@ impl HighResTimerE {
         let minimum_duration = set_duration + set_offset;
 
         let source_frequency: u32 = self.clocks.timy_ker_ck().0;
-        let source_cycles = (minimum_duration * source_frequency as f32) as u32 + 1;
+        let source_cycles =
+            (minimum_duration * source_frequency as f32) as u32 + 1;
 
         // Determine the clock divider, which may be 1, 2, or 4. We will choose a clock divider that
         // allows us the highest resolution per tick, so lower dividers are favored.
@@ -91,7 +92,6 @@ impl HighResTimerE {
                 self.common.oenr.write(|w| w.te2oen().set_bit());
             }
         }
-
 
         // Enable the timer now that it is configured.
         self.master.mcr.modify(|_, w| w.tecen().set_bit());

@@ -1,3 +1,4 @@
+#![deny(warnings)]
 #![allow(clippy::missing_safety_doc)]
 #![no_std]
 #![no_main]
@@ -38,16 +39,23 @@ use hal::{
     dma::{
         config::Priority,
         dma::{DMAReq, DmaConfig},
-        traits::{Stream, TargetAddress},
+        traits::TargetAddress,
         MemoryToPeripheral, PeripheralToMemory, Transfer,
     },
     ethernet::{self, PHY},
 };
+
 use smoltcp as net;
+use smoltcp::iface::Routes;
+use smoltcp::wire::Ipv4Address;
 
 use heapless::{consts::*, String};
 
+// The desired sampling frequency of the ADCs.
 const SAMPLE_FREQUENCY_KHZ: u32 = 500;
+
+// The desired ADC sample processing buffer size.
+const SAMPLE_BUFFER_SIZE: usize = 1;
 
 #[link_section = ".sram3.eth"]
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
@@ -59,10 +67,12 @@ mod eeprom;
 mod hrtimer;
 mod iir;
 mod pounder;
+mod sampling_timer;
 mod server;
 
 use adc::{Adc0Input, Adc1Input, AdcInputs};
-use dac::DacOutputs;
+use dac::{Dac0Output, Dac1Output, DacOutputs};
+use pounder::DdsOutput;
 
 #[cfg(not(feature = "semihosting"))]
 fn init_log() {}
@@ -91,6 +101,7 @@ mod build_info {
 pub struct NetStorage {
     ip_addrs: [net::wire::IpCidr; 1],
     neighbor_cache: [Option<(net::wire::IpAddress, net::iface::Neighbor)>; 8],
+    routes_storage: [Option<(smoltcp::wire::IpCidr, smoltcp::iface::Route)>; 1],
 }
 
 static mut NET_STORE: NetStorage = NetStorage {
@@ -100,6 +111,8 @@ static mut NET_STORE: NetStorage = NetStorage {
     )],
 
     neighbor_cache: [None; 8],
+
+    routes_storage: [None; 1],
 };
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
@@ -181,9 +194,7 @@ const APP: () = {
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
-        timer: hal::timer::Timer<hal::stm32::TIM2>,
-
-        profiles: heapless::spsc::Queue<[u32; 4], heapless::consts::U32>,
+        dds_output: DdsOutput,
 
         // Note: It appears that rustfmt generates a format that GDB cannot recognize, which
         // results in GDB breakpoints being set improperly.
@@ -260,6 +271,16 @@ const APP: () = {
         let dma_streams =
             hal::dma::dma::StreamsTuple::new(dp.DMA1, ccdr.peripheral.DMA1);
 
+        // Configure timer 2 to trigger conversions for the ADC
+        let timer2 = dp.TIM2.timer(
+            SAMPLE_FREQUENCY_KHZ.khz(),
+            ccdr.peripheral.TIM2,
+            &ccdr.clocks,
+        );
+
+        let mut sampling_timer = sampling_timer::SamplingTimer::new(timer2);
+        let sampling_timer_channels = sampling_timer.channels();
+
         // Configure the SPI interfaces to the ADCs and DACs.
         let adcs = {
             let adc0 = {
@@ -292,7 +313,12 @@ const APP: () = {
                     &ccdr.clocks,
                 );
 
-                Adc0Input::new(spi, dma_streams.0, dma_streams.1)
+                Adc0Input::new(
+                    spi,
+                    dma_streams.0,
+                    dma_streams.1,
+                    sampling_timer_channels.ch1,
+                )
             };
 
             let adc1 = {
@@ -325,7 +351,12 @@ const APP: () = {
                     &ccdr.clocks,
                 );
 
-                Adc1Input::new(spi, dma_streams.2, dma_streams.3)
+                Adc1Input::new(
+                    spi,
+                    dma_streams.2,
+                    dma_streams.3,
+                    sampling_timer_channels.ch2,
+                )
             };
 
             AdcInputs::new(adc0, adc1)
@@ -403,13 +434,17 @@ const APP: () = {
                 )
             };
 
-            let timer = dp.TIM3.timer(
-                SAMPLE_FREQUENCY_KHZ.khz(),
-                ccdr.peripheral.TIM3,
-                &ccdr.clocks,
+            let dac0 = Dac0Output::new(
+                dac0_spi,
+                dma_streams.4,
+                sampling_timer_channels.ch3,
             );
-
-            DacOutputs::new(dac0_spi, dac1_spi, timer)
+            let dac1 = Dac1Output::new(
+                dac1_spi,
+                dma_streams.5,
+                sampling_timer_channels.ch4,
+            );
+            DacOutputs::new(dac0, dac1)
         };
 
         let mut fp_led_0 = gpiod.pd5.into_push_pull_output();
@@ -471,9 +506,7 @@ const APP: () = {
                 };
 
                 let mut reset_pin = gpioa.pa0.into_push_pull_output();
-                let mut io_update = gpiog
-                    .pg7
-                    .into_push_pull_output();
+                let mut io_update = gpiog.pg7.into_push_pull_output();
 
                 let ad9959 = ad9959::Ad9959::new(
                     qspi_interface,
@@ -702,6 +735,10 @@ const APP: () = {
                 24,
             );
 
+            let default_v4_gw = Ipv4Address::new(10, 0, 16, 1);
+            let mut routes = Routes::new(&mut store.routes_storage[..]);
+            routes.add_default_ipv4_route(default_v4_gw).unwrap();
+
             let neighbor_cache =
                 net::iface::NeighborCache::new(&mut store.neighbor_cache[..]);
 
@@ -709,6 +746,7 @@ const APP: () = {
                 .ethernet_addr(mac_addr)
                 .neighbor_cache(neighbor_cache)
                 .ip_addrs(&mut store.ip_addrs[..])
+                .routes(routes)
                 .finalize();
 
             (interface, lan8742a)
@@ -724,16 +762,18 @@ const APP: () = {
         // Utilize the cycle counter for RTIC scheduling.
         cp.DWT.enable_cycle_counter();
 
-        // Configure timer 2 to trigger conversions for the ADC
-        let timer2 = dp.TIM2.timer(
-            SAMPLE_FREQUENCY_KHZ.khz(),
-            ccdr.peripheral.TIM2,
-            &ccdr.clocks,
-        );
-        {
-            let t2_regs = unsafe { &*hal::stm32::TIM2::ptr() };
-            t2_regs.dier.modify(|_, w| w.ude().set_bit());
-        }
+        let dds_output = {
+            let timer3 = dp.TIM3.timer(
+                SAMPLE_FREQUENCY_KHZ.khz(),
+                ccdr.peripheral.TIM3,
+                &ccdr.clocks,
+            );
+
+            DdsOutput::new(timer3)
+        };
+
+        // Start sampling ADCs.
+        sampling_timer.start();
 
         init::LateResources {
             afe0: afe0,
@@ -741,61 +781,72 @@ const APP: () = {
 
             adcs,
             dacs,
+            dds_output,
 
-            timer: timer2,
             pounder: pounder_devices,
 
             eeprom_i2c,
             net_interface: network_interface,
             eth_mac,
             mac_addr,
-
-            profiles: heapless::spsc::Queue::new(),
         }
     }
 
-    #[task(binds = TIM3, resources=[dacs, profiles, pounder], priority = 3)]
-    fn dac_update(c: dac_update::Context) {
-        c.resources.dacs.update();
-
+    #[task(binds = TIM3, resources=[dds_output, pounder], priority = 3)]
+    fn dds_update(c: dds_update::Context) {
         if let Some(pounder) = c.resources.pounder {
-            if let Some(profile) = c.resources.profiles.dequeue() {
+            if let Some(profile) = c.resources.dds_output.update_handler() {
                 pounder.ad9959.interface.write_profile(profile).unwrap();
                 pounder.io_update_trigger.trigger();
             }
         }
     }
 
-    #[task(binds=DMA1_STR3, resources=[adcs, dacs, pounder, profiles, iir_state, iir_ch], priority=2)]
+    #[task(binds=DMA1_STR3, resources=[adcs, dacs, pounder, dds_output, iir_state, iir_ch], priority=2)]
     fn adc_update(mut c: adc_update::Context) {
         let (adc0_samples, adc1_samples) =
             c.resources.adcs.transfer_complete_handler();
 
-        for (adc0, adc1) in adc0_samples.iter().zip(adc1_samples.iter()) {
-            let result_adc0 = c.resources.iir_ch[0]
-                .update_from_adc_sample(*adc0, &mut c.resources.iir_state[0]);
+        let mut dac0: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
+        let mut dac1: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
 
-            let result_adc1 = c.resources.iir_ch[1]
-                .update_from_adc_sample(*adc1, &mut c.resources.iir_state[1]);
+        for (i, (adc0, adc1)) in
+            adc0_samples.iter().zip(adc1_samples.iter()).enumerate()
+        {
+            dac0[i] = {
+                let x0 = f32::from(*adc0 as i16);
+                let y0 = c.resources.iir_ch[0]
+                    .update(&mut c.resources.iir_state[0], x0);
+                y0 as i16 as u16 ^ 0x8000
+            };
 
-            c.resources
-                .dacs
-                .lock(|dacs| dacs.push(result_adc0, result_adc1));
+            dac1[i] = {
+                let x1 = f32::from(*adc1 as i16);
+                let y1 = c.resources.iir_ch[1]
+                    .update(&mut c.resources.iir_state[1], x1);
+                y1 as i16 as u16 ^ 0x8000
+            };
 
-            let profiles = &mut c.resources.profiles;
+            let dds_output = &mut c.resources.dds_output;
             c.resources.pounder.lock(|pounder| {
                 if let Some(pounder) = pounder {
-                    profiles.lock(|profiles| {
-                        let profile = pounder.ad9959.serialize_profile(pounder::Channel::Out0.into(),
+                    dds_output.lock(|dds_output| {
+                        let profile = pounder
+                            .ad9959
+                            .serialize_profile(
+                                pounder::Channel::Out0.into(),
                                 100_000_000_f32,
                                 0.0_f32,
-                                *adc0 as f32 / 0xFFFF as f32).unwrap();
-
-                        profiles.enqueue(profile).unwrap();
+                                *adc0 as f32 / 0xFFFF as f32,
+                            )
+                            .unwrap();
+                        dds_output.push(profile);
                     });
                 }
             });
         }
+
+        c.resources.dacs.next_data(&dac0, &dac1);
     }
 
     #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afe0, afe1])]
@@ -980,6 +1031,16 @@ const APP: () = {
     #[task(binds = SPI3, priority = 1)]
     fn spi3(_: spi3::Context) {
         panic!("ADC0 input overrun");
+    }
+
+    #[task(binds = SPI4, priority = 1)]
+    fn spi4(_: spi4::Context) {
+        panic!("DAC0 output error");
+    }
+
+    #[task(binds = SPI5, priority = 1)]
+    fn spi5(_: spi5::Context) {
+        panic!("DAC1 output error");
     }
 
     extern "C" {
