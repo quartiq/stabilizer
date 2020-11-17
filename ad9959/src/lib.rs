@@ -549,3 +549,64 @@ impl<I: Interface> Ad9959<I> {
         Ok(serialized)
     }
 }
+
+struct ProfileSerializer {
+    data: [u8; 16],
+    index: usize,
+}
+
+impl ProfileSerializer {
+    fn new() -> Self {
+        Self {
+            data: [0; 16],
+            index: 0,
+        }
+    }
+
+    fn add_write(&mut self, register: Register, value: &[u8]) {
+        let data = &mut self.data[self.index..];
+        assert!(value.len() + 1 <= data.len());
+
+        data[0] = register as u8;
+        data[1..][..value.len()].copy_from_slice(value);
+        self.index += value.len() + 1;
+    }
+
+    fn finalize(self) -> [u32; 4] {
+        assert!(self.index == self.data.len());
+        unsafe { core::mem::transmute(self.data) }
+    }
+}
+
+pub fn serialize_profile(channel: Channel, ftw: u32, pow: u16, acr: Option<u16>) -> [u32; 4] {
+    let mut serializer = ProfileSerializer::new();
+
+    let csr: u8 = *0x00_u8
+        .set_bits(1..=2, Mode::FourBitSerial as u8)
+        .set_bit(4 + channel as usize, true);
+
+    let acr: [u8; 3] = {
+        let mut data = [0u8; 3];
+        if acr.is_some() {
+            data[2].set_bit(0, acr.is_some());
+            data[0..2].copy_from_slice(&acr.unwrap().to_be_bytes());
+        }
+
+        data
+    };
+
+    // 4 bytes
+    serializer.add_write(Register::CSR, &[csr]);
+    serializer.add_write(Register::CSR, &[csr]);
+
+    // 5 bytes
+    serializer.add_write(Register::CFTW0, &ftw.to_be_bytes());
+
+    // 3 bytes
+    serializer.add_write(Register::CPOW0, &pow.to_be_bytes());
+
+    // 4 bytes
+    serializer.add_write(Register::ACR, &acr);
+
+    serializer.finalize()
+}

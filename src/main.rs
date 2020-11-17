@@ -821,18 +821,15 @@ const APP: () = {
                 y1 as i16 as u16 ^ 0x8000
             };
 
-            let dds_output = &mut c.resources.dds_output;
-            if let Some(pounder) = c.resources.pounder {
-                let profile = pounder
-                    .ad9959
-                    .serialize_profile(
-                        pounder::Channel::Out0.into(),
-                        100_000_000_f32,
-                        0.0_f32,
-                        1.0_f32,
-                    )
-                    .unwrap();
-                dds_output.lock(|dds_output| {
+            if c.resources.pounder.is_some() {
+                let profile = ad9959::serialize_profile(
+                    pounder::Channel::Out0.into(),
+                    u32::MAX / 4,
+                    0,
+                    None,
+                );
+
+                c.resources.dds_output.lock(|dds_output| {
                     dds_output.push(profile);
                 });
             }

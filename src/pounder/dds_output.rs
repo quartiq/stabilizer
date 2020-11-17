@@ -14,6 +14,7 @@ impl DdsOutput {
     ) -> Self {
         timer.pause();
         timer.reset_counter();
+        timer.clear_uif_bit();
         timer.listen(hal::timer::Event::TimeOut);
 
         Self {
