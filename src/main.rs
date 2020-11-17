@@ -55,7 +55,7 @@ use heapless::{consts::*, String};
 const SAMPLE_FREQUENCY_KHZ: u32 = 500;
 
 // The desired ADC sample processing buffer size.
-const SAMPLE_BUFFER_SIZE: usize = 1;
+const SAMPLE_BUFFER_SIZE: usize = 8;
 
 #[link_section = ".sram3.eth"]
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
@@ -829,7 +829,7 @@ const APP: () = {
                         pounder::Channel::Out0.into(),
                         100_000_000_f32,
                         0.0_f32,
-                        *adc0 as f32 / 0xFFFF as f32,
+                        1.0_f32,
                     )
                     .unwrap();
                 dds_output.lock(|dds_output| {
@@ -902,15 +902,7 @@ const APP: () = {
                                     Ok::<server::Status, ()>(state)
                                 }),
                                 "stabilizer/afe0/gain": (|| c.resources.afe0.get_gain()),
-                                "stabilizer/afe1/gain": (|| c.resources.afe1.get_gain()),
-                                "pounder/dds/clock": (|| {
-                                    c.resources.pounder.lock(|pounder| {
-                                        match pounder {
-                                            Some(pounder) => pounder.get_dds_clock_config(),
-                                            _ => Err(pounder::Error::Access),
-                                        }
-                                    })
-                                })
+                                "stabilizer/afe1/gain": (|| c.resources.afe1.get_gain())
                             ],
 
                             modifiable_attributes: [
@@ -935,14 +927,6 @@ const APP: () = {
 
                                         Ok::<server::IirRequest, ()>(req)
                                     })
-                                }),
-                                "pounder/dds/clock": pounder::DdsClockConfig, (|config| {
-                                    c.resources.pounder.lock(|pounder| {
-                                        match pounder {
-                                            Some(pounder) => pounder.configure_dds_clock(config),
-                                            _ => Err(pounder::Error::Access),
-                                        }
-                                     })
                                 }),
                                 "stabilizer/afe0/gain": afe::Gain, (|gain| {
                                     Ok::<(), ()>(c.resources.afe0.set_gain(gain))

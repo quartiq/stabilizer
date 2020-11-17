@@ -24,6 +24,7 @@ impl DdsOutput {
     }
 
     pub fn update_handler(&mut self) {
+        self.update_timer.clear_uif_bit();
         match self.profiles.dequeue() {
             Some(profile) => self.write_profile(profile),
             None => self.update_timer.pause(),
