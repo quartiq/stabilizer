@@ -592,44 +592,10 @@ const APP: () = {
             let adc1_in_p = gpiof.pf11.into_analog();
             let adc2_in_p = gpiof.pf14.into_analog();
 
-            let io_update_trigger = {
-                let _io_update = gpiog
-                    .pg7
-                    .into_alternate_af2()
-                    .set_speed(hal::gpio::Speed::VeryHigh);
-
-                // Configure the IO_Update signal for the DDS.
-                let mut hrtimer = hrtimer::HighResTimerE::new(
-                    dp.HRTIM_TIME,
-                    dp.HRTIM_MASTER,
-                    dp.HRTIM_COMMON,
-                    ccdr.clocks,
-                    ccdr.peripheral.HRTIM,
-                );
-
-                // IO_Update should be latched for 50ns after the QSPI profile write. Profile writes
-                // are always 16 bytes, with 2 cycles required per byte, coming out to a total of 32
-                // QSPI clock cycles. The QSPI is configured for 40MHz, so this comes out to an
-                // offset of 800nS. We use 900ns to be safe - note that the timer is triggered after
-                // the QSPI write, which can take approximately 120nS, so there is additional
-                // margin.
-                hrtimer.configure_single_shot(
-                    hrtimer::Channel::Two,
-                    50_e-9,
-                    900_e-9,
-                );
-
-                // Ensure that we have enough time for an IO-update every sample.
-                assert!(1.0 / (1000 * SAMPLE_FREQUENCY_KHZ) as f32 > 900_e-9);
-
-                hrtimer
-            };
-
             Some(
                 pounder::PounderDevices::new(
                     io_expander,
                     ad9959,
-                    io_update_trigger,
                     spi,
                     adc1,
                     adc2,
@@ -763,13 +729,46 @@ const APP: () = {
         cp.DWT.enable_cycle_counter();
 
         let dds_output = {
+            let io_update_trigger = {
+                let _io_update = gpiog
+                    .pg7
+                    .into_alternate_af2()
+                    .set_speed(hal::gpio::Speed::VeryHigh);
+
+                // Configure the IO_Update signal for the DDS.
+                let mut hrtimer = hrtimer::HighResTimerE::new(
+                    dp.HRTIM_TIME,
+                    dp.HRTIM_MASTER,
+                    dp.HRTIM_COMMON,
+                    ccdr.clocks,
+                    ccdr.peripheral.HRTIM,
+                );
+
+                // IO_Update should be latched for 50ns after the QSPI profile write. Profile writes
+                // are always 16 bytes, with 2 cycles required per byte, coming out to a total of 32
+                // QSPI clock cycles. The QSPI is configured for 40MHz, so this comes out to an
+                // offset of 800nS. We use 900ns to be safe - note that the timer is triggered after
+                // the QSPI write, which can take approximately 120nS, so there is additional
+                // margin.
+                hrtimer.configure_single_shot(
+                    hrtimer::Channel::Two,
+                    50_e-9,
+                    900_e-9,
+                );
+
+                // Ensure that we have enough time for an IO-update every sample.
+                assert!(1.0 / (1000 * SAMPLE_FREQUENCY_KHZ) as f32 > 900_e-9);
+
+                hrtimer
+            };
+
             let timer3 = dp.TIM3.timer(
                 SAMPLE_FREQUENCY_KHZ.khz(),
                 ccdr.peripheral.TIM3,
                 &ccdr.clocks,
             );
 
-            DdsOutput::new(timer3)
+            DdsOutput::new(timer3, io_update_trigger)
         };
 
         // Start sampling ADCs.
@@ -792,14 +791,9 @@ const APP: () = {
         }
     }
 
-    #[task(binds = TIM3, resources=[dds_output, pounder], priority = 3)]
+    #[task(binds = TIM3, resources=[dds_output], priority = 3)]
     fn dds_update(c: dds_update::Context) {
-        if let Some(pounder) = c.resources.pounder {
-            if let Some(profile) = c.resources.dds_output.update_handler() {
-                pounder.ad9959.interface.write_profile(profile).unwrap();
-                pounder.io_update_trigger.trigger();
-            }
-        }
+        c.resources.dds_output.update_handler();
     }
 
     #[task(binds=DMA1_STR3, resources=[adcs, dacs, pounder, dds_output, iir_state, iir_ch], priority=2)]
@@ -828,22 +822,20 @@ const APP: () = {
             };
 
             let dds_output = &mut c.resources.dds_output;
-            c.resources.pounder.lock(|pounder| {
-                if let Some(pounder) = pounder {
-                    dds_output.lock(|dds_output| {
-                        let profile = pounder
-                            .ad9959
-                            .serialize_profile(
-                                pounder::Channel::Out0.into(),
-                                100_000_000_f32,
-                                0.0_f32,
-                                *adc0 as f32 / 0xFFFF as f32,
-                            )
-                            .unwrap();
-                        dds_output.push(profile);
-                    });
-                }
-            });
+            if let Some(pounder) = c.resources.pounder {
+                dds_output.lock(|dds_output| {
+                    let profile = pounder
+                        .ad9959
+                        .serialize_profile(
+                            pounder::Channel::Out0.into(),
+                            100_000_000_f32,
+                            0.0_f32,
+                            *adc0 as f32 / 0xFFFF as f32,
+                        )
+                        .unwrap();
+                    dds_output.push(profile);
+                });
+            }
         }
 
         c.resources.dacs.next_data(&dac0, &dac1);
@@ -942,42 +934,6 @@ const APP: () = {
                                         iir_ch[req.channel as usize] = req.iir;
 
                                         Ok::<server::IirRequest, ()>(req)
-                                    })
-                                }),
-                                "pounder/in0": pounder::ChannelState, (|state| {
-                                    c.resources.pounder.lock(|pounder| {
-                                        match pounder {
-                                            Some(pounder) =>
-                                                pounder.set_channel_state(pounder::Channel::In0, state),
-                                            _ => Err(pounder::Error::Access),
-                                        }
-                                    })
-                                }),
-                                "pounder/in1": pounder::ChannelState, (|state| {
-                                    c.resources.pounder.lock(|pounder| {
-                                        match pounder {
-                                            Some(pounder) =>
-                                                pounder.set_channel_state(pounder::Channel::In1, state),
-                                            _ => Err(pounder::Error::Access),
-                                        }
-                                    })
-                                }),
-                                "pounder/out0": pounder::ChannelState, (|state| {
-                                    c.resources.pounder.lock(|pounder| {
-                                        match pounder {
-                                            Some(pounder) =>
-                                                pounder.set_channel_state(pounder::Channel::Out0, state),
-                                            _ => Err(pounder::Error::Access),
-                                        }
-                                    })
-                                }),
-                                "pounder/out1": pounder::ChannelState, (|state| {
-                                    c.resources.pounder.lock(|pounder| {
-                                        match pounder {
-                                            Some(pounder) =>
-                                                pounder.set_channel_state(pounder::Channel::Out1, state),
-                                            _ => Err(pounder::Error::Access),
-                                        }
                                     })
                                 }),
                                 "pounder/dds/clock": pounder::DdsClockConfig, (|config| {

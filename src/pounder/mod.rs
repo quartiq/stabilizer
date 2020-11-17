@@ -7,7 +7,6 @@ mod rf_power;
 pub use dds_output::DdsOutput;
 
 use super::hal;
-use super::hrtimer::HighResTimerE;
 
 use attenuators::AttenuatorInterface;
 use rf_power::PowerMeasurementInterface;
@@ -37,6 +36,7 @@ pub enum Error {
 }
 
 #[derive(Debug, Copy, Clone)]
+#[allow(dead_code)]
 pub enum Channel {
     In0,
     In1,
@@ -291,7 +291,6 @@ impl ad9959::Interface for QspiInterface {
 /// A structure containing implementation for Pounder hardware.
 pub struct PounderDevices {
     pub ad9959: ad9959::Ad9959<QspiInterface>,
-    pub io_update_trigger: HighResTimerE,
     mcp23017: mcp23017::MCP23017<hal::i2c::I2c<hal::stm32::I2C1>>,
     attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
     adc1: hal::adc::Adc<hal::stm32::ADC1, hal::adc::Enabled>,
@@ -306,7 +305,6 @@ impl PounderDevices {
     /// Args:
     /// * `ad9959` - The DDS driver for the pounder hardware.
     /// * `attenuator_spi` - A SPI interface to control digital attenuators.
-    /// * `io_update_timer` - The HRTimer with the IO_update signal connected to the output.
     /// * `adc1` - The ADC1 peripheral for measuring power.
     /// * `adc2` - The ADC2 peripheral for measuring power.
     /// * `adc1_in_p` - The input channel for the RF power measurement on IN0.
@@ -314,7 +312,6 @@ impl PounderDevices {
     pub fn new(
         mcp23017: mcp23017::MCP23017<hal::i2c::I2c<hal::stm32::I2C1>>,
         ad9959: ad9959::Ad9959<QspiInterface>,
-        io_update_trigger: HighResTimerE,
         attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
         adc1: hal::adc::Adc<hal::stm32::ADC1, hal::adc::Enabled>,
         adc2: hal::adc::Adc<hal::stm32::ADC2, hal::adc::Enabled>,
@@ -323,7 +320,6 @@ impl PounderDevices {
     ) -> Result<Self, Error> {
         let mut devices = Self {
             mcp23017,
-            io_update_trigger,
             ad9959,
             attenuator_spi,
             adc1,
@@ -430,33 +426,6 @@ impl PounderDevices {
             reference_clock,
             external_clock,
         })
-    }
-
-    /// Configure a DDS channel.
-    ///
-    /// Args:
-    /// * `channel` - The pounder channel to configure.
-    /// * `state` - The state to configure the channel for.
-    pub fn set_channel_state(
-        &mut self,
-        channel: Channel,
-        state: ChannelState,
-    ) -> Result<(), Error> {
-        let profile = self
-            .ad9959
-            .serialize_profile(
-                channel.into(),
-                state.parameters.frequency,
-                state.parameters.phase_offset,
-                state.parameters.amplitude,
-            )
-            .map_err(|_| Error::Dds)?;
-        self.ad9959.interface.write_profile(profile).unwrap();
-        self.io_update_trigger.trigger();
-
-        self.set_attenuation(channel, state.attenuation)?;
-
-        Ok(())
     }
 }
 
