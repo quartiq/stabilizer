@@ -262,7 +262,6 @@ impl ad9959::Interface for QspiInterface {
 
 /// A structure containing implementation for Pounder hardware.
 pub struct PounderDevices {
-    pub ad9959: ad9959::Ad9959<QspiInterface>,
     mcp23017: mcp23017::MCP23017<hal::i2c::I2c<hal::stm32::I2C1>>,
     attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
     adc1: hal::adc::Adc<hal::stm32::ADC1, hal::adc::Enabled>,
@@ -283,7 +282,7 @@ impl PounderDevices {
     /// * `adc2_in_p` - The input channel for the RF power measurement on IN1.
     pub fn new(
         mcp23017: mcp23017::MCP23017<hal::i2c::I2c<hal::stm32::I2C1>>,
-        ad9959: ad9959::Ad9959<QspiInterface>,
+        ad9959: &mut ad9959::Ad9959<QspiInterface>,
         attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
         adc1: hal::adc::Adc<hal::stm32::ADC1, hal::adc::Enabled>,
         adc2: hal::adc::Adc<hal::stm32::ADC2, hal::adc::Enabled>,
@@ -292,7 +291,6 @@ impl PounderDevices {
     ) -> Result<Self, Error> {
         let mut devices = Self {
             mcp23017,
-            ad9959,
             attenuator_spi,
             adc1,
             adc2,
@@ -317,87 +315,18 @@ impl PounderDevices {
             .map_err(|_| Error::I2c)?;
 
         // Select the on-board clock with a 4x prescaler (400MHz).
-        devices.select_onboard_clock(4u8)?;
-
-        // Run the DDS in stream-only mode (no read support).
-        devices.ad9959.interface.start_stream().unwrap();
-
-        Ok(devices)
-    }
-
-    /// Select the an external for the DDS reference clock source.
-    ///
-    /// Args:
-    /// * `frequency` - The frequency of the external clock source.
-    /// * `multiplier` - The multiplier of the reference clock to use in the DDS.
-    fn select_external_clock(
-        &mut self,
-        frequency: f32,
-        prescaler: u8,
-    ) -> Result<(), Error> {
-        self.mcp23017
-            .digital_write(EXT_CLK_SEL_PIN, true)
-            .map_err(|_| Error::I2c)?;
-        self.ad9959
-            .configure_system_clock(frequency, prescaler)
-            .map_err(|_| Error::Dds)?;
-
-        Ok(())
-    }
-
-    /// Select the onboard oscillator for the DDS reference clock source.
-    ///
-    /// Args:
-    /// * `multiplier` - The multiplier of the reference clock to use in the DDS.
-    fn select_onboard_clock(&mut self, multiplier: u8) -> Result<(), Error> {
-        self.mcp23017
+        devices
+            .mcp23017
             .digital_write(EXT_CLK_SEL_PIN, false)
             .map_err(|_| Error::I2c)?;
-        self.ad9959
-            .configure_system_clock(100_000_000f32, multiplier)
+        ad9959
+            .configure_system_clock(100_000_000f32, 4)
             .map_err(|_| Error::Dds)?;
 
-        Ok(())
-    }
+        // Run the DDS in stream-only mode (no read support).
+        ad9959.interface.start_stream().unwrap();
 
-    /// Configure the Pounder DDS clock.
-    ///
-    /// Args:
-    /// * `config` - The configuration of the DDS clock desired.
-    pub fn configure_dds_clock(
-        &mut self,
-        config: DdsClockConfig,
-    ) -> Result<(), Error> {
-        if config.external_clock {
-            self.select_external_clock(
-                config.reference_clock,
-                config.multiplier,
-            )
-        } else {
-            self.select_onboard_clock(config.multiplier)
-        }
-    }
-
-    /// Get the pounder DDS clock configuration
-    ///
-    /// Returns:
-    /// The current pounder DDS clock configuration.
-    pub fn get_dds_clock_config(&mut self) -> Result<DdsClockConfig, Error> {
-        let external_clock = self
-            .mcp23017
-            .digital_read(EXT_CLK_SEL_PIN)
-            .map_err(|_| Error::I2c)?;
-        let multiplier = self
-            .ad9959
-            .get_reference_clock_multiplier()
-            .map_err(|_| Error::Dds)?;
-        let reference_clock = self.ad9959.get_reference_clock_frequency();
-
-        Ok(DdsClockConfig {
-            multiplier,
-            reference_clock,
-            external_clock,
-        })
+        Ok(devices)
     }
 }
 

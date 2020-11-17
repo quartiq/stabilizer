@@ -1,43 +1,21 @@
+use super::QspiInterface;
 use crate::hrtimer::HighResTimerE;
 use stm32h7xx_hal as hal;
 
 pub struct DdsOutput {
-    profiles: heapless::spsc::Queue<[u32; 4], heapless::consts::U32>,
-    update_timer: hal::timer::Timer<hal::stm32::TIM3>,
+    _qspi: QspiInterface,
     io_update_trigger: HighResTimerE,
 }
 
 impl DdsOutput {
-    pub fn new(
-        mut timer: hal::timer::Timer<hal::stm32::TIM3>,
-        io_update_trigger: HighResTimerE,
-    ) -> Self {
-        timer.pause();
-        timer.reset_counter();
-        timer.clear_uif_bit();
-        timer.listen(hal::timer::Event::TimeOut);
-
+    pub fn new(_qspi: QspiInterface, io_update_trigger: HighResTimerE) -> Self {
         Self {
-            update_timer: timer,
+            _qspi,
             io_update_trigger,
-            profiles: heapless::spsc::Queue::new(),
         }
     }
 
-    pub fn update_handler(&mut self) {
-        self.update_timer.clear_uif_bit();
-        match self.profiles.dequeue() {
-            Some(profile) => self.write_profile(profile),
-            None => self.update_timer.pause(),
-        }
-    }
-
-    pub fn push(&mut self, profile: [u32; 4]) {
-        self.profiles.enqueue(profile).unwrap();
-        self.update_timer.resume();
-    }
-
-    fn write_profile(&mut self, profile: [u32; 4]) {
+    pub fn write_profile(&mut self, profile: [u32; 4]) {
         let regs = unsafe { &*hal::stm32::QUADSPI::ptr() };
         unsafe {
             core::ptr::write_volatile(

@@ -55,7 +55,7 @@ use heapless::{consts::*, String};
 const SAMPLE_FREQUENCY_KHZ: u32 = 500;
 
 // The desired ADC sample processing buffer size.
-const SAMPLE_BUFFER_SIZE: usize = 8;
+const SAMPLE_BUFFER_SIZE: usize = 1;
 
 #[link_section = ".sram3.eth"]
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
@@ -194,7 +194,7 @@ const APP: () = {
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
-        dds_output: DdsOutput,
+        dds_output: Option<DdsOutput>,
 
         // Note: It appears that rustfmt generates a format that GDB cannot recognize, which
         // results in GDB breakpoints being set improperly.
@@ -460,8 +460,9 @@ const APP: () = {
         // Measure the Pounder PGOOD output to detect if pounder is present on Stabilizer.
         let pounder_pgood = gpiob.pb13.into_pull_down_input();
         delay.delay_ms(2u8);
-        let pounder_devices = if pounder_pgood.is_high().unwrap() {
-            let ad9959 = {
+        let (pounder_devices, dds_output) = if pounder_pgood.is_high().unwrap()
+        {
+            let mut ad9959 = {
                 let qspi_interface = {
                     // Instantiate the QUADSPI pins and peripheral interface.
                     let qspi_pins = {
@@ -592,20 +593,60 @@ const APP: () = {
             let adc1_in_p = gpiof.pf11.into_analog();
             let adc2_in_p = gpiof.pf14.into_analog();
 
-            Some(
-                pounder::PounderDevices::new(
-                    io_expander,
-                    ad9959,
-                    spi,
-                    adc1,
-                    adc2,
-                    adc1_in_p,
-                    adc2_in_p,
-                )
-                .unwrap(),
+            let pounder_devices = pounder::PounderDevices::new(
+                io_expander,
+                &mut ad9959,
+                spi,
+                adc1,
+                adc2,
+                adc1_in_p,
+                adc2_in_p,
             )
+            .unwrap();
+
+            let dds_output = {
+                let io_update_trigger = {
+                    let _io_update = gpiog
+                        .pg7
+                        .into_alternate_af2()
+                        .set_speed(hal::gpio::Speed::VeryHigh);
+
+                    // Configure the IO_Update signal for the DDS.
+                    let mut hrtimer = hrtimer::HighResTimerE::new(
+                        dp.HRTIM_TIME,
+                        dp.HRTIM_MASTER,
+                        dp.HRTIM_COMMON,
+                        ccdr.clocks,
+                        ccdr.peripheral.HRTIM,
+                    );
+
+                    // IO_Update should be latched for 50ns after the QSPI profile write. Profile writes
+                    // are always 16 bytes, with 2 cycles required per byte, coming out to a total of 32
+                    // QSPI clock cycles. The QSPI is configured for 40MHz, so this comes out to an
+                    // offset of 800nS. We use 900ns to be safe - note that the timer is triggered after
+                    // the QSPI write, which can take approximately 120nS, so there is additional
+                    // margin.
+                    hrtimer.configure_single_shot(
+                        hrtimer::Channel::Two,
+                        50_e-9,
+                        900_e-9,
+                    );
+
+                    // Ensure that we have enough time for an IO-update every sample.
+                    assert!(
+                        1.0 / (1000 * SAMPLE_FREQUENCY_KHZ) as f32 > 900_e-9
+                    );
+
+                    hrtimer
+                };
+
+                let qspi = ad9959.free();
+                DdsOutput::new(qspi, io_update_trigger)
+            };
+
+            (Some(pounder_devices), Some(dds_output))
         } else {
-            None
+            (None, None)
         };
 
         let mut eeprom_i2c = {
@@ -728,49 +769,6 @@ const APP: () = {
         // Utilize the cycle counter for RTIC scheduling.
         cp.DWT.enable_cycle_counter();
 
-        let dds_output = {
-            let io_update_trigger = {
-                let _io_update = gpiog
-                    .pg7
-                    .into_alternate_af2()
-                    .set_speed(hal::gpio::Speed::VeryHigh);
-
-                // Configure the IO_Update signal for the DDS.
-                let mut hrtimer = hrtimer::HighResTimerE::new(
-                    dp.HRTIM_TIME,
-                    dp.HRTIM_MASTER,
-                    dp.HRTIM_COMMON,
-                    ccdr.clocks,
-                    ccdr.peripheral.HRTIM,
-                );
-
-                // IO_Update should be latched for 50ns after the QSPI profile write. Profile writes
-                // are always 16 bytes, with 2 cycles required per byte, coming out to a total of 32
-                // QSPI clock cycles. The QSPI is configured for 40MHz, so this comes out to an
-                // offset of 800nS. We use 900ns to be safe - note that the timer is triggered after
-                // the QSPI write, which can take approximately 120nS, so there is additional
-                // margin.
-                hrtimer.configure_single_shot(
-                    hrtimer::Channel::Two,
-                    50_e-9,
-                    900_e-9,
-                );
-
-                // Ensure that we have enough time for an IO-update every sample.
-                assert!(1.0 / (1000 * SAMPLE_FREQUENCY_KHZ) as f32 > 900_e-9);
-
-                hrtimer
-            };
-
-            let timer3 = dp.TIM3.timer(
-                SAMPLE_FREQUENCY_KHZ.khz(),
-                ccdr.peripheral.TIM3,
-                &ccdr.clocks,
-            );
-
-            DdsOutput::new(timer3, io_update_trigger)
-        };
-
         // Start sampling ADCs.
         sampling_timer.start();
 
@@ -781,7 +779,6 @@ const APP: () = {
             adcs,
             dacs,
             dds_output,
-
             pounder: pounder_devices,
 
             eeprom_i2c,
@@ -791,13 +788,8 @@ const APP: () = {
         }
     }
 
-    #[task(binds = TIM3, resources=[dds_output], priority = 3)]
-    fn dds_update(c: dds_update::Context) {
-        c.resources.dds_output.update_handler();
-    }
-
-    #[task(binds=DMA1_STR3, resources=[adcs, dacs, pounder, dds_output, iir_state, iir_ch], priority=2)]
-    fn adc_update(mut c: adc_update::Context) {
+    #[task(binds=DMA1_STR3, resources=[adcs, dacs, dds_output, iir_state, iir_ch], priority=2)]
+    fn adc_update(c: adc_update::Context) {
         let (adc0_samples, adc1_samples) =
             c.resources.adcs.transfer_complete_handler();
 
@@ -820,25 +812,23 @@ const APP: () = {
                     .update(&mut c.resources.iir_state[1], x1);
                 y1 as i16 as u16 ^ 0x8000
             };
+        }
 
-            if c.resources.pounder.is_some() {
-                let profile = ad9959::serialize_profile(
-                    pounder::Channel::Out0.into(),
-                    u32::MAX / 4,
-                    0,
-                    None,
-                );
+        if let Some(dds_output) = c.resources.dds_output {
+            let profile = ad9959::serialize_profile(
+                pounder::Channel::Out0.into(),
+                u32::MAX / 4,
+                0,
+                None,
+            );
 
-                c.resources.dds_output.lock(|dds_output| {
-                    dds_output.push(profile);
-                });
-            }
+            dds_output.write_profile(profile);
         }
 
         c.resources.dacs.next_data(&dac0, &dac1);
     }
 
-    #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afe0, afe1])]
+    #[idle(resources=[net_interface, mac_addr, eth_mac, iir_state, iir_ch, afe0, afe1])]
     fn idle(mut c: idle::Context) -> ! {
         let mut socket_set_entries: [_; 8] = Default::default();
         let mut sockets =

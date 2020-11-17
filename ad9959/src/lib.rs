@@ -501,52 +501,8 @@ impl<I: Interface> Ad9959<I> {
             / (1u64 << 32) as f32)
     }
 
-    pub fn serialize_profile(
-        &self,
-        channel: Channel,
-        freq: f32,
-        turns: f32,
-        amplitude: f32,
-    ) -> Result<[u32; 4], Error> {
-        let csr: u8 = *0x00_u8
-            .set_bits(1..=2, self.communication_mode as u8)
-            .set_bit(4 + channel as usize, true);
-
-        // The function for channel frequency is `f_out = FTW * f_s / 2^32`, where FTW is the
-        // frequency tuning word and f_s is the system clock rate.
-        let tuning_word: u32 = ((freq * (1u64 << 32) as f32)
-            / self.system_clock_frequency())
-            as u32;
-
-        let phase_offset: u16 = (turns * (1 << 14) as f32) as u16 & 0x3FFFu16;
-        let pow: u32 = *0u32
-            .set_bits(24..32, Register::CPOW0 as u32)
-            .set_bits(8..24, phase_offset as u32)
-            .set_bits(0..8, Register::CFTW0 as u32);
-
-        // Enable the amplitude multiplier for the channel if required. The amplitude control has
-        // full-scale at 0x3FF (amplitude of 1), so the multiplier should be disabled whenever
-        // full-scale is used.
-        let amplitude_control: u16 = (amplitude * (1 << 10) as f32) as u16;
-
-        let acr: u32 = *0u32
-            .set_bits(24..32, Register::ACR as u32)
-            .set_bits(0..10, amplitude_control as u32 & 0x3FF)
-            .set_bit(12, amplitude_control < (1 << 10));
-
-        let serialized: [u32; 4] = [
-            u32::from_le_bytes([
-                Register::CSR as u8,
-                csr,
-                Register::CSR as u8,
-                csr,
-            ]),
-            acr.to_be(),
-            pow.to_be(),
-            tuning_word.to_be(),
-        ];
-
-        Ok(serialized)
+    pub fn free(self) -> I {
+        self.interface
     }
 }
 
@@ -578,7 +534,12 @@ impl ProfileSerializer {
     }
 }
 
-pub fn serialize_profile(channel: Channel, ftw: u32, pow: u16, acr: Option<u16>) -> [u32; 4] {
+pub fn serialize_profile(
+    channel: Channel,
+    ftw: u32,
+    pow: u16,
+    acr: Option<u16>,
+) -> [u32; 4] {
     let mut serializer = ProfileSerializer::new();
 
     let csr: u8 = *0x00_u8
