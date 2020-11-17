@@ -115,7 +115,7 @@ impl QspiInterface {
         })
     }
 
-    pub fn start_stream(&mut self) -> Result<(), Error> {
+    fn start_stream(&mut self) -> Result<(), Error> {
         if self.qspi.is_busy() {
             return Err(Error::Qspi);
         }
@@ -133,34 +133,6 @@ impl QspiInterface {
         }
 
         self.streaming = true;
-
-        Ok(())
-    }
-
-    pub fn write_profile(&mut self, data: [u32; 4]) -> Result<(), Error> {
-        if self.streaming == false {
-            return Err(Error::Qspi);
-        }
-
-        let qspi_regs = unsafe { &*hal::stm32::QUADSPI::ptr() };
-        unsafe {
-            core::ptr::write_volatile(
-                &qspi_regs.dr as *const _ as *mut u32,
-                data[0],
-            );
-            core::ptr::write_volatile(
-                &qspi_regs.dr as *const _ as *mut u32,
-                data[1],
-            );
-            core::ptr::write_volatile(
-                &qspi_regs.dr as *const _ as *mut u32,
-                data[2],
-            );
-            core::ptr::write_volatile(
-                &qspi_regs.dr as *const _ as *mut u32,
-                data[3],
-            );
-        }
 
         Ok(())
     }

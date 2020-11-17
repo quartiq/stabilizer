@@ -823,16 +823,16 @@ const APP: () = {
 
             let dds_output = &mut c.resources.dds_output;
             if let Some(pounder) = c.resources.pounder {
+                let profile = pounder
+                    .ad9959
+                    .serialize_profile(
+                        pounder::Channel::Out0.into(),
+                        100_000_000_f32,
+                        0.0_f32,
+                        *adc0 as f32 / 0xFFFF as f32,
+                    )
+                    .unwrap();
                 dds_output.lock(|dds_output| {
-                    let profile = pounder
-                        .ad9959
-                        .serialize_profile(
-                            pounder::Channel::Out0.into(),
-                            100_000_000_f32,
-                            0.0_f32,
-                            *adc0 as f32 / 0xFFFF as f32,
-                        )
-                        .unwrap();
                     dds_output.push(profile);
                 });
             }
