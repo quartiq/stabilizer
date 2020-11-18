@@ -1,3 +1,4 @@
+#![no_std]
 use core::ops::{Add, Mul};
 use serde::{Deserialize, Serialize};
 
