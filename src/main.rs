@@ -54,9 +54,10 @@ static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 
 mod afe;
 mod eeprom;
-mod iir;
 mod pounder;
 mod server;
+
+use dsp::iir;
 
 #[cfg(not(feature = "semihosting"))]
 fn init_log() {}
