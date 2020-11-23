@@ -3,15 +3,10 @@ use serde::{Deserialize, Serialize};
 
 use core::f32;
 
-pub type IIRState = [f32; 5];
-
-#[derive(Copy, Clone, Deserialize, Serialize)]
-pub struct IIR {
-    pub ba: IIRState,
-    pub y_offset: f32,
-    pub y_min: f32,
-    pub y_max: f32,
-}
+// These are implemented here because core::f32 doesn't have them (yet).
+// They are naive and don't handle inf/nan.
+// `compiler-intrinsics`/llvm should have better (robust, universal, and
+// faster) implementations.
 
 fn abs(x: f32) -> f32 {
     if x >= 0. {
@@ -45,17 +40,72 @@ fn min(x: f32, y: f32) -> f32 {
     }
 }
 
+// Multiply-accumulate vectors `x` and `a`.
+//
+// A.k.a. dot product.
+// Rust/LLVM optimize this nicely.
 fn macc<T>(y0: T, x: &[T], a: &[T]) -> T
 where
     T: Add<Output = T> + Mul<Output = T> + Copy,
 {
     x.iter()
-        .zip(a.iter())
-        .map(|(&i, &j)| i * j)
+        .zip(a)
+        .map(|(&x, &a)| x * a)
         .fold(y0, |y, xa| y + xa)
 }
 
+/// IIR state and coefficients type.
+///
+/// To represent the IIR state (input and output memory) during the filter update
+/// this contains the three inputs (x0, x1, x2) and the two outputs (y1, y2)
+/// concatenated.
+/// To represent the IIR coefficients, this contains the feed-forward
+/// coefficients (b0, b1, b2) followd by the feed-back coefficients (a1, a2),
+/// all normalized such that a0 = 1.
+pub type IIRState = [f32; 5];
+
+/// IIR configuration.
+///
+/// Contains the coeeficients `ba`, the output offset `y_offset`, and the
+/// output limits `y_min` and `y_max`.
+///
+/// This implementation achieves several important properties:
+///
+/// * Its transfer function is universal in the sense that any biquadratic
+///   transfer function can be implemented (high-passes, gain limits, second
+///   order integrators with inherent anti-windup, notches etc) without code
+///   changes preserving all features.
+/// * It inherits a universal implementation of "integrator anti-windup", also
+///   and especially in the presence of set-point changes and in the presence
+///   of proportional or derivative gain without any back-off that would reduce
+///   steady-state output range.
+/// * It has universal derivative-kick (undesired, unlimited, and un-physical
+///   amplification of set-point changes by the derivative term) avoidance.
+/// * An offset at the input of an IIR filter (a.k.a. "set-point") is
+///   equivalent to an offset at the output. They are related by the
+///   overall (DC feed-forward) gain of the filter.
+/// * It stores only previous outputs and inputs. These have direct and
+///   invariant interpretation (independent of gains and offsets).
+///   Therefore it can trivially implement bump-less transfer.
+/// * Cascading multiple IIR filters allows stable and robust
+///   implementation of transfer functions beyond bequadratic terms.
+#[derive(Copy, Clone, Deserialize, Serialize)]
+pub struct IIR {
+    pub ba: IIRState,
+    pub y_offset: f32,
+    pub y_min: f32,
+    pub y_max: f32,
+}
+
 impl IIR {
+    /// Configures IIR filter coefficients for proportional-integral behavior
+    /// with gain limit.
+    ///
+    /// # Arguments
+    ///
+    /// * `kp` - Proportional gain. Also defines gain sign.
+    /// * `ki` - Integral gain at Nyquist. Sign taken from `kp`.
+    /// * `g` - Gain limit.
     pub fn set_pi(&mut self, kp: f32, ki: f32, g: f32) -> Result<(), &str> {
         let ki = copysign(ki, kp);
         let g = copysign(g, kp);
@@ -75,33 +125,51 @@ impl IIR {
             }
             (a1, b0, b1)
         };
-        self.ba[0] = b0;
-        self.ba[1] = b1;
-        self.ba[2] = 0.;
-        self.ba[3] = a1;
-        self.ba[4] = 0.;
+        self.ba.copy_from_slice(&[b0, b1, 0., a1, 0.]);
         Ok(())
     }
 
+    /// Compute the overall (DC feed-forward) gain.
+    pub fn get_k(&self) -> f32 {
+        self.ba[..3].iter().sum()
+    }
+
+    /// Compute input-referred (`x`) offset from output (`y`) offset.
     pub fn get_x_offset(&self) -> Result<f32, &str> {
-        let b: f32 = self.ba[..3].iter().sum();
-        if abs(b) < f32::EPSILON {
-            Err("b is zero")
+        let k = self.get_k();
+        if abs(k) < f32::EPSILON {
+            Err("k is zero")
         } else {
-            Ok(self.y_offset / b)
+            Ok(self.y_offset / k)
         }
     }
 
+    /// Convert input (`x`) offset to equivalent output (`y`) offset and apply.
+    ///
+    /// # Arguments
+    /// * `xo`: Input (`x`) offset.
     pub fn set_x_offset(&mut self, xo: f32) {
-        let b: f32 = self.ba[..3].iter().sum();
-        self.y_offset = xo * b;
+        self.y_offset = xo * self.get_k();
     }
 
+    /// Feed a new input value into the filter, update the filter state, and
+    /// return the new output. Only the state `xy` is modified.
+    ///
+    /// # Arguments
+    /// * `xy` - Current filter state.
+    /// * `x0` - New input.
     pub fn update(&self, xy: &mut IIRState, x0: f32) -> f32 {
+        // `xy` contains       x0 x1 y0 y1 y2
+        // Increment time      x1 x2 y1 y2 y3
+        // Rotate              y3 x1 x2 y1 y2
         xy.rotate_right(1);
+        // Store x0            x0 x1 x2 y1 y2
         xy[0] = x0;
+        // Compute y0 by multiply-accumulate
         let y0 = macc(self.y_offset, xy, &self.ba);
+        // Limit y0
         let y0 = max(self.y_min, min(self.y_max, y0));
+        // Store y0            x0 x1 y0 y1 y2
         xy[xy.len() / 2] = y0;
         y0
     }
