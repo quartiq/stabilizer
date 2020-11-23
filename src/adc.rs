@@ -42,13 +42,18 @@ static mut ADC1_BUF1: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
 
 /// SPI2 is used as a ZST (zero-sized type) for indicating a DMA transfer into the SPI2 TX FIFO
 /// whenever the tim2 update dma request occurs.
-struct SPI2 {}
+struct SPI2 {
+    _channel: sampling_timer::tim2::Channel1,
+}
 impl SPI2 {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(_channel: sampling_timer::tim2::Channel1) -> Self {
+        Self { _channel }
     }
 }
 
+// Note(unsafe): This structure is only safe to instantiate once. The DMA request is hard-coded and
+// may only be used if ownership of the timer2 channel 1 compare channel is assured, which is
+// ensured by maintaining ownership of the channel.
 unsafe impl TargetAddress<MemoryToPeripheral> for SPI2 {
     /// SPI2 is configured to operate using 16-bit transfer words.
     type MemSize = u16;
@@ -59,6 +64,8 @@ unsafe impl TargetAddress<MemoryToPeripheral> for SPI2 {
     /// Whenever the DMA request occurs, it should write into SPI2's TX FIFO to start a DMA
     /// transfer.
     fn address(&self) -> u32 {
+        // Note(unsafe): It is assumed that SPI2 is owned by another DMA transfer and this DMA is
+        // only used for the transmit-half of DMA.
         let regs = unsafe { &*hal::stm32::SPI2::ptr() };
         &regs.txdr as *const _ as u32
     }
@@ -66,13 +73,18 @@ unsafe impl TargetAddress<MemoryToPeripheral> for SPI2 {
 
 /// SPI3 is used as a ZST (zero-sized type) for indicating a DMA transfer into the SPI3 TX FIFO
 /// whenever the tim2 update dma request occurs.
-struct SPI3 {}
+struct SPI3 {
+    _channel: sampling_timer::tim2::Channel2,
+}
 impl SPI3 {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(_channel: sampling_timer::tim2::Channel2) -> Self {
+        Self { _channel }
     }
 }
 
+// Note(unsafe): This structure is only safe to instantiate once. The DMA request is hard-coded and
+// may only be used if ownership of the timer2 channel 2 compare channel is assured, which is
+// ensured by maintaining ownership of the channel.
 unsafe impl TargetAddress<MemoryToPeripheral> for SPI3 {
     /// SPI3 is configured to operate using 16-bit transfer words.
     type MemSize = u16;
@@ -83,6 +95,8 @@ unsafe impl TargetAddress<MemoryToPeripheral> for SPI3 {
     /// Whenever the DMA request occurs, it should write into SPI3's TX FIFO to start a DMA
     /// transfer.
     fn address(&self) -> u32 {
+        // Note(unsafe): It is assumed that SPI3 is owned by another DMA transfer and this DMA is
+        // only used for the transmit-half of DMA.
         let regs = unsafe { &*hal::stm32::SPI3::ptr() };
         &regs.txdr as *const _ as u32
     }
@@ -144,7 +158,7 @@ impl Adc0Input {
         spi: hal::spi::Spi<hal::stm32::SPI2, hal::spi::Enabled, u16>,
         trigger_stream: hal::dma::dma::Stream0<hal::stm32::DMA1>,
         data_stream: hal::dma::dma::Stream1<hal::stm32::DMA1>,
-        trigger_channel: sampling_timer::Timer2Channel1,
+        trigger_channel: sampling_timer::tim2::Channel1,
     ) -> Self {
         // Generate DMA events when an output compare of the timer hitting zero (timer roll over)
         // occurs.
@@ -164,7 +178,10 @@ impl Adc0Input {
         let mut trigger_transfer: Transfer<_, _, MemoryToPeripheral, _> =
             Transfer::init(
                 trigger_stream,
-                SPI2::new(),
+                SPI2::new(trigger_channel),
+                // Note(unsafe): Because this is a Memory->Peripheral transfer, this data is never
+                // actually modified. It technically only needs to be immutably borrowed, but the
+                // current HAL API only supports mutable borrows.
                 unsafe { &mut SPI_START },
                 None,
                 trigger_config,
@@ -192,6 +209,8 @@ impl Adc0Input {
             Transfer::init(
                 data_stream,
                 spi,
+                // Note(unsafe): The ADC0_BUF0 is "owned" by this peripheral. It shall not be used
+                // anywhere else in the module.
                 unsafe { &mut ADC0_BUF0 },
                 None,
                 data_config,
@@ -210,6 +229,8 @@ impl Adc0Input {
         trigger_transfer.start(|_| {});
 
         Self {
+            // Note(unsafe): The ADC0_BUF1 is "owned" by this peripheral. It shall not be used
+            // anywhere else in the module.
             next_buffer: unsafe { Some(&mut ADC0_BUF1) },
             transfer: data_transfer,
             _trigger_transfer: trigger_transfer,
@@ -265,7 +286,7 @@ impl Adc1Input {
         spi: hal::spi::Spi<hal::stm32::SPI3, hal::spi::Enabled, u16>,
         trigger_stream: hal::dma::dma::Stream2<hal::stm32::DMA1>,
         data_stream: hal::dma::dma::Stream3<hal::stm32::DMA1>,
-        trigger_channel: sampling_timer::Timer2Channel2,
+        trigger_channel: sampling_timer::tim2::Channel2,
     ) -> Self {
         // Generate DMA events when an output compare of the timer hitting zero (timer roll over)
         // occurs.
@@ -285,7 +306,7 @@ impl Adc1Input {
         let mut trigger_transfer: Transfer<_, _, MemoryToPeripheral, _> =
             Transfer::init(
                 trigger_stream,
-                SPI3::new(),
+                SPI3::new(trigger_channel),
                 unsafe { &mut SPI_START },
                 None,
                 trigger_config,
@@ -314,6 +335,8 @@ impl Adc1Input {
             Transfer::init(
                 data_stream,
                 spi,
+                // Note(unsafe): The ADC1_BUF0 is "owned" by this peripheral. It shall not be used
+                // anywhere else in the module.
                 unsafe { &mut ADC1_BUF0 },
                 None,
                 data_config,
@@ -332,6 +355,8 @@ impl Adc1Input {
         trigger_transfer.start(|_| {});
 
         Self {
+            // Note(unsafe): The ADC1_BUF1 is "owned" by this peripheral. It shall not be used
+            // anywhere else in the module.
             next_buffer: unsafe { Some(&mut ADC1_BUF1) },
             transfer: data_transfer,
             _trigger_transfer: trigger_transfer,

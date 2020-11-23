@@ -25,13 +25,18 @@ static mut DAC1_BUF0: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
 static mut DAC1_BUF1: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
 
 /// SPI4 is used as a ZST (zero-sized type) for indicating a DMA transfer into the SPI4 TX FIFO
-struct SPI4 {}
+struct SPI4 {
+    _channel: sampling_timer::tim2::Channel3,
+}
 impl SPI4 {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(_channel: sampling_timer::tim2::Channel3) -> Self {
+        Self { _channel }
     }
 }
 
+// Note(unsafe): This is safe because the DMA request line is logically owned by this module.
+// Additionally, it is only safe if the SPI TX functionality is never used, which is managed by the
+// Dac0Output.
 unsafe impl TargetAddress<MemoryToPeripheral> for SPI4 {
     /// SPI2 is configured to operate using 16-bit transfer words.
     type MemSize = u16;
@@ -41,19 +46,25 @@ unsafe impl TargetAddress<MemoryToPeripheral> for SPI4 {
 
     /// Whenever the DMA request occurs, it should write into SPI4's TX FIFO.
     fn address(&self) -> u32 {
+        // Note(unsafe): This is only safe as long as no other users write to the SPI TX FIFO.
         let regs = unsafe { &*hal::stm32::SPI4::ptr() };
         &regs.txdr as *const _ as u32
     }
 }
 
 /// SPI5 is used as a ZST (zero-sized type) for indicating a DMA transfer into the SPI5 TX FIFO
-struct SPI5 {}
+struct SPI5 {
+    _channel: sampling_timer::tim2::Channel4,
+}
 impl SPI5 {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(_channel: sampling_timer::tim2::Channel4) -> Self {
+        Self { _channel }
     }
 }
 
+// Note(unsafe): This is safe because the DMA request line is logically owned by this module.
+// Additionally, it is only safe if the SPI TX functionality is never used, which is managed by the
+// Dac1Output.
 unsafe impl TargetAddress<MemoryToPeripheral> for SPI5 {
     /// SPI5 is configured to operate using 16-bit transfer words.
     type MemSize = u16;
@@ -63,6 +74,7 @@ unsafe impl TargetAddress<MemoryToPeripheral> for SPI5 {
 
     /// Whenever the DMA request occurs, it should write into SPI5's TX FIFO
     fn address(&self) -> u32 {
+        // Note(unsafe): This is only safe as long as no other users write to the SPI TX FIFO.
         let regs = unsafe { &*hal::stm32::SPI5::ptr() };
         &regs.txdr as *const _ as u32
     }
@@ -98,6 +110,7 @@ impl DacOutputs {
 /// Represents data associated with DAC0.
 pub struct Dac0Output {
     next_buffer: Option<&'static mut [u16; SAMPLE_BUFFER_SIZE]>,
+    // Note: SPI TX functionality may not be used from this structure to ensure safety with DMA.
     _spi: hal::spi::Spi<hal::stm32::SPI4, hal::spi::Disabled, u16>,
     transfer: Transfer<
         hal::dma::dma::Stream4<hal::stm32::DMA1>,
@@ -118,7 +131,7 @@ impl Dac0Output {
     pub fn new(
         spi: hal::spi::Spi<hal::stm32::SPI4, hal::spi::Enabled, u16>,
         stream: hal::dma::dma::Stream4<hal::stm32::DMA1>,
-        trigger_channel: sampling_timer::Timer2Channel3,
+        trigger_channel: sampling_timer::tim2::Channel3,
     ) -> Self {
         // Generate DMA events when an output compare of the timer hitting zero (timer roll over)
         // occurs.
@@ -133,7 +146,8 @@ impl Dac0Output {
         // Construct the trigger stream to write from memory to the peripheral.
         let transfer: Transfer<_, _, MemoryToPeripheral, _> = Transfer::init(
             stream,
-            SPI4::new(),
+            SPI4::new(trigger_channel),
+            // Note(unsafe): This buffer is only used once and provided for the DMA transfer.
             unsafe { &mut DAC0_BUF0 },
             None,
             trigger_config,
@@ -153,6 +167,7 @@ impl Dac0Output {
 
         Self {
             transfer,
+            // Note(unsafe): This buffer is only used once and provided for the next DMA transfer.
             next_buffer: unsafe { Some(&mut DAC0_BUF1) },
             _spi: spi,
             first_transfer: true,
@@ -189,6 +204,7 @@ impl Dac0Output {
 /// Represents the data output stream from DAC1.
 pub struct Dac1Output {
     next_buffer: Option<&'static mut [u16; SAMPLE_BUFFER_SIZE]>,
+    // Note: SPI TX functionality may not be used from this structure to ensure safety with DMA.
     _spi: hal::spi::Spi<hal::stm32::SPI5, hal::spi::Disabled, u16>,
     transfer: Transfer<
         hal::dma::dma::Stream5<hal::stm32::DMA1>,
@@ -209,7 +225,7 @@ impl Dac1Output {
     pub fn new(
         spi: hal::spi::Spi<hal::stm32::SPI5, hal::spi::Enabled, u16>,
         stream: hal::dma::dma::Stream5<hal::stm32::DMA1>,
-        trigger_channel: sampling_timer::Timer2Channel4,
+        trigger_channel: sampling_timer::tim2::Channel4,
     ) -> Self {
         // Generate DMA events when an output compare of the timer hitting zero (timer roll over)
         // occurs.
@@ -225,7 +241,8 @@ impl Dac1Output {
         // Construct the stream to write from memory to the peripheral.
         let transfer: Transfer<_, _, MemoryToPeripheral, _> = Transfer::init(
             stream,
-            SPI5::new(),
+            SPI5::new(trigger_channel),
+            // Note(unsafe): This buffer is only used once and provided to the transfer.
             unsafe { &mut DAC1_BUF0 },
             None,
             trigger_config,
@@ -244,6 +261,7 @@ impl Dac1Output {
         spi.inner().cr1.modify(|_, w| w.cstart().started());
 
         Self {
+            // Note(unsafe): This buffer is only used once and provided for the next DMA transfer.
             next_buffer: unsafe { Some(&mut DAC1_BUF1) },
             transfer,
             _spi: spi,

@@ -474,6 +474,7 @@ dependencies = [
  "nb 1.0.0",
  "panic-halt",
  "panic-semihosting",
+ "paste",
  "serde",
  "serde-json-core",
  "smoltcp",
