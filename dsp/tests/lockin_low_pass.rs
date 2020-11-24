@@ -332,30 +332,30 @@ fn sampled_noise_amplitude(
 ///
 /// | sqrt((I+n*sin(x))**2 + (Q+n*cos(x))**2) - sqrt(I**2 + Q**2) |
 ///
-/// * I is the in-phase component of the part of the input signal we
-/// care about (component of the input signal with the same frequency
-/// as the demodulation signal).
+/// * I is the in-phase component of the portion of the input signal
+/// with the same frequency as the demodulation signal.
 /// * Q is the quadrature component.
 /// * n is the total noise amplitude (from all contributions, after
 /// attenuation from filtering).
-/// * x is the phase of the demodulation signal and can be chosen to
-/// be anywhere in the range [0, 2pi) to maximize this expression.
+/// * x is the phase of the demodulation signal.
 ///
 /// We need to find the demodulation phase (x) that maximizes this
-/// expression. We could compute this, because we know I, Q, and n,
-/// but that's a fairly expensive computation and probably
-/// overkill. Instead, we can employ the heuristic that when |I|>>|Q|,
-/// sin(x)=+-1 (+- denotes plus or minus) will maximize the error,
-/// when |Q|>>|I|, cos(x)=+-1 will maximize the error and when
-/// |I|~|Q|, max,min(sin(x)+cos(x)) will maximize the error (this
-/// occurs when sin(x)=cos(x)=+-1/sqrt(2)). Whether a positive or
-/// negative noise term maximizes the error depends on the values and
-/// signs of I and Q (for instance, when I,Q>0, negative noise terms
-/// will maximize the error since the sqrt function is concave down),
-/// but the difference should be modest in each case so we should be
-/// able to get a reasonably good approximation by using the positive
-/// noise case. We can use the maximum of all 3 cases as a rough
-/// approximation of the real maximum.
+/// expression. We can ignore the absolute value operation by also
+/// considering the expression minimum. The locations of the minimum
+/// and maximum can be computed analytically by finding the value of x
+/// when the derivative of this expression with respect to x is
+/// 0. When we solve this equation, we find:
+///
+/// x = atan(I/Q)
+///
+/// It's worth noting that this solution is technically only valid
+/// when cos(x)!=0 (i.e., x!=pi/2,-pi/2). However, this is not a
+/// problem because we only get these values when Q=0. Rust correctly
+/// computes atan(inf)=pi/2, which is precisely what we want because
+/// x=pi/2 maximizes sin(x) and therefore also the noise effect.
+///
+/// The other maximum or minimum is pi radians away from this
+/// value.
 ///
 /// # Arguments
 ///
@@ -388,21 +388,17 @@ fn magnitude_noise(
             .abs()
     };
 
-    let mut max_noise: f64 = 0.;
-    for (in_phase_delta, quadrature_delta) in [
-        (total_noise_amplitude, 0.),
-        (0., total_noise_amplitude),
-        (
-            total_noise_amplitude / 2_f64.sqrt(),
-            total_noise_amplitude / 2_f64.sqrt(),
-        ),
-    ]
-    .iter()
-    {
-        max_noise = max_noise.max(noise(*in_phase_delta, *quadrature_delta));
-    }
+    let phase = (in_phase_actual / quadrature_actual).atan();
+    let max_noise_1 = noise(
+        total_noise_amplitude * phase.sin(),
+        total_noise_amplitude * phase.cos(),
+    );
+    let max_noise_2 = noise(
+        total_noise_amplitude * (phase + PI).sin(),
+        total_noise_amplitude * (phase + PI).cos(),
+    );
 
-    max_noise
+    max_noise_1.max(max_noise_2)
 }
 
 /// Compute the maximum phase deviation from the correct value due to
@@ -415,12 +411,25 @@ fn magnitude_noise(
 /// See `magnitude_noise` for an explanation of the terms in this
 /// mathematical expression.
 ///
-/// Similar to the heuristic used when computing the error in
-/// `magnitude_noise`, we can use (sin(x)=+-1,cos(x)=0),
-/// (sin(x)=0,cos(x)=+-1), and the value of x that maximizes
-/// |sin(x)-cos(x)| (when sin(x)=1/sqrt(2) and cos(x)=-1/sqrt(2), or
-/// when the signs are flipped) as cases to test as an approximation
-/// for the actual maximum value of this expression.
+/// This expression is harder to compute analytically than the
+/// expression in `magnitude_noise`. We could compute it numerically,
+/// but that's expensive. However, we can use heuristics to try to
+/// guess the values of x that will maximize the noise
+/// effect. Intuitively, the difference will be largest when the
+/// Y-argument of the atan2 function (Q+n*cos(x)) is pushed in the
+/// opposite direction of the noise effect on the X-argument (i.e.,
+/// cos(x) and sin(x) have different signs). We can use:
+///
+/// * sin(x)=+-1 (+- denotes plus or minus), cos(x)=0,
+/// * sin(x)=0, cos(x)=+-1, and
+/// * the value of x that maximizes |sin(x)-cos(x)| (when
+/// sin(x)=1/sqrt(2) and cos(x)=-1/sqrt(2), or when the signs are
+/// flipped)
+///
+/// The first choice addresses cases in which |I|>>|Q|, the second
+/// choice addresses cases in which |Q|>>|I|, and the third choice
+/// addresses cases in which |I|~|Q|. We can test all of these cases
+/// as an approximation for the real maximum.
 ///
 /// # Arguments
 ///
