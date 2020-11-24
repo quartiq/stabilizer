@@ -63,6 +63,7 @@ static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 mod adc;
 mod afe;
 mod dac;
+mod design_parameters;
 mod eeprom;
 mod pounder;
 mod sampling_timer;
@@ -299,12 +300,12 @@ const APP: () = {
                 })
                 .manage_cs()
                 .suspend_when_inactive()
-                .cs_delay(220e-9);
+                .cs_delay(design_parameters::ADC_SETUP_TIME);
 
                 let spi: hal::spi::Spi<_, _, u16> = dp.SPI2.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    50.mhz(),
+                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
                     ccdr.peripheral.SPI2,
                     &ccdr.clocks,
                 );
@@ -337,12 +338,12 @@ const APP: () = {
                 })
                 .manage_cs()
                 .suspend_when_inactive()
-                .cs_delay(220e-9);
+                .cs_delay(design_parameters::ADC_SETUP_TIME);
 
                 let spi: hal::spi::Spi<_, _, u16> = dp.SPI3.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    50.mhz(),
+                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
                     ccdr.peripheral.SPI3,
                     &ccdr.clocks,
                 );
@@ -392,7 +393,7 @@ const APP: () = {
                 dp.SPI4.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    50.mhz(),
+                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
                     ccdr.peripheral.SPI4,
                     &ccdr.clocks,
                 )
@@ -424,7 +425,7 @@ const APP: () = {
                 dp.SPI5.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    50.mhz(),
+                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
                     ccdr.peripheral.SPI5,
                     &ccdr.clocks,
                 )
