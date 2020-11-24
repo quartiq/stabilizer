@@ -307,6 +307,8 @@ impl Adc1Input {
             Transfer::init(
                 trigger_stream,
                 SPI3::new(trigger_channel),
+                // Note(unsafe). This transaction is read-only and SPI_START is a dont-care value,
+                // so it is always safe to share.
                 unsafe { &mut SPI_START },
                 None,
                 trigger_config,
