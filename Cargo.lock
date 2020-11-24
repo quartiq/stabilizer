@@ -186,6 +186,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "dsp"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "embedded-dma"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -466,6 +473,7 @@ dependencies = [
  "cortex-m-log",
  "cortex-m-rt",
  "cortex-m-rtic",
+ "dsp",
  "embedded-hal",
  "enum-iterator",
  "heapless",

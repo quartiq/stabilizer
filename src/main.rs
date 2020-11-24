@@ -64,13 +64,13 @@ mod adc;
 mod afe;
 mod dac;
 mod eeprom;
-mod iir;
 mod pounder;
 mod sampling_timer;
 mod server;
 
 use adc::{Adc0Input, Adc1Input, AdcInputs};
 use dac::{Dac0Output, Dac1Output, DacOutputs};
+use dsp::iir;
 
 #[cfg(not(feature = "semihosting"))]
 fn init_log() {}
