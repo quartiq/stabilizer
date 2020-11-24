@@ -92,18 +92,28 @@ impl DacOutputs {
         Self { dac0, dac1 }
     }
 
+    /// Borrow the next DAC output buffers to populate the DAC output codes in-place.
+    ///
+    /// # Returns
+    /// (dac0, dac1) where each value is a mutable reference to the output code array for DAC0 and
+    /// DAC1 respectively.
+    pub fn prepare_data(
+        &mut self,
+    ) -> (
+        &mut [u16; SAMPLE_BUFFER_SIZE],
+        &mut [u16; SAMPLE_BUFFER_SIZE],
+    ) {
+        (self.dac0.prepare_buffer(), self.dac1.prepare_buffer())
+    }
+
     /// Enqueue the next DAC output codes for transmission.
     ///
-    /// # Args
-    /// * `dac0_codes` - The output codes for DAC0 to enqueue.
-    /// * `dac1_codes` - The output codes for DAC1 to enqueue.
-    pub fn next_data(
-        &mut self,
-        dac0_codes: &[u16; SAMPLE_BUFFER_SIZE],
-        dac1_codes: &[u16; SAMPLE_BUFFER_SIZE],
-    ) {
-        self.dac0.next_data(dac0_codes);
-        self.dac1.next_data(dac1_codes);
+    /// # Note
+    /// It is assumed that data was populated using `prepare_data()` before this function is
+    /// called.
+    pub fn commit_data(&mut self) {
+        self.dac0.commit_buffer();
+        self.dac1.commit_buffer();
     }
 }
 
@@ -174,15 +184,17 @@ impl Dac0Output {
         }
     }
 
-    /// Schedule the next set of DAC update codes.
+    /// Mutably borrow the next output buffer to populate it with DAC codes.
+    pub fn prepare_buffer(&mut self) -> &mut [u16; SAMPLE_BUFFER_SIZE] {
+        self.next_buffer.as_mut().unwrap()
+    }
+
+    /// Enqueue the next buffer for transmission to the DAC.
     ///
     /// # Args
-    /// * `data` - The next samples to enqueue for transmission.
-    pub fn next_data(&mut self, data: &[u16; SAMPLE_BUFFER_SIZE]) {
+    /// * `data` - The next data to write to the DAC.
+    pub fn commit_buffer(&mut self) {
         let next_buffer = self.next_buffer.take().unwrap();
-
-        // Copy data into the next buffer
-        next_buffer.copy_from_slice(data);
 
         // If the last transfer was not complete, we didn't write all our previous DAC codes.
         // Wait for all the DAC codes to get written as well.
@@ -269,15 +281,17 @@ impl Dac1Output {
         }
     }
 
+    /// Mutably borrow the next output buffer to populate it with DAC codes.
+    pub fn prepare_buffer(&mut self) -> &mut [u16; SAMPLE_BUFFER_SIZE] {
+        self.next_buffer.as_mut().unwrap()
+    }
+
     /// Enqueue the next buffer for transmission to the DAC.
     ///
     /// # Args
     /// * `data` - The next data to write to the DAC.
-    pub fn next_data(&mut self, data: &[u16; SAMPLE_BUFFER_SIZE]) {
+    pub fn commit_buffer(&mut self) {
         let next_buffer = self.next_buffer.take().unwrap();
-
-        // Copy data into the next buffer
-        next_buffer.copy_from_slice(data);
 
         // If the last transfer was not complete, we didn't write all our previous DAC codes.
         // Wait for all the DAC codes to get written as well.

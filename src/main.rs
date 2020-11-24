@@ -748,8 +748,7 @@ const APP: () = {
         let (adc0_samples, adc1_samples) =
             c.resources.adcs.transfer_complete_handler();
 
-        let mut dac0: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
-        let mut dac1: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
+        let (dac0, dac1) = c.resources.dacs.prepare_data();
 
         for (i, (adc0, adc1)) in
             adc0_samples.iter().zip(adc1_samples.iter()).enumerate()
@@ -769,7 +768,7 @@ const APP: () = {
             };
         }
 
-        c.resources.dacs.next_data(&dac0, &dac1);
+        c.resources.dacs.commit_data();
     }
 
     #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afe0, afe1])]
