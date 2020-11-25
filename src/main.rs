@@ -962,22 +962,22 @@ const APP: () = {
         unsafe { ethernet::interrupt_handler() }
     }
 
-    #[task(binds = SPI2, priority = 1)]
+    #[task(binds = SPI2, priority = 3)]
     fn spi2(_: spi2::Context) {
         panic!("ADC0 input overrun");
     }
 
-    #[task(binds = SPI3, priority = 1)]
+    #[task(binds = SPI3, priority = 3)]
     fn spi3(_: spi3::Context) {
         panic!("ADC0 input overrun");
     }
 
-    #[task(binds = SPI4, priority = 1)]
+    #[task(binds = SPI4, priority = 3)]
     fn spi4(_: spi4::Context) {
         panic!("DAC0 output error");
     }
 
-    #[task(binds = SPI5, priority = 1)]
+    #[task(binds = SPI5, priority = 3)]
     fn spi5(_: spi5::Context) {
         panic!("DAC1 output error");
     }
