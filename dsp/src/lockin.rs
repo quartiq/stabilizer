@@ -277,9 +277,13 @@ pub fn decimate(
     in_phase_decimated
         .iter_mut()
         .zip(quadrature_decimated.iter_mut())
-        .zip(in_phase.iter().step_by(n_k))
-        .zip(quadrature.iter().step_by(n_k))
-        .for_each(|(((i_decimated, q_decimated), i_original), q_original)| {
+        .zip(
+            in_phase
+                .iter()
+                .step_by(n_k)
+                .zip(quadrature.iter().step_by(n_k)),
+        )
+        .for_each(|((i_decimated, q_decimated), (i_original, q_original))| {
             *i_decimated = *i_original;
             *q_decimated = *q_original;
         });
