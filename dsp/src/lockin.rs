@@ -74,6 +74,32 @@ pub const TIMESTAMP_BUFFER_SIZE: usize = ADC_SAMPLE_BUFFER_SIZE / 2;
 /// The number of outputs sent to the DAC for each ADC batch.
 pub const DECIMATED_BUFFER_SIZE: usize = 1;
 
+/// Treat the 2-element array as a FIFO. This allows new elements to
+/// be pushed into the array, existing elements to shift back in the
+/// array, and the last element to fall off the array.
+trait Fifo2<T> {
+    fn push(&mut self, new_element: Option<T>);
+}
+
+impl<T: Copy> Fifo2<T> for [Option<T>; 2] {
+    /// Push a new element into the array. The existing elements move
+    /// backward in the array by one location, and the current last
+    /// element is discarded.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_element` - New element pushed into the front of the
+    /// array.
+    fn push(&mut self, new_element: Option<T>) {
+        // For array sizes greater than 2 it would be preferable to
+        // use a rotating index to avoid unnecessary data
+        // copying. However, this would somewhat complicate the use of
+        // iterators and for 2 elements, shifting is inexpensive.
+        self[1] = self[0];
+        self[0] = new_element;
+    }
+}
+
 /// Performs lock-in amplifier processing of a signal.
 pub struct Lockin {
     phase_offset: f32,
@@ -272,32 +298,6 @@ pub fn magnitude_phase(in_phase: &mut [f32], quadrature: &mut [f32]) {
             *i = new_i;
             *q = new_q;
         });
-}
-
-/// Treat the 2-element array as a FIFO. This allows new elements to
-/// be pushed into the array, existing elements to shift back in the
-/// array, and the last element to fall off the array.
-trait Fifo2<T> {
-    fn push(&mut self, new_element: Option<T>);
-}
-
-impl<T: Copy> Fifo2<T> for [Option<T>; 2] {
-    /// Push a new element into the array. The existing elements move
-    /// backward in the array by one location, and the current last
-    /// element is discarded.
-    ///
-    /// # Arguments
-    ///
-    /// * `new_element` - New element pushed into the front of the
-    /// array.
-    fn push(&mut self, new_element: Option<T>) {
-        // For array sizes greater than 2 it would be preferable to
-        // use a rotating index to avoid unnecessary data
-        // copying. However, this would somewhat complicate the use of
-        // iterators and for 2 elements, shifting is inexpensive.
-        self[1] = self[0];
-        self[0] = new_element;
-    }
 }
 
 #[cfg(test)]
