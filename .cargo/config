@@ -1,6 +1,10 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
 runner = "gdb-multiarch -q -x openocd.gdb"
-rustflags = ["-C", "link-arg=-Tlink.x"]
+rustflags = [
+    "-C", "link-arg=-Tlink.x",
+    "-C", "target-cpu=cortex-m7",
+    "-C", "target-feature=+fp-armv8d16",
+]
 
 [build]
 target = "thumbv7em-none-eabihf"
