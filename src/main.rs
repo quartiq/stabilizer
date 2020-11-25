@@ -758,10 +758,10 @@ const APP: () = {
                 let x0 = f32::from(*adc0 as i16);
                 let y0 = c.resources.iir_ch[0]
                     .update(&mut c.resources.iir_state[0], x0);
-                // note(unsafe): The filter limits ensure that the value is in range.
+                // Note(unsafe): The filter limits ensure that the value is in range.
                 // The truncation introduces 1/2 LSB distortion.
                 let y0 = unsafe { y0.to_int_unchecked::<i16>() };
-                // convert to DAC code
+                // Convert to DAC code
                 y0 as u16 ^ 0x8000
             };
 
@@ -769,10 +769,10 @@ const APP: () = {
                 let x1 = f32::from(*adc1 as i16);
                 let y1 = c.resources.iir_ch[1]
                     .update(&mut c.resources.iir_state[1], x1);
-                // note(unsafe): The filter limits ensure that the value is in range.
+                // Note(unsafe): The filter limits ensure that the value is in range.
                 // The truncation introduces 1/2 LSB distortion.
                 let y1 = unsafe { y1.to_int_unchecked::<i16>() };
-                // convert to DAC code
+                // Convert to DAC code
                 y1 as u16 ^ 0x8000
             };
         }
