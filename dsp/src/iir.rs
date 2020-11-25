@@ -164,7 +164,8 @@ impl IIR {
         // `xy` contains       x0 x1 y0 y1 y2
         // Increment time      x1 x2 y1 y2 y3
         // Shift               x1 x1 x2 y1 y2
-        xy.copy_within(0..n - 1, 1);  // unrolls better than xy.rotate_right(1)
+        // This unrolls better than xy.rotate_right(1)
+        xy.copy_within(0..n - 1, 1);
         // Store x0            x0 x1 x2 y1 y2
         xy[0] = x0;
         // Compute y0 by multiply-accumulate
