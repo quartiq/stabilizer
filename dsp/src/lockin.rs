@@ -175,8 +175,10 @@ impl Lockin {
         adc_samples: [i16; ADC_SAMPLE_BUFFER_SIZE],
         timestamps: [u16; TIMESTAMP_BUFFER_SIZE],
         valid_timestamps: u16,
-    ) -> Option<([f32; ADC_SAMPLE_BUFFER_SIZE], [f32; ADC_SAMPLE_BUFFER_SIZE])>
-    {
+    ) -> Result<
+        ([f32; ADC_SAMPLE_BUFFER_SIZE], [f32; ADC_SAMPLE_BUFFER_SIZE]),
+        &str,
+    > {
         // update old timestamps for new ADC batch
         let sample_period = self.sample_period as i32;
         self.timestamps.iter_mut().for_each(|t| match *t {
@@ -202,7 +204,7 @@ impl Lockin {
         // return prematurely if there aren't enough timestamps for
         // processing
         if self.timestamps.iter().filter(|t| t.is_some()).count() < 2 {
-            return None;
+            return Err("insufficient timestamps");
         }
 
         // compute ADC sample phases, sines/cosines and demodulate
@@ -227,7 +229,7 @@ impl Lockin {
                 *q = cosine * sample;
             });
 
-        Some((in_phase, quadrature))
+        Ok((in_phase, quadrature))
     }
 
     /// Filter the in-phase and quadrature signals using the supplied
@@ -448,7 +450,7 @@ mod tests {
                 [0; TIMESTAMP_BUFFER_SIZE],
                 0
             ),
-            None
+            Err("insufficient timestamps")
         );
     }
 
@@ -471,7 +473,7 @@ mod tests {
                 [0; TIMESTAMP_BUFFER_SIZE],
                 1
             ),
-            None
+            Err("insufficient timestamps")
         );
     }
 

@@ -601,11 +601,11 @@ fn lowpass_test(
         let lockin_demodulate =
             lockin.demodulate(signal, timestamps, valid_timestamps as u16);
         match lockin_demodulate {
-            Some(i) => {
-                in_phase = i.0;
-                quadrature = i.1;
+            Ok((i, q)) => {
+                in_phase = i;
+                quadrature = q;
             }
-            None => {
+            Err(_) => {
                 continue;
             }
         }
