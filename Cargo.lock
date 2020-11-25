@@ -193,6 +193,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "embedded-dma"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46c8c02e4347a0267ca60813c952017f4c5948c232474c6010a381a337f1bda4"
+dependencies = [
+ "stable_deref_trait",
+]
+
+[[package]]
 name = "embedded-hal"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -473,6 +482,7 @@ dependencies = [
  "nb 1.0.0",
  "panic-halt",
  "panic-semihosting",
+ "paste",
  "serde",
  "serde-json-core",
  "smoltcp",
@@ -500,12 +510,13 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.8.0"
-source = "git+https://github.com/stm32-rs/stm32h7xx-hal#cbb31d0b6d0c8530437367032a600a4ff74657f7"
+source = "git+https://github.com/stm32-rs/stm32h7xx-hal?branch=dma#0bfeeca4ce120c1b7c6d140a7da73a4372b874d8"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",
  "cortex-m",
  "cortex-m-rt",
+ "embedded-dma",
  "embedded-hal",
  "nb 1.0.0",
  "paste",
