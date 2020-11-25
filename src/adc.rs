@@ -169,8 +169,6 @@ impl Adc0Input {
         // contents). Thus, neither the memory or peripheral address ever change. This is run in
         // circular mode to be completed at every DMA request.
         let trigger_config = DmaConfig::default()
-            .memory_increment(false)
-            .peripheral_increment(false)
             .priority(Priority::High)
             .circular_buffer(true);
 
@@ -193,8 +191,7 @@ impl Adc0Input {
         // stream is used to trigger a transfer completion interrupt.
         let data_config = DmaConfig::default()
             .memory_increment(true)
-            .priority(Priority::VeryHigh)
-            .peripheral_increment(false);
+            .priority(Priority::VeryHigh);
 
         // A SPI peripheral error interrupt is used to determine if the RX FIFO overflows. This
         // indicates that samples were dropped due to excessive processing time in the main
@@ -297,8 +294,6 @@ impl Adc1Input {
         // contents). Thus, neither the memory or peripheral address ever change. This is run in
         // circular mode to be completed at every DMA request.
         let trigger_config = DmaConfig::default()
-            .memory_increment(false)
-            .peripheral_increment(false)
             .priority(Priority::High)
             .circular_buffer(true);
 
@@ -321,8 +316,7 @@ impl Adc1Input {
         let data_config = DmaConfig::default()
             .memory_increment(true)
             .transfer_complete_interrupt(true)
-            .priority(Priority::VeryHigh)
-            .peripheral_increment(false);
+            .priority(Priority::VeryHigh);
 
         // A SPI peripheral error interrupt is used to determine if the RX FIFO overflows. This
         // indicates that samples were dropped due to excessive processing time in the main
