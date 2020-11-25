@@ -283,9 +283,9 @@ pub fn decimate(
                 .step_by(n_k)
                 .zip(quadrature.iter().step_by(n_k)),
         )
-        .for_each(|((i_decimated, q_decimated), (i_original, q_original))| {
-            *i_decimated = *i_original;
-            *q_decimated = *q_original;
+        .for_each(|((i_d, q_d), (i, q))| {
+            *i_d = *i;
+            *q_d = *q;
         });
 
     (in_phase_decimated, quadrature_decimated)
