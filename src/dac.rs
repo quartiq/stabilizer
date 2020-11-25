@@ -205,6 +205,8 @@ impl Dac0Output {
         if self.first_transfer {
             self.first_transfer = false
         } else {
+            // Note: If a device hangs up, check that this conditional is passing correctly, as
+            // there is no time-out checks here in the interest of execution speed.
             while self.transfer.get_transfer_complete_flag() == false {}
         }
 
@@ -299,6 +301,8 @@ impl Dac1Output {
         if self.first_transfer {
             self.first_transfer = false
         } else {
+            // Note: If a device hangs up, check that this conditional is passing correctly, as
+            // there is no time-out checks here in the interest of execution speed.
             while self.transfer.get_transfer_complete_flag() == false {}
         }
 
