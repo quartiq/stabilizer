@@ -180,8 +180,12 @@ impl Lockin {
         // update old timestamps for new ADC batch
         let sample_period = self.sample_period as i32;
         self.timestamps.iter_mut().for_each(|t| match *t {
-            Some(i) => {
-                *t = Some(i - ADC_SAMPLE_BUFFER_SIZE as i32 * sample_period);
+            Some(timestamp) => {
+                // Existing timestamps have aged by one ADC batch
+                // period since the last ADC batch.
+                *t = Some(
+                    timestamp - ADC_SAMPLE_BUFFER_SIZE as i32 * sample_period,
+                );
             }
             None => (),
         });
