@@ -137,6 +137,7 @@ macro_rules! adc_input {
                 // data stream is used to trigger a transfer completion interrupt.
                 let data_config = DmaConfig::default()
                     .memory_increment(true)
+                    .transfer_complete_interrupt($index == 1)
                     .priority(Priority::VeryHigh);
 
                 // A SPI peripheral error interrupt is used to determine if the RX FIFO overflows. This
