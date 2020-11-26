@@ -19,7 +19,7 @@ static mut DAC_BUF: [[[u16; SAMPLE_BUFFER_SIZE]; 2]; 2] =
 macro_rules! dac_output {
     ($name:ident, $index:literal, $data_stream:ident,
      $spi:ident, $trigger_channel:ident, $dma_req:ident) => {
-        /// SPI is used as a type for indicating a DMA transfer into the SPI TX FIFO
+        /// $spi is used as a type for indicating a DMA transfer into the SPI TX FIFO
         struct $spi {
             spi: hal::spi::Spi<hal::stm32::$spi, hal::spi::Disabled, u16>,
             _channel: sampling_timer::tim2::$trigger_channel,
@@ -50,7 +50,7 @@ macro_rules! dac_output {
             }
         }
 
-        /// Represents data associated with DAC0.
+        /// Represents data associated with DAC.
         pub struct $name {
             next_buffer: Option<&'static mut [u16; SAMPLE_BUFFER_SIZE]>,
             // Note: SPI TX functionality may not be used from this structure to ensure safety with DMA.

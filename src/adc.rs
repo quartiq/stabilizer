@@ -35,7 +35,7 @@ static mut ADC_BUF: [[[u16; SAMPLE_BUFFER_SIZE]; 2]; 2] =
 macro_rules! adc_input {
     ($name:ident, $index:literal, $trigger_stream:ident, $data_stream:ident,
      $spi:ident, $trigger_channel:ident, $dma_req:ident) => {
-        /// SPI is used as a ZST (zero-sized type) for indicating a DMA transfer into the SPI TX FIFO
+        /// $spi is used as a ZST (zero-sized type) for indicating a DMA transfer into the SPI TX FIFO
         /// whenever the tim2 update dma request occurs.
         struct $spi {
             _channel: sampling_timer::tim2::$trigger_channel,
@@ -68,7 +68,7 @@ macro_rules! adc_input {
             }
         }
 
-        /// Represents data associated with ADC0.
+        /// Represents data associated with ADC.
         pub struct $name {
             next_buffer: Option<&'static mut [u16; SAMPLE_BUFFER_SIZE]>,
             transfer: Transfer<
@@ -86,7 +86,7 @@ macro_rules! adc_input {
         }
 
         impl $name {
-            /// Construct the ADC0 input channel.
+            /// Construct the ADC input channel.
             ///
             /// # Args
             /// * `spi` - The SPI interface used to communicate with the ADC.
