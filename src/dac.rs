@@ -41,7 +41,7 @@ macro_rules! dac_output {
             /// SPI is configured to operate using 16-bit transfer words.
             type MemSize = u16;
 
-            /// SPI DMA requests are generated whenever TIM2 CH3 comparison occurs.
+            /// SPI DMA requests are generated whenever TIM2 CHx ($dma_req) comparison occurs.
             const REQUEST_LINE: Option<u8> = Some(DMAReq::$dma_req as u8);
 
             /// Whenever the DMA request occurs, it should write into SPI's TX FIFO.
