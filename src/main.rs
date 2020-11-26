@@ -745,12 +745,12 @@ const APP: () = {
     #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
-            c.resources.adcs.0.transfer_complete_handler(),
-            c.resources.adcs.1.transfer_complete_handler(),
+            c.resources.adcs.0.acquire_buffer(),
+            c.resources.adcs.1.acquire_buffer(),
         ];
         let dac_samples = [
-            c.resources.dacs.0.prepare_buffer(),
-            c.resources.dacs.1.prepare_buffer(),
+            c.resources.dacs.0.acquire_buffer(),
+            c.resources.dacs.1.acquire_buffer(),
         ];
 
         for channel in 0..adc_samples.len() {
@@ -761,9 +761,12 @@ const APP: () = {
                 dac_samples[channel][sample] = y as i16 as u16 ^ 0x8000;
             }
         }
-
-        c.resources.dacs.0.commit_buffer();
-        c.resources.dacs.1.commit_buffer();
+        let [adc0, adc1] = adc_samples;
+        c.resources.adcs.0.release_buffer(adc0);
+        c.resources.adcs.0.release_buffer(adc1);
+        let [dac0, dac1] = dac_samples;
+        c.resources.dacs.0.release_buffer(dac0);
+        c.resources.dacs.1.release_buffer(dac1);
     }
 
     #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afes])]

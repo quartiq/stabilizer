@@ -181,27 +181,37 @@ macro_rules! adc_input {
                 }
             }
 
-            /// Handle a transfer completion.
+            /// Obtain a buffer filled with ADC samples.
             ///
             /// # Returns
             /// A reference to the underlying buffer that has been filled with ADC samples.
-            pub fn transfer_complete_handler(
+            pub fn acquire_buffer(
                 &mut self,
-            ) -> &[u16; SAMPLE_BUFFER_SIZE] {
-                let next_buffer = self.next_buffer.take().unwrap();
-
+            ) -> &'static mut [u16; SAMPLE_BUFFER_SIZE] {
                 // Wait for the transfer to fully complete before continuing.
                 // Note: If a device hangs up, check that this conditional is passing correctly, as there is
                 // no time-out checks here in the interest of execution speed.
-                while self.transfer.get_transfer_complete_flag() == false {}
+                while !self.transfer.get_transfer_complete_flag() {}
+
+                let next_buffer = self.next_buffer.take().unwrap();
 
                 // Start the next transfer.
                 self.transfer.clear_interrupts();
                 let (prev_buffer, _) =
                     self.transfer.next_transfer(next_buffer).unwrap();
 
-                self.next_buffer.replace(prev_buffer);
-                self.next_buffer.as_ref().unwrap()
+                prev_buffer
+            }
+
+            /// Release a buffer of ADC samples to the pool.
+            ///
+            /// # Args
+            /// * `next_buffer` - Buffer of ADC samples to be re-used.
+            pub fn release_buffer(
+                &mut self,
+                next_buffer: &'static mut [u16; SAMPLE_BUFFER_SIZE],
+            ) {
+                self.next_buffer.replace(next_buffer); // .unwrap_none() https://github.com/rust-lang/rust/issues/62633
             }
         }
     };

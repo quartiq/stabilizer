@@ -116,18 +116,21 @@ macro_rules! dac_output {
                 }
             }
 
-            /// Mutably borrow the next output buffer to populate it with DAC codes.
-            pub fn prepare_buffer(&mut self) -> &mut [u16; SAMPLE_BUFFER_SIZE] {
-                self.next_buffer.as_mut().unwrap()
+            /// Acquire the next output buffer to populate it with DAC codes.
+            pub fn acquire_buffer(
+                &mut self,
+            ) -> &'static mut [u16; SAMPLE_BUFFER_SIZE] {
+                self.next_buffer.take().unwrap()
             }
 
             /// Enqueue the next buffer for transmission to the DAC.
             ///
             /// # Args
             /// * `data` - The next data to write to the DAC.
-            pub fn commit_buffer(&mut self) {
-                let next_buffer = self.next_buffer.take().unwrap();
-
+            pub fn release_buffer(
+                &mut self,
+                next_buffer: &'static mut [u16; SAMPLE_BUFFER_SIZE],
+            ) {
                 // If the last transfer was not complete, we didn't write all our previous DAC codes.
                 // Wait for all the DAC codes to get written as well.
                 if self.first_transfer {
@@ -135,7 +138,7 @@ macro_rules! dac_output {
                 } else {
                     // Note: If a device hangs up, check that this conditional is passing correctly, as
                     // there is no time-out checks here in the interest of execution speed.
-                    while self.transfer.get_transfer_complete_flag() == false {}
+                    while !self.transfer.get_transfer_complete_flag() {}
                 }
 
                 // Start the next transfer.
@@ -143,6 +146,7 @@ macro_rules! dac_output {
                 let (prev_buffer, _) =
                     self.transfer.next_transfer(next_buffer).unwrap();
 
+                // .unwrap_none() https://github.com/rust-lang/rust/issues/62633
                 self.next_buffer.replace(prev_buffer);
             }
         }
