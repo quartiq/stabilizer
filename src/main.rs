@@ -745,29 +745,23 @@ const APP: () = {
     }
 
     #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch], priority=2)]
-    fn adc_update(c: adc_update::Context) {
-        let adc0_samples = c.resources.adcs.0.transfer_complete_handler();
-        let adc1_samples = c.resources.adcs.1.transfer_complete_handler();
+    fn process(c: process::Context) {
+        let adc_samples = [
+            c.resources.adcs.0.transfer_complete_handler(),
+            c.resources.adcs.1.transfer_complete_handler(),
+        ];
+        let dac_samples = [
+            c.resources.dacs.0.prepare_buffer(),
+            c.resources.dacs.1.prepare_buffer(),
+        ];
 
-        let dac0 = c.resources.dacs.0.prepare_buffer();
-        let dac1 = c.resources.dacs.1.prepare_buffer();
-
-        for (i, (adc0, adc1)) in
-            adc0_samples.iter().zip(adc1_samples.iter()).enumerate()
-        {
-            dac0[i] = {
-                let x0 = f32::from(*adc0 as i16);
-                let y0 = c.resources.iir_ch[0]
-                    .update(&mut c.resources.iir_state[0], x0);
-                y0 as i16 as u16 ^ 0x8000
-            };
-
-            dac1[i] = {
-                let x1 = f32::from(*adc1 as i16);
-                let y1 = c.resources.iir_ch[1]
-                    .update(&mut c.resources.iir_state[1], x1);
-                y1 as i16 as u16 ^ 0x8000
-            };
+        for channel in 0..adc_samples.len() {
+            for sample in 0..adc_samples[0].len() {
+                let x = f32::from(adc_samples[channel][sample] as i16);
+                let y = c.resources.iir_ch[channel]
+                    .update(&mut c.resources.iir_state[channel], x);
+                dac_samples[channel][sample] = y as i16 as u16 ^ 0x8000;
+            }
         }
 
         c.resources.dacs.0.commit_buffer();
