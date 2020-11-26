@@ -208,7 +208,7 @@ where
     ) -> Result<f64, Error> {
         self.reference_clock_frequency = reference_clock_frequency;
 
-        if multiplier != 1 && (multiplier > 20 || multiplier < 4) {
+        if multiplier != 1 && !(4..=20).contains(&multiplier) {
             return Err(Error::Bounds);
         }
 
@@ -438,7 +438,7 @@ where
         channel: Channel,
         amplitude: f32,
     ) -> Result<f32, Error> {
-        if amplitude < 0.0 || amplitude > 1.0 {
+        if !(0.0..=1.0).contains(&amplitude) {
             return Err(Error::Bounds);
         }
 
