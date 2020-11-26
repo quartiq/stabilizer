@@ -69,7 +69,7 @@ mod pounder;
 mod sampling_timer;
 mod server;
 
-use adc::{Adc0Input, Adc1Input, AdcInputs};
+use adc::{Adc0Input, Adc1Input};
 use dac::{Dac0Output, Dac1Output, DacOutputs};
 use dsp::iir;
 
@@ -188,7 +188,7 @@ const APP: () = {
         afe0: AFE0,
         afe1: AFE1,
 
-        adcs: AdcInputs,
+        adcs: (Adc0Input, Adc1Input),
         dacs: DacOutputs,
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
@@ -356,7 +356,7 @@ const APP: () = {
                 )
             };
 
-            AdcInputs::new(adc0, adc1)
+            (adc0, adc1)
         };
 
         let dacs = {
@@ -746,8 +746,8 @@ const APP: () = {
 
     #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch], priority=2)]
     fn adc_update(c: adc_update::Context) {
-        let (adc0_samples, adc1_samples) =
-            c.resources.adcs.transfer_complete_handler();
+        let adc0_samples = c.resources.adcs.0.transfer_complete_handler();
+        let adc1_samples = c.resources.adcs.1.transfer_complete_handler();
 
         let (dac0, dac1) = c.resources.dacs.prepare_data();
 
