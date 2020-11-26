@@ -24,6 +24,7 @@ fn copysign(x: f32, y: f32) -> f32 {
     }
 }
 
+#[cfg(not(feature = "nightly"))]
 fn max(x: f32, y: f32) -> f32 {
     if x > y {
         x
@@ -32,6 +33,7 @@ fn max(x: f32, y: f32) -> f32 {
     }
 }
 
+#[cfg(not(feature = "nightly"))]
 fn min(x: f32, y: f32) -> f32 {
     if x < y {
         x
@@ -39,6 +41,31 @@ fn min(x: f32, y: f32) -> f32 {
         y
     }
 }
+
+#[cfg(feature = "nightly")]
+fn max(x: f32, y: f32) -> f32 {
+    let o: f32;
+    unsafe {
+        asm!("vmaxnm.f32 {}, {}, {}",
+            lateout(sreg) o, in(sreg) x, in(sreg) y,
+            options(pure, nomem, nostack, preserves_flags)
+        );
+    }
+    o
+}
+
+#[cfg(feature = "nightly")]
+fn min(x: f32, y: f32) -> f32 {
+    let o: f32;
+    unsafe {
+        asm!("vminnm.f32 {}, {}, {}",
+            lateout(sreg) o, in(sreg) x, in(sreg) y,
+            options(pure, nomem, nostack, preserves_flags)
+        );
+    }
+    o
+}
+
 
 // Multiply-accumulate vectors `x` and `a`.
 //

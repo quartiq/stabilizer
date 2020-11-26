@@ -13,6 +13,9 @@
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     let gpiod = unsafe { &*hal::stm32::GPIOD::ptr() };
     gpiod.odr.modify(|_, w| w.odr6().high().odr12().high()); // FP_LED_1, FP_LED_3
+    #[cfg(feature = "nightly")]
+    core::intrinsics::abort();
+    #[cfg(not(feature = "nightly"))]
     unsafe {
         core::intrinsics::abort();
     }
