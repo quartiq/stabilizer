@@ -70,7 +70,7 @@ mod sampling_timer;
 mod server;
 
 use adc::{Adc0Input, Adc1Input};
-use dac::{Dac0Output, Dac1Output, DacOutputs};
+use dac::{Dac0Output, Dac1Output};
 use dsp::iir;
 
 #[cfg(not(feature = "semihosting"))]
@@ -189,7 +189,7 @@ const APP: () = {
         afe1: AFE1,
 
         adcs: (Adc0Input, Adc1Input),
-        dacs: DacOutputs,
+        dacs: (Dac0Output, Dac1Output),
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
@@ -441,7 +441,7 @@ const APP: () = {
                 dma_streams.5,
                 sampling_timer_channels.ch4,
             );
-            DacOutputs::new(dac0, dac1)
+            (dac0, dac1)
         };
 
         let mut fp_led_0 = gpiod.pd5.into_push_pull_output();
@@ -749,7 +749,8 @@ const APP: () = {
         let adc0_samples = c.resources.adcs.0.transfer_complete_handler();
         let adc1_samples = c.resources.adcs.1.transfer_complete_handler();
 
-        let (dac0, dac1) = c.resources.dacs.prepare_data();
+        let dac0 = c.resources.dacs.0.prepare_buffer();
+        let dac1 = c.resources.dacs.1.prepare_buffer();
 
         for (i, (adc0, adc1)) in
             adc0_samples.iter().zip(adc1_samples.iter()).enumerate()
@@ -769,7 +770,8 @@ const APP: () = {
             };
         }
 
-        c.resources.dacs.commit_data();
+        c.resources.dacs.0.commit_buffer();
+        c.resources.dacs.1.commit_buffer();
     }
 
     #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afe0, afe1])]
