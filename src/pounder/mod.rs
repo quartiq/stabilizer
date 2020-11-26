@@ -17,7 +17,7 @@ const ATT_RST_N_PIN: u8 = 8 + 5;
 const ATT_LE3_PIN: u8 = 8 + 3;
 const ATT_LE2_PIN: u8 = 8 + 2;
 const ATT_LE1_PIN: u8 = 8 + 1;
-const ATT_LE0_PIN: u8 = 8 + 0;
+const ATT_LE0_PIN: u8 = 8;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Error {
