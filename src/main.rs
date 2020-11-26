@@ -185,8 +185,7 @@ macro_rules! route_request {
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
-        afe0: AFE0,
-        afe1: AFE1,
+        afes: (AFE0, AFE1),
 
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
@@ -729,8 +728,7 @@ const APP: () = {
         sampling_timer.start();
 
         init::LateResources {
-            afe0: afe0,
-            afe1: afe1,
+            afes: (afe0, afe1),
 
             adcs,
             dacs,
@@ -768,7 +766,7 @@ const APP: () = {
         c.resources.dacs.1.commit_buffer();
     }
 
-    #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afe0, afe1])]
+    #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afes])]
     fn idle(mut c: idle::Context) -> ! {
         let mut socket_set_entries: [_; 8] = Default::default();
         let mut sockets =
@@ -828,8 +826,8 @@ const APP: () = {
 
                                     Ok::<server::Status, ()>(state)
                                 }),
-                                "stabilizer/afe0/gain": (|| c.resources.afe0.get_gain()),
-                                "stabilizer/afe1/gain": (|| c.resources.afe1.get_gain()),
+                                "stabilizer/afe0/gain": (|| c.resources.afes.0.get_gain()),
+                                "stabilizer/afe1/gain": (|| c.resources.afes.1.get_gain()),
                                 "pounder/in0": (|| {
                                     match c.resources.pounder {
                                         Some(pounder) =>
@@ -924,10 +922,10 @@ const APP: () = {
                                     }
                                 }),
                                 "stabilizer/afe0/gain": afe::Gain, (|gain| {
-                                    Ok::<(), ()>(c.resources.afe0.set_gain(gain))
+                                    Ok::<(), ()>(c.resources.afes.0.set_gain(gain))
                                 }),
                                 "stabilizer/afe1/gain": afe::Gain, (|gain| {
-                                    Ok::<(), ()>(c.resources.afe1.set_gain(gain))
+                                    Ok::<(), ()>(c.resources.afes.1.set_gain(gain))
                                 })
                             ]
                         )
