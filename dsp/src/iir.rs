@@ -66,7 +66,6 @@ fn min(x: f32, y: f32) -> f32 {
     o
 }
 
-
 // Multiply-accumulate vectors `x` and `a`.
 //
 // A.k.a. dot product.
