@@ -1,7 +1,7 @@
 use dsp::iir::IIR;
 use dsp::lockin::{
     decimate, magnitude_phase, Lockin, ADC_SAMPLE_BUFFER_SIZE,
-    DECIMATED_BUFFER_SIZE, TIMESTAMP_BUFFER_SIZE,
+    DECIMATED_BUFFER_SIZE,
 };
 
 use std::f64::consts::PI;
@@ -159,15 +159,14 @@ fn adc_sampled_signal(
 /// batch period, followed by an array of the timestamp values.
 fn adc_batch_timestamps(
     reference_frequency: f64,
+    timestamps: &mut [u16],
     timestamp_start: u64,
     timestamp_stop: u64,
     internal_frequency: f64,
-) -> (usize, [u16; TIMESTAMP_BUFFER_SIZE]) {
+) -> &[u16] {
     let reference_period = internal_frequency / reference_frequency;
     let start_count = timestamp_start as f64 % reference_period;
     let mut valid_timestamps: usize = 0;
-    let mut timestamps: [u16; TIMESTAMP_BUFFER_SIZE] =
-        [0; TIMESTAMP_BUFFER_SIZE];
 
     let mut timestamp = (reference_period - start_count) % reference_period;
     while timestamp < (timestamp_stop - timestamp_start) as f64 {
@@ -176,7 +175,7 @@ fn adc_batch_timestamps(
         valid_timestamps += 1;
     }
 
-    (valid_timestamps, timestamps)
+    &timestamps[..valid_timestamps]
 }
 
 /// Lowpass biquad filter using cutoff and sampling frequencies.
@@ -589,8 +588,10 @@ fn lowpass_test(
             internal_frequency,
             adc_frequency,
         );
-        let (valid_timestamps, timestamps) = adc_batch_timestamps(
+        let mut timestamps_array = [0_u16; ADC_SAMPLE_BUFFER_SIZE / 2];
+        let timestamps = adc_batch_timestamps(
             reference_frequency,
+            &mut timestamps_array,
             timestamp_start,
             timestamp_start + sample_count - 1,
             internal_frequency,
@@ -598,9 +599,7 @@ fn lowpass_test(
 
         let mut in_phase: [f32; ADC_SAMPLE_BUFFER_SIZE];
         let mut quadrature: [f32; ADC_SAMPLE_BUFFER_SIZE];
-        let lockin_demodulate =
-            lockin.demodulate(signal, timestamps, valid_timestamps as u16);
-        match lockin_demodulate {
+        match lockin.demodulate(&signal, timestamps) {
             Ok((i, q)) => {
                 in_phase = i;
                 quadrature = q;

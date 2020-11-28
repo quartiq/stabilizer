@@ -154,9 +154,6 @@ impl Lockin {
     /// * `timestamps` - Counter values corresponding to the edges of
     /// an external reference signal. The counter is incremented by a
     /// fast internal clock.
-    /// * `valid_timestamps` - The number of valid timestamps in
-    /// `timestamps`. Only `&timestamps[..valid_timestamps]` are used;
-    /// every other value in the `timestamps` array is ignored.
     ///
     /// # Returns
     ///
@@ -172,9 +169,8 @@ impl Lockin {
     /// at the end of the ADC batch sampling period.
     pub fn demodulate(
         &mut self,
-        adc_samples: [i16; ADC_SAMPLE_BUFFER_SIZE],
-        timestamps: [u16; TIMESTAMP_BUFFER_SIZE],
-        valid_timestamps: u16,
+        adc_samples: &[i16],
+        timestamps: &[u16],
     ) -> Result<
         ([f32; ADC_SAMPLE_BUFFER_SIZE], [f32; ADC_SAMPLE_BUFFER_SIZE]),
         &str,
@@ -195,7 +191,7 @@ impl Lockin {
         // record new timestamps
         timestamps
             .iter()
-            .take(valid_timestamps as usize)
+            .take(timestamps.len())
             .rev()
             .take(2)
             .rev()
@@ -449,11 +445,7 @@ mod tests {
             },
         );
         assert_eq!(
-            lockin.demodulate(
-                [0; ADC_SAMPLE_BUFFER_SIZE],
-                [0; TIMESTAMP_BUFFER_SIZE],
-                0
-            ),
+            lockin.demodulate(&[0; ADC_SAMPLE_BUFFER_SIZE], &[],),
             Err("insufficient timestamps")
         );
     }
@@ -472,11 +464,7 @@ mod tests {
             },
         );
         assert_eq!(
-            lockin.demodulate(
-                [0; ADC_SAMPLE_BUFFER_SIZE],
-                [0; TIMESTAMP_BUFFER_SIZE],
-                1
-            ),
+            lockin.demodulate(&[0; ADC_SAMPLE_BUFFER_SIZE], &[0],),
             Err("insufficient timestamps")
         );
     }
@@ -499,15 +487,9 @@ mod tests {
             [-8, 7, -7, 6, -6, 5, -5, 4, -4, 3, -3, 2, -2, -1, 1, 0];
         let reference_period: u16 = 2800;
         let initial_phase_integer: u16 = 200;
-        let timestamps: [u16; TIMESTAMP_BUFFER_SIZE] = [
+        let timestamps: &[u16] = &[
             initial_phase_integer,
             initial_phase_integer + reference_period,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
         ];
         let initial_phase: f32 =
             -(initial_phase_integer as f32) / reference_period as f32 * 2. * PI;
@@ -527,7 +509,7 @@ mod tests {
             *q = cosine * adc_samples[n] as f32;
         }
         let (result_in_phase, result_quadrature) =
-            lockin.demodulate(adc_samples, timestamps, 2).unwrap();
+            lockin.demodulate(&adc_samples, timestamps).unwrap();
         assert!(
             array_within_tolerance(&result_in_phase, &in_phase, 0., 1e-5),
             "\nin_phase computed: {:?},\nin_phase expected: {:?}",
