@@ -102,7 +102,7 @@ pub struct Lockin {
     sample_period: u32,
     harmonic: u32,
     timestamps: [Option<i32>; 2],
-    iir: [IIR; 2],
+    iir: IIR,
     iirstate: [IIRState; 2],
 }
 
@@ -118,9 +118,7 @@ impl Lockin {
     /// * `harmonic` - Integer scaling factor used to adjust the
     /// demodulation frequency. E.g., 2 would demodulate with the
     /// first harmonic.
-    /// * `iir` - IIR biquad filter. Two identical copies of this IIR
-    /// filter are used: one for the in-phase signal and the other for
-    /// the quadrature signal.
+    /// * `iir` - IIR biquad filter.
     ///
     /// # Returns
     ///
@@ -136,7 +134,7 @@ impl Lockin {
             sample_period: sample_period,
             harmonic: harmonic,
             timestamps: [None, None],
-            iir: [iir, iir],
+            iir: iir,
             iirstate: [[0.; 5]; 2],
         }
     }
@@ -236,8 +234,8 @@ impl Lockin {
             .iter_mut()
             .zip(quadrature.iter_mut())
             .for_each(|(i, q)| {
-                *i = self.iir[0].update(&mut self.iirstate[0], *i);
-                *q = self.iir[1].update(&mut self.iirstate[1], *q);
+                *i = self.iir.update(&mut self.iirstate[0], *i);
+                *q = self.iir.update(&mut self.iirstate[1], *q);
             });
     }
 }
