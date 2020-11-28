@@ -67,10 +67,6 @@ use core::f32::consts::PI;
 
 /// The number of ADC samples in one batch.
 pub const ADC_SAMPLE_BUFFER_SIZE: usize = 16;
-/// The maximum number of timestamps in the period for one ADC
-/// batch. Each timestamp corresponds to the time of an external
-/// reference clock edge.
-pub const TIMESTAMP_BUFFER_SIZE: usize = ADC_SAMPLE_BUFFER_SIZE / 2;
 /// The number of outputs sent to the DAC for each ADC batch.
 pub const DECIMATED_BUFFER_SIZE: usize = 1;
 
