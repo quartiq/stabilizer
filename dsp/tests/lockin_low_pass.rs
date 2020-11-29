@@ -1,3 +1,4 @@
+use dsp::complex::Complex;
 use dsp::iir::IIR;
 use dsp::lockin::{
     decimate, magnitude_phase, Lockin, ADC_SAMPLE_BUFFER_SIZE,
@@ -582,7 +583,7 @@ fn lowpass_test(
     pure_signals.push(desired_input);
 
     for n in 0..(samples + extra_samples) {
-        let signal: [i16; ADC_SAMPLE_BUFFER_SIZE] = adc_sampled_signal(
+        let adc_signal: [i16; ADC_SAMPLE_BUFFER_SIZE] = adc_sampled_signal(
             &pure_signals,
             timestamp_start,
             internal_frequency,
@@ -597,33 +598,31 @@ fn lowpass_test(
             internal_frequency,
         );
 
-        let mut in_phase: [f32; ADC_SAMPLE_BUFFER_SIZE];
-        let mut quadrature: [f32; ADC_SAMPLE_BUFFER_SIZE];
-        match lockin.demodulate(&signal, timestamps) {
-            Ok((i, q)) => {
-                in_phase = i;
-                quadrature = q;
+        let mut signal: [Complex; ADC_SAMPLE_BUFFER_SIZE];
+        match lockin.demodulate(&adc_signal, timestamps) {
+            Ok(s) => {
+                signal = s;
             }
             Err(_) => {
                 continue;
             }
         }
 
-        lockin.filter(&mut in_phase, &mut quadrature);
-        let (in_phase_decimated, quadrature_decimated) =
-            decimate(in_phase, quadrature);
+        lockin.filter(&mut signal);
+        let signal_decimated = decimate(signal);
 
-        let mut magnitude_decimated = in_phase_decimated.clone();
-        let mut phase_decimated = quadrature_decimated.clone();
+        let mut magnitude_phase_decimated = signal.clone();
+        // let mut magnitude_decimated = in_phase_decimated.clone();
+        // let mut phase_decimated = quadrature_decimated.clone();
 
-        magnitude_phase(&mut magnitude_decimated, &mut phase_decimated);
+        magnitude_phase(&mut magnitude_phase_decimated);
 
         // Ensure stable within tolerance for 1 time constant after
         // `time_constant_factor`.
         if n >= samples {
             for k in 0..DECIMATED_BUFFER_SIZE {
                 let amplitude_normalized: f32 =
-                    magnitude_decimated[k] / ADC_MAX_COUNT as f32;
+                    magnitude_phase_decimated[k].re / ADC_MAX_COUNT as f32;
                 assert!(
                     tolerance_check(linear(desired_input.amplitude_dbfs) as f32, amplitude_normalized, total_magnitude_noise as f32, tolerance),
                     "magnitude actual: {:.4} ({:.2} dBFS), magnitude computed: {:.4} ({:.2} dBFS), tolerance: {:.4}",
@@ -636,13 +635,13 @@ fn lowpass_test(
                 assert!(
                     tolerance_check(
                         effective_phase_offset as f32,
-                        phase_decimated[k],
+                        magnitude_phase_decimated[k].im,
                         total_phase_noise as f32,
                         tolerance
                     ),
                     "phase actual: {:.4}, phase computed: {:.4}, tolerance: {:.4}",
                     effective_phase_offset as f32,
-                    phase_decimated[k],
+                    magnitude_phase_decimated[k].im,
                     max_error(
                         effective_phase_offset as f32,
                         total_phase_noise as f32,
@@ -651,9 +650,9 @@ fn lowpass_test(
                 );
 
                 let in_phase_normalized: f32 =
-                    in_phase_decimated[k] / ADC_MAX_COUNT as f32;
+                    signal_decimated[k].re / ADC_MAX_COUNT as f32;
                 let quadrature_normalized: f32 =
-                    quadrature_decimated[k] / ADC_MAX_COUNT as f32;
+                    signal_decimated[k].im / ADC_MAX_COUNT as f32;
                 assert!(
                     tolerance_check(
                         in_phase_actual as f32,
