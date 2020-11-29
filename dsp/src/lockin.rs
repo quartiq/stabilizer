@@ -52,8 +52,8 @@
 //! the demodulation frequency. This does not require any state
 //! information and is therefore a normal function.
 
-use super::complex::Complex;
 use super::iir::{IIRState, IIR};
+use super::Complex;
 use core::f32::consts::PI;
 
 /// The number of ADC samples in one batch.
@@ -155,7 +155,7 @@ impl Lockin {
         &mut self,
         adc_samples: &[i16],
         timestamps: &[u16],
-    ) -> Result<[Complex; ADC_SAMPLE_BUFFER_SIZE], &str> {
+    ) -> Result<[Complex<f32>; ADC_SAMPLE_BUFFER_SIZE], &str> {
         // update old timestamps for new ADC batch
         let sample_period = self.sample_period as i32;
         self.timestamps.iter_mut().for_each(|t| match *t {
@@ -187,7 +187,7 @@ impl Lockin {
         // compute ADC sample phases, sines/cosines and demodulate
         let reference_period =
             self.timestamps[0].unwrap() - self.timestamps[1].unwrap();
-        let mut signal = [Complex::new(0., 0.); ADC_SAMPLE_BUFFER_SIZE];
+        let mut signal = [(0., 0.); ADC_SAMPLE_BUFFER_SIZE];
         signal
             .iter_mut()
             .zip(adc_samples.iter())
@@ -200,8 +200,8 @@ impl Lockin {
                     + 2. * PI * integer_phase as f32 / reference_period as f32;
                 let (sine, cosine) = libm::sincosf(phase);
                 let sample = *sample as f32;
-                s.re = sine * sample;
-                s.im = cosine * sample;
+                s.0 = sine * sample;
+                s.1 = cosine * sample;
             });
 
         Ok(signal)
@@ -213,10 +213,10 @@ impl Lockin {
     /// # Arguments
     ///
     /// * `signal` - Complex signal to filter.
-    pub fn filter(&mut self, signal: &mut [Complex]) {
+    pub fn filter(&mut self, signal: &mut [Complex<f32>]) {
         signal.iter_mut().for_each(|s| {
-            s.re = self.iir.update(&mut self.iirstate[0], s.re);
-            s.im = self.iir.update(&mut self.iirstate[1], s.im);
+            s.0 = self.iir.update(&mut self.iirstate[0], s.0);
+            s.1 = self.iir.update(&mut self.iirstate[1], s.1);
         });
     }
 }
@@ -233,21 +233,21 @@ impl Lockin {
 ///
 /// The decimated signal.
 pub fn decimate(
-    signal: [Complex; ADC_SAMPLE_BUFFER_SIZE],
-) -> [Complex; DECIMATED_BUFFER_SIZE] {
+    signal: [Complex<f32>; ADC_SAMPLE_BUFFER_SIZE],
+) -> [Complex<f32>; DECIMATED_BUFFER_SIZE] {
     let n_k = ADC_SAMPLE_BUFFER_SIZE / DECIMATED_BUFFER_SIZE;
     debug_assert!(
         ADC_SAMPLE_BUFFER_SIZE == DECIMATED_BUFFER_SIZE || n_k % 2 == 0
     );
 
-    let mut signal_decimated = [Complex::new(0., 0.); DECIMATED_BUFFER_SIZE];
+    let mut signal_decimated = [(0_f32, 0_f32); DECIMATED_BUFFER_SIZE];
 
     signal_decimated
         .iter_mut()
         .zip(signal.iter().step_by(n_k))
         .for_each(|(s_d, s)| {
-            s_d.re = s.re;
-            s_d.im = s.im;
+            s_d.0 = s.0;
+            s_d.1 = s.1;
         });
 
     signal_decimated
@@ -259,12 +259,12 @@ pub fn decimate(
 /// # Arguments
 ///
 /// * `signal` - Complex signal to decimate.
-pub fn magnitude_phase(signal: &mut [Complex]) {
+pub fn magnitude_phase(signal: &mut [Complex<f32>]) {
     signal.iter_mut().for_each(|s| {
-        let new_i = s.abs();
-        let new_q = s.arg();
-        s.re = new_i;
-        s.im = new_q;
+        let new_i = libm::sqrtf([s.0, s.1].iter().map(|i| i * i).sum());
+        let new_q = libm::atan2f(s.1, s.0);
+        s.0 = new_i;
+        s.1 = new_q;
     });
 }
 
@@ -276,11 +276,11 @@ mod tests {
         (a - b).abs() <= a.abs().max(b.abs()) * f32::EPSILON
     }
 
-    fn complex_is_close(a: Complex, b: Complex) -> bool {
-        f32_is_close(a.re, b.re) && f32_is_close(a.im, b.im)
+    fn complex_is_close(a: Complex<f32>, b: Complex<f32>) -> bool {
+        f32_is_close(a.0, b.0) && f32_is_close(a.1, b.1)
     }
 
-    fn complex_array_is_close(a: &[Complex], b: &[Complex]) -> bool {
+    fn complex_array_is_close(a: &[Complex<f32>], b: &[Complex<f32>]) -> bool {
         let mut result: bool = true;
         a.iter().zip(b.iter()).for_each(|(i, j)| {
             result &= complex_is_close(*i, *j);
@@ -299,18 +299,18 @@ mod tests {
     }
 
     fn complex_within_tolerance(
-        a: Complex,
-        b: Complex,
+        a: Complex<f32>,
+        b: Complex<f32>,
         relative_tolerance: f32,
         fixed_tolerance: f32,
     ) -> bool {
-        within_tolerance(a.re, b.re, relative_tolerance, fixed_tolerance)
-            && within_tolerance(a.im, b.im, relative_tolerance, fixed_tolerance)
+        within_tolerance(a.0, b.0, relative_tolerance, fixed_tolerance)
+            && within_tolerance(a.1, b.1, relative_tolerance, fixed_tolerance)
     }
 
     fn complex_array_within_tolerance(
-        a: &[Complex],
-        b: &[Complex],
+        a: &[Complex<f32>],
+        b: &[Complex<f32>],
         relative_tolerance: f32,
         fixed_tolerance: f32,
     ) -> bool {
@@ -339,93 +339,81 @@ mod tests {
 
     #[test]
     fn magnitude_phase_length_1_quadrant_1() {
-        let mut signal: [Complex; 1] = [Complex::new(1., 1.)];
+        let mut signal: [Complex<f32>; 1] = [(1., 1.)];
         magnitude_phase(&mut signal);
-        assert!(complex_array_is_close(
-            &signal,
-            &[Complex::new(2_f32.sqrt(), PI / 4.)]
-        ));
+        assert!(complex_array_is_close(&signal, &[(2_f32.sqrt(), PI / 4.)]));
 
-        signal = [Complex::new(3_f32.sqrt() / 2., 1. / 2.)];
+        signal = [(3_f32.sqrt() / 2., 1. / 2.)];
         magnitude_phase(&mut signal);
-        assert!(complex_array_is_close(
-            &signal,
-            &[Complex::new(1., PI / 6.)]
-        ));
+        assert!(complex_array_is_close(&signal, &[(1., PI / 6.)]));
     }
 
     #[test]
     fn magnitude_phase_length_1_quadrant_2() {
-        let mut signal = [Complex::new(-1., 1.)];
+        let mut signal = [(-1., 1.)];
         magnitude_phase(&mut signal);
         assert!(complex_array_is_close(
             &signal,
-            &[Complex::new(2_f32.sqrt(), 3. * PI / 4.)]
+            &[(2_f32.sqrt(), 3. * PI / 4.)]
         ));
 
-        signal = [Complex::new(-1. / 2., 3_f32.sqrt() / 2.)];
+        signal = [(-1. / 2., 3_f32.sqrt() / 2.)];
         magnitude_phase(&mut signal);
-        assert!(complex_array_is_close(
-            &signal,
-            &[Complex::new(1_f32, 2. * PI / 3.)]
-        ));
+        assert!(complex_array_is_close(&signal, &[(1_f32, 2. * PI / 3.)]));
     }
 
     #[test]
     fn magnitude_phase_length_1_quadrant_3() {
-        let mut signal = [Complex::new(-1. / 2_f32.sqrt(), -1. / 2_f32.sqrt())];
+        let mut signal = [(-1. / 2_f32.sqrt(), -1. / 2_f32.sqrt())];
         magnitude_phase(&mut signal);
         assert!(complex_array_is_close(
             &signal,
-            &[Complex::new(1_f32.sqrt(), -3. * PI / 4.)]
+            &[(1_f32.sqrt(), -3. * PI / 4.)]
         ));
 
-        signal = [Complex::new(-1. / 2., -2_f32.sqrt())];
+        signal = [(-1. / 2., -2_f32.sqrt())];
         magnitude_phase(&mut signal);
         assert!(complex_array_is_close(
             &signal,
-            &[Complex::new((3. / 2.) as f32, -1.91063323625 as f32)]
+            &[((3. / 2.) as f32, -1.91063323625 as f32)]
         ));
     }
 
     #[test]
     fn magnitude_phase_length_1_quadrant_4() {
-        let mut signal = [Complex::new(1. / 2_f32.sqrt(), -1. / 2_f32.sqrt())];
+        let mut signal = [(1. / 2_f32.sqrt(), -1. / 2_f32.sqrt())];
         magnitude_phase(&mut signal);
         assert!(complex_array_is_close(
             &signal,
-            &[Complex::new(1_f32.sqrt(), -1. * PI / 4.)]
+            &[(1_f32.sqrt(), -1. * PI / 4.)]
         ));
 
-        signal = [Complex::new(3_f32.sqrt() / 2., -1. / 2.)];
+        signal = [(3_f32.sqrt() / 2., -1. / 2.)];
         magnitude_phase(&mut signal);
-        assert!(complex_array_is_close(
-            &signal,
-            &[Complex::new(1_f32, -PI / 6.)]
-        ));
+        assert!(complex_array_is_close(&signal, &[(1_f32, -PI / 6.)]));
     }
 
     #[test]
     fn decimate_sample_16_decimated_1() {
-        let signal: [Complex; ADC_SAMPLE_BUFFER_SIZE] = [
-            Complex::new(0.0, 1.6),
-            Complex::new(0.1, 1.7),
-            Complex::new(0.2, 1.8),
-            Complex::new(0.3, 1.9),
-            Complex::new(0.4, 2.0),
-            Complex::new(0.5, 2.1),
-            Complex::new(0.6, 2.2),
-            Complex::new(0.7, 2.3),
-            Complex::new(0.8, 2.4),
-            Complex::new(0.9, 2.5),
-            Complex::new(1.0, 2.6),
-            Complex::new(1.1, 2.7),
-            Complex::new(1.2, 2.8),
-            Complex::new(1.3, 2.9),
-            Complex::new(1.4, 3.0),
-            Complex::new(1.5, 3.1),
+        let signal: [Complex<f32>; ADC_SAMPLE_BUFFER_SIZE] = [
+            (0.0, 1.6),
+            (0.1, 1.7),
+            (0.2, 1.8),
+            (0.3, 1.9),
+            (0.4, 2.0),
+            (0.5, 2.1),
+            (0.6, 2.2),
+            (0.7, 2.3),
+            (0.8, 2.4),
+            (0.9, 2.5),
+            (1.0, 2.6),
+            (1.1, 2.7),
+            (1.2, 2.8),
+            (1.3, 2.9),
+            (1.4, 3.0),
+            (1.5, 3.1),
         ];
-        assert_eq!(decimate(signal), [Complex::new(0.0, 1.6)]);
+        assert_eq!(decimate(signal), [(0.0, 1.6)]);
     }
 
     #[test]
@@ -492,13 +480,13 @@ mod tests {
             -(initial_phase_integer as f32) / reference_period as f32 * 2. * PI;
         let phase_increment: f32 =
             adc_period as f32 / reference_period as f32 * 2. * PI;
-        let mut signal = [Complex::new(0., 0.); ADC_SAMPLE_BUFFER_SIZE];
+        let mut signal = [(0., 0.); ADC_SAMPLE_BUFFER_SIZE];
         for (n, s) in signal.iter_mut().enumerate() {
             let adc_phase = initial_phase + n as f32 * phase_increment;
             let sine = adc_phase.sin();
             let cosine = adc_phase.cos();
-            s.re = sine * adc_samples[n] as f32;
-            s.im = cosine * adc_samples[n] as f32;
+            s.0 = sine * adc_samples[n] as f32;
+            s.1 = cosine * adc_samples[n] as f32;
         }
         let result = lockin.demodulate(&adc_samples, timestamps).unwrap();
         assert!(

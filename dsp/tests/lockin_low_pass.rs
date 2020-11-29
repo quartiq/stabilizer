@@ -1,9 +1,9 @@
-use dsp::complex::Complex;
 use dsp::iir::IIR;
 use dsp::lockin::{
     decimate, magnitude_phase, Lockin, ADC_SAMPLE_BUFFER_SIZE,
     DECIMATED_BUFFER_SIZE,
 };
+use dsp::Complex;
 
 use std::f64::consts::PI;
 use std::vec::Vec;
@@ -598,7 +598,7 @@ fn lowpass_test(
             internal_frequency,
         );
 
-        let mut signal: [Complex; ADC_SAMPLE_BUFFER_SIZE];
+        let mut signal: [Complex<f32>; ADC_SAMPLE_BUFFER_SIZE];
         match lockin.demodulate(&adc_signal, timestamps) {
             Ok(s) => {
                 signal = s;
@@ -622,7 +622,7 @@ fn lowpass_test(
         if n >= samples {
             for k in 0..DECIMATED_BUFFER_SIZE {
                 let amplitude_normalized: f32 =
-                    magnitude_phase_decimated[k].re / ADC_MAX_COUNT as f32;
+                    magnitude_phase_decimated[k].0 / ADC_MAX_COUNT as f32;
                 assert!(
                     tolerance_check(linear(desired_input.amplitude_dbfs) as f32, amplitude_normalized, total_magnitude_noise as f32, tolerance),
                     "magnitude actual: {:.4} ({:.2} dBFS), magnitude computed: {:.4} ({:.2} dBFS), tolerance: {:.4}",
@@ -635,13 +635,13 @@ fn lowpass_test(
                 assert!(
                     tolerance_check(
                         effective_phase_offset as f32,
-                        magnitude_phase_decimated[k].im,
+                        magnitude_phase_decimated[k].1,
                         total_phase_noise as f32,
                         tolerance
                     ),
                     "phase actual: {:.4}, phase computed: {:.4}, tolerance: {:.4}",
                     effective_phase_offset as f32,
-                    magnitude_phase_decimated[k].im,
+                    magnitude_phase_decimated[k].1,
                     max_error(
                         effective_phase_offset as f32,
                         total_phase_noise as f32,
@@ -650,9 +650,9 @@ fn lowpass_test(
                 );
 
                 let in_phase_normalized: f32 =
-                    signal_decimated[k].re / ADC_MAX_COUNT as f32;
+                    signal_decimated[k].0 / ADC_MAX_COUNT as f32;
                 let quadrature_normalized: f32 =
-                    signal_decimated[k].im / ADC_MAX_COUNT as f32;
+                    signal_decimated[k].1 / ADC_MAX_COUNT as f32;
                 assert!(
                     tolerance_check(
                         in_phase_actual as f32,
