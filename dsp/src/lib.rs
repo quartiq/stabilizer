@@ -5,3 +5,6 @@ pub type Complex<T> = (T, T);
 pub mod iir;
 pub mod lockin;
 pub mod pll;
+
+#[cfg(test)]
+mod testing;

@@ -271,60 +271,9 @@ pub fn magnitude_phase(signal: &mut [Complex<f32>]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn f32_is_close(a: f32, b: f32) -> bool {
-        (a - b).abs() <= a.abs().max(b.abs()) * f32::EPSILON
-    }
-
-    fn complex_is_close(a: Complex<f32>, b: Complex<f32>) -> bool {
-        f32_is_close(a.0, b.0) && f32_is_close(a.1, b.1)
-    }
-
-    fn complex_array_is_close(a: &[Complex<f32>], b: &[Complex<f32>]) -> bool {
-        let mut result: bool = true;
-        a.iter().zip(b.iter()).for_each(|(i, j)| {
-            result &= complex_is_close(*i, *j);
-        });
-        result
-    }
-
-    fn within_tolerance(
-        a: f32,
-        b: f32,
-        relative_tolerance: f32,
-        fixed_tolerance: f32,
-    ) -> bool {
-        (a - b).abs()
-            <= a.abs().max(b.abs()) * relative_tolerance + fixed_tolerance
-    }
-
-    fn complex_within_tolerance(
-        a: Complex<f32>,
-        b: Complex<f32>,
-        relative_tolerance: f32,
-        fixed_tolerance: f32,
-    ) -> bool {
-        within_tolerance(a.0, b.0, relative_tolerance, fixed_tolerance)
-            && within_tolerance(a.1, b.1, relative_tolerance, fixed_tolerance)
-    }
-
-    fn complex_array_within_tolerance(
-        a: &[Complex<f32>],
-        b: &[Complex<f32>],
-        relative_tolerance: f32,
-        fixed_tolerance: f32,
-    ) -> bool {
-        let mut result: bool = true;
-        a.iter().zip(b.iter()).for_each(|(i, j)| {
-            result &= complex_within_tolerance(
-                *i,
-                *j,
-                relative_tolerance,
-                fixed_tolerance,
-            );
-        });
-        result
-    }
+    use crate::testing::{
+        complex_array_is_close, complex_array_within_tolerance,
+    };
 
     #[test]
     fn array_push() {
