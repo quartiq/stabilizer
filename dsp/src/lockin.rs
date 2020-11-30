@@ -156,8 +156,8 @@ impl Lockin {
         adc_samples: &[i16],
         timestamps: &[u16],
     ) -> Result<[Complex<f32>; ADC_SAMPLE_BUFFER_SIZE], &str> {
-        // update old timestamps for new ADC batch
         let sample_period = self.sample_period as i32;
+        // update old timestamps for new ADC batch
         self.timestamps.iter_mut().for_each(|t| match *t {
             Some(timestamp) => {
                 // Existing timestamps have aged by one ADC batch
@@ -169,32 +169,66 @@ impl Lockin {
             None => (),
         });
 
-        // record new timestamps
-        timestamps
-            .iter()
-            .take(timestamps.len())
-            .rev()
-            .take(2)
-            .rev()
-            .for_each(|t| self.timestamps.push(Some(*t as i32)));
-
         // return prematurely if there aren't enough timestamps for
         // processing
-        if self.timestamps.iter().filter(|t| t.is_some()).count() < 2 {
+        let old_timestamp_count =
+            self.timestamps.iter().filter(|t| t.is_some()).count();
+        if old_timestamp_count + timestamps.len() < 2 {
             return Err("insufficient timestamps");
         }
 
-        // compute ADC sample phases, sines/cosines and demodulate
-        let reference_period =
-            self.timestamps[0].unwrap() - self.timestamps[1].unwrap();
         let mut signal = [(0., 0.); ADC_SAMPLE_BUFFER_SIZE];
+        // if we have not yet recorded any timestamps, the first
+        // reference period must be computed from the first and
+        // second timestamps in the array
+        let mut timestamp_index: usize =
+            if old_timestamp_count == 0 { 1 } else { 0 };
+
+        // compute ADC sample phases, sines/cosines and demodulate
         signal
             .iter_mut()
             .zip(adc_samples.iter())
             .enumerate()
-            .for_each(|(n, (s, sample))| {
-                let integer_phase: i32 = (n as i32 * self.sample_period as i32
-                    - self.timestamps[0].unwrap())
+            .for_each(|(i, (s, sample))| {
+                let adc_sample_count = i as i32 * sample_period;
+                // index of the closest timestamp that occurred after
+                // the current ADC sample
+                let closest_timestamp_after_index: i32 = if timestamps.len() > 0
+                {
+                    // Linear search is fast because both the timestamps
+                    // and ADC sample counts are sorted. Because of this,
+                    // we only need to check timestamps that were also
+                    // greater than the last ADC sample count.
+                    while timestamp_index < timestamps.len() - 1
+                        && (timestamps[timestamp_index] as i32)
+                            < adc_sample_count
+                    {
+                        timestamp_index += 1;
+                    }
+                    timestamp_index as i32
+                } else {
+                    -1
+                };
+
+                // closest timestamp that occurred before to the
+                // current ADC sample
+                let closest_timestamp_before: i32;
+                let reference_period = if closest_timestamp_after_index < 0 {
+                    closest_timestamp_before = self.timestamps[0].unwrap();
+                    closest_timestamp_before - self.timestamps[1].unwrap()
+                } else if closest_timestamp_after_index == 0 {
+                    closest_timestamp_before = self.timestamps[0].unwrap();
+                    timestamps[0] as i32 - closest_timestamp_before
+                } else {
+                    closest_timestamp_before = timestamps
+                        [(closest_timestamp_after_index - 1) as usize]
+                        as i32;
+                    timestamps[closest_timestamp_after_index as usize] as i32
+                        - closest_timestamp_before
+                };
+
+                let integer_phase: i32 = (adc_sample_count
+                    - closest_timestamp_before)
                     * self.harmonic as i32;
                 let phase = self.phase_offset
                     + 2. * PI * integer_phase as f32 / reference_period as f32;
@@ -203,6 +237,16 @@ impl Lockin {
                 s.0 = sine * sample;
                 s.1 = cosine * sample;
             });
+
+        // record new timestamps
+        let start_index: usize = if timestamps.len() < 2 {
+            0
+        } else {
+            timestamps.len() - 2
+        };
+        timestamps[start_index..]
+            .iter()
+            .for_each(|t| self.timestamps.push(Some(*t as i32)));
 
         Ok(signal)
     }
