@@ -763,9 +763,6 @@ const APP: () = {
                 dac_samples[channel][sample] = y as i16 as u16 ^ 0x8000;
             }
         }
-        let [adc0, adc1] = adc_samples;
-        c.resources.adcs.0.release_buffer(adc0);
-        c.resources.adcs.0.release_buffer(adc1);
         let [dac0, dac1] = dac_samples;
         c.resources.dacs.0.release_buffer(dac0);
         c.resources.dacs.1.release_buffer(dac1);
