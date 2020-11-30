@@ -207,7 +207,7 @@ impl Dac0Output {
         } else {
             // Note: If a device hangs up, check that this conditional is passing correctly, as
             // there is no time-out checks here in the interest of execution speed.
-            while self.transfer.get_transfer_complete_flag() == false {}
+            while !self.transfer.get_transfer_complete_flag() {}
         }
 
         // Start the next transfer.
@@ -303,7 +303,7 @@ impl Dac1Output {
         } else {
             // Note: If a device hangs up, check that this conditional is passing correctly, as
             // there is no time-out checks here in the interest of execution speed.
-            while self.transfer.get_transfer_complete_flag() == false {}
+            while !self.transfer.get_transfer_complete_flag() {}
         }
 
         // Start the next transfer.

@@ -89,7 +89,7 @@ impl Response {
     /// Args:
     /// * `attrbute` - The attribute of the success.
     /// * `value` - The value of the attribute.
-    pub fn success<'a, 'b>(attribute: &'a str, value: &'b str) -> Self {
+    pub fn success(attribute: &str, value: &str) -> Self {
         let mut res = Self {
             code: 200,
             attribute: String::from(attribute),
@@ -106,7 +106,7 @@ impl Response {
     /// Args:
     /// * `attrbute` - The attribute of the success.
     /// * `message` - The message denoting the error.
-    pub fn error<'a, 'b>(attribute: &'a str, message: &'b str) -> Self {
+    pub fn error(attribute: &str, message: &str) -> Self {
         let mut res = Self {
             code: 400,
             attribute: String::from(attribute),
@@ -123,7 +123,7 @@ impl Response {
     /// Args:
     /// * `attrbute` - The attribute of the success.
     /// * `message` - The message denoting the status.
-    pub fn custom<'a>(code: i32, message: &'a str) -> Self {
+    pub fn custom(code: i32, message: &str) -> Self {
         let mut res = Self {
             code,
             attribute: String::from(""),

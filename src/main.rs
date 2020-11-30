@@ -140,6 +140,7 @@ macro_rules! route_request {
                 match $request.attribute {
                 $(
                     $read_attribute => {
+                        #[allow(clippy::redundant_closure_call)]
                         let value = match $getter() {
                             Ok(data) => data,
                             Err(_) => return server::Response::error($request.attribute,
@@ -168,6 +169,7 @@ macro_rules! route_request {
                                     "Failed to decode value"),
                         };
 
+                        #[allow(clippy::redundant_closure_call)]
                         match $setter(new_value) {
                             Ok(_) => server::Response::success($request.attribute, &$request.value),
                             Err(_) => server::Response::error($request.attribute,
@@ -678,7 +680,7 @@ const APP: () = {
                     dp.ETHERNET_MTL,
                     dp.ETHERNET_DMA,
                     &mut DES_RING,
-                    mac_addr.clone(),
+                    mac_addr,
                     ccdr.peripheral.ETH1MAC,
                     &ccdr.clocks,
                 )
@@ -729,8 +731,8 @@ const APP: () = {
         sampling_timer.start();
 
         init::LateResources {
-            afe0: afe0,
-            afe1: afe1,
+            afe0,
+            afe1,
 
             adcs,
             dacs,
@@ -928,10 +930,12 @@ const APP: () = {
                                     }
                                 }),
                                 "stabilizer/afe0/gain": afe::Gain, (|gain| {
-                                    Ok::<(), ()>(c.resources.afe0.set_gain(gain))
+                                    c.resources.afe0.set_gain(gain);
+                                    Ok::<(), ()>(())
                                 }),
                                 "stabilizer/afe1/gain": afe::Gain, (|gain| {
-                                    Ok::<(), ()>(c.resources.afe1.set_gain(gain))
+                                    c.resources.afe1.set_gain(gain);
+                                    Ok::<(), ()>(())
                                 })
                             ]
                         )
@@ -943,7 +947,7 @@ const APP: () = {
                 &mut sockets,
                 net::time::Instant::from_millis(time as i64),
             ) {
-                Ok(changed) => changed == false,
+                Ok(changed) => !changed,
                 Err(net::Error::Unrecognized) => true,
                 Err(e) => {
                     info!("iface poll error: {:?}", e);
