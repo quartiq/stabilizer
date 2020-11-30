@@ -27,7 +27,7 @@ static mut SPI_START: [u16; 1] = [0x00];
 // The following global buffers are used for the ADC sample DMA transfers. Two buffers are used for
 // each transfer in a ping-pong buffer configuration (one is being acquired while the other is being
 // processed). Note that the contents of AXI SRAM is uninitialized, so the buffer contents on
-// startup are undefined. The dimension are `ADC_BUF[adc_index][ping_pong_index][sample_index]`.
+// startup are undefined. The dimensions are `ADC_BUF[adc_index][ping_pong_index][sample_index]`.
 #[link_section = ".axisram.buffers"]
 static mut ADC_BUF: [[[u16; SAMPLE_BUFFER_SIZE]; 2]; 2] =
     [[[0; SAMPLE_BUFFER_SIZE]; 2]; 2];
@@ -35,7 +35,7 @@ static mut ADC_BUF: [[[u16; SAMPLE_BUFFER_SIZE]; 2]; 2] =
 macro_rules! adc_input {
     ($name:ident, $index:literal, $trigger_stream:ident, $data_stream:ident,
      $spi:ident, $trigger_channel:ident, $dma_req:ident) => {
-        /// $spi is used as a ZST (zero-sized type) for indicating a DMA transfer into the SPI TX FIFO
+        /// $spi is used as a type for indicating a DMA transfer into the SPI TX FIFO
         /// whenever the tim2 update dma request occurs.
         struct $spi {
             _channel: sampling_timer::tim2::$trigger_channel,

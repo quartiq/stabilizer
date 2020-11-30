@@ -11,7 +11,7 @@ use super::{
 // The following global buffers are used for the DAC code DMA transfers. Two buffers are used for
 // each transfer in a ping-pong buffer configuration (one is being prepared while the other is being
 // processed). Note that the contents of AXI SRAM is uninitialized, so the buffer contents on
-// startup are undefined. The dimension are `ADC_BUF[adc_index][ping_pong_index][sample_index]`.
+// startup are undefined. The dimensions are `ADC_BUF[adc_index][ping_pong_index][sample_index]`.
 #[link_section = ".axisram.buffers"]
 static mut DAC_BUF: [[[u16; SAMPLE_BUFFER_SIZE]; 2]; 2] =
     [[[0; SAMPLE_BUFFER_SIZE]; 2]; 2];
