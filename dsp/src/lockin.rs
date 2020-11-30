@@ -210,8 +210,8 @@ impl Lockin {
                     -1
                 };
 
-                // closest timestamp that occurred before to the
-                // current ADC sample
+                // closest timestamp that occurred before the current
+                // ADC sample
                 let closest_timestamp_before: i32;
                 let reference_period = if closest_timestamp_after_index < 0 {
                     closest_timestamp_before = self.timestamps[0].unwrap();
