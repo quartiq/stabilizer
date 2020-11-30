@@ -2,8 +2,14 @@
 runner = "gdb-multiarch -q -x openocd.gdb"
 rustflags = [
     "-C", "link-arg=-Tlink.x",
+# The target (below) defaults to cortex-m4
+# There currently are two different options to go beyond that:
+# 1. cortex-m7 has the right flags and instructions (FPU) but no instruction schedule yet
     "-C", "target-cpu=cortex-m7",
+# 2. cortex-m4 with the additional fpv5 instructions and a potentially
+# better-than-nothing instruction schedule
     "-C", "target-feature=+fp-armv8d16",
+# When combined they are equivalent to (1) alone
 ]
 
 [build]
