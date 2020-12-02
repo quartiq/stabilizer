@@ -24,14 +24,24 @@ static mut DAC1_BUF0: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
 #[link_section = ".axisram.buffers"]
 static mut DAC1_BUF1: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
 
-/// SPI4 is used as a ZST (zero-sized type) for indicating a DMA transfer into the SPI4 TX FIFO
-struct SPI4 {}
+/// SPI4 is used as a type for indicating a DMA transfer into the SPI4 TX FIFO
+struct SPI4 {
+    spi: hal::spi::Spi<hal::stm32::SPI4, hal::spi::Disabled, u16>,
+    _channel: sampling_timer::tim2::Channel3,
+}
+
 impl SPI4 {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(
+        _channel: sampling_timer::tim2::Channel3,
+        spi: hal::spi::Spi<hal::stm32::SPI4, hal::spi::Disabled, u16>,
+    ) -> Self {
+        Self { _channel, spi }
     }
 }
 
+// Note(unsafe): This is safe because the DMA request line is logically owned by this module.
+// Additionally, the SPI is owned by this structure and is known to be configured for u16 word
+// sizes.
 unsafe impl TargetAddress<MemoryToPeripheral> for SPI4 {
     /// SPI2 is configured to operate using 16-bit transfer words.
     type MemSize = u16;
@@ -41,19 +51,28 @@ unsafe impl TargetAddress<MemoryToPeripheral> for SPI4 {
 
     /// Whenever the DMA request occurs, it should write into SPI4's TX FIFO.
     fn address(&self) -> u32 {
-        let regs = unsafe { &*hal::stm32::SPI4::ptr() };
-        &regs.txdr as *const _ as u32
+        &self.spi.inner().txdr as *const _ as u32
     }
 }
 
 /// SPI5 is used as a ZST (zero-sized type) for indicating a DMA transfer into the SPI5 TX FIFO
-struct SPI5 {}
+struct SPI5 {
+    _channel: sampling_timer::tim2::Channel4,
+    spi: hal::spi::Spi<hal::stm32::SPI5, hal::spi::Disabled, u16>,
+}
+
 impl SPI5 {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(
+        _channel: sampling_timer::tim2::Channel4,
+        spi: hal::spi::Spi<hal::stm32::SPI5, hal::spi::Disabled, u16>,
+    ) -> Self {
+        Self { _channel, spi }
     }
 }
 
+// Note(unsafe): This is safe because the DMA request line is logically owned by this module.
+// Additionally, the SPI is owned by this structure and is known to be configured for u16 word
+// sizes.
 unsafe impl TargetAddress<MemoryToPeripheral> for SPI5 {
     /// SPI5 is configured to operate using 16-bit transfer words.
     type MemSize = u16;
@@ -63,8 +82,7 @@ unsafe impl TargetAddress<MemoryToPeripheral> for SPI5 {
 
     /// Whenever the DMA request occurs, it should write into SPI5's TX FIFO
     fn address(&self) -> u32 {
-        let regs = unsafe { &*hal::stm32::SPI5::ptr() };
-        &regs.txdr as *const _ as u32
+        &self.spi.inner().txdr as *const _ as u32
     }
 }
 
@@ -80,25 +98,35 @@ impl DacOutputs {
         Self { dac0, dac1 }
     }
 
+    /// Borrow the next DAC output buffers to populate the DAC output codes in-place.
+    ///
+    /// # Returns
+    /// (dac0, dac1) where each value is a mutable reference to the output code array for DAC0 and
+    /// DAC1 respectively.
+    pub fn prepare_data(
+        &mut self,
+    ) -> (
+        &mut [u16; SAMPLE_BUFFER_SIZE],
+        &mut [u16; SAMPLE_BUFFER_SIZE],
+    ) {
+        (self.dac0.prepare_buffer(), self.dac1.prepare_buffer())
+    }
+
     /// Enqueue the next DAC output codes for transmission.
     ///
-    /// # Args
-    /// * `dac0_codes` - The output codes for DAC0 to enqueue.
-    /// * `dac1_codes` - The output codes for DAC1 to enqueue.
-    pub fn next_data(
-        &mut self,
-        dac0_codes: &[u16; SAMPLE_BUFFER_SIZE],
-        dac1_codes: &[u16; SAMPLE_BUFFER_SIZE],
-    ) {
-        self.dac0.next_data(dac0_codes);
-        self.dac1.next_data(dac1_codes);
+    /// # Note
+    /// It is assumed that data was populated using `prepare_data()` before this function is
+    /// called.
+    pub fn commit_data(&mut self) {
+        self.dac0.commit_buffer();
+        self.dac1.commit_buffer();
     }
 }
 
 /// Represents data associated with DAC0.
 pub struct Dac0Output {
     next_buffer: Option<&'static mut [u16; SAMPLE_BUFFER_SIZE]>,
-    _spi: hal::spi::Spi<hal::stm32::SPI4, hal::spi::Disabled, u16>,
+    // Note: SPI TX functionality may not be used from this structure to ensure safety with DMA.
     transfer: Transfer<
         hal::dma::dma::Stream4<hal::stm32::DMA1>,
         SPI4,
@@ -118,7 +146,7 @@ impl Dac0Output {
     pub fn new(
         spi: hal::spi::Spi<hal::stm32::SPI4, hal::spi::Enabled, u16>,
         stream: hal::dma::dma::Stream4<hal::stm32::DMA1>,
-        trigger_channel: sampling_timer::Timer2Channel3,
+        trigger_channel: sampling_timer::tim2::Channel3,
     ) -> Self {
         // Generate DMA events when an output compare of the timer hitting zero (timer roll over)
         // occurs.
@@ -129,15 +157,6 @@ impl Dac0Output {
         let trigger_config = DmaConfig::default()
             .memory_increment(true)
             .peripheral_increment(false);
-
-        // Construct the trigger stream to write from memory to the peripheral.
-        let transfer: Transfer<_, _, MemoryToPeripheral, _> = Transfer::init(
-            stream,
-            SPI4::new(),
-            unsafe { &mut DAC0_BUF0 },
-            None,
-            trigger_config,
-        );
 
         // Listen for any potential SPI error signals, which may indicate that we are not generating
         // update codes.
@@ -151,30 +170,44 @@ impl Dac0Output {
         spi.inner().cr1.modify(|_, w| w.spe().set_bit());
         spi.inner().cr1.modify(|_, w| w.cstart().started());
 
+        // Construct the trigger stream to write from memory to the peripheral.
+        let transfer: Transfer<_, _, MemoryToPeripheral, _> = Transfer::init(
+            stream,
+            SPI4::new(trigger_channel, spi),
+            // Note(unsafe): This buffer is only used once and provided for the DMA transfer.
+            unsafe { &mut DAC0_BUF0 },
+            None,
+            trigger_config,
+        );
+
         Self {
             transfer,
+            // Note(unsafe): This buffer is only used once and provided for the next DMA transfer.
             next_buffer: unsafe { Some(&mut DAC0_BUF1) },
-            _spi: spi,
             first_transfer: true,
         }
     }
 
-    /// Schedule the next set of DAC update codes.
+    /// Mutably borrow the next output buffer to populate it with DAC codes.
+    pub fn prepare_buffer(&mut self) -> &mut [u16; SAMPLE_BUFFER_SIZE] {
+        self.next_buffer.as_mut().unwrap()
+    }
+
+    /// Enqueue the next buffer for transmission to the DAC.
     ///
     /// # Args
-    /// * `data` - The next samples to enqueue for transmission.
-    pub fn next_data(&mut self, data: &[u16; SAMPLE_BUFFER_SIZE]) {
+    /// * `data` - The next data to write to the DAC.
+    pub fn commit_buffer(&mut self) {
         let next_buffer = self.next_buffer.take().unwrap();
-
-        // Copy data into the next buffer
-        next_buffer.copy_from_slice(data);
 
         // If the last transfer was not complete, we didn't write all our previous DAC codes.
         // Wait for all the DAC codes to get written as well.
         if self.first_transfer {
             self.first_transfer = false
         } else {
-            while self.transfer.get_transfer_complete_flag() == false {}
+            // Note: If a device hangs up, check that this conditional is passing correctly, as
+            // there is no time-out checks here in the interest of execution speed.
+            while !self.transfer.get_transfer_complete_flag() {}
         }
 
         // Start the next transfer.
@@ -189,7 +222,6 @@ impl Dac0Output {
 /// Represents the data output stream from DAC1.
 pub struct Dac1Output {
     next_buffer: Option<&'static mut [u16; SAMPLE_BUFFER_SIZE]>,
-    _spi: hal::spi::Spi<hal::stm32::SPI5, hal::spi::Disabled, u16>,
     transfer: Transfer<
         hal::dma::dma::Stream5<hal::stm32::DMA1>,
         SPI5,
@@ -209,7 +241,7 @@ impl Dac1Output {
     pub fn new(
         spi: hal::spi::Spi<hal::stm32::SPI5, hal::spi::Enabled, u16>,
         stream: hal::dma::dma::Stream5<hal::stm32::DMA1>,
-        trigger_channel: sampling_timer::Timer2Channel4,
+        trigger_channel: sampling_timer::tim2::Channel4,
     ) -> Self {
         // Generate DMA events when an output compare of the timer hitting zero (timer roll over)
         // occurs.
@@ -221,15 +253,6 @@ impl Dac1Output {
             .memory_increment(true)
             .peripheral_increment(false)
             .circular_buffer(true);
-
-        // Construct the stream to write from memory to the peripheral.
-        let transfer: Transfer<_, _, MemoryToPeripheral, _> = Transfer::init(
-            stream,
-            SPI5::new(),
-            unsafe { &mut DAC1_BUF0 },
-            None,
-            trigger_config,
-        );
 
         // Listen for any SPI errors, as this may indicate that we are not generating updates on the
         // DAC.
@@ -243,30 +266,44 @@ impl Dac1Output {
         spi.inner().cr1.modify(|_, w| w.spe().set_bit());
         spi.inner().cr1.modify(|_, w| w.cstart().started());
 
+        // Construct the stream to write from memory to the peripheral.
+        let transfer: Transfer<_, _, MemoryToPeripheral, _> = Transfer::init(
+            stream,
+            SPI5::new(trigger_channel, spi),
+            // Note(unsafe): This buffer is only used once and provided to the transfer.
+            unsafe { &mut DAC1_BUF0 },
+            None,
+            trigger_config,
+        );
+
         Self {
+            // Note(unsafe): This buffer is only used once and provided for the next DMA transfer.
             next_buffer: unsafe { Some(&mut DAC1_BUF1) },
             transfer,
-            _spi: spi,
             first_transfer: true,
         }
+    }
+
+    /// Mutably borrow the next output buffer to populate it with DAC codes.
+    pub fn prepare_buffer(&mut self) -> &mut [u16; SAMPLE_BUFFER_SIZE] {
+        self.next_buffer.as_mut().unwrap()
     }
 
     /// Enqueue the next buffer for transmission to the DAC.
     ///
     /// # Args
     /// * `data` - The next data to write to the DAC.
-    pub fn next_data(&mut self, data: &[u16; SAMPLE_BUFFER_SIZE]) {
+    pub fn commit_buffer(&mut self) {
         let next_buffer = self.next_buffer.take().unwrap();
-
-        // Copy data into the next buffer
-        next_buffer.copy_from_slice(data);
 
         // If the last transfer was not complete, we didn't write all our previous DAC codes.
         // Wait for all the DAC codes to get written as well.
         if self.first_transfer {
             self.first_transfer = false
         } else {
-            while self.transfer.get_transfer_complete_flag() == false {}
+            // Note: If a device hangs up, check that this conditional is passing correctly, as
+            // there is no time-out checks here in the interest of execution speed.
+            while !self.transfer.get_transfer_complete_flag() {}
         }
 
         // Start the next transfer.

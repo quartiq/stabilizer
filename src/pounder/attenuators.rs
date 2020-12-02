@@ -19,7 +19,7 @@ pub trait AttenuatorInterface {
         channel: Channel,
         attenuation: f32,
     ) -> Result<f32, Error> {
-        if attenuation > 31.5 || attenuation < 0.0 {
+        if !(0.0..=31.5).contains(&attenuation) {
             return Err(Error::Bounds);
         }
 

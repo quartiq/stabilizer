@@ -63,9 +63,9 @@ static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 mod adc;
 mod afe;
 mod dac;
+mod design_parameters;
 mod eeprom;
 mod hrtimer;
-mod iir;
 mod pounder;
 mod sampling_timer;
 mod server;
@@ -73,6 +73,7 @@ mod server;
 use adc::{Adc0Input, Adc1Input, AdcInputs};
 use dac::{Dac0Output, Dac1Output, DacOutputs};
 use pounder::DdsOutput;
+use dsp::iir;
 
 #[cfg(not(feature = "semihosting"))]
 fn init_log() {}
@@ -141,6 +142,7 @@ macro_rules! route_request {
                 match $request.attribute {
                 $(
                     $read_attribute => {
+                        #[allow(clippy::redundant_closure_call)]
                         let value = match $getter() {
                             Ok(data) => data,
                             Err(_) => return server::Response::error($request.attribute,
@@ -169,6 +171,7 @@ macro_rules! route_request {
                                     "Failed to decode value"),
                         };
 
+                        #[allow(clippy::redundant_closure_call)]
                         match $setter(new_value) {
                             Ok(_) => server::Response::success($request.attribute, &$request.value),
                             Err(_) => server::Response::error($request.attribute,
@@ -303,12 +306,12 @@ const APP: () = {
                 })
                 .manage_cs()
                 .suspend_when_inactive()
-                .cs_delay(220e-9);
+                .cs_delay(design_parameters::ADC_SETUP_TIME);
 
                 let spi: hal::spi::Spi<_, _, u16> = dp.SPI2.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    50.mhz(),
+                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
                     ccdr.peripheral.SPI2,
                     &ccdr.clocks,
                 );
@@ -341,12 +344,12 @@ const APP: () = {
                 })
                 .manage_cs()
                 .suspend_when_inactive()
-                .cs_delay(220e-9);
+                .cs_delay(design_parameters::ADC_SETUP_TIME);
 
                 let spi: hal::spi::Spi<_, _, u16> = dp.SPI3.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    50.mhz(),
+                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
                     ccdr.peripheral.SPI3,
                     &ccdr.clocks,
                 );
@@ -396,7 +399,7 @@ const APP: () = {
                 dp.SPI4.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    50.mhz(),
+                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
                     ccdr.peripheral.SPI4,
                     &ccdr.clocks,
                 )
@@ -428,7 +431,7 @@ const APP: () = {
                 dp.SPI5.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    50.mhz(),
+                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
                     ccdr.peripheral.SPI5,
                     &ccdr.clocks,
                 )
@@ -721,7 +724,7 @@ const APP: () = {
                     dp.ETHERNET_MTL,
                     dp.ETHERNET_DMA,
                     &mut DES_RING,
-                    mac_addr.clone(),
+                    mac_addr,
                     ccdr.peripheral.ETH1MAC,
                     &ccdr.clocks,
                 )
@@ -773,8 +776,8 @@ const APP: () = {
         sampling_timer.start();
 
         init::LateResources {
-            afe0: afe0,
-            afe1: afe1,
+            afe0,
+            afe1,
 
             adcs,
             dacs,
@@ -793,8 +796,7 @@ const APP: () = {
         let (adc0_samples, adc1_samples) =
             c.resources.adcs.transfer_complete_handler();
 
-        let mut dac0: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
-        let mut dac1: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
+        let (dac0, dac1) = c.resources.dacs.prepare_data();
 
         for (i, (adc0, adc1)) in
             adc0_samples.iter().zip(adc1_samples.iter()).enumerate()
@@ -825,7 +827,7 @@ const APP: () = {
             dds_output.write_profile(profile);
         }
 
-        c.resources.dacs.next_data(&dac0, &dac1);
+        c.resources.dacs.commit_data();
     }
 
     #[idle(resources=[net_interface, mac_addr, eth_mac, iir_state, iir_ch, afe0, afe1])]
@@ -916,10 +918,12 @@ const APP: () = {
                                     })
                                 }),
                                 "stabilizer/afe0/gain": afe::Gain, (|gain| {
-                                    Ok::<(), ()>(c.resources.afe0.set_gain(gain))
+                                    c.resources.afe0.set_gain(gain);
+                                    Ok::<(), ()>(())
                                 }),
                                 "stabilizer/afe1/gain": afe::Gain, (|gain| {
-                                    Ok::<(), ()>(c.resources.afe1.set_gain(gain))
+                                    c.resources.afe1.set_gain(gain);
+                                    Ok::<(), ()>(())
                                 })
                             ]
                         )
@@ -931,7 +935,7 @@ const APP: () = {
                 &mut sockets,
                 net::time::Instant::from_millis(time as i64),
             ) {
-                Ok(changed) => changed == false,
+                Ok(changed) => !changed,
                 Err(net::Error::Unrecognized) => true,
                 Err(e) => {
                     info!("iface poll error: {:?}", e);
@@ -950,22 +954,22 @@ const APP: () = {
         unsafe { ethernet::interrupt_handler() }
     }
 
-    #[task(binds = SPI2, priority = 1)]
+    #[task(binds = SPI2, priority = 3)]
     fn spi2(_: spi2::Context) {
         panic!("ADC0 input overrun");
     }
 
-    #[task(binds = SPI3, priority = 1)]
+    #[task(binds = SPI3, priority = 3)]
     fn spi3(_: spi3::Context) {
         panic!("ADC0 input overrun");
     }
 
-    #[task(binds = SPI4, priority = 1)]
+    #[task(binds = SPI4, priority = 3)]
     fn spi4(_: spi4::Context) {
         panic!("DAC0 output error");
     }
 
-    #[task(binds = SPI5, priority = 1)]
+    #[task(binds = SPI5, priority = 3)]
     fn spi5(_: spi5::Context) {
         panic!("DAC1 output error");
     }

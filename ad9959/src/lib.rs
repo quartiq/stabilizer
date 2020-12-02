@@ -117,46 +117,42 @@ impl<I: Interface> Ad9959<I> {
             communication_mode: desired_mode,
         };
 
-        // Reset the AD9959
-        reset_pin.set_high().or_else(|_| Err(Error::Pin))?;
+        io_update.set_low().or(Err(Error::Pin))?;
 
-        io_update.set_low().or_else(|_| Err(Error::Pin))?;
+        // Reset the AD9959
+        reset_pin.set_high().or(Err(Error::Pin))?;
+
+        io_update.set_low().or(Err(Error::Pin))?;
 
         // Delay for a clock cycle to allow the device to reset.
         delay.delay_ms((1000.0 / clock_frequency as f32) as u8);
 
-        reset_pin.set_low().or_else(|_| Err(Error::Pin))?;
+        reset_pin.set_low().or(Err(Error::Pin))?;
 
         ad9959
             .interface
             .configure_mode(Mode::SingleBitTwoWire)
-            .map_err(|_| Error::Interface)?;
+            .or(Err(Error::Interface))?;
 
         // Program the interface configuration in the AD9959. Default to all channels enabled.
         let mut csr: [u8; 1] = [0xF0];
         csr[0].set_bits(1..3, desired_mode as u8);
-        ad9959
-            .interface
-            .write(Register::CSR as u8, &csr)
-            .map_err(|_| Error::Interface)?;
+        ad9959.write(Register::CSR, &csr)?;
 
         // Latch the new interface configuration.
-        io_update.set_high().or_else(|_| Err(Error::Pin))?;
+        io_update.set_high().or(Err(Error::Pin))?;
         // Delay for a clock cycle to allow the device to reset.
         delay.delay_ms(2 * (1000.0 / clock_frequency as f32) as u8);
-        io_update.set_low().or_else(|_| Err(Error::Pin))?;
+        io_update.set_low().or(Err(Error::Pin))?;
 
         ad9959
             .interface
             .configure_mode(desired_mode)
-            .map_err(|_| Error::Interface)?;
+            .or(Err(Error::Interface))?;
 
         // Read back the CSR to ensure it specifies the mode correctly.
         let mut updated_csr: [u8; 1] = [0];
-        ad9959
-            .interface
-            .read(Register::CSR as u8, &mut updated_csr)
-            .map_err(|_| Error::Interface)?;
+        ad9959.read(Register::CSR, &mut updated_csr)?;
         if updated_csr[0] != csr[0] {
             return Err(Error::Check);
         }
@@ -164,6 +160,18 @@ impl<I: Interface> Ad9959<I> {
         // Set the clock frequency to configure the device as necessary.
         ad9959.configure_system_clock(clock_frequency, multiplier)?;
         Ok(ad9959)
+    }
+
+    fn read(&mut self, reg: Register, data: &mut [u8]) -> Result<(), Error> {
+        self.interface
+            .read(reg as u8, data)
+            .or(Err(Error::Interface))
+    }
+
+    fn write(&mut self, reg: Register, data: &[u8]) -> Result<(), Error> {
+        self.interface
+            .write(reg as u8, data)
+            .or(Err(Error::Interface))
     }
 
     /// Configure the internal system clock of the chip.
@@ -181,7 +189,7 @@ impl<I: Interface> Ad9959<I> {
     ) -> Result<f32, Error> {
         self.reference_clock_frequency = reference_clock_frequency;
 
-        if multiplier != 1 && (multiplier > 20 || multiplier < 4) {
+        if multiplier != 1 && !(4..=20).contains(&multiplier) {
             return Err(Error::Bounds);
         }
 
@@ -193,17 +201,13 @@ impl<I: Interface> Ad9959<I> {
 
         // TODO: Update / disable any enabled channels?
         let mut fr1: [u8; 3] = [0, 0, 0];
-        self.interface
-            .read(Register::FR1 as u8, &mut fr1)
-            .map_err(|_| Error::Interface)?;
+        self.read(Register::FR1, &mut fr1)?;
         fr1[0].set_bits(2..=6, multiplier);
 
         let vco_range = frequency > 255e6;
         fr1[0].set_bit(7, vco_range);
 
-        self.interface
-            .write(Register::FR1 as u8, &fr1)
-            .map_err(|_| Error::Interface)?;
+        self.write(Register::FR1, &fr1)?;
         self.system_clock_multiplier = multiplier;
 
         Ok(self.system_clock_frequency())
@@ -217,9 +221,7 @@ impl<I: Interface> Ad9959<I> {
     /// Get the current reference clock multiplier.
     pub fn get_reference_clock_multiplier(&mut self) -> Result<u8, Error> {
         let mut fr1: [u8; 3] = [0, 0, 0];
-        self.interface
-            .read(Register::FR1 as u8, &mut fr1)
-            .map_err(|_| Error::Interface)?;
+        self.read(Register::FR1, &mut fr1)?;
 
         Ok(fr1[0].get_bits(2..=6) as u8)
     }
@@ -233,46 +235,34 @@ impl<I: Interface> Ad9959<I> {
     /// True if the self test succeeded. False otherwise.
     pub fn self_test(&mut self) -> Result<bool, Error> {
         let mut csr: [u8; 1] = [0];
-        self.interface
-            .read(Register::CSR as u8, &mut csr)
-            .map_err(|_| Error::Interface)?;
+        self.read(Register::CSR, &mut csr)?;
         let old_csr = csr[0];
 
         // Enable all channels.
         csr[0].set_bits(4..8, 0xF);
-        self.interface
-            .write(Register::CSR as u8, &csr)
-            .map_err(|_| Error::Interface)?;
+        self.write(Register::CSR, &csr)?;
 
         // Read back the enable.
         csr[0] = 0;
-        self.interface
-            .read(Register::CSR as u8, &mut csr)
-            .map_err(|_| Error::Interface)?;
+        self.read(Register::CSR, &mut csr)?;
         if csr[0].get_bits(4..8) != 0xF {
             return Ok(false);
         }
 
         // Clear all channel enables.
         csr[0].set_bits(4..8, 0x0);
-        self.interface
-            .write(Register::CSR as u8, &csr)
-            .map_err(|_| Error::Interface)?;
+        self.write(Register::CSR, &csr)?;
 
         // Read back the enable.
         csr[0] = 0xFF;
-        self.interface
-            .read(Register::CSR as u8, &mut csr)
-            .map_err(|_| Error::Interface)?;
+        self.read(Register::CSR, &mut csr)?;
         if csr[0].get_bits(4..8) != 0 {
             return Ok(false);
         }
 
         // Restore the CSR.
         csr[0] = old_csr;
-        self.interface
-            .write(Register::CSR as u8, &csr)
-            .map_err(|_| Error::Interface)?;
+        self.write(Register::CSR, &csr)?;
 
         Ok(true)
     }
@@ -305,9 +295,7 @@ impl<I: Interface> Ad9959<I> {
             .write(Register::CSR as u8, &[csr])
             .map_err(|_| Error::Interface)?;
 
-        self.interface
-            .write(register as u8, &data)
-            .map_err(|_| Error::Interface)?;
+        self.write(register, &data)?;
 
         Ok(())
     }
@@ -327,27 +315,18 @@ impl<I: Interface> Ad9959<I> {
         // Disable all other channels in the CSR so that we can read the configuration register of
         // only the desired channel.
         let mut csr: [u8; 1] = [0];
-        self.interface
-            .read(Register::CSR as u8, &mut csr)
-            .map_err(|_| Error::Interface)?;
+        self.read(Register::CSR, &mut csr)?;
 
         let mut new_csr = csr;
         new_csr[0].set_bits(4..8, 0);
         new_csr[0].set_bit(4 + channel as usize, true);
 
-        self.interface
-            .write(Register::CSR as u8, &new_csr)
-            .map_err(|_| Error::Interface)?;
-
-        self.interface
-            .read(register as u8, &mut data)
-            .map_err(|_| Error::Interface)?;
+        self.write(Register::CSR, &new_csr)?;
+        self.read(register, &mut data)?;
 
         // Restore the previous CSR. Note that the re-enable of the channel happens immediately, so
         // the CSR update does not need to be latched.
-        self.interface
-            .write(Register::CSR as u8, &csr)
-            .map_err(|_| Error::Interface)?;
+        self.write(Register::CSR, &csr)?;
 
         Ok(())
     }
@@ -406,7 +385,7 @@ impl<I: Interface> Ad9959<I> {
         channel: Channel,
         amplitude: f32,
     ) -> Result<f32, Error> {
-        if amplitude < 0.0 || amplitude > 1.0 {
+        if !(0.0..=1.0).contains(&amplitude) {
             return Err(Error::Bounds);
         }
 
