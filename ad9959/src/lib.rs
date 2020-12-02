@@ -123,8 +123,6 @@ impl<I: Interface> Ad9959<I> {
         // Reset the AD9959
         reset_pin.set_high().or(Err(Error::Pin))?;
 
-        io_update.set_low().or(Err(Error::Pin))?;
-
         // Delay for at least 1 SYNC_CLK period for the reset to occur. The SYNC_CLK is guaranteed
         // to be at least 250KHz (1/4 of 1MHz minimum REF_CLK).
         delay.delay_us(5);
@@ -492,6 +490,13 @@ impl<I: Interface> Ad9959<I> {
             / (1u64 << 32) as f32)
     }
 
+    /// Finalize DDS configuration
+    ///
+    /// # Note
+    /// This is intended for when the DDS profiles will be written as a stream of data to the DDS.
+    ///
+    /// # Returns
+    /// (I, config) where `I` is the interface to the DDS and `config` is the frozen `DdsConfig`.
     pub fn freeze(self) -> (I, DdsConfig) {
         let config = DdsConfig {
             mode: self.communication_mode,
@@ -500,16 +505,20 @@ impl<I: Interface> Ad9959<I> {
     }
 }
 
+/// The frozen DDS configuration.
 pub struct DdsConfig {
     mode: Mode,
 }
 
 impl DdsConfig {
+    /// Create a serializer that can be used for generating a serialized DDS profile for writing to
+    /// a QSPI stream.
     pub fn builder(&self) -> ProfileSerializer {
         ProfileSerializer::new(self.mode)
     }
 }
 
+/// Represents a means of serializing a DDS profile for writing to a stream.
 pub struct ProfileSerializer {
     data: [u8; 16],
     index: usize,
@@ -517,6 +526,10 @@ pub struct ProfileSerializer {
 }
 
 impl ProfileSerializer {
+    /// Construct a new serializer.
+    ///
+    /// # Args
+    /// * `mode` - The communication mode of the DDS.
     fn new(mode: Mode) -> Self {
         Self {
             mode,
@@ -525,6 +538,13 @@ impl ProfileSerializer {
         }
     }
 
+    /// Update a number of channels with the requested profile.
+    ///
+    /// # Args
+    /// * `channels` - A list of channels to apply the configuration to.
+    /// * `ftw` - If provided, indicates a frequency tuning word for the channels.
+    /// * `pow` - If provided, indicates a phase offset word for the channels.
+    /// * `acr` - If provided, indicates the amplitude control register for the channels.
     pub fn update_channels(
         &mut self,
         channels: &[Channel],
@@ -532,12 +552,12 @@ impl ProfileSerializer {
         pow: Option<u16>,
         acr: Option<u16>,
     ) {
-        // If there are no updates requested, skip this update cycle.
-        if (ftw.is_none() && acr.is_none() && pow.is_none())
-            || channels.len() == 0
-        {
-            panic!("Invalid config");
-        }
+        // The user should have provided something to update.
+        assert!(
+            (ftw.is_some() || acr.is_some() || pow.is_some())
+                && channels.len() > 0
+        );
+
         let mut csr: u8 = *0u8.set_bits(1..3, self.mode as u8);
         for channel in channels.iter() {
             csr.set_bit(4 + *channel as usize, true);
@@ -558,8 +578,25 @@ impl ProfileSerializer {
         }
     }
 
+    /// Add a register write to the serialization data.
+    fn add_write(&mut self, register: Register, value: &[u8]) {
+        let data = &mut self.data[self.index..];
+        assert!(value.len() + 1 <= data.len());
+
+        data[0] = register as u8;
+        data[1..][..value.len()].copy_from_slice(value);
+        self.index += value.len() + 1;
+    }
+
+    /// Get the serialized profile as a slice of 32-bit words.
+    ///
+    /// # Note
+    /// The serialized profile will be padded to the next 32-bit word boundary by adding dummy
+    /// writes to the CSR or FR2 registers.
+    ///
+    /// # Returns
+    /// A slice of `u32` words representing the serialized profile.
     pub fn finalize<'a>(&'a mut self) -> &[u32] {
-        //&self.data[..self.index]
         // Pad the buffer to 32-bit alignment by adding dummy writes to CSR and FR2.
         let padding = 4 - (self.index % 4);
         match padding {
@@ -580,14 +617,5 @@ impl ProfileSerializer {
                 self.index / 4,
             )
         }
-    }
-
-    fn add_write(&mut self, register: Register, value: &[u8]) {
-        let data = &mut self.data[self.index..];
-        assert!(value.len() + 1 <= data.len());
-
-        data[0] = register as u8;
-        data[1..][..value.len()].copy_from_slice(value);
-        self.index += value.len() + 1;
     }
 }

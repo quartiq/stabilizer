@@ -766,7 +766,6 @@ const APP: () = {
         };
 
         cp.SCB.enable_icache();
-        //cp.SCB.enable_dcache(&mut cp.CPUID);
 
         // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
         // info!("Built on {}", build_info::BUILT_TIME_UTC);

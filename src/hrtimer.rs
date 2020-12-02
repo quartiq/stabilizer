@@ -1,11 +1,14 @@
+///! The HRTimer (High Resolution Timer) is used to generate IO_Update pulses to the Pounder DDS.
 use crate::hal;
 use hal::rcc::{rec, CoreClocks, ResetEnable};
 
+/// A HRTimer output channel.
 pub enum Channel {
     One,
     Two,
 }
 
+/// The high resolution timer. Currently, only Timer E is supported.
 pub struct HighResTimerE {
     master: hal::stm32::HRTIM_MASTER,
     timer: hal::stm32::HRTIM_TIME,
@@ -15,6 +18,7 @@ pub struct HighResTimerE {
 }
 
 impl HighResTimerE {
+    /// Construct a new high resolution timer for generating IO_update signals.
     pub fn new(
         timer_regs: hal::stm32::HRTIM_TIME,
         master_regs: hal::stm32::HRTIM_MASTER,
@@ -32,6 +36,18 @@ impl HighResTimerE {
         }
     }
 
+    /// Configure the timer to operate in single-shot mode.
+    ///
+    /// # Note
+    /// This will configure the timer to generate a single pulse on an output channel. The timer
+    /// will only count up once and must be `trigger()`'d after / configured.
+    ///
+    /// The output will be asserted from `set_offset` to `set_offset` + `set_duration` in the count.
+    ///
+    /// # Args
+    /// * `channel` - The timer output channel to configure.
+    /// * `set_duration` - The duration that the output should be asserted for.
+    /// * `set_offset` - The first time at which the output should be asserted.
     pub fn configure_single_shot(
         &mut self,
         channel: Channel,
@@ -97,6 +113,7 @@ impl HighResTimerE {
         self.master.mcr.modify(|_, w| w.tecen().set_bit());
     }
 
+    /// Generate a single trigger of the timer to start the output pulse generation.
     pub fn trigger(&mut self) {
         // Generate a reset event to force the timer to start counting.
         self.common.cr2.write(|w| w.terst().set_bit());
