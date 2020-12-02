@@ -1,4 +1,4 @@
-use core::ops::{Add, Mul};
+use core::ops::{Add, Mul, Neg};
 use serde::{Deserialize, Serialize};
 
 use core::f32;
@@ -8,23 +8,35 @@ use core::f32;
 // `compiler-intrinsics`/llvm should have better (robust, universal, and
 // faster) implementations.
 
-fn abs(x: f32) -> f32 {
-    if x >= 0. {
+fn abs<T>(x: T) -> T
+where
+    T: PartialOrd + Default + Neg<Output = T>,
+{
+    if x >= T::default() {
         x
     } else {
         -x
     }
 }
 
-fn copysign(x: f32, y: f32) -> f32 {
-    if (x >= 0. && y >= 0.) || (x <= 0. && y <= 0.) {
+fn copysign<T>(x: T, y: T) -> T
+where
+    T: PartialOrd + Default + Neg<Output = T>,
+{
+    if (x >= T::default() && y >= T::default())
+        || (x <= T::default() && y <= T::default())
+    {
         x
     } else {
         -x
     }
 }
 
-fn max(x: f32, y: f32) -> f32 {
+#[cfg(not(feature = "nightly"))]
+fn max<T>(x: T, y: T) -> T
+where
+    T: PartialOrd,
+{
     if x > y {
         x
     } else {
@@ -32,12 +44,26 @@ fn max(x: f32, y: f32) -> f32 {
     }
 }
 
-fn min(x: f32, y: f32) -> f32 {
+#[cfg(not(feature = "nightly"))]
+fn min<T>(x: T, y: T) -> T
+where
+    T: PartialOrd,
+{
     if x < y {
         x
     } else {
         y
     }
+}
+
+#[cfg(feature = "nightly")]
+fn max(x: f32, y: f32) -> f32 {
+    core::intrinsics::maxnumf32(x, y)
+}
+
+#[cfg(feature = "nightly")]
+fn min(x: f32, y: f32) -> f32 {
+    core::intrinsics::minnumf32(x, y)
 }
 
 // Multiply-accumulate vectors `x` and `a`.
@@ -50,7 +76,7 @@ where
 {
     x.iter()
         .zip(a)
-        .map(|(&x, &a)| x * a)
+        .map(|(x, a)| *x * *a)
         .fold(y0, |y, xa| y + xa)
 }
 
@@ -58,10 +84,10 @@ where
 ///
 /// To represent the IIR state (input and output memory) during the filter update
 /// this contains the three inputs (x0, x1, x2) and the two outputs (y1, y2)
-/// concatenated.
+/// concatenated. Lower indices correspond to more recent samples.
 /// To represent the IIR coefficients, this contains the feed-forward
-/// coefficients (b0, b1, b2) followd by the feed-back coefficients (a1, a2),
-/// all normalized such that a0 = 1.
+/// coefficients (b0, b1, b2) followd by the negated feed-back coefficients
+/// (-a1, -a2), all five normalized such that a0 = 1.
 pub type IIRState = [f32; 5];
 
 /// IIR configuration.
@@ -159,10 +185,13 @@ impl IIR {
     /// * `xy` - Current filter state.
     /// * `x0` - New input.
     pub fn update(&self, xy: &mut IIRState, x0: f32) -> f32 {
+        let n = self.ba.len();
+        debug_assert!(xy.len() == n);
         // `xy` contains       x0 x1 y0 y1 y2
         // Increment time      x1 x2 y1 y2 y3
-        // Rotate              y3 x1 x2 y1 y2
-        xy.rotate_right(1);
+        // Shift               x1 x1 x2 y1 y2
+        // This unrolls better than xy.rotate_right(1)
+        xy.copy_within(0..n - 1, 1);
         // Store x0            x0 x1 x2 y1 y2
         xy[0] = x0;
         // Compute y0 by multiply-accumulate
@@ -170,7 +199,7 @@ impl IIR {
         // Limit y0
         let y0 = max(self.y_min, min(self.y_max, y0));
         // Store y0            x0 x1 y0 y1 y2
-        xy[xy.len() / 2] = y0;
+        xy[n / 2] = y0;
         y0
     }
 }

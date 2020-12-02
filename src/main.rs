@@ -13,6 +13,9 @@
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     let gpiod = unsafe { &*hal::stm32::GPIOD::ptr() };
     gpiod.odr.modify(|_, w| w.odr6().high().odr12().high()); // FP_LED_1, FP_LED_3
+    #[cfg(feature = "nightly")]
+    core::intrinsics::abort();
+    #[cfg(not(feature = "nightly"))]
     unsafe {
         core::intrinsics::abort();
     }
@@ -760,7 +763,11 @@ const APP: () = {
                 let x = f32::from(adc_samples[channel][sample] as i16);
                 let y = c.resources.iir_ch[channel]
                     .update(&mut c.resources.iir_state[channel], x);
-                dac_samples[channel][sample] = y as i16 as u16 ^ 0x8000;
+                // Note(unsafe): The filter limits ensure that the value is in range.
+                // The truncation introduces 1/2 LSB distortion.
+                let y = unsafe { y.to_int_unchecked::<i16>() };
+                // Convert to DAC code
+                dac_samples[channel][sample] = y as u16 ^ 0x8000;
             }
         }
         let [dac0, dac1] = dac_samples;
