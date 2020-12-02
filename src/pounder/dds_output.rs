@@ -28,10 +28,10 @@ impl DdsOutput {
         io_update_trigger: HighResTimerE,
         dds_config: DdsConfig,
     ) -> Self {
-        qspi.start_stream();
+        qspi.start_stream().unwrap();
         Self {
             config: dds_config,
-            _qspi,
+            _qspi: qspi,
             io_update_trigger,
         }
     }

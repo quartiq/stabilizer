@@ -645,8 +645,7 @@ const APP: () = {
                     hrtimer
                 };
 
-                let (mut qspi, config) = ad9959.freeze();
-                qspi.start_stream().unwrap();
+                let (qspi, config) = ad9959.freeze();
                 DdsOutput::new(qspi, io_update_trigger, config)
             };
 
