@@ -72,8 +72,8 @@ mod server;
 
 use adc::{Adc0Input, Adc1Input, AdcInputs};
 use dac::{Dac0Output, Dac1Output, DacOutputs};
-use pounder::DdsOutput;
 use dsp::iir;
+use pounder::DdsOutput;
 
 #[cfg(not(feature = "semihosting"))]
 fn init_log() {}
@@ -509,12 +509,12 @@ const APP: () = {
                     pounder::QspiInterface::new(qspi).unwrap()
                 };
 
-                let mut reset_pin = gpioa.pa0.into_push_pull_output();
+                let reset_pin = gpioa.pa0.into_push_pull_output();
                 let mut io_update = gpiog.pg7.into_push_pull_output();
 
                 let ad9959 = ad9959::Ad9959::new(
                     qspi_interface,
-                    &mut reset_pin,
+                    reset_pin,
                     &mut io_update,
                     &mut delay,
                     ad9959::Mode::FourBitSerial,
@@ -643,8 +643,9 @@ const APP: () = {
                     hrtimer
                 };
 
-                let qspi = ad9959.free();
-                DdsOutput::new(qspi, io_update_trigger)
+                let (mut qspi, config) = ad9959.freeze();
+                qspi.start_stream().unwrap();
+                DdsOutput::new(qspi, io_update_trigger, config)
             };
 
             (Some(pounder_devices), Some(dds_output))
@@ -817,14 +818,13 @@ const APP: () = {
         }
 
         if let Some(dds_output) = c.resources.dds_output {
-            let profile = ad9959::serialize_profile(
-                pounder::Channel::Out0.into(),
-                u32::MAX / 4,
-                0,
+            let builder = dds_output.builder().update_channels(
+                &[pounder::Channel::Out0.into()],
+                Some(u32::MAX / 4),
+                None,
                 None,
             );
-
-            dds_output.write_profile(profile);
+            builder.write_profile();
         }
 
         c.resources.dacs.commit_data();

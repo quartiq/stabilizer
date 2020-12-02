@@ -1,7 +1,7 @@
 #![no_std]
 
 use bit_field::BitField;
-use embedded_hal::{blocking::delay::DelayMs, digital::v2::OutputPin};
+use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
 
 /// A device driver for the AD9959 direct digital synthesis (DDS) chip.
 ///
@@ -14,7 +14,7 @@ use embedded_hal::{blocking::delay::DelayMs, digital::v2::OutputPin};
 /// The chip supports a number of serial interfaces to improve data throughput, including normal,
 /// dual, and quad SPI configurations.
 pub struct Ad9959<INTERFACE> {
-    pub interface: INTERFACE,
+    interface: INTERFACE,
     reference_clock_frequency: f32,
     system_clock_multiplier: u8,
     communication_mode: Mode,
@@ -72,6 +72,7 @@ pub enum Register {
 }
 
 /// Specifies an output channel of the AD9959 DDS chip.
+#[derive(Copy, Clone, PartialEq)]
 pub enum Channel {
     One = 0,
     Two = 1,
@@ -103,9 +104,9 @@ impl<I: Interface> Ad9959<I> {
     ///   `clock_frequency` to generate the system clock.
     pub fn new(
         interface: I,
-        reset_pin: &mut impl OutputPin,
+        mut reset_pin: impl OutputPin,
         io_update: &mut impl OutputPin,
-        delay: &mut impl DelayMs<u8>,
+        delay: &mut impl DelayUs<u8>,
         desired_mode: Mode,
         clock_frequency: f32,
         multiplier: u8,
@@ -124,8 +125,9 @@ impl<I: Interface> Ad9959<I> {
 
         io_update.set_low().or(Err(Error::Pin))?;
 
-        // Delay for a clock cycle to allow the device to reset.
-        delay.delay_ms((1000.0 / clock_frequency as f32) as u8);
+        // Delay for at least 1 SYNC_CLK period for the reset to occur. The SYNC_CLK is guaranteed
+        // to be at least 250KHz (1/4 of 1MHz minimum REF_CLK).
+        delay.delay_us(5);
 
         reset_pin.set_low().or(Err(Error::Pin))?;
 
@@ -141,14 +143,24 @@ impl<I: Interface> Ad9959<I> {
 
         // Latch the new interface configuration.
         io_update.set_high().or(Err(Error::Pin))?;
-        // Delay for a clock cycle to allow the device to reset.
-        delay.delay_ms(2 * (1000.0 / clock_frequency as f32) as u8);
+
+        // Delay for at least 1 SYNC_CLK period for the update to occur. The SYNC_CLK is guaranteed
+        // to be at least 250KHz (1/4 of 1MHz minimum REF_CLK).
+        delay.delay_us(5);
+
         io_update.set_low().or(Err(Error::Pin))?;
 
         ad9959
             .interface
             .configure_mode(desired_mode)
             .or(Err(Error::Interface))?;
+
+        // Empirical evidence indicates a delay is necessary here for the IO update to become
+        // active. This is likely due to needing to wait at least 1 clock cycle of the DDS for the
+        // interface update to occur.
+        // Delay for at least 1 SYNC_CLK period for the update to occur. The SYNC_CLK is guaranteed
+        // to be at least 250KHz (1/4 of 1MHz minimum REF_CLK).
+        delay.delay_us(5);
 
         // Read back the CSR to ensure it specifies the mode correctly.
         let mut updated_csr: [u8; 1] = [0];
@@ -480,21 +492,93 @@ impl<I: Interface> Ad9959<I> {
             / (1u64 << 32) as f32)
     }
 
-    pub fn free(self) -> I {
-        self.interface
+    pub fn freeze(self) -> (I, DdsConfig) {
+        let config = DdsConfig {
+            mode: self.communication_mode,
+        };
+        (self.interface, config)
     }
 }
 
-struct ProfileSerializer {
+pub struct DdsConfig {
+    mode: Mode,
+}
+
+impl DdsConfig {
+    pub fn builder(&self) -> ProfileSerializer {
+        ProfileSerializer::new(self.mode)
+    }
+}
+
+pub struct ProfileSerializer {
     data: [u8; 16],
     index: usize,
+    mode: Mode,
 }
 
 impl ProfileSerializer {
-    fn new() -> Self {
+    fn new(mode: Mode) -> Self {
         Self {
+            mode,
             data: [0; 16],
             index: 0,
+        }
+    }
+
+    pub fn update_channels(
+        &mut self,
+        channels: &[Channel],
+        ftw: Option<u32>,
+        pow: Option<u16>,
+        acr: Option<u16>,
+    ) {
+        // If there are no updates requested, skip this update cycle.
+        if (ftw.is_none() && acr.is_none() && pow.is_none())
+            || channels.len() == 0
+        {
+            panic!("Invalid config");
+        }
+        let mut csr: u8 = *0u8.set_bits(1..3, self.mode as u8);
+        for channel in channels.iter() {
+            csr.set_bit(4 + *channel as usize, true);
+        }
+
+        self.add_write(Register::CSR, &[csr]);
+
+        if let Some(ftw) = ftw {
+            self.add_write(Register::CFTW0, &ftw.to_be_bytes());
+        }
+
+        if let Some(pow) = pow {
+            self.add_write(Register::CPOW0, &pow.to_be_bytes());
+        }
+
+        if let Some(acr) = acr {
+            self.add_write(Register::ACR, &acr.to_be_bytes());
+        }
+    }
+
+    pub fn finalize<'a>(&'a mut self) -> &[u32] {
+        //&self.data[..self.index]
+        // Pad the buffer to 32-bit alignment by adding dummy writes to CSR and FR2.
+        let padding = 4 - (self.index % 4);
+        match padding {
+            0 => {}
+            1 => {
+                // For a pad size of 1, we have to pad with 5 bytes to align things.
+                self.add_write(Register::CSR, &[(self.mode as u8) << 1]);
+                self.add_write(Register::FR2, &[0, 0, 0]);
+            }
+            2 => self.add_write(Register::CSR, &[(self.mode as u8) << 1]),
+            3 => self.add_write(Register::FR2, &[0, 0, 0]),
+
+            _ => panic!("Invalid"),
+        }
+        unsafe {
+            core::slice::from_raw_parts::<'a, u32>(
+                &self.data as *const _ as *const u32,
+                self.index / 4,
+            )
         }
     }
 
@@ -506,47 +590,4 @@ impl ProfileSerializer {
         data[1..][..value.len()].copy_from_slice(value);
         self.index += value.len() + 1;
     }
-
-    fn finalize(self) -> [u32; 4] {
-        assert!(self.index == self.data.len());
-        unsafe { core::mem::transmute(self.data) }
-    }
-}
-
-pub fn serialize_profile(
-    channel: Channel,
-    ftw: u32,
-    pow: u16,
-    acr: Option<u16>,
-) -> [u32; 4] {
-    let mut serializer = ProfileSerializer::new();
-
-    let csr: u8 = *0x00_u8
-        .set_bits(1..=2, Mode::FourBitSerial as u8)
-        .set_bit(4 + channel as usize, true);
-
-    let acr: [u8; 3] = {
-        let mut data = [0u8; 3];
-        if acr.is_some() {
-            data[2].set_bit(0, acr.is_some());
-            data[0..2].copy_from_slice(&acr.unwrap().to_be_bytes());
-        }
-
-        data
-    };
-
-    // 4 bytes
-    serializer.add_write(Register::CSR, &[csr]);
-    serializer.add_write(Register::CSR, &[csr]);
-
-    // 5 bytes
-    serializer.add_write(Register::CFTW0, &ftw.to_be_bytes());
-
-    // 3 bytes
-    serializer.add_write(Register::CPOW0, &pow.to_be_bytes());
-
-    // 4 bytes
-    serializer.add_write(Register::ACR, &acr);
-
-    serializer.finalize()
 }

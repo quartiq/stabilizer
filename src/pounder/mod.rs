@@ -115,7 +115,7 @@ impl QspiInterface {
         })
     }
 
-    fn start_stream(&mut self) -> Result<(), Error> {
+    pub fn start_stream(&mut self) -> Result<(), Error> {
         if self.qspi.is_busy() {
             return Err(Error::Qspi);
         }
@@ -322,9 +322,6 @@ impl PounderDevices {
         ad9959
             .configure_system_clock(100_000_000f32, 4)
             .map_err(|_| Error::Dds)?;
-
-        // Run the DDS in stream-only mode (no read support).
-        ad9959.interface.start_stream().unwrap();
 
         Ok(devices)
     }
