@@ -62,7 +62,7 @@ branch = "dma"
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
 bkpt = [ ]
-nightly = ["cortex-m/inline-asm"]
+nightly = ["cortex-m/inline-asm", "dsp/nightly"]
 
 [profile.dev]
 codegen-units = 1

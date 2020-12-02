@@ -47,7 +47,6 @@ impl DdsOutput {
                 );
             }
         }
-
         // Trigger the IO_update signal generating timer to asynchronous create the IO_Update pulse.
         self.io_update_trigger.trigger();
     }
