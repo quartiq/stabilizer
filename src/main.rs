@@ -58,7 +58,7 @@ use heapless::{consts::*, String};
 const SAMPLE_FREQUENCY_KHZ: u32 = 500;
 
 // The desired ADC sample processing buffer size.
-const SAMPLE_BUFFER_SIZE: usize = 2;
+const SAMPLE_BUFFER_SIZE: usize = 1;
 
 #[link_section = ".sram3.eth"]
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
