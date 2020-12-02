@@ -72,8 +72,8 @@ mod pounder;
 mod sampling_timer;
 mod server;
 
-use adc::{Adc0Input, Adc1Input, AdcInputs};
-use dac::{Dac0Output, Dac1Output, DacOutputs};
+use adc::{Adc0Input, Adc1Input};
+use dac::{Dac0Output, Dac1Output};
 use dsp::iir;
 
 #[cfg(not(feature = "semihosting"))]
@@ -190,11 +190,10 @@ macro_rules! route_request {
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
-        afe0: AFE0,
-        afe1: AFE1,
+        afes: (AFE0, AFE1),
 
-        adcs: AdcInputs,
-        dacs: DacOutputs,
+        adcs: (Adc0Input, Adc1Input),
+        dacs: (Dac0Output, Dac1Output),
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
@@ -361,7 +360,7 @@ const APP: () = {
                 )
             };
 
-            AdcInputs::new(adc0, adc1)
+            (adc0, adc1)
         };
 
         let dacs = {
@@ -446,7 +445,7 @@ const APP: () = {
                 dma_streams.5,
                 sampling_timer_channels.ch4,
             );
-            DacOutputs::new(dac0, dac1)
+            (dac0, dac1)
         };
 
         let mut fp_led_0 = gpiod.pd5.into_push_pull_output();
@@ -734,8 +733,7 @@ const APP: () = {
         sampling_timer.start();
 
         init::LateResources {
-            afe0,
-            afe1,
+            afes: (afe0, afe1),
 
             adcs,
             dacs,
@@ -750,42 +748,34 @@ const APP: () = {
     }
 
     #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch], priority=2)]
-    fn adc_update(c: adc_update::Context) {
-        let (adc0_samples, adc1_samples) =
-            c.resources.adcs.transfer_complete_handler();
+    fn process(c: process::Context) {
+        let adc_samples = [
+            c.resources.adcs.0.acquire_buffer(),
+            c.resources.adcs.1.acquire_buffer(),
+        ];
+        let dac_samples = [
+            c.resources.dacs.0.acquire_buffer(),
+            c.resources.dacs.1.acquire_buffer(),
+        ];
 
-        let (dac0, dac1) = c.resources.dacs.prepare_data();
-
-        for (i, (adc0, adc1)) in
-            adc0_samples.iter().zip(adc1_samples.iter()).enumerate()
-        {
-            dac0[i] = {
-                let x0 = f32::from(*adc0 as i16);
-                let y0 = c.resources.iir_ch[0]
-                    .update(&mut c.resources.iir_state[0], x0);
+        for channel in 0..adc_samples.len() {
+            for sample in 0..adc_samples[0].len() {
+                let x = f32::from(adc_samples[channel][sample] as i16);
+                let y = c.resources.iir_ch[channel]
+                    .update(&mut c.resources.iir_state[channel], x);
                 // Note(unsafe): The filter limits ensure that the value is in range.
                 // The truncation introduces 1/2 LSB distortion.
-                let y0 = unsafe { y0.to_int_unchecked::<i16>() };
+                let y = unsafe { y.to_int_unchecked::<i16>() };
                 // Convert to DAC code
-                y0 as u16 ^ 0x8000
-            };
-
-            dac1[i] = {
-                let x1 = f32::from(*adc1 as i16);
-                let y1 = c.resources.iir_ch[1]
-                    .update(&mut c.resources.iir_state[1], x1);
-                // Note(unsafe): The filter limits ensure that the value is in range.
-                // The truncation introduces 1/2 LSB distortion.
-                let y1 = unsafe { y1.to_int_unchecked::<i16>() };
-                // Convert to DAC code
-                y1 as u16 ^ 0x8000
-            };
+                dac_samples[channel][sample] = y as u16 ^ 0x8000;
+            }
         }
-
-        c.resources.dacs.commit_data();
+        let [dac0, dac1] = dac_samples;
+        c.resources.dacs.0.release_buffer(dac0);
+        c.resources.dacs.1.release_buffer(dac1);
     }
 
-    #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afe0, afe1])]
+    #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afes])]
     fn idle(mut c: idle::Context) -> ! {
         let mut socket_set_entries: [_; 8] = Default::default();
         let mut sockets =
@@ -845,8 +835,8 @@ const APP: () = {
 
                                     Ok::<server::Status, ()>(state)
                                 }),
-                                "stabilizer/afe0/gain": (|| c.resources.afe0.get_gain()),
-                                "stabilizer/afe1/gain": (|| c.resources.afe1.get_gain()),
+                                "stabilizer/afe0/gain": (|| c.resources.afes.0.get_gain()),
+                                "stabilizer/afe1/gain": (|| c.resources.afes.1.get_gain()),
                                 "pounder/in0": (|| {
                                     match c.resources.pounder {
                                         Some(pounder) =>
@@ -941,11 +931,11 @@ const APP: () = {
                                     }
                                 }),
                                 "stabilizer/afe0/gain": afe::Gain, (|gain| {
-                                    c.resources.afe0.set_gain(gain);
+                                    c.resources.afes.0.set_gain(gain);
                                     Ok::<(), ()>(())
                                 }),
                                 "stabilizer/afe1/gain": afe::Gain, (|gain| {
-                                    c.resources.afe1.set_gain(gain);
+                                    c.resources.afes.1.set_gain(gain);
                                     Ok::<(), ()>(())
                                 })
                             ]

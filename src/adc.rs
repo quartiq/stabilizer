@@ -27,358 +27,184 @@ static mut SPI_START: [u16; 1] = [0x00];
 // The following global buffers are used for the ADC sample DMA transfers. Two buffers are used for
 // each transfer in a ping-pong buffer configuration (one is being acquired while the other is being
 // processed). Note that the contents of AXI SRAM is uninitialized, so the buffer contents on
-// startup are undefined.
+// startup are undefined. The dimensions are `ADC_BUF[adc_index][ping_pong_index][sample_index]`.
 #[link_section = ".axisram.buffers"]
-static mut ADC0_BUF0: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
+static mut ADC_BUF: [[[u16; SAMPLE_BUFFER_SIZE]; 2]; 2] =
+    [[[0; SAMPLE_BUFFER_SIZE]; 2]; 2];
 
-#[link_section = ".axisram.buffers"]
-static mut ADC0_BUF1: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
-
-#[link_section = ".axisram.buffers"]
-static mut ADC1_BUF0: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
-
-#[link_section = ".axisram.buffers"]
-static mut ADC1_BUF1: [u16; SAMPLE_BUFFER_SIZE] = [0; SAMPLE_BUFFER_SIZE];
-
-/// SPI2 is used as a ZST (zero-sized type) for indicating a DMA transfer into the SPI2 TX FIFO
-/// whenever the tim2 update dma request occurs.
-struct SPI2 {
-    _channel: sampling_timer::tim2::Channel1,
-}
-impl SPI2 {
-    pub fn new(_channel: sampling_timer::tim2::Channel1) -> Self {
-        Self { _channel }
-    }
-}
-
-// Note(unsafe): This structure is only safe to instantiate once. The DMA request is hard-coded and
-// may only be used if ownership of the timer2 channel 1 compare channel is assured, which is
-// ensured by maintaining ownership of the channel.
-unsafe impl TargetAddress<MemoryToPeripheral> for SPI2 {
-    /// SPI2 is configured to operate using 16-bit transfer words.
-    type MemSize = u16;
-
-    /// SPI2 DMA requests are generated whenever TIM2 CH1 comparison occurs.
-    const REQUEST_LINE: Option<u8> = Some(DMAReq::TIM2_CH1 as u8);
-
-    /// Whenever the DMA request occurs, it should write into SPI2's TX FIFO to start a DMA
-    /// transfer.
-    fn address(&self) -> u32 {
-        // Note(unsafe): It is assumed that SPI2 is owned by another DMA transfer and this DMA is
-        // only used for the transmit-half of DMA.
-        let regs = unsafe { &*hal::stm32::SPI2::ptr() };
-        &regs.txdr as *const _ as u32
-    }
-}
-
-/// SPI3 is used as a ZST (zero-sized type) for indicating a DMA transfer into the SPI3 TX FIFO
-/// whenever the tim2 update dma request occurs.
-struct SPI3 {
-    _channel: sampling_timer::tim2::Channel2,
-}
-impl SPI3 {
-    pub fn new(_channel: sampling_timer::tim2::Channel2) -> Self {
-        Self { _channel }
-    }
-}
-
-// Note(unsafe): This structure is only safe to instantiate once. The DMA request is hard-coded and
-// may only be used if ownership of the timer2 channel 2 compare channel is assured, which is
-// ensured by maintaining ownership of the channel.
-unsafe impl TargetAddress<MemoryToPeripheral> for SPI3 {
-    /// SPI3 is configured to operate using 16-bit transfer words.
-    type MemSize = u16;
-
-    /// SPI3 DMA requests are generated whenever TIM2 CH2 comparison occurs.
-    const REQUEST_LINE: Option<u8> = Some(DMAReq::TIM2_CH2 as u8);
-
-    /// Whenever the DMA request occurs, it should write into SPI3's TX FIFO to start a DMA
-    /// transfer.
-    fn address(&self) -> u32 {
-        // Note(unsafe): It is assumed that SPI3 is owned by another DMA transfer and this DMA is
-        // only used for the transmit-half of DMA.
-        let regs = unsafe { &*hal::stm32::SPI3::ptr() };
-        &regs.txdr as *const _ as u32
-    }
-}
-
-/// Represents both ADC input channels.
-pub struct AdcInputs {
-    adc0: Adc0Input,
-    adc1: Adc1Input,
-}
-
-impl AdcInputs {
-    /// Construct the ADC inputs.
-    pub fn new(adc0: Adc0Input, adc1: Adc1Input) -> Self {
-        Self { adc0, adc1 }
-    }
-
-    /// Interrupt handler to handle when the sample collection DMA transfer completes.
-    ///
-    /// # Returns
-    /// (adc0, adc1) where adcN is a reference to the collected ADC samples. Two array references
-    /// are returned - one for each ADC sample stream.
-    pub fn transfer_complete_handler(
-        &mut self,
-    ) -> (&[u16; SAMPLE_BUFFER_SIZE], &[u16; SAMPLE_BUFFER_SIZE]) {
-        let adc0_buffer = self.adc0.transfer_complete_handler();
-        let adc1_buffer = self.adc1.transfer_complete_handler();
-        (adc0_buffer, adc1_buffer)
-    }
-}
-
-/// Represents data associated with ADC0.
-pub struct Adc0Input {
-    next_buffer: Option<&'static mut [u16; SAMPLE_BUFFER_SIZE]>,
-    transfer: Transfer<
-        hal::dma::dma::Stream1<hal::stm32::DMA1>,
-        hal::spi::Spi<hal::stm32::SPI2, hal::spi::Disabled, u16>,
-        PeripheralToMemory,
-        &'static mut [u16; SAMPLE_BUFFER_SIZE],
-    >,
-    _trigger_transfer: Transfer<
-        hal::dma::dma::Stream0<hal::stm32::DMA1>,
-        SPI2,
-        MemoryToPeripheral,
-        &'static mut [u16; 1],
-    >,
-}
-
-impl Adc0Input {
-    /// Construct the ADC0 input channel.
-    ///
-    /// # Args
-    /// * `spi` - The SPI interface used to communicate with the ADC.
-    /// * `trigger_stream` - The DMA stream used to trigger each ADC transfer by writing a word into
-    ///   the SPI TX FIFO.
-    /// * `data_stream` - The DMA stream used to read samples received over SPI into a data buffer.
-    /// * `_trigger_channel` - The ADC sampling timer output compare channel for read triggers.
-    pub fn new(
-        spi: hal::spi::Spi<hal::stm32::SPI2, hal::spi::Enabled, u16>,
-        trigger_stream: hal::dma::dma::Stream0<hal::stm32::DMA1>,
-        data_stream: hal::dma::dma::Stream1<hal::stm32::DMA1>,
-        trigger_channel: sampling_timer::tim2::Channel1,
-    ) -> Self {
-        // Generate DMA events when an output compare of the timer hitting zero (timer roll over)
-        // occurs.
-        trigger_channel.listen_dma();
-        trigger_channel.to_output_compare(0);
-
-        // The trigger stream constantly writes to the TX FIFO using a static word (dont-care
-        // contents). Thus, neither the memory or peripheral address ever change. This is run in
-        // circular mode to be completed at every DMA request.
-        let trigger_config = DmaConfig::default()
-            .priority(Priority::High)
-            .circular_buffer(true);
-
-        // Construct the trigger stream to write from memory to the peripheral.
-        let mut trigger_transfer: Transfer<_, _, MemoryToPeripheral, _> =
-            Transfer::init(
-                trigger_stream,
-                SPI2::new(trigger_channel),
-                // Note(unsafe): Because this is a Memory->Peripheral transfer, this data is never
-                // actually modified. It technically only needs to be immutably borrowed, but the
-                // current HAL API only supports mutable borrows.
-                unsafe { &mut SPI_START },
-                None,
-                trigger_config,
-            );
-
-        // The data stream constantly reads from the SPI RX FIFO into a RAM buffer. The peripheral
-        // stalls reads of the SPI RX FIFO until data is available, so the DMA transfer completes
-        // after the requested number of samples have been collected. Note that only ADC1's data
-        // stream is used to trigger a transfer completion interrupt.
-        let data_config = DmaConfig::default()
-            .memory_increment(true)
-            .priority(Priority::VeryHigh);
-
-        // A SPI peripheral error interrupt is used to determine if the RX FIFO overflows. This
-        // indicates that samples were dropped due to excessive processing time in the main
-        // application (e.g. a second DMA transfer completes before the first was done with
-        // processing). This is used as a flow control indicator to guarantee that no ADC samples
-        // are lost.
-        let mut spi = spi.disable();
-        spi.listen(hal::spi::Event::Error);
-
-        // The data transfer is always a transfer of data from the peripheral to a RAM buffer.
-        let mut data_transfer: Transfer<_, _, PeripheralToMemory, _> =
-            Transfer::init(
-                data_stream,
-                spi,
-                // Note(unsafe): The ADC0_BUF0 is "owned" by this peripheral. It shall not be used
-                // anywhere else in the module.
-                unsafe { &mut ADC0_BUF0 },
-                None,
-                data_config,
-            );
-
-        data_transfer.start(|spi| {
-            // Allow the SPI FIFOs to operate using only DMA data channels.
-            spi.enable_dma_rx();
-            spi.enable_dma_tx();
-
-            // Enable SPI and start it in infinite transaction mode.
-            spi.inner().cr1.modify(|_, w| w.spe().set_bit());
-            spi.inner().cr1.modify(|_, w| w.cstart().started());
-        });
-
-        trigger_transfer.start(|_| {});
-
-        Self {
-            // Note(unsafe): The ADC0_BUF1 is "owned" by this peripheral. It shall not be used
-            // anywhere else in the module.
-            next_buffer: unsafe { Some(&mut ADC0_BUF1) },
-            transfer: data_transfer,
-            _trigger_transfer: trigger_transfer,
+macro_rules! adc_input {
+    ($name:ident, $index:literal, $trigger_stream:ident, $data_stream:ident,
+     $spi:ident, $trigger_channel:ident, $dma_req:ident) => {
+        /// $spi is used as a type for indicating a DMA transfer into the SPI TX FIFO
+        /// whenever the tim2 update dma request occurs.
+        struct $spi {
+            _channel: sampling_timer::tim2::$trigger_channel,
         }
-    }
-
-    /// Handle a transfer completion.
-    ///
-    /// # Returns
-    /// A reference to the underlying buffer that has been filled with ADC samples.
-    pub fn transfer_complete_handler(&mut self) -> &[u16; SAMPLE_BUFFER_SIZE] {
-        let next_buffer = self.next_buffer.take().unwrap();
-
-        // Wait for the transfer to fully complete before continuing.
-        // Note: If a device hangs up, check that this conditional is passing correctly, as there is
-        // no time-out checks here in the interest of execution speed.
-        while !self.transfer.get_transfer_complete_flag() {}
-
-        // Start the next transfer.
-        self.transfer.clear_interrupts();
-        let (prev_buffer, _) =
-            self.transfer.next_transfer(next_buffer).unwrap();
-
-        self.next_buffer.replace(prev_buffer);
-        self.next_buffer.as_ref().unwrap()
-    }
-}
-
-/// Represents the data input stream from ADC1
-pub struct Adc1Input {
-    next_buffer: Option<&'static mut [u16; SAMPLE_BUFFER_SIZE]>,
-    transfer: Transfer<
-        hal::dma::dma::Stream3<hal::stm32::DMA1>,
-        hal::spi::Spi<hal::stm32::SPI3, hal::spi::Disabled, u16>,
-        PeripheralToMemory,
-        &'static mut [u16; SAMPLE_BUFFER_SIZE],
-    >,
-    _trigger_transfer: Transfer<
-        hal::dma::dma::Stream2<hal::stm32::DMA1>,
-        SPI3,
-        MemoryToPeripheral,
-        &'static mut [u16; 1],
-    >,
-}
-
-impl Adc1Input {
-    /// Construct a new ADC1 input data stream.
-    ///
-    /// # Args
-    /// * `spi` - The SPI interface connected to ADC1.
-    /// * `trigger_stream` - The DMA stream used to trigger ADC conversions on the SPI interface.
-    /// * `data_stream` - The DMA stream used to read ADC samples from the SPI RX FIFO.
-    /// * `trigger_channel` - The ADC sampling timer output compare channel for read triggers.
-    pub fn new(
-        spi: hal::spi::Spi<hal::stm32::SPI3, hal::spi::Enabled, u16>,
-        trigger_stream: hal::dma::dma::Stream2<hal::stm32::DMA1>,
-        data_stream: hal::dma::dma::Stream3<hal::stm32::DMA1>,
-        trigger_channel: sampling_timer::tim2::Channel2,
-    ) -> Self {
-        // Generate DMA events when an output compare of the timer hitting zero (timer roll over)
-        // occurs.
-        trigger_channel.listen_dma();
-        trigger_channel.to_output_compare(0);
-
-        // The trigger stream constantly writes to the TX FIFO using a static word (dont-care
-        // contents). Thus, neither the memory or peripheral address ever change. This is run in
-        // circular mode to be completed at every DMA request.
-        let trigger_config = DmaConfig::default()
-            .priority(Priority::High)
-            .circular_buffer(true);
-
-        // Construct the trigger stream to write from memory to the peripheral.
-        let mut trigger_transfer: Transfer<_, _, MemoryToPeripheral, _> =
-            Transfer::init(
-                trigger_stream,
-                SPI3::new(trigger_channel),
-                // Note(unsafe). This transaction is read-only and SPI_START is a dont-care value,
-                // so it is always safe to share.
-                unsafe { &mut SPI_START },
-                None,
-                trigger_config,
-            );
-
-        // The data stream constantly reads from the SPI RX FIFO into a RAM buffer. The peripheral
-        // stalls reads of the SPI RX FIFO until data is available, so the DMA transfer completes
-        // after the requested number of samples have been collected. Note that only ADC1's data
-        // stream is used to trigger a transfer completion interrupt.
-        let data_config = DmaConfig::default()
-            .memory_increment(true)
-            .transfer_complete_interrupt(true)
-            .priority(Priority::VeryHigh);
-
-        // A SPI peripheral error interrupt is used to determine if the RX FIFO overflows. This
-        // indicates that samples were dropped due to excessive processing time in the main
-        // application (e.g. a second DMA transfer completes before the first was done with
-        // processing). This is used as a flow control indicator to guarantee that no ADC samples
-        // are lost.
-        let mut spi = spi.disable();
-        spi.listen(hal::spi::Event::Error);
-
-        // The data transfer is always a transfer of data from the peripheral to a RAM buffer.
-        let mut data_transfer: Transfer<_, _, PeripheralToMemory, _> =
-            Transfer::init(
-                data_stream,
-                spi,
-                // Note(unsafe): The ADC1_BUF0 is "owned" by this peripheral. It shall not be used
-                // anywhere else in the module.
-                unsafe { &mut ADC1_BUF0 },
-                None,
-                data_config,
-            );
-
-        data_transfer.start(|spi| {
-            // Allow the SPI FIFOs to operate using only DMA data channels.
-            spi.enable_dma_rx();
-            spi.enable_dma_tx();
-
-            // Enable SPI and start it in infinite transaction mode.
-            spi.inner().cr1.modify(|_, w| w.spe().set_bit());
-            spi.inner().cr1.modify(|_, w| w.cstart().started());
-        });
-
-        trigger_transfer.start(|_| {});
-
-        Self {
-            // Note(unsafe): The ADC1_BUF1 is "owned" by this peripheral. It shall not be used
-            // anywhere else in the module.
-            next_buffer: unsafe { Some(&mut ADC1_BUF1) },
-            transfer: data_transfer,
-            _trigger_transfer: trigger_transfer,
+        impl $spi {
+            pub fn new(
+                _channel: sampling_timer::tim2::$trigger_channel,
+            ) -> Self {
+                Self { _channel }
+            }
         }
-    }
 
-    /// Handle a transfer completion.
-    ///
-    /// # Returns
-    /// A reference to the underlying buffer that has been filled with ADC samples.
-    pub fn transfer_complete_handler(&mut self) -> &[u16; SAMPLE_BUFFER_SIZE] {
-        let next_buffer = self.next_buffer.take().unwrap();
+        // Note(unsafe): This structure is only safe to instantiate once. The DMA request is hard-coded and
+        // may only be used if ownership of the timer2 $trigger_channel compare channel is assured, which is
+        // ensured by maintaining ownership of the channel.
+        unsafe impl TargetAddress<MemoryToPeripheral> for $spi {
+            /// SPI is configured to operate using 16-bit transfer words.
+            type MemSize = u16;
 
-        // Wait for the transfer to fully complete before continuing.
-        // Note: If a device hangs up, check that this conditional is passing correctly, as there is
-        // no time-out checks here in the interest of execution speed.
-        while !self.transfer.get_transfer_complete_flag() {}
+            /// SPI DMA requests are generated whenever TIM2 CHx ($dma_req) comparison occurs.
+            const REQUEST_LINE: Option<u8> = Some(DMAReq::$dma_req as u8);
 
-        // Start the next transfer.
-        self.transfer.clear_interrupts();
-        let (prev_buffer, _) =
-            self.transfer.next_transfer(next_buffer).unwrap();
+            /// Whenever the DMA request occurs, it should write into SPI's TX FIFO to start a DMA
+            /// transfer.
+            fn address(&self) -> u32 {
+                // Note(unsafe): It is assumed that SPI is owned by another DMA transfer and this DMA is
+                // only used for the transmit-half of DMA.
+                let regs = unsafe { &*hal::stm32::$spi::ptr() };
+                &regs.txdr as *const _ as u32
+            }
+        }
 
-        self.next_buffer.replace(prev_buffer);
-        self.next_buffer.as_ref().unwrap()
-    }
+        /// Represents data associated with ADC.
+        pub struct $name {
+            next_buffer: Option<&'static mut [u16; SAMPLE_BUFFER_SIZE]>,
+            transfer: Transfer<
+                hal::dma::dma::$data_stream<hal::stm32::DMA1>,
+                hal::spi::Spi<hal::stm32::$spi, hal::spi::Disabled, u16>,
+                PeripheralToMemory,
+                &'static mut [u16; SAMPLE_BUFFER_SIZE],
+            >,
+            _trigger_transfer: Transfer<
+                hal::dma::dma::$trigger_stream<hal::stm32::DMA1>,
+                $spi,
+                MemoryToPeripheral,
+                &'static mut [u16; 1],
+            >,
+        }
+
+        impl $name {
+            /// Construct the ADC input channel.
+            ///
+            /// # Args
+            /// * `spi` - The SPI interface used to communicate with the ADC.
+            /// * `trigger_stream` - The DMA stream used to trigger each ADC transfer by writing a word into
+            ///   the SPI TX FIFO.
+            /// * `data_stream` - The DMA stream used to read samples received over SPI into a data buffer.
+            /// * `_trigger_channel` - The ADC sampling timer output compare channel for read triggers.
+            pub fn new(
+                spi: hal::spi::Spi<hal::stm32::$spi, hal::spi::Enabled, u16>,
+                trigger_stream: hal::dma::dma::$trigger_stream<
+                    hal::stm32::DMA1,
+                >,
+                data_stream: hal::dma::dma::$data_stream<hal::stm32::DMA1>,
+                trigger_channel: sampling_timer::tim2::$trigger_channel,
+            ) -> Self {
+                // Generate DMA events when an output compare of the timer hitting zero (timer roll over)
+                // occurs.
+                trigger_channel.listen_dma();
+                trigger_channel.to_output_compare(0);
+
+                // The trigger stream constantly writes to the TX FIFO using a static word (dont-care
+                // contents). Thus, neither the memory or peripheral address ever change. This is run in
+                // circular mode to be completed at every DMA request.
+                let trigger_config = DmaConfig::default()
+                    .priority(Priority::High)
+                    .circular_buffer(true);
+
+                // Construct the trigger stream to write from memory to the peripheral.
+                let mut trigger_transfer: Transfer<
+                    _,
+                    _,
+                    MemoryToPeripheral,
+                    _,
+                > = Transfer::init(
+                    trigger_stream,
+                    $spi::new(trigger_channel),
+                    // Note(unsafe): Because this is a Memory->Peripheral transfer, this data is never
+                    // actually modified. It technically only needs to be immutably borrowed, but the
+                    // current HAL API only supports mutable borrows.
+                    unsafe { &mut SPI_START },
+                    None,
+                    trigger_config,
+                );
+
+                // The data stream constantly reads from the SPI RX FIFO into a RAM buffer. The peripheral
+                // stalls reads of the SPI RX FIFO until data is available, so the DMA transfer completes
+                // after the requested number of samples have been collected. Note that only ADC1's (sic!)
+                // data stream is used to trigger a transfer completion interrupt.
+                let data_config = DmaConfig::default()
+                    .memory_increment(true)
+                    .transfer_complete_interrupt($index == 1)
+                    .priority(Priority::VeryHigh);
+
+                // A SPI peripheral error interrupt is used to determine if the RX FIFO overflows. This
+                // indicates that samples were dropped due to excessive processing time in the main
+                // application (e.g. a second DMA transfer completes before the first was done with
+                // processing). This is used as a flow control indicator to guarantee that no ADC samples
+                // are lost.
+                let mut spi = spi.disable();
+                spi.listen(hal::spi::Event::Error);
+
+                // The data transfer is always a transfer of data from the peripheral to a RAM buffer.
+                let mut data_transfer: Transfer<_, _, PeripheralToMemory, _> =
+                    Transfer::init(
+                        data_stream,
+                        spi,
+                        // Note(unsafe): The ADC_BUF[$index][0] is "owned" by this peripheral.
+                        // It shall not be used anywhere else in the module.
+                        unsafe { &mut ADC_BUF[$index][0] },
+                        None,
+                        data_config,
+                    );
+
+                data_transfer.start(|spi| {
+                    // Allow the SPI FIFOs to operate using only DMA data channels.
+                    spi.enable_dma_rx();
+                    spi.enable_dma_tx();
+
+                    // Enable SPI and start it in infinite transaction mode.
+                    spi.inner().cr1.modify(|_, w| w.spe().set_bit());
+                    spi.inner().cr1.modify(|_, w| w.cstart().started());
+                });
+
+                trigger_transfer.start(|_| {});
+
+                Self {
+                    // Note(unsafe): The ADC_BUF[$index][1] is "owned" by this peripheral. It shall not be used
+                    // anywhere else in the module.
+                    next_buffer: unsafe { Some(&mut ADC_BUF[$index][1]) },
+                    transfer: data_transfer,
+                    _trigger_transfer: trigger_transfer,
+                }
+            }
+
+            /// Obtain a buffer filled with ADC samples.
+            ///
+            /// # Returns
+            /// A reference to the underlying buffer that has been filled with ADC samples.
+            pub fn acquire_buffer(&mut self) -> &[u16; SAMPLE_BUFFER_SIZE] {
+                // Wait for the transfer to fully complete before continuing.
+                // Note: If a device hangs up, check that this conditional is passing correctly, as there is
+                // no time-out checks here in the interest of execution speed.
+                while !self.transfer.get_transfer_complete_flag() {}
+
+                let next_buffer = self.next_buffer.take().unwrap();
+
+                // Start the next transfer.
+                self.transfer.clear_interrupts();
+                let (prev_buffer, _) =
+                    self.transfer.next_transfer(next_buffer).unwrap();
+
+                self.next_buffer.replace(prev_buffer); // .unwrap_none() https://github.com/rust-lang/rust/issues/62633
+
+                self.next_buffer.as_ref().unwrap()
+            }
+        }
+    };
 }
+
+adc_input!(Adc0Input, 0, Stream0, Stream1, SPI2, Channel1, TIM2_CH1);
+adc_input!(Adc1Input, 1, Stream2, Stream3, SPI3, Channel2, TIM2_CH2);
