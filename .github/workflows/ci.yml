@@ -94,7 +94,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --manifest-path dsp/Cargo.toml --target=x86_64-unknown-linux-gnu
+          args: --package dsp --target=x86_64-unknown-linux-gnu
 
   # Tell bors about it
   # https://github.com/rtic-rs/cortex-m-rtic/blob/8a4f9c6b8ae91bebeea0791680f89375a78bffc6/.github/workflows/build.yml#L566-L603
