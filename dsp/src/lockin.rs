@@ -315,9 +315,7 @@ pub fn magnitude_phase(signal: &mut [Complex<f32>]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::{
-        complex_array_is_close, complex_array_within_tolerance,
-    };
+    use crate::testing::complex_allclose;
 
     #[test]
     fn array_push() {
@@ -334,41 +332,62 @@ mod tests {
     fn magnitude_phase_length_1_quadrant_1() {
         let mut signal: [Complex<f32>; 1] = [(1., 1.)];
         magnitude_phase(&mut signal);
-        assert!(complex_array_is_close(&signal, &[(2_f32.sqrt(), PI / 4.)]));
+        assert!(complex_allclose(
+            &signal,
+            &[(2_f32.sqrt(), PI / 4.)],
+            f32::EPSILON,
+            0.
+        ));
 
         signal = [(3_f32.sqrt() / 2., 1. / 2.)];
         magnitude_phase(&mut signal);
-        assert!(complex_array_is_close(&signal, &[(1., PI / 6.)]));
+        assert!(complex_allclose(
+            &signal,
+            &[(1., PI / 6.)],
+            f32::EPSILON,
+            0.
+        ));
     }
 
     #[test]
     fn magnitude_phase_length_1_quadrant_2() {
         let mut signal = [(-1., 1.)];
         magnitude_phase(&mut signal);
-        assert!(complex_array_is_close(
+        assert!(complex_allclose(
             &signal,
-            &[(2_f32.sqrt(), 3. * PI / 4.)]
+            &[(2_f32.sqrt(), 3. * PI / 4.)],
+            f32::EPSILON,
+            0.
         ));
 
         signal = [(-1. / 2., 3_f32.sqrt() / 2.)];
         magnitude_phase(&mut signal);
-        assert!(complex_array_is_close(&signal, &[(1_f32, 2. * PI / 3.)]));
+        assert!(complex_allclose(
+            &signal,
+            &[(1_f32, 2. * PI / 3.)],
+            f32::EPSILON,
+            0.
+        ));
     }
 
     #[test]
     fn magnitude_phase_length_1_quadrant_3() {
         let mut signal = [(-1. / 2_f32.sqrt(), -1. / 2_f32.sqrt())];
         magnitude_phase(&mut signal);
-        assert!(complex_array_is_close(
+        assert!(complex_allclose(
             &signal,
-            &[(1_f32.sqrt(), -3. * PI / 4.)]
+            &[(1_f32.sqrt(), -3. * PI / 4.)],
+            f32::EPSILON,
+            0.
         ));
 
         signal = [(-1. / 2., -2_f32.sqrt())];
         magnitude_phase(&mut signal);
-        assert!(complex_array_is_close(
+        assert!(complex_allclose(
             &signal,
-            &[((3. / 2.) as f32, -1.91063323625 as f32)]
+            &[((3. / 2.) as f32, -1.91063323625 as f32)],
+            f32::EPSILON,
+            0.
         ));
     }
 
@@ -376,14 +395,21 @@ mod tests {
     fn magnitude_phase_length_1_quadrant_4() {
         let mut signal = [(1. / 2_f32.sqrt(), -1. / 2_f32.sqrt())];
         magnitude_phase(&mut signal);
-        assert!(complex_array_is_close(
+        assert!(complex_allclose(
             &signal,
-            &[(1_f32.sqrt(), -1. * PI / 4.)]
+            &[(1_f32.sqrt(), -1. * PI / 4.)],
+            f32::EPSILON,
+            0.
         ));
 
         signal = [(3_f32.sqrt() / 2., -1. / 2.)];
         magnitude_phase(&mut signal);
-        assert!(complex_array_is_close(&signal, &[(1_f32, -PI / 6.)]));
+        assert!(complex_allclose(
+            &signal,
+            &[(1_f32, -PI / 6.)],
+            f32::EPSILON,
+            0.
+        ));
     }
 
     #[test]
@@ -483,7 +509,7 @@ mod tests {
         }
         let result = lockin.demodulate(&adc_samples, timestamps).unwrap();
         assert!(
-            complex_array_within_tolerance(&result, &signal, 0., 1e-5),
+            complex_allclose(&result, &signal, 0., 1e-5),
             "\nsignal computed: {:?},\nsignal expected: {:?}",
             result,
             signal
