@@ -214,7 +214,7 @@ const APP: () = {
         pounder: Option<pounder::PounderDevices<asm_delay::AsmDelay>>,
 
         // Format: iir_state[ch][cascade-no][coeff]
-        #[init([[[0.; 5]; IIR_CASCADE_LENGTH];2])]
+        #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
         iir_state: [[iir::IIRState; IIR_CASCADE_LENGTH]; 2],
         #[init([[iir::IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; IIR_CASCADE_LENGTH]; 2])]
         iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
