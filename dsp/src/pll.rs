@@ -74,4 +74,23 @@ mod tests {
         assert_eq!(y, 0xc2);
         assert_eq!(f, y);
     }
+
+    #[test]
+    fn converge() {
+        let mut p = PLLState::default();
+        let f0 = 0x71f63049_i32;
+        let shift = 10;
+        let n = 31 << shift + 2;
+        let mut x = 0i32;
+        for i in 0..n {
+            x = x.wrapping_add(f0);
+            let (y, f) = p.update(x, shift);
+            if i > n / 4 {
+                assert_eq!(f.wrapping_sub(f0).abs() <= 1, true);
+            }
+            if i > n / 2 {
+                assert_eq!(y.wrapping_sub(x).abs() < 1 << 18, true);
+            }
+        }
+    }
 }
