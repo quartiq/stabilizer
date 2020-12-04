@@ -783,7 +783,6 @@ const APP: () = {
     }
 
     #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afes])]
-
     fn idle(mut c: idle::Context) -> ! {
         let mut socket_set_entries: [_; 8] = Default::default();
         let mut sockets =
