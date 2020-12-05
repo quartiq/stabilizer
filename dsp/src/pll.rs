@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 /// The extension to I^3,I^2,I behavior to track chirps phase-accurately or to i64 data to
 /// increase resolution for extremely narrowband applications is obvious.
 #[derive(Copy, Clone, Default, Deserialize, Serialize)]
-pub struct PLLState {
+pub struct PLL {
     // last input phase
     x: i32,
     // filtered frequency
@@ -38,7 +38,7 @@ pub struct PLLState {
     y: i32,
 }
 
-impl PLLState {
+impl PLL {
     /// Update the PLL with a new phase sample.
     ///
     /// Args:
@@ -49,7 +49,7 @@ impl PLLState {
     /// Returns:
     /// A tuple of instantaneous phase and frequency (the current phase increment).
     pub fn update(&mut self, x: i32, shift: u8) -> (i32, i32) {
-        debug_assert!(shift >= 1 && shift <= 31);
+        debug_assert!((1..=30).contains(&shift));
         let bias = 1i32 << shift;
         let e = x.wrapping_sub(self.f);
         self.f = self.f.wrapping_add(
@@ -57,7 +57,7 @@ impl PLLState {
         );
         self.x = x;
         let f = self.f.wrapping_add(
-            bias.wrapping_add(e).wrapping_sub(self.y) >> shift - 1,
+            bias.wrapping_add(e).wrapping_sub(self.y) >> (shift - 1),
         );
         self.y = self.y.wrapping_add(f);
         (self.y, f)
@@ -69,9 +69,28 @@ mod tests {
     use super::*;
     #[test]
     fn mini() {
-        let mut p = PLLState::default();
+        let mut p = PLL::default();
         let (y, f) = p.update(0x10000, 10);
         assert_eq!(y, 0xc2);
         assert_eq!(f, y);
+    }
+
+    #[test]
+    fn converge() {
+        let mut p = PLL::default();
+        let f0 = 0x71f63049_i32;
+        let shift = 10;
+        let n = 31 << shift + 2;
+        let mut x = 0i32;
+        for i in 0..n {
+            x = x.wrapping_add(f0);
+            let (y, f) = p.update(x, shift);
+            if i > n / 4 {
+                assert_eq!(f.wrapping_sub(f0).abs() <= 1, true);
+            }
+            if i > n / 2 {
+                assert_eq!(y.wrapping_sub(x).abs() < 1 << 18, true);
+            }
+        }
     }
 }
