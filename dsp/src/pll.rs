@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 /// The extension to I^3,I^2,I behavior to track chirps phase-accurately or to i64 data to
 /// increase resolution for extremely narrowband applications is obvious.
 #[derive(Copy, Clone, Default, Deserialize, Serialize)]
-pub struct PLLState {
+pub struct PLL {
     // last input phase
     x: i32,
     // filtered frequency
@@ -38,7 +38,7 @@ pub struct PLLState {
     y: i32,
 }
 
-impl PLLState {
+impl PLL {
     /// Update the PLL with a new phase sample.
     ///
     /// Args:
@@ -69,7 +69,7 @@ mod tests {
     use super::*;
     #[test]
     fn mini() {
-        let mut p = PLLState::default();
+        let mut p = PLL::default();
         let (y, f) = p.update(0x10000, 10);
         assert_eq!(y, 0xc2);
         assert_eq!(f, y);
@@ -77,7 +77,7 @@ mod tests {
 
     #[test]
     fn converge() {
-        let mut p = PLLState::default();
+        let mut p = PLL::default();
         let f0 = 0x71f63049_i32;
         let shift = 10;
         let n = 31 << shift + 2;
