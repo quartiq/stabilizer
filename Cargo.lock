@@ -189,6 +189,7 @@ dependencies = [
 name = "dsp"
 version = "0.1.0"
 dependencies = [
+ "libm",
  "serde",
 ]
 
@@ -296,6 +297,12 @@ dependencies = [
  "autocfg",
  "hashbrown",
 ]
+
+[[package]]
+name = "libm"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
 
 [[package]]
 name = "log"
