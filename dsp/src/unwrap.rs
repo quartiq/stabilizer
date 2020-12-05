@@ -2,15 +2,16 @@ use serde::{Deserialize, Serialize};
 
 /// Get phase wrap from x to y.
 ///
-/// Phases are modulo integer overflow.
+/// Phases are modulo integer overflow. The wraps have the same bias as
+/// the base data type itself.
 ///
 /// Args:
 /// * `x`: Old phase sample
 /// * `y`: New phase sample
 ///
 /// Returns:
-/// A tuple containg the (wrapped) phase difference and
-/// one times the direction of the wrap.
+/// A tuple containg the (wrapped) phase difference and the signum of the wrap.
+#[inline(always)]
 pub fn get_wrap(x: i32, y: i32) -> (i32, i8) {
     let delta = y.wrapping_sub(x);
     let wrap = (delta >= 0) as i8 - (y >= x) as i8;
@@ -27,15 +28,15 @@ pub struct Unwrapper {
 }
 
 impl Unwrapper {
-    /// Unwrap a new sample from a phase sequence and update the
-    /// unwrapper state.
+    /// Unwrap a new sample from a phase sequence and update the unwrapper
+    /// state.
     ///
     /// Args:
     /// * `x`: New phase sample
     ///
     /// Returns:
-    /// A tuple containing the (wrapped) phase difference
-    /// and the signed number of phase wraps corresponding to the new sample.
+    /// A tuple containing the (wrapped) phase difference and the signed
+    /// number of phase wraps accumulated to the new sample.
     pub fn update(&mut self, x: i32) -> (i32, i32) {
         let (dx, v) = get_wrap(self.x, x);
         self.x = x;
@@ -51,18 +52,24 @@ mod tests {
     fn mini() {
         for (x0, x1, v) in [
             (0i32, 0i32, 0i8),
-            (1, 1, 0),
-            (-1, -1, 0),
-            (1, -1, 0),
-            (-1, 1, 0),
+            (0, 1, 0),
+            (0, -1, 0),
+            (1, 0, 0),
+            (-1, 0, 0),
             (0, 0x7fff_ffff, 0),
             (-1, 0x7fff_ffff, -1),
+            (-2, 0x7fff_ffff, -1),
+            (-1, -0x8000_0000, 0),
             (0, -0x8000_0000, 0),
             (1, -0x8000_0000, 1),
             (-0x6000_0000, 0x6000_0000, -1),
             (0x6000_0000, -0x6000_0000, 1),
-            (0x6000_0000, -0x6000_0000, 1),
-            (0x6000_0000, -0x6000_0000, 1),
+            (-0x4000_0000, 0x3fff_ffff, 0),
+            (-0x4000_0000, 0x4000_0000, -1),
+            (-0x4000_0000, 0x4000_0001, -1),
+            (0x4000_0000, -0x3fff_ffff, 0),
+            (0x4000_0000, -0x4000_0000, 0),
+            (0x4000_0000, -0x4000_0001, 1),
         ]
         .iter()
         {
