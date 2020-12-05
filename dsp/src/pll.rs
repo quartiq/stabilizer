@@ -49,7 +49,7 @@ impl PLL {
     /// Returns:
     /// A tuple of instantaneous phase and frequency (the current phase increment).
     pub fn update(&mut self, x: i32, shift: u8) -> (i32, i32) {
-        debug_assert!(shift >= 1 && shift <= 31);
+        debug_assert!((1..=30).contains(&shift));
         let bias = 1i32 << shift;
         let e = x.wrapping_sub(self.f);
         self.f = self.f.wrapping_add(
@@ -57,7 +57,7 @@ impl PLL {
         );
         self.x = x;
         let f = self.f.wrapping_add(
-            bias.wrapping_add(e).wrapping_sub(self.y) >> shift - 1,
+            bias.wrapping_add(e).wrapping_sub(self.y) >> (shift - 1),
         );
         self.y = self.y.wrapping_add(f);
         (self.y, f)
