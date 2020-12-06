@@ -18,14 +18,14 @@ pub fn overflowing_sub(y: i32, x: i32) -> (i32, i8) {
 
 /// Overflow unwrapper.
 ///
-/// This is unwrapping as in the phase unwrapping context, not unwrapping as
-/// in the `Result`/`Option` context.
+/// This is unwrapping as in the phase and overflow unwrapping context, not
+/// unwrapping as in the `Result`/`Option` context.
 #[derive(Copy, Clone, Default, Deserialize, Serialize)]
 pub struct Unwrapper {
     // last input
     x: i32,
     // last wraps
-    v: i32,
+    w: i32,
 }
 
 impl Unwrapper {
@@ -35,13 +35,13 @@ impl Unwrapper {
     /// * `x`: New sample
     ///
     /// Returns:
-    /// A tuple containing the (wrapped) difference `x - x_old` and the signed
-    /// number of wraps accumulated by `x`.
+    /// A tuple containing the (wrapped) difference `x - x_old` and the
+    /// signed number of wraps accumulated by the new sample.
     pub fn update(&mut self, x: i32) -> (i32, i32) {
-        let (dx, v) = overflowing_sub(x, self.x);
+        let (dx, dw) = overflowing_sub(x, self.x);
         self.x = x;
-        self.v = self.v.saturating_add(v as i32);
-        (dx, self.v)
+        self.w = self.w.wrapping_add(dw as i32);
+        (dx, self.w)
     }
 }
 
