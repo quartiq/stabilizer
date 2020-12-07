@@ -80,6 +80,7 @@ mod timers;
 use adc::{Adc0Input, Adc1Input};
 use dac::{Dac0Output, Dac1Output};
 use dsp::iir;
+use pounder::DdsOutput;
 
 #[cfg(not(feature = "semihosting"))]
 fn init_log() {}
@@ -201,6 +202,8 @@ const APP: () = {
         input_stamper: digital_input_stamper::InputStamper,
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
+
+        dds_output: Option<DdsOutput>,
 
         // Note: It appears that rustfmt generates a format that GDB cannot recognize, which
         // results in GDB breakpoints being set improperly.
@@ -487,8 +490,9 @@ const APP: () = {
         // Measure the Pounder PGOOD output to detect if pounder is present on Stabilizer.
         let pounder_pgood = gpiob.pb13.into_pull_down_input();
         delay.delay_ms(2u8);
-        let pounder_devices = if pounder_pgood.is_high().unwrap() {
-            let ad9959 = {
+        let (pounder_devices, dds_output) = if pounder_pgood.is_high().unwrap()
+        {
+            let mut ad9959 = {
                 let qspi_interface = {
                     // Instantiate the QUADSPI pins and peripheral interface.
                     let qspi_pins = {
@@ -532,12 +536,12 @@ const APP: () = {
                     pounder::QspiInterface::new(qspi).unwrap()
                 };
 
-                let mut reset_pin = gpioa.pa0.into_push_pull_output();
+                let reset_pin = gpioa.pa0.into_push_pull_output();
                 let mut io_update = gpiog.pg7.into_push_pull_output();
 
                 let ad9959 = ad9959::Ad9959::new(
                     qspi_interface,
-                    &mut reset_pin,
+                    reset_pin,
                     &mut io_update,
                     &mut delay,
                     ad9959::Mode::FourBitSerial,
@@ -619,54 +623,64 @@ const APP: () = {
             let adc1_in_p = gpiof.pf11.into_analog();
             let adc2_in_p = gpiof.pf14.into_analog();
 
-            let io_update_trigger = {
-                let _io_update = gpiog
-                    .pg7
-                    .into_alternate_af2()
-                    .set_speed(hal::gpio::Speed::VeryHigh);
+            let pounder_devices = pounder::PounderDevices::new(
+                io_expander,
+                &mut ad9959,
+                spi,
+                adc1,
+                adc2,
+                adc1_in_p,
+                adc2_in_p,
+            )
+            .unwrap();
 
-                // Configure the IO_Update signal for the DDS.
-                let mut hrtimer = hrtimer::HighResTimerE::new(
-                    dp.HRTIM_TIME,
-                    dp.HRTIM_MASTER,
-                    dp.HRTIM_COMMON,
-                    ccdr.clocks,
-                    ccdr.peripheral.HRTIM,
-                );
+            let dds_output = {
+                let io_update_trigger = {
+                    let _io_update = gpiog
+                        .pg7
+                        .into_alternate_af2()
+                        .set_speed(hal::gpio::Speed::VeryHigh);
 
-                // IO_Update should be latched for 50ns after the QSPI profile write. Profile writes
-                // are always 16 bytes, with 2 cycles required per byte, coming out to a total of 32
-                // QSPI clock cycles. The QSPI is configured for 40MHz, so this comes out to an
-                // offset of 800nS. We use 900ns to be safe - note that the timer is triggered after
-                // the QSPI write, which can take approximately 120nS, so there is additional
-                // margin.
-                hrtimer.configure_single_shot(
-                    hrtimer::Channel::Two,
-                    50_e-9,
-                    900_e-9,
-                );
+                    // Configure the IO_Update signal for the DDS.
+                    let mut hrtimer = hrtimer::HighResTimerE::new(
+                        dp.HRTIM_TIME,
+                        dp.HRTIM_MASTER,
+                        dp.HRTIM_COMMON,
+                        ccdr.clocks,
+                        ccdr.peripheral.HRTIM,
+                    );
 
-                // Ensure that we have enough time for an IO-update every sample.
-                assert!(1.0 / (1000 * SAMPLE_FREQUENCY_KHZ) as f32 > 900_e-9);
+                    // IO_Update should be latched for 4 SYNC_CLK cycles after the QSPI profile
+                    // write. With pounder SYNC_CLK running at 100MHz (1/4 of the pounder reference
+                    // clock of 400MHz), this corresponds to 40ns. To accomodate rounding errors, we
+                    // use 50ns instead.
+                    //
+                    // Profile writes are always 16 bytes, with 2 cycles required per byte, coming
+                    // out to a total of 32 QSPI clock cycles. The QSPI is configured for 40MHz, so
+                    // this comes out to an offset of 800nS. We use 900ns to be safe - note that the
+                    // timer is triggered after the QSPI write, which can take approximately 120nS,
+                    // so there is additional margin.
+                    hrtimer.configure_single_shot(
+                        hrtimer::Channel::Two,
+                        50_e-9,
+                        900_e-9,
+                    );
 
-                hrtimer
+                    // Ensure that we have enough time for an IO-update every sample.
+                    assert!(
+                        1.0 / (1000 * SAMPLE_FREQUENCY_KHZ) as f32 > 900_e-9
+                    );
+
+                    hrtimer
+                };
+
+                let (qspi, config) = ad9959.freeze();
+                DdsOutput::new(qspi, io_update_trigger, config)
             };
 
-            Some(
-                pounder::PounderDevices::new(
-                    io_expander,
-                    ad9959,
-                    io_update_trigger,
-                    spi,
-                    adc1,
-                    adc2,
-                    adc1_in_p,
-                    adc2_in_p,
-                )
-                .unwrap(),
-            )
+            (Some(pounder_devices), Some(dds_output))
         } else {
-            None
+            (None, None)
         };
 
         let mut eeprom_i2c = {
@@ -780,7 +794,6 @@ const APP: () = {
         };
 
         cp.SCB.enable_icache();
-        //cp.SCB.enable_dcache(&mut cp.CPUID);
 
         // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
         // info!("Built on {}", build_info::BUILT_TIME_UTC);
@@ -808,7 +821,7 @@ const APP: () = {
             adcs,
             dacs,
             input_stamper,
-
+            dds_output,
             pounder: pounder_devices,
 
             eeprom_i2c,
@@ -818,7 +831,7 @@ const APP: () = {
         }
     }
 
-    #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch, input_stamper], priority=2)]
+    #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch, dds_output, input_stamper], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -846,6 +859,18 @@ const APP: () = {
                 dac_samples[channel][sample] = y as u16 ^ 0x8000;
             }
         }
+
+        if let Some(dds_output) = c.resources.dds_output {
+            let builder = dds_output.builder().update_channels(
+                &[pounder::Channel::Out0.into()],
+                Some(u32::MAX / 4),
+                None,
+                None,
+            );
+
+            builder.write_profile();
+        }
+
         let [dac0, dac1] = dac_samples;
         c.resources.dacs.0.release_buffer(dac0);
         c.resources.dacs.1.release_buffer(dac1);
