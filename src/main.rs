@@ -60,6 +60,9 @@ const SAMPLE_FREQUENCY_KHZ: u32 = 500;
 // The desired ADC sample processing buffer size.
 const SAMPLE_BUFFER_SIZE: usize = 1;
 
+// The number of cascaded IIR biquads per channel. Select 1 or 2!
+const IIR_CASCADE_LENGTH: usize = 1;
+
 #[link_section = ".sram3.eth"]
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 
@@ -214,10 +217,11 @@ const APP: () = {
 
         pounder: Option<pounder::PounderDevices>,
 
-        #[init([[0.; 5]; 2])]
-        iir_state: [iir::IIRState; 2],
-        #[init([iir::IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; 2])]
-        iir_ch: [iir::IIR; 2],
+        // Format: iir_state[ch][cascade-no][coeff]
+        #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
+        iir_state: [[iir::IIRState; IIR_CASCADE_LENGTH]; 2],
+        #[init([[iir::IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; IIR_CASCADE_LENGTH]; 2])]
+        iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
     }
 
     #[init]
@@ -809,8 +813,11 @@ const APP: () = {
         for channel in 0..adc_samples.len() {
             for sample in 0..adc_samples[0].len() {
                 let x = f32::from(adc_samples[channel][sample] as i16);
-                let y = c.resources.iir_ch[channel]
-                    .update(&mut c.resources.iir_state[channel], x);
+                let mut y = x;
+                for i in 0..c.resources.iir_state[channel].len() {
+                    y = c.resources.iir_ch[channel][i]
+                        .update(&mut c.resources.iir_state[channel][i], y);
+                }
                 // Note(unsafe): The filter limits ensure that the value is in range.
                 // The truncation introduces 1/2 LSB distortion.
                 let y = unsafe { y.to_int_unchecked::<i16>() };
@@ -887,10 +894,23 @@ const APP: () = {
                                     let state = c.resources.iir_state.lock(|iir_state|
                                         server::Status {
                                             t: time,
-                                            x0: iir_state[0][0],
-                                            y0: iir_state[0][2],
-                                            x1: iir_state[1][0],
-                                            y1: iir_state[1][2],
+                                            x0: iir_state[0][0][0],
+                                            y0: iir_state[0][0][2],
+                                            x1: iir_state[1][0][0],
+                                            y1: iir_state[1][0][2],
+                                    });
+
+                                    Ok::<server::Status, ()>(state)
+                                }),
+                                // "_b" means cascades 2nd IIR
+                                "stabilizer/iir_b/state": (|| {
+                                    let state = c.resources.iir_state.lock(|iir_state|
+                                        server::Status {
+                                            t: time,
+                                            x0: iir_state[0][IIR_CASCADE_LENGTH-1][0],
+                                            y0: iir_state[0][IIR_CASCADE_LENGTH-1][2],
+                                            x1: iir_state[1][IIR_CASCADE_LENGTH-1][0],
+                                            y1: iir_state[1][IIR_CASCADE_LENGTH-1][2],
                                     });
 
                                     Ok::<server::Status, ()>(state)
@@ -906,7 +926,7 @@ const APP: () = {
                                             return Err(());
                                         }
 
-                                        iir_ch[req.channel as usize] = req.iir;
+                                        iir_ch[req.channel as usize][0] = req.iir;
 
                                         Ok::<server::IirRequest, ()>(req)
                                     })
@@ -917,7 +937,29 @@ const APP: () = {
                                             return Err(());
                                         }
 
-                                        iir_ch[req.channel as usize] = req.iir;
+                                        iir_ch[req.channel as usize][0] = req.iir;
+
+                                        Ok::<server::IirRequest, ()>(req)
+                                    })
+                                }),
+                                "stabilizer/iir_b0/state": server::IirRequest, (|req: server::IirRequest| {
+                                    c.resources.iir_ch.lock(|iir_ch| {
+                                        if req.channel > 1 {
+                                            return Err(());
+                                        }
+
+                                        iir_ch[req.channel as usize][IIR_CASCADE_LENGTH-1] = req.iir;
+
+                                        Ok::<server::IirRequest, ()>(req)
+                                    })
+                                }),
+                                "stabilizer/iir_b1/state": server::IirRequest,(|req: server::IirRequest| {
+                                    c.resources.iir_ch.lock(|iir_ch| {
+                                        if req.channel > 1 {
+                                            return Err(());
+                                        }
+
+                                        iir_ch[req.channel as usize][IIR_CASCADE_LENGTH-1] = req.iir;
 
                                         Ok::<server::IirRequest, ()>(req)
                                     })
