@@ -18,7 +18,6 @@ exclude = [
 ]
 
 [badges]
-travis-ci = { repository = "quartiq/stabilizer", branch = "master" }
 maintenance = { status = "experimental" }
 
 [package.metadata.docs.rs]
@@ -42,6 +41,7 @@ asm-delay = "0.9.0"
 enum-iterator = "0.6.0"
 paste = "1"
 dsp = { path = "dsp" }
+ad9959 = { path = "ad9959" }
 
 [dependencies.mcp23017]
 git = "https://github.com/mrd0ll4r/mcp23017.git"
@@ -50,9 +50,6 @@ git = "https://github.com/mrd0ll4r/mcp23017.git"
 version = "0.6"
 features = ["ethernet", "proto-ipv4", "socket-tcp", "proto-ipv6"]
 default-features = false
-
-[dependencies.ad9959]
-path = "ad9959"
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]
