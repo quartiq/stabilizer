@@ -1,3 +1,4 @@
 /target
 /dsp/target
 .gdb_history
+/dsp/src/cossin_table.txt
