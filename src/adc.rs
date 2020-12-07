@@ -195,7 +195,7 @@ macro_rules! adc_input {
 
                 // Start the next transfer.
                 self.transfer.clear_interrupts();
-                let (prev_buffer, _) =
+                let (prev_buffer, _, _) =
                     self.transfer.next_transfer(next_buffer).unwrap();
 
                 self.next_buffer.replace(prev_buffer); // .unwrap_none() https://github.com/rust-lang/rust/issues/62633

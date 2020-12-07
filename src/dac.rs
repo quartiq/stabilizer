@@ -143,7 +143,7 @@ macro_rules! dac_output {
 
                 // Start the next transfer.
                 self.transfer.clear_interrupts();
-                let (prev_buffer, _) =
+                let (prev_buffer, _, _) =
                     self.transfer.next_transfer(next_buffer).unwrap();
 
                 // .unwrap_none() https://github.com/rust-lang/rust/issues/62633

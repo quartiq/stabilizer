@@ -13,8 +13,8 @@ pub struct InputStamper {
     timestamp_buffer: heapless::Vec<u16, heapless::consts::U128>,
     next_buffer: Option<&'static mut [u16; INPUT_BUFFER_SIZE]>,
     transfer: Transfer<
-        hal::dma::dma::Stream4<hal::stm32::DMA1>,
-        sampling_timer::Timer2Channel4,
+        hal::dma::dma::Stream6<hal::stm32::DMA1>,
+        sampling_timer::tim2::Channel4InputCapture,
         PeripheralToMemory,
         &'static mut [u16; INPUT_BUFFER_SIZE],
     >,
@@ -23,13 +23,13 @@ pub struct InputStamper {
 impl InputStamper {
     pub fn new(
         trigger: hal::gpio::gpioa::PA3<hal::gpio::Alternate<hal::gpio::AF1>>,
-        stream: hal::dma::dma::Stream4<hal::stm32::DMA1>,
-        timer_channel: sampling_timer::Timer2Channel4,
+        stream: hal::dma::dma::Stream6<hal::stm32::DMA1>,
+        timer_channel: sampling_timer::tim2::Channel4,
     ) -> Self {
         // Utilize the TIM2 CH4 as an input capture channel - use TI4 (the DI0 input trigger) as the
         // capture source.
         timer_channel.listen_dma();
-        timer_channel.to_input_capture(sampling_timer::CC4S_A::TI4);
+        let input_capture = timer_channel.to_input_capture(sampling_timer::tim2::CC4S_A::TI4);
 
         // Set up the DMA transfer.
         let dma_config = DmaConfig::default()
@@ -39,7 +39,7 @@ impl InputStamper {
         let mut timestamp_transfer: Transfer<_, _, PeripheralToMemory, _> =
             Transfer::init(
                 stream,
-                timer_channel,
+                input_capture,
                 unsafe { &mut BUF0 },
                 None,
                 dma_config,
