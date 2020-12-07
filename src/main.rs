@@ -289,14 +289,21 @@ const APP: () = {
         let sampling_timer_channels = sampling_timer.channels();
 
         let mut timestamp_timer = {
-            // TODO: This needs to be precisely controlled via the prescaler of the timer.
-            let timer5 = dp.TIM5.timer(
-                (SAMPLE_FREQUENCY_KHZ / SAMPLE_BUFFER_SIZE as u32).khz(),
-                ccdr.peripheral.TIM5,
-                &ccdr.clocks,
+            // The timer frequency is manually adjusted below, so the 1KHz setting here is a
+            // dont-care.
+            let timer5 =
+                dp.TIM5.timer(1.khz(), ccdr.peripheral.TIM5, &ccdr.clocks);
+
+            // The time stamp timer must run at exactly a multiple of the sample timer based on the
+            // batch size. To accomodate this, we manually set the period identical to the sample
+            // timer, but use a prescaler that is `BATCH_SIZE` longer.
+            let mut timer = timers::TimestampTimer::new(timer5);
+            timer.set_period(sampling_timer.get_period());
+            timer.set_prescaler(
+                sampling_timer.get_prescaler() * SAMPLE_BUFFER_SIZE as u16,
             );
 
-            timers::TimestampTimer::new(timer5)
+            timer
         };
 
         let timestamp_timer_channels = timestamp_timer.channels();

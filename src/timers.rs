@@ -32,8 +32,36 @@ macro_rules! timer_channels {
                     self.channels.take().unwrap()
                 }
 
-                /// Start the sampling timer.
-                pub fn start(&mut self) {
+                #[allow(dead_code)]
+                pub fn get_prescaler(&self) -> u16 {
+                    let regs = unsafe { &*hal::stm32::$TY::ptr() };
+                    regs.psc.read().psc().bits() + 1
+                }
+
+                #[allow(dead_code)]
+                pub fn set_prescaler(&mut self, prescaler: u16) {
+                    let regs = unsafe { &*hal::stm32::$TY::ptr() };
+                    assert!(prescaler >= 1);
+                    regs.psc.write(|w| w.psc().bits(prescaler - 1));
+                }
+
+                #[allow(dead_code)]
+                pub fn get_period(&self) -> u32 {
+                    let regs = unsafe { &*hal::stm32::$TY::ptr() };
+                    regs.arr.read().arr().bits()
+                }
+
+                #[allow(dead_code)]
+                pub fn set_period(&mut self, period: u32) {
+                    let regs = unsafe { &*hal::stm32::$TY::ptr() };
+                    regs.arr.write(|w| w.arr().bits(period));
+                }
+
+                /// Start the timer.
+                pub fn start(mut self) {
+                    // Force a refresh of the frequency settings.
+                    self.timer.apply_freq();
+
                     self.timer.reset_counter();
                     self.timer.resume();
                 }
