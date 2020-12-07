@@ -13,6 +13,9 @@
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     let gpiod = unsafe { &*hal::stm32::GPIOD::ptr() };
     gpiod.odr.modify(|_, w| w.odr6().high().odr12().high()); // FP_LED_1, FP_LED_3
+    #[cfg(feature = "nightly")]
+    core::intrinsics::abort();
+    #[cfg(not(feature = "nightly"))]
     unsafe {
         core::intrinsics::abort();
     }
@@ -51,7 +54,14 @@ use smoltcp::wire::Ipv4Address;
 
 use heapless::{consts::*, String};
 
+// The desired sampling frequency of the ADCs.
 const SAMPLE_FREQUENCY_KHZ: u32 = 500;
+
+// The desired ADC sample processing buffer size.
+const SAMPLE_BUFFER_SIZE: usize = 1;
+
+// The number of cascaded IIR biquads per channel. Select 1 or 2!
+const IIR_CASCADE_LENGTH: usize = 1;
 
 #[link_section = ".sram3.eth"]
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
@@ -63,12 +73,15 @@ mod digital_input_stamper;
 mod eeprom;
 mod hrtimer;
 mod iir;
+mod design_parameters;
+mod eeprom;
 mod pounder;
 mod sampling_timer;
 mod server;
 
-use adc::{Adc0Input, Adc1Input, AdcInputs};
-use dac::DacOutputs;
+use adc::{Adc0Input, Adc1Input};
+use dac::{Dac0Output, Dac1Output};
+use dsp::iir;
 
 #[cfg(not(feature = "semihosting"))]
 fn init_log() {}
@@ -137,6 +150,7 @@ macro_rules! route_request {
                 match $request.attribute {
                 $(
                     $read_attribute => {
+                        #[allow(clippy::redundant_closure_call)]
                         let value = match $getter() {
                             Ok(data) => data,
                             Err(_) => return server::Response::error($request.attribute,
@@ -165,6 +179,7 @@ macro_rules! route_request {
                                     "Failed to decode value"),
                         };
 
+                        #[allow(clippy::redundant_closure_call)]
                         match $setter(new_value) {
                             Ok(_) => server::Response::success($request.attribute, &$request.value),
                             Err(_) => server::Response::error($request.attribute,
@@ -182,16 +197,12 @@ macro_rules! route_request {
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
-        afe0: AFE0,
-        afe1: AFE1,
-
-        adcs: AdcInputs,
-        dacs: DacOutputs,
+        afes: (AFE0, AFE1),
+        adcs: (Adc0Input, Adc1Input),
+        dacs: (Dac0Output, Dac1Output),
         input_stamper: digital_input_stamper::InputStamper,
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
-
-        profiles: heapless::spsc::Queue<[u32; 4], heapless::consts::U32>,
 
         // Note: It appears that rustfmt generates a format that GDB cannot recognize, which
         // results in GDB breakpoints being set improperly.
@@ -206,10 +217,11 @@ const APP: () = {
 
         pounder: Option<pounder::PounderDevices>,
 
-        #[init([[0.; 5]; 2])]
-        iir_state: [iir::IIRState; 2],
-        #[init([iir::IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; 2])]
-        iir_ch: [iir::IIR; 2],
+        // Format: iir_state[ch][cascade-no][coeff]
+        #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
+        iir_state: [[iir::IIRState; IIR_CASCADE_LENGTH]; 2],
+        #[init([[iir::IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; IIR_CASCADE_LENGTH]; 2])]
+        iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
     }
 
     #[init]
@@ -300,12 +312,12 @@ const APP: () = {
                 })
                 .manage_cs()
                 .suspend_when_inactive()
-                .cs_delay(220e-9);
+                .cs_delay(design_parameters::ADC_SETUP_TIME);
 
                 let spi: hal::spi::Spi<_, _, u16> = dp.SPI2.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    50.mhz(),
+                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
                     ccdr.peripheral.SPI2,
                     &ccdr.clocks,
                 );
@@ -338,12 +350,12 @@ const APP: () = {
                 })
                 .manage_cs()
                 .suspend_when_inactive()
-                .cs_delay(220e-9);
+                .cs_delay(design_parameters::ADC_SETUP_TIME);
 
                 let spi: hal::spi::Spi<_, _, u16> = dp.SPI3.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    50.mhz(),
+                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
                     ccdr.peripheral.SPI3,
                     &ccdr.clocks,
                 );
@@ -356,7 +368,7 @@ const APP: () = {
                 )
             };
 
-            AdcInputs::new(adc0, adc1)
+            (adc0, adc1)
         };
 
         let dacs = {
@@ -393,7 +405,7 @@ const APP: () = {
                 dp.SPI4.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    50.mhz(),
+                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
                     ccdr.peripheral.SPI4,
                     &ccdr.clocks,
                 )
@@ -425,19 +437,23 @@ const APP: () = {
                 dp.SPI5.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    50.mhz(),
+                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
                     ccdr.peripheral.SPI5,
                     &ccdr.clocks,
                 )
             };
 
-            let timer = dp.TIM3.timer(
-                SAMPLE_FREQUENCY_KHZ.khz(),
-                ccdr.peripheral.TIM3,
-                &ccdr.clocks,
+            let dac0 = Dac0Output::new(
+                dac0_spi,
+                dma_streams.4,
+                sampling_timer_channels.ch3,
             );
-
-            DacOutputs::new(dac0_spi, dac1_spi, timer)
+            let dac1 = Dac1Output::new(
+                dac1_spi,
+                dma_streams.5,
+                sampling_timer_channels.ch4,
+            );
+            (dac0, dac1)
         };
 
         let mut fp_led_0 = gpiod.pd5.into_push_pull_output();
@@ -707,7 +723,7 @@ const APP: () = {
                     dp.ETHERNET_MTL,
                     dp.ETHERNET_DMA,
                     &mut DES_RING,
-                    mac_addr.clone(),
+                    mac_addr,
                     ccdr.peripheral.ETH1MAC,
                     &ccdr.clocks,
                 )
@@ -768,12 +784,10 @@ const APP: () = {
         sampling_timer.start();
 
         init::LateResources {
-            afe0: afe0,
-            afe1: afe1,
+            afes: (afe0, afe1),
 
             adcs,
             dacs,
-
             input_stamper,
 
             pounder: pounder_devices,
@@ -792,64 +806,38 @@ const APP: () = {
         let _timestamps = c.resources.input_stamper.transfer_complete_handler();
     }
 
-    #[task(binds = TIM3, resources=[dacs, profiles, pounder], priority = 3)]
-    fn dac_update(c: dac_update::Context) {
-        c.resources.dacs.update();
+    #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch], priority=2)]
+    fn process(c: process::Context) {
+        let adc_samples = [
+            c.resources.adcs.0.acquire_buffer(),
+            c.resources.adcs.1.acquire_buffer(),
+        ];
+        let dac_samples = [
+            c.resources.dacs.0.acquire_buffer(),
+            c.resources.dacs.1.acquire_buffer(),
+        ];
 
-        if let Some(pounder) = c.resources.pounder {
-            if let Some(profile) = c.resources.profiles.dequeue() {
-                pounder.ad9959.interface.write_profile(profile).unwrap();
-                pounder.io_update_trigger.trigger();
+        for channel in 0..adc_samples.len() {
+            for sample in 0..adc_samples[0].len() {
+                let x = f32::from(adc_samples[channel][sample] as i16);
+                let mut y = x;
+                for i in 0..c.resources.iir_state[channel].len() {
+                    y = c.resources.iir_ch[channel][i]
+                        .update(&mut c.resources.iir_state[channel][i], y);
+                }
+                // Note(unsafe): The filter limits ensure that the value is in range.
+                // The truncation introduces 1/2 LSB distortion.
+                let y = unsafe { y.to_int_unchecked::<i16>() };
+                // Convert to DAC code
+                dac_samples[channel][sample] = y as u16 ^ 0x8000;
             }
         }
+        let [dac0, dac1] = dac_samples;
+        c.resources.dacs.0.release_buffer(dac0);
+        c.resources.dacs.1.release_buffer(dac1);
     }
 
-    #[task(binds=DMA1_STR3, resources=[adcs, dacs, pounder, profiles, iir_state, iir_ch], priority=2)]
-    fn adc_update(mut c: adc_update::Context) {
-        let (adc0_samples, adc1_samples) =
-            c.resources.adcs.transfer_complete_handler();
-
-        for (adc0, adc1) in adc0_samples.iter().zip(adc1_samples.iter()) {
-            let result_adc0 = {
-                let x0 = f32::from(*adc0 as i16);
-                let y0 = c.resources.iir_ch[0]
-                    .update(&mut c.resources.iir_state[0], x0);
-                y0 as i16 as u16 ^ 0x8000
-            };
-
-            let result_adc1 = {
-                let x1 = f32::from(*adc1 as i16);
-                let y1 = c.resources.iir_ch[1]
-                    .update(&mut c.resources.iir_state[1], x1);
-                y1 as i16 as u16 ^ 0x8000
-            };
-
-            c.resources
-                .dacs
-                .lock(|dacs| dacs.push(result_adc0, result_adc1));
-
-            let profiles = &mut c.resources.profiles;
-            c.resources.pounder.lock(|pounder| {
-                if let Some(pounder) = pounder {
-                    profiles.lock(|profiles| {
-                        let profile = pounder
-                            .ad9959
-                            .serialize_profile(
-                                pounder::Channel::Out0.into(),
-                                100_000_000_f32,
-                                0.0_f32,
-                                *adc0 as f32 / 0xFFFF as f32,
-                            )
-                            .unwrap();
-
-                        profiles.enqueue(profile).unwrap();
-                    });
-                }
-            });
-        }
-    }
-
-    #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afe0, afe1])]
+    #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afes])]
     fn idle(mut c: idle::Context) -> ! {
         let mut socket_set_entries: [_; 8] = Default::default();
         let mut sockets =
@@ -901,16 +889,58 @@ const APP: () = {
                                     let state = c.resources.iir_state.lock(|iir_state|
                                         server::Status {
                                             t: time,
-                                            x0: iir_state[0][0],
-                                            y0: iir_state[0][2],
-                                            x1: iir_state[1][0],
-                                            y1: iir_state[1][2],
+                                            x0: iir_state[0][0][0],
+                                            y0: iir_state[0][0][2],
+                                            x1: iir_state[1][0][0],
+                                            y1: iir_state[1][0][2],
                                     });
 
                                     Ok::<server::Status, ()>(state)
                                 }),
-                                "stabilizer/afe0/gain": (|| c.resources.afe0.get_gain()),
-                                "stabilizer/afe1/gain": (|| c.resources.afe1.get_gain()),
+                                // "_b" means cascades 2nd IIR
+                                "stabilizer/iir_b/state": (|| {
+                                    let state = c.resources.iir_state.lock(|iir_state|
+                                        server::Status {
+                                            t: time,
+                                            x0: iir_state[0][IIR_CASCADE_LENGTH-1][0],
+                                            y0: iir_state[0][IIR_CASCADE_LENGTH-1][2],
+                                            x1: iir_state[1][IIR_CASCADE_LENGTH-1][0],
+                                            y1: iir_state[1][IIR_CASCADE_LENGTH-1][2],
+                                    });
+
+                                    Ok::<server::Status, ()>(state)
+                                }),
+                                "stabilizer/afe0/gain": (|| c.resources.afes.0.get_gain()),
+                                "stabilizer/afe1/gain": (|| c.resources.afes.1.get_gain()),
+                                "pounder/in0": (|| {
+                                    match c.resources.pounder {
+                                        Some(pounder) =>
+                                            pounder.get_input_channel_state(pounder::Channel::In0),
+                                        _ => Err(pounder::Error::Access),
+                                    }
+                                }),
+                                "pounder/in1": (|| {
+                                    match c.resources.pounder {
+                                        Some(pounder) =>
+                                            pounder.get_input_channel_state(pounder::Channel::In1),
+                                        _ => Err(pounder::Error::Access),
+                                    }
+                                }),
+                                "pounder/out0": (|| {
+                                    match c.resources.pounder {
+                                        Some(pounder) =>
+                                            pounder.get_output_channel_state(pounder::Channel::Out0),
+                                        _ => Err(pounder::Error::Access),
+                                    }
+                                }),
+                                "pounder/out1": (|| {
+                                    match c.resources.pounder {
+                                        Some(pounder) =>
+                                            pounder.get_output_channel_state(pounder::Channel::Out1),
+                                        _ => Err(pounder::Error::Access),
+                                    }
+                                }),
+>>>>>>> master
                                 "pounder/dds/clock": (|| {
                                     c.resources.pounder.lock(|pounder| {
                                         match pounder {
@@ -928,7 +958,7 @@ const APP: () = {
                                             return Err(());
                                         }
 
-                                        iir_ch[req.channel as usize] = req.iir;
+                                        iir_ch[req.channel as usize][0] = req.iir;
 
                                         Ok::<server::IirRequest, ()>(req)
                                     })
@@ -939,7 +969,29 @@ const APP: () = {
                                             return Err(());
                                         }
 
-                                        iir_ch[req.channel as usize] = req.iir;
+                                        iir_ch[req.channel as usize][0] = req.iir;
+
+                                        Ok::<server::IirRequest, ()>(req)
+                                    })
+                                }),
+                                "stabilizer/iir_b0/state": server::IirRequest, (|req: server::IirRequest| {
+                                    c.resources.iir_ch.lock(|iir_ch| {
+                                        if req.channel > 1 {
+                                            return Err(());
+                                        }
+
+                                        iir_ch[req.channel as usize][IIR_CASCADE_LENGTH-1] = req.iir;
+
+                                        Ok::<server::IirRequest, ()>(req)
+                                    })
+                                }),
+                                "stabilizer/iir_b1/state": server::IirRequest,(|req: server::IirRequest| {
+                                    c.resources.iir_ch.lock(|iir_ch| {
+                                        if req.channel > 1 {
+                                            return Err(());
+                                        }
+
+                                        iir_ch[req.channel as usize][IIR_CASCADE_LENGTH-1] = req.iir;
 
                                         Ok::<server::IirRequest, ()>(req)
                                     })
@@ -989,10 +1041,12 @@ const APP: () = {
                                      })
                                 }),
                                 "stabilizer/afe0/gain": afe::Gain, (|gain| {
-                                    Ok::<(), ()>(c.resources.afe0.set_gain(gain))
+                                    c.resources.afes.0.set_gain(gain);
+                                    Ok::<(), ()>(())
                                 }),
                                 "stabilizer/afe1/gain": afe::Gain, (|gain| {
-                                    Ok::<(), ()>(c.resources.afe1.set_gain(gain))
+                                    c.resources.afes.1.set_gain(gain);
+                                    Ok::<(), ()>(())
                                 })
                             ]
                         )
@@ -1004,7 +1058,7 @@ const APP: () = {
                 &mut sockets,
                 net::time::Instant::from_millis(time as i64),
             ) {
-                Ok(changed) => changed == false,
+                Ok(changed) => !changed,
                 Err(net::Error::Unrecognized) => true,
                 Err(e) => {
                     info!("iface poll error: {:?}", e);
@@ -1023,22 +1077,22 @@ const APP: () = {
         unsafe { ethernet::interrupt_handler() }
     }
 
-    #[task(binds = SPI2, priority = 1)]
+    #[task(binds = SPI2, priority = 3)]
     fn spi2(_: spi2::Context) {
         panic!("ADC0 input overrun");
     }
 
-    #[task(binds = SPI3, priority = 1)]
+    #[task(binds = SPI3, priority = 3)]
     fn spi3(_: spi3::Context) {
         panic!("ADC0 input overrun");
     }
 
-    #[task(binds = SPI4, priority = 1)]
+    #[task(binds = SPI4, priority = 3)]
     fn spi4(_: spi4::Context) {
         panic!("DAC0 output error");
     }
 
-    #[task(binds = SPI5, priority = 1)]
+    #[task(binds = SPI5, priority = 3)]
     fn spi5(_: spi5::Context) {
         panic!("DAC1 output error");
     }

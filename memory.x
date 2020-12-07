@@ -17,7 +17,7 @@ SECTIONS {
     *(.itcm .itcm.*);
     . = ALIGN(8);
     } > ITCM
-  .axisram : ALIGN(8) {
+  .axisram (NOLOAD) : ALIGN(8) {
     *(.axisram .axisram.*);
     . = ALIGN(8);
     } > AXISRAM

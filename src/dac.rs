@@ -1,114 +1,157 @@
-///! Stabilizer DAC output control
+///! Stabilizer DAC management interface
 ///!
-///! Stabilizer output DACs do not currently rely on DMA requests for generating output.
-///! Instead, the DACs utilize an internal queue for storing output codes. A timer then periodically
-///! generates an interrupt which triggers an update of the DACs via a write over SPI.
-use super::hal;
-use heapless::consts;
+///! The Stabilizer DAC utilize a DMA channel to generate output updates.  A timer channel is
+///! configured to generate a DMA write into the SPI TXFIFO, which initiates a SPI transfer and
+///! results in DAC update for both channels.
+use super::{
+    hal, sampling_timer, DMAReq, DmaConfig, MemoryToPeripheral, TargetAddress,
+    Transfer, SAMPLE_BUFFER_SIZE,
+};
 
-/// Controller structure for managing the DAC outputs.
-pub struct DacOutputs {
-    dac0_spi: hal::spi::Spi<hal::stm32::SPI4, hal::spi::Enabled, u16>,
-    dac1_spi: hal::spi::Spi<hal::stm32::SPI5, hal::spi::Enabled, u16>,
-    timer: hal::timer::Timer<hal::stm32::TIM3>,
+// The following global buffers are used for the DAC code DMA transfers. Two buffers are used for
+// each transfer in a ping-pong buffer configuration (one is being prepared while the other is being
+// processed). Note that the contents of AXI SRAM is uninitialized, so the buffer contents on
+// startup are undefined. The dimensions are `ADC_BUF[adc_index][ping_pong_index][sample_index]`.
+#[link_section = ".axisram.buffers"]
+static mut DAC_BUF: [[[u16; SAMPLE_BUFFER_SIZE]; 2]; 2] =
+    [[[0; SAMPLE_BUFFER_SIZE]; 2]; 2];
 
-    // The queue is provided a default length of 32 updates, but this queue can be updated by the
-    // end user to be larger if necessary.
-    outputs: heapless::spsc::Queue<(u16, u16), consts::U32>,
-}
-
-impl DacOutputs {
-    /// Construct a new set of DAC output controls
-    ///
-    /// # Args
-    /// * `dac0_spi` - The SPI interface to the DAC0 output.
-    /// * `dac1_spi` - The SPI interface to the DAC1 output.
-    /// * `timer` - The timer used to generate periodic events for updating the DACs.
-    pub fn new(
-        mut dac0_spi: hal::spi::Spi<hal::stm32::SPI4, hal::spi::Enabled, u16>,
-        mut dac1_spi: hal::spi::Spi<hal::stm32::SPI5, hal::spi::Enabled, u16>,
-        mut timer: hal::timer::Timer<hal::stm32::TIM3>,
-    ) -> Self {
-        // Start the DAC SPI interfaces in infinite transaction mode. CS is configured in
-        // auto-suspend mode.
-        dac0_spi.inner().cr1.modify(|_, w| w.cstart().started());
-        dac1_spi.inner().cr1.modify(|_, w| w.cstart().started());
-
-        dac0_spi.listen(hal::spi::Event::Error);
-        dac1_spi.listen(hal::spi::Event::Error);
-
-        // Stop the timer and begin listening for timeouts. Timeouts will be used as a means to
-        // generate new DAC outputs.
-        timer.pause();
-        timer.reset_counter();
-        timer.clear_irq();
-        timer.listen(hal::timer::Event::TimeOut);
-
-        Self {
-            dac0_spi,
-            dac1_spi,
-            outputs: heapless::spsc::Queue::new(),
-            timer,
+macro_rules! dac_output {
+    ($name:ident, $index:literal, $data_stream:ident,
+     $spi:ident, $trigger_channel:ident, $dma_req:ident) => {
+        /// $spi is used as a type for indicating a DMA transfer into the SPI TX FIFO
+        struct $spi {
+            spi: hal::spi::Spi<hal::stm32::$spi, hal::spi::Disabled, u16>,
+            _channel: sampling_timer::tim2::$trigger_channel,
         }
-    }
 
-    /// Push a set of new DAC output codes to the internal queue.
-    ///
-    /// # Note
-    /// The earlier DAC output codes will be generated within 1 update cycle of the codes. This is a
-    /// fixed latency currently.
-    ///
-    /// This function will panic if too many codes are written.
-    ///
-    /// # Args
-    /// * `dac0_value` - The value to enqueue for a DAC0 update.
-    /// * `dac1_value` - The value to enqueue for a DAC1 update.
-    pub fn push(&mut self, dac0_value: u16, dac1_value: u16) {
-        self.outputs.enqueue((dac0_value, dac1_value)).unwrap();
-        self.timer.resume();
-    }
-
-    /// Update the DAC codes with the next set of values in the internal queue.
-    ///
-    /// # Note
-    /// This is intended to be called from the TIM3 update ISR.
-    ///
-    /// If the last value in the queue is used, the timer is stopped.
-    pub fn update(&mut self) {
-        self.timer.clear_irq();
-        match self.outputs.dequeue() {
-            Some((dac0, dac1)) => self.write(dac0, dac1),
-            None => {
-                self.timer.pause();
-                self.timer.reset_counter();
-                self.timer.clear_irq();
+        impl $spi {
+            pub fn new(
+                _channel: sampling_timer::tim2::$trigger_channel,
+                spi: hal::spi::Spi<hal::stm32::$spi, hal::spi::Disabled, u16>,
+            ) -> Self {
+                Self { _channel, spi }
             }
-        };
-    }
-
-    /// Write immediate values to the DAC outputs.
-    ///
-    /// # Note
-    /// The DACs will be updated as soon as the SPI transfer completes, which will be nominally
-    /// 320nS after this function call.
-    ///
-    /// # Args
-    /// * `dac0_value` - The output code to write to DAC0.
-    /// * `dac1_value` - The output code to write to DAC1.
-    pub fn write(&mut self, dac0_value: u16, dac1_value: u16) {
-        // In order to optimize throughput and minimize latency, the DAC codes are written directly
-        // into the SPI TX FIFO. No error checking is conducted. Errors are handled via interrupts
-        // instead.
-        unsafe {
-            core::ptr::write_volatile(
-                &self.dac0_spi.inner().txdr as *const _ as *mut u16,
-                dac0_value,
-            );
-
-            core::ptr::write_volatile(
-                &self.dac1_spi.inner().txdr as *const _ as *mut u16,
-                dac1_value,
-            );
         }
-    }
+
+        // Note(unsafe): This is safe because the DMA request line is logically owned by this module.
+        // Additionally, the SPI is owned by this structure and is known to be configured for u16 word
+        // sizes.
+        unsafe impl TargetAddress<MemoryToPeripheral> for $spi {
+            /// SPI is configured to operate using 16-bit transfer words.
+            type MemSize = u16;
+
+            /// SPI DMA requests are generated whenever TIM2 CHx ($dma_req) comparison occurs.
+            const REQUEST_LINE: Option<u8> = Some(DMAReq::$dma_req as u8);
+
+            /// Whenever the DMA request occurs, it should write into SPI's TX FIFO.
+            fn address(&self) -> u32 {
+                &self.spi.inner().txdr as *const _ as u32
+            }
+        }
+
+        /// Represents data associated with DAC.
+        pub struct $name {
+            next_buffer: Option<&'static mut [u16; SAMPLE_BUFFER_SIZE]>,
+            // Note: SPI TX functionality may not be used from this structure to ensure safety with DMA.
+            transfer: Transfer<
+                hal::dma::dma::$data_stream<hal::stm32::DMA1>,
+                $spi,
+                MemoryToPeripheral,
+                &'static mut [u16; SAMPLE_BUFFER_SIZE],
+            >,
+            first_transfer: bool,
+        }
+
+        impl $name {
+            /// Construct the DAC output channel.
+            ///
+            /// # Args
+            /// * `spi` - The SPI interface used to communicate with the ADC.
+            /// * `stream` - The DMA stream used to write DAC codes over SPI.
+            /// * `trigger_channel` - The sampling timer output compare channel for update triggers.
+            pub fn new(
+                spi: hal::spi::Spi<hal::stm32::$spi, hal::spi::Enabled, u16>,
+                stream: hal::dma::dma::$data_stream<hal::stm32::DMA1>,
+                trigger_channel: sampling_timer::tim2::$trigger_channel,
+            ) -> Self {
+                // Generate DMA events when an output compare of the timer hitting zero (timer roll over)
+                // occurs.
+                trigger_channel.listen_dma();
+                trigger_channel.to_output_compare(0);
+
+                // The stream constantly writes to the TX FIFO to write new update codes.
+                let trigger_config = DmaConfig::default()
+                    .memory_increment(true)
+                    .peripheral_increment(false);
+
+                // Listen for any potential SPI error signals, which may indicate that we are not generating
+                // update codes.
+                let mut spi = spi.disable();
+                spi.listen(hal::spi::Event::Error);
+
+                // Allow the SPI FIFOs to operate using only DMA data channels.
+                spi.enable_dma_tx();
+
+                // Enable SPI and start it in infinite transaction mode.
+                spi.inner().cr1.modify(|_, w| w.spe().set_bit());
+                spi.inner().cr1.modify(|_, w| w.cstart().started());
+
+                // Construct the trigger stream to write from memory to the peripheral.
+                let transfer: Transfer<_, _, MemoryToPeripheral, _> =
+                    Transfer::init(
+                        stream,
+                        $spi::new(trigger_channel, spi),
+                        // Note(unsafe): This buffer is only used once and provided for the DMA transfer.
+                        unsafe { &mut DAC_BUF[$index][0] },
+                        None,
+                        trigger_config,
+                    );
+
+                Self {
+                    transfer,
+                    // Note(unsafe): This buffer is only used once and provided for the next DMA transfer.
+                    next_buffer: unsafe { Some(&mut DAC_BUF[$index][1]) },
+                    first_transfer: true,
+                }
+            }
+
+            /// Acquire the next output buffer to populate it with DAC codes.
+            pub fn acquire_buffer(
+                &mut self,
+            ) -> &'static mut [u16; SAMPLE_BUFFER_SIZE] {
+                self.next_buffer.take().unwrap()
+            }
+
+            /// Enqueue the next buffer for transmission to the DAC.
+            ///
+            /// # Args
+            /// * `data` - The next data to write to the DAC.
+            pub fn release_buffer(
+                &mut self,
+                next_buffer: &'static mut [u16; SAMPLE_BUFFER_SIZE],
+            ) {
+                // If the last transfer was not complete, we didn't write all our previous DAC codes.
+                // Wait for all the DAC codes to get written as well.
+                if self.first_transfer {
+                    self.first_transfer = false
+                } else {
+                    // Note: If a device hangs up, check that this conditional is passing correctly, as
+                    // there is no time-out checks here in the interest of execution speed.
+                    while !self.transfer.get_transfer_complete_flag() {}
+                }
+
+                // Start the next transfer.
+                self.transfer.clear_interrupts();
+                let (prev_buffer, _) =
+                    self.transfer.next_transfer(next_buffer).unwrap();
+
+                // .unwrap_none() https://github.com/rust-lang/rust/issues/62633
+                self.next_buffer.replace(prev_buffer);
+            }
+        }
+    };
 }
+
+dac_output!(Dac0Output, 0, Stream4, SPI4, Channel3, TIM2_CH3);
+dac_output!(Dac1Output, 1, Stream5, SPI5, Channel4, TIM2_CH4);

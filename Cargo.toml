@@ -40,6 +40,8 @@ embedded-hal = "0.2.4"
 nb = "1.0.0"
 asm-delay = "0.9.0"
 enum-iterator = "0.6.0"
+paste = "1"
+dsp = { path = "dsp" }
 
 [dependencies.mcp23017]
 git = "https://github.com/mrd0ll4r/mcp23017.git"
@@ -54,14 +56,13 @@ path = "ad9959"
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]
-# git = "https://github.com/quartiq/stm32h7xx-hal"
-# branch = "feature/dma-rtic-example"
-path = "../stm32h7xx-hal"
+git = "https://github.com/stm32-rs/stm32h7xx-hal"
+branch = "dma"
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
 bkpt = [ ]
-nightly = ["cortex-m/inline-asm"]
+nightly = ["cortex-m/inline-asm", "dsp/nightly"]
 
 [profile.dev]
 codegen-units = 1
