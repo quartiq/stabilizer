@@ -58,6 +58,10 @@ impl DdsOutput {
         // fashion.
         let regs = unsafe { &*hal::stm32::QUADSPI::ptr() };
 
+        if regs.sr.read().flevel() != 0 {
+            warn!("QSPI stalling")
+        }
+
         for word in profile.iter() {
             // Note(unsafe): We are writing to the SPI TX FIFO in a raw manner for performance. This
             // is safe because we know the data register is a valid address to write to.

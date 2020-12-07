@@ -68,28 +68,39 @@ impl HighResTimerE {
 
         // Determine the clock divider, which may be 1, 2, or 4. We will choose a clock divider that
         // allows us the highest resolution per tick, so lower dividers are favored.
-        let divider: u8 = if source_cycles < 0xFFDF {
+        let setting: u8 = if source_cycles < 0xFFDF {
             1
         } else if (source_cycles / 2) < 0xFFDF {
             2
         } else if (source_cycles / 4) < 0xFFDF {
-            4
+            3
         } else {
             panic!("Unattainable timing parameters!");
         };
+
+        let divider = 1 << (setting - 1);
 
         // The period register must be greater than or equal to 3 cycles.
         let period = (source_cycles / divider as u32) as u16;
         assert!(period > 2);
 
         // We now have the prescaler and the period registers. Configure the timer.
+        // Note(unsafe): The prescaler is guaranteed to be greater than or equal to 4 (minimum
+        // allowed value) due to the addition. The setting is always 1, 2, or 3, which represents
+        // all valid values.
         self.timer
             .timecr
-            .modify(|_, w| unsafe { w.ck_pscx().bits(divider + 4) });
+            .modify(|_, w| unsafe { w.ck_pscx().bits(setting + 4) });
+
+        // Note(unsafe): The period register is guaranteed to be a 16-bit value, which will fit in
+        // this register.
         self.timer.perer.write(|w| unsafe { w.perx().bits(period) });
 
         // Configure the comparator 1 level.
         let offset = (set_offset * source_frequency as f32) as u16;
+        // Note(unsafe): The offset is always a 16-bit value, so is always valid for values >= 3, as
+        // specified by the datasheet.
+        assert!(offset >= 3);
         self.timer
             .cmp1er
             .write(|w| unsafe { w.cmp1x().bits(offset) });

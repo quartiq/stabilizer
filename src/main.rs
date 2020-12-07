@@ -625,12 +625,16 @@ const APP: () = {
                         ccdr.peripheral.HRTIM,
                     );
 
-                    // IO_Update should be latched for 50ns after the QSPI profile write. Profile writes
-                    // are always 16 bytes, with 2 cycles required per byte, coming out to a total of 32
-                    // QSPI clock cycles. The QSPI is configured for 40MHz, so this comes out to an
-                    // offset of 800nS. We use 900ns to be safe - note that the timer is triggered after
-                    // the QSPI write, which can take approximately 120nS, so there is additional
-                    // margin.
+                    // IO_Update should be latched for 4 SYNC_CLK cycles after the QSPI profile
+                    // write. With pounder SYNC_CLK running at 100MHz (1/4 of the pounder reference
+                    // clock of 400MHz), this corresponds to 40ns. To accomodate rounding errors, we
+                    // use 50ns instead.
+                    //
+                    // Profile writes are always 16 bytes, with 2 cycles required per byte, coming
+                    // out to a total of 32 QSPI clock cycles. The QSPI is configured for 40MHz, so
+                    // this comes out to an offset of 800nS. We use 900ns to be safe - note that the
+                    // timer is triggered after the QSPI write, which can take approximately 120nS,
+                    // so there is additional margin.
                     hrtimer.configure_single_shot(
                         hrtimer::Channel::Two,
                         50_e-9,

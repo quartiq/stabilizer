@@ -124,7 +124,8 @@ impl<I: Interface> Ad9959<I> {
         reset_pin.set_high().or(Err(Error::Pin))?;
 
         // Delay for at least 1 SYNC_CLK period for the reset to occur. The SYNC_CLK is guaranteed
-        // to be at least 250KHz (1/4 of 1MHz minimum REF_CLK).
+        // to be at least 250KHz (1/4 of 1MHz minimum REF_CLK). We use 5uS instead of 4uS to
+        // guarantee conformance with datasheet requirements.
         delay.delay_us(5);
 
         reset_pin.set_low().or(Err(Error::Pin))?;
@@ -143,7 +144,8 @@ impl<I: Interface> Ad9959<I> {
         io_update.set_high().or(Err(Error::Pin))?;
 
         // Delay for at least 1 SYNC_CLK period for the update to occur. The SYNC_CLK is guaranteed
-        // to be at least 250KHz (1/4 of 1MHz minimum REF_CLK).
+        // to be at least 250KHz (1/4 of 1MHz minimum REF_CLK). We use 5uS instead of 4uS to
+        // guarantee conformance with datasheet requirements.
         delay.delay_us(5);
 
         io_update.set_low().or(Err(Error::Pin))?;
@@ -157,7 +159,8 @@ impl<I: Interface> Ad9959<I> {
         // active. This is likely due to needing to wait at least 1 clock cycle of the DDS for the
         // interface update to occur.
         // Delay for at least 1 SYNC_CLK period for the update to occur. The SYNC_CLK is guaranteed
-        // to be at least 250KHz (1/4 of 1MHz minimum REF_CLK).
+        // to be at least 250KHz (1/4 of 1MHz minimum REF_CLK). We use 5uS instead of 4uS to
+        // guarantee conformance with datasheet requirements.
         delay.delay_us(5);
 
         // Read back the CSR to ensure it specifies the mode correctly.
@@ -552,12 +555,6 @@ impl ProfileSerializer {
         pow: Option<u16>,
         acr: Option<u16>,
     ) {
-        // The user should have provided something to update.
-        assert!(
-            (ftw.is_some() || acr.is_some() || pow.is_some())
-                && channels.len() > 0
-        );
-
         let mut csr: u8 = *0u8.set_bits(1..3, self.mode as u8);
         for channel in channels.iter() {
             csr.set_bit(4 + *channel as usize, true);
@@ -581,8 +578,6 @@ impl ProfileSerializer {
     /// Add a register write to the serialization data.
     fn add_write(&mut self, register: Register, value: &[u8]) {
         let data = &mut self.data[self.index..];
-        assert!(value.len() + 1 <= data.len());
-
         data[0] = register as u8;
         data[1..][..value.len()].copy_from_slice(value);
         self.index += value.len() + 1;
@@ -592,24 +587,24 @@ impl ProfileSerializer {
     ///
     /// # Note
     /// The serialized profile will be padded to the next 32-bit word boundary by adding dummy
-    /// writes to the CSR or FR2 registers.
+    /// writes to the CSR or LSRR registers.
     ///
     /// # Returns
     /// A slice of `u32` words representing the serialized profile.
     pub fn finalize<'a>(&'a mut self) -> &[u32] {
-        // Pad the buffer to 32-bit alignment by adding dummy writes to CSR and FR2.
+        // Pad the buffer to 32-bit alignment by adding dummy writes to CSR and LSRR.
         let padding = 4 - (self.index % 4);
         match padding {
             0 => {}
             1 => {
                 // For a pad size of 1, we have to pad with 5 bytes to align things.
                 self.add_write(Register::CSR, &[(self.mode as u8) << 1]);
-                self.add_write(Register::FR2, &[0, 0, 0]);
+                self.add_write(Register::LSRR, &[0, 0, 0]);
             }
             2 => self.add_write(Register::CSR, &[(self.mode as u8) << 1]),
-            3 => self.add_write(Register::FR2, &[0, 0, 0]),
+            3 => self.add_write(Register::LSRR, &[0, 0, 0]),
 
-            _ => panic!("Invalid"),
+            _ => unreachable!(),
         }
         unsafe {
             core::slice::from_raw_parts::<'a, u32>(
