@@ -1,7 +1,7 @@
 #![no_std]
 
 use bit_field::BitField;
-use embedded_hal::{blocking::delay::DelayMs, digital::v2::OutputPin};
+use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
 
 /// A device driver for the AD9959 direct digital synthesis (DDS) chip.
 ///
@@ -13,12 +13,11 @@ use embedded_hal::{blocking::delay::DelayMs, digital::v2::OutputPin};
 ///
 /// The chip supports a number of serial interfaces to improve data throughput, including normal,
 /// dual, and quad SPI configurations.
-pub struct Ad9959<INTERFACE, DELAY, UPDATE> {
+pub struct Ad9959<INTERFACE> {
     interface: INTERFACE,
-    delay: DELAY,
     reference_clock_frequency: f32,
     system_clock_multiplier: u8,
-    io_update: UPDATE,
+    communication_mode: Mode,
 }
 
 /// A trait that allows a HAL to provide a means of communicating with the AD9959.
@@ -73,6 +72,7 @@ pub enum Register {
 }
 
 /// Specifies an output channel of the AD9959 DDS chip.
+#[derive(Copy, Clone, PartialEq)]
 pub enum Channel {
     One = 0,
     Two = 1,
@@ -90,12 +90,7 @@ pub enum Error {
     Frequency,
 }
 
-impl<PinE, INTERFACE, DELAY, UPDATE> Ad9959<INTERFACE, DELAY, UPDATE>
-where
-    INTERFACE: Interface,
-    DELAY: DelayMs<u8>,
-    UPDATE: OutputPin<Error = PinE>,
-{
+impl<I: Interface> Ad9959<I> {
     /// Construct and initialize the DDS.
     ///
     /// Args:
@@ -107,35 +102,31 @@ where
     /// * `clock_frequency` - The clock frequency of the reference clock input.
     /// * `multiplier` - The desired clock multiplier for the system clock. This multiplies
     ///   `clock_frequency` to generate the system clock.
-    pub fn new<RST>(
-        interface: INTERFACE,
-        reset_pin: &mut RST,
-        io_update: UPDATE,
-        delay: DELAY,
+    pub fn new(
+        interface: I,
+        mut reset_pin: impl OutputPin,
+        io_update: &mut impl OutputPin,
+        delay: &mut impl DelayUs<u8>,
         desired_mode: Mode,
         clock_frequency: f32,
         multiplier: u8,
-    ) -> Result<Self, Error>
-    where
-        RST: OutputPin,
-    {
+    ) -> Result<Self, Error> {
         let mut ad9959 = Ad9959 {
             interface,
-            io_update,
-            delay,
             reference_clock_frequency: clock_frequency,
             system_clock_multiplier: 1,
+            communication_mode: desired_mode,
         };
 
-        ad9959.io_update.set_low().or(Err(Error::Pin))?;
+        io_update.set_low().or(Err(Error::Pin))?;
 
         // Reset the AD9959
         reset_pin.set_high().or(Err(Error::Pin))?;
 
-        // Delay for a clock cycle to allow the device to reset.
-        ad9959
-            .delay
-            .delay_ms((1000.0 / clock_frequency as f32) as u8);
+        // Delay for at least 1 SYNC_CLK period for the reset to occur. The SYNC_CLK is guaranteed
+        // to be at least 250KHz (1/4 of 1MHz minimum REF_CLK). We use 5uS instead of 4uS to
+        // guarantee conformance with datasheet requirements.
+        delay.delay_us(5);
 
         reset_pin.set_low().or(Err(Error::Pin))?;
 
@@ -149,13 +140,28 @@ where
         csr[0].set_bits(1..3, desired_mode as u8);
         ad9959.write(Register::CSR, &csr)?;
 
-        // Latch the configuration registers to make them active.
-        ad9959.latch_configuration()?;
+        // Latch the new interface configuration.
+        io_update.set_high().or(Err(Error::Pin))?;
+
+        // Delay for at least 1 SYNC_CLK period for the update to occur. The SYNC_CLK is guaranteed
+        // to be at least 250KHz (1/4 of 1MHz minimum REF_CLK). We use 5uS instead of 4uS to
+        // guarantee conformance with datasheet requirements.
+        delay.delay_us(5);
+
+        io_update.set_low().or(Err(Error::Pin))?;
 
         ad9959
             .interface
             .configure_mode(desired_mode)
             .or(Err(Error::Interface))?;
+
+        // Empirical evidence indicates a delay is necessary here for the IO update to become
+        // active. This is likely due to needing to wait at least 1 clock cycle of the DDS for the
+        // interface update to occur.
+        // Delay for at least 1 SYNC_CLK period for the update to occur. The SYNC_CLK is guaranteed
+        // to be at least 250KHz (1/4 of 1MHz minimum REF_CLK). We use 5uS instead of 4uS to
+        // guarantee conformance with datasheet requirements.
+        delay.delay_us(5);
 
         // Read back the CSR to ensure it specifies the mode correctly.
         let mut updated_csr: [u8; 1] = [0];
@@ -181,18 +187,6 @@ where
             .or(Err(Error::Interface))
     }
 
-    /// Latch the DDS configuration to ensure it is active on the output channels.
-    fn latch_configuration(&mut self) -> Result<(), Error> {
-        self.io_update.set_high().or(Err(Error::Pin))?;
-        // The SYNC_CLK is 1/4 the system clock frequency. The IO_UPDATE pin must be latched for one
-        // full SYNC_CLK pulse to register. For safety, we latch for 5 here.
-        self.delay
-            .delay_ms((5000.0 / self.system_clock_frequency()) as u8);
-        self.io_update.set_low().or(Err(Error::Pin))?;
-
-        Ok(())
-    }
-
     /// Configure the internal system clock of the chip.
     ///
     /// Arguments:
@@ -205,7 +199,7 @@ where
         &mut self,
         reference_clock_frequency: f32,
         multiplier: u8,
-    ) -> Result<f64, Error> {
+    ) -> Result<f32, Error> {
         self.reference_clock_frequency = reference_clock_frequency;
 
         if multiplier != 1 && !(4..=20).contains(&multiplier) {
@@ -213,8 +207,8 @@ where
         }
 
         let frequency =
-            multiplier as f64 * self.reference_clock_frequency as f64;
-        if frequency > 500_000_000.0f64 {
+            multiplier as f32 * self.reference_clock_frequency as f32;
+        if frequency > 500_000_000.0f32 {
             return Err(Error::Frequency);
         }
 
@@ -287,37 +281,9 @@ where
     }
 
     /// Get the current system clock frequency in Hz.
-    fn system_clock_frequency(&self) -> f64 {
-        self.system_clock_multiplier as f64
-            * self.reference_clock_frequency as f64
-    }
-
-    /// Enable an output channel.
-    pub fn enable_channel(&mut self, channel: Channel) -> Result<(), Error> {
-        let mut csr: [u8; 1] = [0];
-        self.read(Register::CSR, &mut csr)?;
-        csr[0].set_bit(channel as usize + 4, true);
-        self.write(Register::CSR, &csr)?;
-
-        Ok(())
-    }
-
-    /// Disable an output channel.
-    pub fn disable_channel(&mut self, channel: Channel) -> Result<(), Error> {
-        let mut csr: [u8; 1] = [0];
-        self.read(Register::CSR, &mut csr)?;
-        csr[0].set_bit(channel as usize + 4, false);
-        self.write(Register::CSR, &csr)?;
-
-        Ok(())
-    }
-
-    /// Determine if an output channel is enabled.
-    pub fn is_enabled(&mut self, channel: Channel) -> Result<bool, Error> {
-        let mut csr: [u8; 1] = [0; 1];
-        self.read(Register::CSR, &mut csr)?;
-
-        Ok(csr[0].get_bit(channel as usize + 4))
+    fn system_clock_frequency(&self) -> f32 {
+        self.system_clock_multiplier as f32
+            * self.reference_clock_frequency as f32
     }
 
     /// Update an output channel configuration register.
@@ -334,21 +300,15 @@ where
     ) -> Result<(), Error> {
         // Disable all other outputs so that we can update the configuration register of only the
         // specified channel.
-        let mut csr: [u8; 1] = [0];
-        self.read(Register::CSR, &mut csr)?;
+        let csr: u8 = *0x00_u8
+            .set_bits(1..=2, self.communication_mode as u8)
+            .set_bit(4 + channel as usize, true);
 
-        let mut new_csr = csr;
-        new_csr[0].set_bits(4..8, 0);
-        new_csr[0].set_bit(4 + channel as usize, true);
-
-        self.write(Register::CSR, &new_csr)?;
+        self.interface
+            .write(Register::CSR as u8, &[csr])
+            .map_err(|_| Error::Interface)?;
 
         self.write(register, &data)?;
-
-        // Latch the configuration and restore the previous CSR. Note that the re-enable of the
-        // channel happens immediately, so the CSR update does not need to be latched.
-        self.latch_configuration()?;
-        self.write(Register::CSR, &csr)?;
 
         Ok(())
     }
@@ -494,8 +454,8 @@ where
     pub fn set_frequency(
         &mut self,
         channel: Channel,
-        frequency: f64,
-    ) -> Result<f64, Error> {
+        frequency: f32,
+    ) -> Result<f32, Error> {
         if frequency < 0.0 || frequency > self.system_clock_frequency() {
             return Err(Error::Bounds);
         }
@@ -503,15 +463,15 @@ where
         // The function for channel frequency is `f_out = FTW * f_s / 2^32`, where FTW is the
         // frequency tuning word and f_s is the system clock rate.
         let tuning_word: u32 =
-            ((frequency as f64 / self.system_clock_frequency())
-                * 1u64.wrapping_shl(32) as f64) as u32;
+            ((frequency as f32 / self.system_clock_frequency())
+                * 1u64.wrapping_shl(32) as f32) as u32;
 
         self.modify_channel(
             channel,
             Register::CFTW0,
             &tuning_word.to_be_bytes(),
         )?;
-        Ok((tuning_word as f64 / 1u64.wrapping_shl(32) as f64)
+        Ok((tuning_word as f32 / 1u64.wrapping_shl(32) as f32)
             * self.system_clock_frequency())
     }
 
@@ -522,14 +482,135 @@ where
     ///
     /// Returns:
     /// The frequency of the channel in Hz.
-    pub fn get_frequency(&mut self, channel: Channel) -> Result<f64, Error> {
+    pub fn get_frequency(&mut self, channel: Channel) -> Result<f32, Error> {
         // Read the frequency tuning word for the channel.
         let mut tuning_word: [u8; 4] = [0; 4];
         self.read_channel(channel, Register::CFTW0, &mut tuning_word)?;
         let tuning_word = u32::from_be_bytes(tuning_word);
 
         // Convert the tuning word into a frequency.
-        Ok(tuning_word as f64 * self.system_clock_frequency()
-            / (1u64 << 32) as f64)
+        Ok((tuning_word as f32 * self.system_clock_frequency())
+            / (1u64 << 32) as f32)
+    }
+
+    /// Finalize DDS configuration
+    ///
+    /// # Note
+    /// This is intended for when the DDS profiles will be written as a stream of data to the DDS.
+    ///
+    /// # Returns
+    /// (I, config) where `I` is the interface to the DDS and `config` is the frozen `DdsConfig`.
+    pub fn freeze(self) -> (I, DdsConfig) {
+        let config = DdsConfig {
+            mode: self.communication_mode,
+        };
+        (self.interface, config)
+    }
+}
+
+/// The frozen DDS configuration.
+pub struct DdsConfig {
+    mode: Mode,
+}
+
+impl DdsConfig {
+    /// Create a serializer that can be used for generating a serialized DDS profile for writing to
+    /// a QSPI stream.
+    pub fn builder(&self) -> ProfileSerializer {
+        ProfileSerializer::new(self.mode)
+    }
+}
+
+/// Represents a means of serializing a DDS profile for writing to a stream.
+pub struct ProfileSerializer {
+    data: [u8; 16],
+    index: usize,
+    mode: Mode,
+}
+
+impl ProfileSerializer {
+    /// Construct a new serializer.
+    ///
+    /// # Args
+    /// * `mode` - The communication mode of the DDS.
+    fn new(mode: Mode) -> Self {
+        Self {
+            mode,
+            data: [0; 16],
+            index: 0,
+        }
+    }
+
+    /// Update a number of channels with the requested profile.
+    ///
+    /// # Args
+    /// * `channels` - A list of channels to apply the configuration to.
+    /// * `ftw` - If provided, indicates a frequency tuning word for the channels.
+    /// * `pow` - If provided, indicates a phase offset word for the channels.
+    /// * `acr` - If provided, indicates the amplitude control register for the channels.
+    pub fn update_channels(
+        &mut self,
+        channels: &[Channel],
+        ftw: Option<u32>,
+        pow: Option<u16>,
+        acr: Option<u16>,
+    ) {
+        let mut csr: u8 = *0u8.set_bits(1..3, self.mode as u8);
+        for channel in channels.iter() {
+            csr.set_bit(4 + *channel as usize, true);
+        }
+
+        self.add_write(Register::CSR, &[csr]);
+
+        if let Some(ftw) = ftw {
+            self.add_write(Register::CFTW0, &ftw.to_be_bytes());
+        }
+
+        if let Some(pow) = pow {
+            self.add_write(Register::CPOW0, &pow.to_be_bytes());
+        }
+
+        if let Some(acr) = acr {
+            self.add_write(Register::ACR, &acr.to_be_bytes());
+        }
+    }
+
+    /// Add a register write to the serialization data.
+    fn add_write(&mut self, register: Register, value: &[u8]) {
+        let data = &mut self.data[self.index..];
+        data[0] = register as u8;
+        data[1..][..value.len()].copy_from_slice(value);
+        self.index += value.len() + 1;
+    }
+
+    /// Get the serialized profile as a slice of 32-bit words.
+    ///
+    /// # Note
+    /// The serialized profile will be padded to the next 32-bit word boundary by adding dummy
+    /// writes to the CSR or LSRR registers.
+    ///
+    /// # Returns
+    /// A slice of `u32` words representing the serialized profile.
+    pub fn finalize<'a>(&'a mut self) -> &[u32] {
+        // Pad the buffer to 32-bit alignment by adding dummy writes to CSR and LSRR.
+        let padding = 4 - (self.index % 4);
+        match padding {
+            0 => {}
+            1 => {
+                // For a pad size of 1, we have to pad with 5 bytes to align things.
+                self.add_write(Register::CSR, &[(self.mode as u8) << 1]);
+                self.add_write(Register::LSRR, &[0, 0, 0]);
+            }
+            2 => self.add_write(Register::CSR, &[(self.mode as u8) << 1]),
+            3 => self.add_write(Register::LSRR, &[0, 0, 0]),
+
+            _ => unreachable!(),
+        }
+        unsafe {
+            core::slice::from_raw_parts::<'a, u32>(
+                &self.data as *const _ as *const u32,
+                self.index / 4,
+            )
+        }
     }
 }

@@ -71,6 +71,7 @@ mod afe;
 mod dac;
 mod design_parameters;
 mod eeprom;
+mod hrtimer;
 mod pounder;
 mod sampling_timer;
 mod server;
@@ -78,6 +79,7 @@ mod server;
 use adc::{Adc0Input, Adc1Input};
 use dac::{Dac0Output, Dac1Output};
 use dsp::iir;
+use pounder::DdsOutput;
 
 #[cfg(not(feature = "semihosting"))]
 fn init_log() {}
@@ -200,6 +202,8 @@ const APP: () = {
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
+        dds_output: Option<DdsOutput>,
+
         // Note: It appears that rustfmt generates a format that GDB cannot recognize, which
         // results in GDB breakpoints being set improperly.
         #[rustfmt::skip]
@@ -211,7 +215,7 @@ const APP: () = {
         eth_mac: ethernet::phy::LAN8742A<ethernet::EthernetMAC>,
         mac_addr: net::wire::EthernetAddress,
 
-        pounder: Option<pounder::PounderDevices<asm_delay::AsmDelay>>,
+        pounder: Option<pounder::PounderDevices>,
 
         // Format: iir_state[ch][cascade-no][coeff]
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
@@ -259,7 +263,7 @@ const APP: () = {
         let gpiod = dp.GPIOD.split(ccdr.peripheral.GPIOD);
         let gpioe = dp.GPIOE.split(ccdr.peripheral.GPIOE);
         let gpiof = dp.GPIOF.split(ccdr.peripheral.GPIOF);
-        let gpiog = dp.GPIOG.split(ccdr.peripheral.GPIOG);
+        let mut gpiog = dp.GPIOG.split(ccdr.peripheral.GPIOG);
 
         let afe0 = {
             let a0_pin = gpiof.pf2.into_push_pull_output();
@@ -465,8 +469,9 @@ const APP: () = {
         // Measure the Pounder PGOOD output to detect if pounder is present on Stabilizer.
         let pounder_pgood = gpiob.pb13.into_pull_down_input();
         delay.delay_ms(2u8);
-        let pounder_devices = if pounder_pgood.is_high().unwrap() {
-            let ad9959 = {
+        let (pounder_devices, dds_output) = if pounder_pgood.is_high().unwrap()
+        {
+            let mut ad9959 = {
                 let qspi_interface = {
                     // Instantiate the QUADSPI pins and peripheral interface.
                     let qspi_pins = {
@@ -502,33 +507,32 @@ const APP: () = {
                     let qspi = hal::qspi::Qspi::bank2(
                         dp.QUADSPI,
                         qspi_pins,
-                        10.mhz(),
+                        40.mhz(),
                         &ccdr.clocks,
                         ccdr.peripheral.QSPI,
                     );
+
                     pounder::QspiInterface::new(qspi).unwrap()
                 };
 
-                let mut reset_pin = gpioa.pa0.into_push_pull_output();
-                let io_update = gpiog.pg7.into_push_pull_output();
+                let reset_pin = gpioa.pa0.into_push_pull_output();
+                let mut io_update = gpiog.pg7.into_push_pull_output();
 
-                let asm_delay = {
-                    let frequency_hz = ccdr.clocks.c_ck().0;
-                    asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(
-                        frequency_hz,
-                    ))
-                };
-
-                ad9959::Ad9959::new(
+                let ad9959 = ad9959::Ad9959::new(
                     qspi_interface,
-                    &mut reset_pin,
-                    io_update,
-                    asm_delay,
+                    reset_pin,
+                    &mut io_update,
+                    &mut delay,
                     ad9959::Mode::FourBitSerial,
-                    100_000_000f32,
+                    100_000_000_f32,
                     5,
                 )
-                .unwrap()
+                .unwrap();
+
+                // Return IO_Update
+                gpiog.pg7 = io_update.into_analog();
+
+                ad9959
             };
 
             let io_expander = {
@@ -598,20 +602,64 @@ const APP: () = {
             let adc1_in_p = gpiof.pf11.into_analog();
             let adc2_in_p = gpiof.pf14.into_analog();
 
-            Some(
-                pounder::PounderDevices::new(
-                    io_expander,
-                    ad9959,
-                    spi,
-                    adc1,
-                    adc2,
-                    adc1_in_p,
-                    adc2_in_p,
-                )
-                .unwrap(),
+            let pounder_devices = pounder::PounderDevices::new(
+                io_expander,
+                &mut ad9959,
+                spi,
+                adc1,
+                adc2,
+                adc1_in_p,
+                adc2_in_p,
             )
+            .unwrap();
+
+            let dds_output = {
+                let io_update_trigger = {
+                    let _io_update = gpiog
+                        .pg7
+                        .into_alternate_af2()
+                        .set_speed(hal::gpio::Speed::VeryHigh);
+
+                    // Configure the IO_Update signal for the DDS.
+                    let mut hrtimer = hrtimer::HighResTimerE::new(
+                        dp.HRTIM_TIME,
+                        dp.HRTIM_MASTER,
+                        dp.HRTIM_COMMON,
+                        ccdr.clocks,
+                        ccdr.peripheral.HRTIM,
+                    );
+
+                    // IO_Update should be latched for 4 SYNC_CLK cycles after the QSPI profile
+                    // write. With pounder SYNC_CLK running at 100MHz (1/4 of the pounder reference
+                    // clock of 400MHz), this corresponds to 40ns. To accomodate rounding errors, we
+                    // use 50ns instead.
+                    //
+                    // Profile writes are always 16 bytes, with 2 cycles required per byte, coming
+                    // out to a total of 32 QSPI clock cycles. The QSPI is configured for 40MHz, so
+                    // this comes out to an offset of 800nS. We use 900ns to be safe - note that the
+                    // timer is triggered after the QSPI write, which can take approximately 120nS,
+                    // so there is additional margin.
+                    hrtimer.configure_single_shot(
+                        hrtimer::Channel::Two,
+                        50_e-9,
+                        900_e-9,
+                    );
+
+                    // Ensure that we have enough time for an IO-update every sample.
+                    assert!(
+                        1.0 / (1000 * SAMPLE_FREQUENCY_KHZ) as f32 > 900_e-9
+                    );
+
+                    hrtimer
+                };
+
+                let (qspi, config) = ad9959.freeze();
+                DdsOutput::new(qspi, io_update_trigger, config)
+            };
+
+            (Some(pounder_devices), Some(dds_output))
         } else {
-            None
+            (None, None)
         };
 
         let mut eeprom_i2c = {
@@ -741,7 +789,7 @@ const APP: () = {
 
             adcs,
             dacs,
-
+            dds_output,
             pounder: pounder_devices,
 
             eeprom_i2c,
@@ -751,7 +799,7 @@ const APP: () = {
         }
     }
 
-    #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch], priority=2)]
+    #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch, dds_output], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -777,6 +825,18 @@ const APP: () = {
                 dac_samples[channel][sample] = y as u16 ^ 0x8000;
             }
         }
+
+        if let Some(dds_output) = c.resources.dds_output {
+            let builder = dds_output.builder().update_channels(
+                &[pounder::Channel::Out0.into()],
+                Some(u32::MAX / 4),
+                None,
+                None,
+            );
+
+            builder.write_profile();
+        }
+
         let [dac0, dac1] = dac_samples;
         c.resources.dacs.0.release_buffer(dac0);
         c.resources.dacs.1.release_buffer(dac1);
@@ -856,41 +916,7 @@ const APP: () = {
                                     Ok::<server::Status, ()>(state)
                                 }),
                                 "stabilizer/afe0/gain": (|| c.resources.afes.0.get_gain()),
-                                "stabilizer/afe1/gain": (|| c.resources.afes.1.get_gain()),
-                                "pounder/in0": (|| {
-                                    match c.resources.pounder {
-                                        Some(pounder) =>
-                                            pounder.get_input_channel_state(pounder::Channel::In0),
-                                        _ => Err(pounder::Error::Access),
-                                    }
-                                }),
-                                "pounder/in1": (|| {
-                                    match c.resources.pounder {
-                                        Some(pounder) =>
-                                            pounder.get_input_channel_state(pounder::Channel::In1),
-                                        _ => Err(pounder::Error::Access),
-                                    }
-                                }),
-                                "pounder/out0": (|| {
-                                    match c.resources.pounder {
-                                        Some(pounder) =>
-                                            pounder.get_output_channel_state(pounder::Channel::Out0),
-                                        _ => Err(pounder::Error::Access),
-                                    }
-                                }),
-                                "pounder/out1": (|| {
-                                    match c.resources.pounder {
-                                        Some(pounder) =>
-                                            pounder.get_output_channel_state(pounder::Channel::Out1),
-                                        _ => Err(pounder::Error::Access),
-                                    }
-                                }),
-                                "pounder/dds/clock": (|| {
-                                    match c.resources.pounder {
-                                        Some(pounder) => pounder.get_dds_clock_config(),
-                                        _ => Err(pounder::Error::Access),
-                                    }
-                                })
+                                "stabilizer/afe1/gain": (|| c.resources.afes.1.get_gain())
                             ],
 
                             modifiable_attributes: [
@@ -937,40 +963,6 @@ const APP: () = {
 
                                         Ok::<server::IirRequest, ()>(req)
                                     })
-                                }),
-                                "pounder/in0": pounder::ChannelState, (|state| {
-                                    match c.resources.pounder {
-                                        Some(pounder) =>
-                                            pounder.set_channel_state(pounder::Channel::In0, state),
-                                        _ => Err(pounder::Error::Access),
-                                    }
-                                }),
-                                "pounder/in1": pounder::ChannelState, (|state| {
-                                    match c.resources.pounder {
-                                        Some(pounder) =>
-                                            pounder.set_channel_state(pounder::Channel::In1, state),
-                                        _ => Err(pounder::Error::Access),
-                                    }
-                                }),
-                                "pounder/out0": pounder::ChannelState, (|state| {
-                                    match c.resources.pounder {
-                                        Some(pounder) =>
-                                            pounder.set_channel_state(pounder::Channel::Out0, state),
-                                        _ => Err(pounder::Error::Access),
-                                    }
-                                }),
-                                "pounder/out1": pounder::ChannelState, (|state| {
-                                    match c.resources.pounder {
-                                        Some(pounder) =>
-                                            pounder.set_channel_state(pounder::Channel::Out1, state),
-                                        _ => Err(pounder::Error::Access),
-                                    }
-                                }),
-                                "pounder/dds/clock": pounder::DdsClockConfig, (|config| {
-                                    match c.resources.pounder {
-                                        Some(pounder) => pounder.configure_dds_clock(config),
-                                        _ => Err(pounder::Error::Access),
-                                    }
                                 }),
                                 "stabilizer/afe0/gain": afe::Gain, (|gain| {
                                     c.resources.afes.0.set_gain(gain);
