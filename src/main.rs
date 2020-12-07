@@ -818,7 +818,7 @@ const APP: () = {
         }
     }
 
-    #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch], priority=2)]
+    #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch, input_stamper], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -828,6 +828,8 @@ const APP: () = {
             c.resources.dacs.0.acquire_buffer(),
             c.resources.dacs.1.acquire_buffer(),
         ];
+
+        let _timestamps = c.resources.input_stamper.acquire_buffer();
 
         for channel in 0..adc_samples.len() {
             for sample in 0..adc_samples[0].len() {
@@ -847,11 +849,6 @@ const APP: () = {
         let [dac0, dac1] = dac_samples;
         c.resources.dacs.0.release_buffer(dac0);
         c.resources.dacs.1.release_buffer(dac1);
-    }
-
-    #[task(binds=DMA1_STR6, priority = 2)]
-    fn digital_stamper(_: digital_stamper::Context) {
-        panic!("Timestamp overflow")
     }
 
     #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afes])]
@@ -1006,6 +1003,11 @@ const APP: () = {
                 cortex_m::asm::wfi();
             }
         }
+    }
+
+    #[task(binds=DMA1_STR6, priority = 2)]
+    fn di0_timestamp(_: di0_timestamp::Context) {
+        panic!("DI0 Timestamp overflow")
     }
 
     #[task(binds = ETH, priority = 1)]
