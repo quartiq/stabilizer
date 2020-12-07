@@ -69,13 +69,13 @@ static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 mod adc;
 mod afe;
 mod dac;
-mod digital_input_stamper;
-mod hrtimer;
 mod design_parameters;
+mod digital_input_stamper;
 mod eeprom;
+mod hrtimer;
 mod pounder;
-mod sampling_timer;
 mod server;
+mod timers;
 
 use adc::{Adc0Input, Adc1Input};
 use dac::{Dac0Output, Dac1Output};
@@ -285,8 +285,21 @@ const APP: () = {
             &ccdr.clocks,
         );
 
-        let mut sampling_timer = sampling_timer::SamplingTimer::new(timer2);
+        let mut sampling_timer = timers::SamplingTimer::new(timer2);
         let sampling_timer_channels = sampling_timer.channels();
+
+        let mut timestamp_timer = {
+            // TODO: This needs to be precisely controlled via the prescaler of the timer.
+            let timer5 = dp.TIM5.timer(
+                (SAMPLE_FREQUENCY_KHZ / SAMPLE_BUFFER_SIZE as u32).khz(),
+                ccdr.peripheral.TIM5,
+                &ccdr.clocks,
+            );
+
+            timers::TimestampTimer::new(timer5)
+        };
+
+        let timestamp_timer_channels = timestamp_timer.channels();
 
         // Configure the SPI interfaces to the ADCs and DACs.
         let adcs = {
@@ -770,16 +783,17 @@ const APP: () = {
         cp.DWT.enable_cycle_counter();
 
         let input_stamper = {
-            let trigger = gpioa.pa3.into_alternate_af1();
+            let trigger = gpioa.pa3.into_alternate_af2();
             digital_input_stamper::InputStamper::new(
                 trigger,
                 dma_streams.6,
-                sampling_timer_channels.ch4,
+                timestamp_timer_channels.ch4,
             )
         };
 
         // Start sampling ADCs.
         sampling_timer.start();
+        timestamp_timer.start();
 
         init::LateResources {
             afes: (afe0, afe1),
@@ -795,11 +809,6 @@ const APP: () = {
             eth_mac,
             mac_addr,
         }
-    }
-
-    #[task(binds=DMA1_STR6, resources=[input_stamper], priority = 2)]
-    fn digital_stamper(c: digital_stamper::Context) {
-        panic!("Timestamp overflow")
     }
 
     #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch], priority=2)]
@@ -831,6 +840,11 @@ const APP: () = {
         let [dac0, dac1] = dac_samples;
         c.resources.dacs.0.release_buffer(dac0);
         c.resources.dacs.1.release_buffer(dac1);
+    }
+
+    #[task(binds=DMA1_STR6, priority = 2)]
+    fn digital_stamper(_: digital_stamper::Context) {
+        panic!("Timestamp overflow")
     }
 
     #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afes])]

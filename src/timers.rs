@@ -1,50 +1,51 @@
 ///! The sampling timer is used for managing ADC sampling and external reference timestamping.
 use super::hal;
 
-/// The timer used for managing ADC sampling.
-pub struct SamplingTimer {
-    timer: hal::timer::Timer<hal::stm32::TIM2>,
-    channels: Option<tim2::Channels>,
-}
-
-impl SamplingTimer {
-    /// Construct the sampling timer.
-    pub fn new(mut timer: hal::timer::Timer<hal::stm32::TIM2>) -> Self {
-        timer.pause();
-
-        Self {
-            timer,
-            // Note(unsafe): Once these channels are taken, we guarantee that we do not modify any
-            // of the underlying timer channel registers, as ownership of the channels is now
-            // provided through the associated channel structures. We additionally guarantee this
-            // can only be called once because there is only one Timer2 and this resource takes
-            // ownership of it once instantiated.
-            channels: unsafe { Some(tim2::Channels::new()) },
-        }
-    }
-
-    /// Get the timer capture/compare channels.
-    pub fn channels(&mut self) -> tim2::Channels {
-        self.channels.take().unwrap()
-    }
-
-    /// Start the sampling timer.
-    pub fn start(&mut self) {
-        self.timer.reset_counter();
-        self.timer.resume();
-    }
-}
-
 macro_rules! timer_channels {
-    ($TY:ty) => {
+    ($name:ident, $TY:ident) => {
         paste::paste! {
+
+            /// The timer used for managing ADC sampling.
+            pub struct $name {
+                timer: hal::timer::Timer<hal::stm32::[< $TY >]>,
+                channels: Option<[< $TY:lower >]::Channels>,
+            }
+
+            impl $name {
+                /// Construct the sampling timer.
+                pub fn new(mut timer: hal::timer::Timer<hal::stm32::[< $TY>]>) -> Self {
+                    timer.pause();
+
+                    Self {
+                        timer,
+                        // Note(unsafe): Once these channels are taken, we guarantee that we do not modify any
+                        // of the underlying timer channel registers, as ownership of the channels is now
+                        // provided through the associated channel structures. We additionally guarantee this
+                        // can only be called once because there is only one Timer2 and this resource takes
+                        // ownership of it once instantiated.
+                        channels: unsafe { Some([< $TY:lower >]::Channels::new()) },
+                    }
+                }
+
+                /// Get the timer capture/compare channels.
+                pub fn channels(&mut self) -> [< $TY:lower >]::Channels {
+                    self.channels.take().unwrap()
+                }
+
+                /// Start the sampling timer.
+                pub fn start(&mut self) {
+                    self.timer.reset_counter();
+                    self.timer.resume();
+                }
+            }
+
             pub mod [< $TY:lower >] {
-                pub use hal::stm32::[< $TY:lower >]::ccmr1_input::{CC1S_A, CC2S_A};
-                pub use hal::stm32::[< $TY:lower >]::ccmr2_input::{CC3S_A, CC4S_A};
+                pub use hal::stm32::tim2::ccmr1_input::{CC1S_A, CC2S_A};
+                pub use hal::stm32::tim2::ccmr2_input::{CC3S_A, CC4S_A};
 
                 use stm32h7xx_hal as hal;
                 use hal::dma::{traits::TargetAddress, PeripheralToMemory, dma::DMAReq};
-                use hal::stm32::TIM2;
+                use hal::stm32::$TY;
 
                 /// The channels representing the timer.
                 pub struct Channels {
@@ -92,6 +93,7 @@ macro_rules! timer_channels {
                 }
 
                 /// Allow the channel to generate DMA requests.
+                #[allow(dead_code)]
                 pub fn listen_dma(&self) {
                     let regs = unsafe { &*<$TY>::ptr() };
                     regs.dier.modify(|_, w| w.[< cc $index de >]().set_bit());
@@ -101,6 +103,7 @@ macro_rules! timer_channels {
                 ///
                 /// # Args
                 /// * `value` - The value to compare the sampling timer's counter against.
+                #[allow(dead_code)]
                 pub fn to_output_compare(&self, value: u32) {
                     let regs = unsafe { &*<$TY>::ptr() };
                     assert!(value <= regs.arr.read().bits());
@@ -113,7 +116,8 @@ macro_rules! timer_channels {
                 ///
                 /// # Args
                 /// * `input` - The input source for the input capture event.
-                pub fn to_input_capture(self, input: hal::stm32::[<$TY:lower>]::[< $ccmrx _input >]::[< CC $index S_A >]) -> [< Channel $index InputCapture >]{
+                #[allow(dead_code)]
+                pub fn to_input_capture(self, input: hal::stm32::tim2::[< $ccmrx _input >]::[< CC $index S_A >]) -> [< Channel $index InputCapture >]{
                     let regs = unsafe { &*<$TY>::ptr() };
                     regs.[< $ccmrx _input >]().modify(|_, w| w.[< cc $index s>]().variant(input));
 
@@ -135,4 +139,5 @@ macro_rules! timer_channels {
     };
 }
 
-timer_channels!(TIM2);
+timer_channels!(SamplingTimer, TIM2);
+timer_channels!(TimestampTimer, TIM5);

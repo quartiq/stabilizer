@@ -1,20 +1,17 @@
-use super::{hal, sampling_timer, DmaConfig, PeripheralToMemory, Transfer};
+use super::{hal, timers, DmaConfig, PeripheralToMemory, Transfer};
 
 const INPUT_BUFFER_SIZE: usize = 1;
 
 #[link_section = ".axisram.buffers"]
-static mut BUF0: [u16; INPUT_BUFFER_SIZE] = [0; INPUT_BUFFER_SIZE];
-
-#[link_section = ".axisram.buffers"]
-static mut BUF1: [u16; INPUT_BUFFER_SIZE] = [0; INPUT_BUFFER_SIZE];
+static mut BUF: [[u16; INPUT_BUFFER_SIZE]; 2] = [[0; INPUT_BUFFER_SIZE]; 2];
 
 pub struct InputStamper {
-    _di0_trigger: hal::gpio::gpioa::PA3<hal::gpio::Alternate<hal::gpio::AF1>>,
+    _di0_trigger: hal::gpio::gpioa::PA3<hal::gpio::Alternate<hal::gpio::AF2>>,
     timestamp_buffer: heapless::Vec<u16, heapless::consts::U128>,
     next_buffer: Option<&'static mut [u16; INPUT_BUFFER_SIZE]>,
     transfer: Transfer<
         hal::dma::dma::Stream6<hal::stm32::DMA1>,
-        sampling_timer::tim2::Channel4InputCapture,
+        timers::tim5::Channel4InputCapture,
         PeripheralToMemory,
         &'static mut [u16; INPUT_BUFFER_SIZE],
     >,
@@ -22,17 +19,19 @@ pub struct InputStamper {
 
 impl InputStamper {
     pub fn new(
-        trigger: hal::gpio::gpioa::PA3<hal::gpio::Alternate<hal::gpio::AF1>>,
+        trigger: hal::gpio::gpioa::PA3<hal::gpio::Alternate<hal::gpio::AF2>>,
         stream: hal::dma::dma::Stream6<hal::stm32::DMA1>,
-        timer_channel: sampling_timer::tim2::Channel4,
+        timer_channel: timers::tim5::Channel4,
     ) -> Self {
-        // Utilize the TIM2 CH4 as an input capture channel - use TI4 (the DI0 input trigger) as the
+        // Utilize the TIM5 CH4 as an input capture channel - use TI4 (the DI0 input trigger) as the
         // capture source.
         timer_channel.listen_dma();
-        let input_capture = timer_channel.to_input_capture(sampling_timer::tim2::CC4S_A::TI4);
+        let input_capture =
+            timer_channel.to_input_capture(timers::tim5::CC4S_A::TI4);
 
         // Set up the DMA transfer.
         let dma_config = DmaConfig::default()
+            .transfer_complete_interrupt(true)
             .memory_increment(true)
             .peripheral_increment(false);
 
@@ -40,7 +39,7 @@ impl InputStamper {
             Transfer::init(
                 stream,
                 input_capture,
-                unsafe { &mut BUF0 },
+                unsafe { &mut BUF[0] },
                 None,
                 dma_config,
             );
@@ -49,7 +48,7 @@ impl InputStamper {
 
         Self {
             timestamp_buffer: heapless::Vec::new(),
-            next_buffer: unsafe { Some(&mut BUF1) },
+            next_buffer: unsafe { Some(&mut BUF[1]) },
             transfer: timestamp_transfer,
             _di0_trigger: trigger,
         }
