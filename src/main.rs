@@ -808,6 +808,7 @@ const APP: () = {
                 trigger,
                 dma_streams.6,
                 timestamp_timer_channels.ch4,
+                SAMPLE_BUFFER_SIZE,
             )
         };
 
@@ -1030,11 +1031,6 @@ const APP: () = {
         }
     }
 
-    #[task(binds=DMA1_STR6, priority = 2)]
-    fn di0_timestamp(_: di0_timestamp::Context) {
-        panic!("DI0 Timestamp overflow")
-    }
-
     #[task(binds = ETH, priority = 1)]
     fn eth(_: eth::Context) {
         unsafe { ethernet::interrupt_handler() }
@@ -1058,6 +1054,11 @@ const APP: () = {
     #[task(binds = SPI5, priority = 3)]
     fn spi5(_: spi5::Context) {
         panic!("DAC1 output error");
+    }
+
+    #[task(binds = TIM5, priority = 3)]
+    fn di0(_: di0::Context) {
+        panic!("DI0 timestamp overrun");
     }
 
     extern "C" {

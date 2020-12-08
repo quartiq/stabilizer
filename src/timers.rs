@@ -2,7 +2,7 @@
 use super::hal;
 
 macro_rules! timer_channels {
-    ($name:ident, $TY:ident) => {
+    ($name:ident, $TY:ident, u32) => {
         paste::paste! {
 
             /// The timer used for managing ADC sampling.
@@ -32,12 +32,14 @@ macro_rules! timer_channels {
                     self.channels.take().unwrap()
                 }
 
+                /// Get the prescaler of a timer.
                 #[allow(dead_code)]
                 pub fn get_prescaler(&self) -> u16 {
                     let regs = unsafe { &*hal::stm32::$TY::ptr() };
                     regs.psc.read().psc().bits() + 1
                 }
 
+                /// Manually set the prescaler of the timer.
                 #[allow(dead_code)]
                 pub fn set_prescaler(&mut self, prescaler: u16) {
                     let regs = unsafe { &*hal::stm32::$TY::ptr() };
@@ -45,12 +47,14 @@ macro_rules! timer_channels {
                     regs.psc.write(|w| w.psc().bits(prescaler - 1));
                 }
 
+                /// Get the period of the timer.
                 #[allow(dead_code)]
                 pub fn get_period(&self) -> u32 {
                     let regs = unsafe { &*hal::stm32::$TY::ptr() };
                     regs.arr.read().arr().bits()
                 }
 
+                /// Manually set the period of the timer.
                 #[allow(dead_code)]
                 pub fn set_period(&mut self, period: u32) {
                     let regs = unsafe { &*hal::stm32::$TY::ptr() };
@@ -107,8 +111,10 @@ macro_rules! timer_channels {
 
     ($index:expr, $TY:ty, $ccmrx:expr) => {
         paste::paste! {
+            /// A capture/compare channel of the timer.
             pub struct [< Channel $index >] {}
 
+            /// A capture channel of the timer.
             pub struct [< Channel $index InputCapture>] {}
 
             impl [< Channel $index >] {
@@ -153,8 +159,52 @@ macro_rules! timer_channels {
                 }
             }
 
+            impl [< Channel $index InputCapture >] {
+                /// Get the latest capture from the channel.
+                #[allow(dead_code)]
+                pub fn latest_capture(&mut self) -> Option<u32> {
+                    // Note(unsafe): This channel owns all access to the specific timer channel.
+                    // Only atomic operations on completed on the timer registers.
+                    let regs = unsafe { &*<$TY>::ptr() };
+                    let sr = regs.sr.read();
+                    let ccx = regs.[< ccr $index >].read();
+                    if sr.[< cc $index if >]().bit_is_set() {
+                        regs.sr.modify(|_, w| w.[< cc $index if >]().clear_bit());
+                        Some(ccx.ccr().bits())
+                    } else {
+                        None
+                    }
+                }
+
+                /// Listen for over-capture events on the timer channel.
+                ///
+                /// # Note
+                /// An over-capture event is when a previous capture was lost due to a new capture.
+                ///
+                /// "Listening" is equivalent to enabling the interrupt for the event.
+                #[allow(dead_code)]
+                pub fn listen_overcapture(&self) {
+                    // Note(unsafe): This channel owns all access to the specific timer channel.
+                    // Only atomic operations on completed on the timer registers.
+                    let regs = unsafe { &*<$TY>::ptr() };
+                    regs.dier.modify(|_, w| w.[<cc $index ie>]().set_bit());
+                }
+
+                /// Allow the channel to generate DMA requests.
+                #[allow(dead_code)]
+                pub fn listen_dma(&self) {
+                    // Note(unsafe): This channel owns all access to the specific timer channel.
+                    // Only atomic operations on completed on the timer registers.
+                    let regs = unsafe { &*<$TY>::ptr() };
+                    regs.dier.modify(|_, w| w.[< cc $index de >]().set_bit());
+                }
+            }
+
+            // Note(unsafe): This manually implements DMA support for input-capture channels. This
+            // is safe as it is only completed once per channel and each DMA request is allocated to
+            // each channel as the owner.
             unsafe impl TargetAddress<PeripheralToMemory> for [< Channel $index InputCapture >] {
-                type MemSize = u16;
+                type MemSize = u32;
 
                 const REQUEST_LINE: Option<u8> = Some(DMAReq::[< $TY _CH $index >]as u8);
 
@@ -167,5 +217,5 @@ macro_rules! timer_channels {
     };
 }
 
-timer_channels!(SamplingTimer, TIM2);
-timer_channels!(TimestampTimer, TIM5);
+timer_channels!(SamplingTimer, TIM2, u32);
+timer_channels!(TimestampTimer, TIM5, u32);
