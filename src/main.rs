@@ -325,7 +325,16 @@ const APP: () = {
                     SAMPLE_BUFFER_SIZE as u64 * ADC_SAMPLE_TICKS as u64;
                 let batches_per_overflow: u64 =
                     (1u64 + u32::MAX as u64) / batch_duration;
-                let period: u64 = batch_duration * batches_per_overflow - 1u64;
+
+                // Calculate the largest power-of-two that is less than `batches_per_overflow`.
+                // This is completed by eliminating the least significant bits of the value until
+                // only the msb remains, which is always a power of two.
+                let mut j = batches_per_overflow;
+                while (j & (j - 1)) != 0 {
+                    j = j & (j - 1);
+                }
+
+                let period: u64 = batch_duration * j - 1u64;
                 period.try_into().unwrap()
             };
 
