@@ -58,10 +58,10 @@ use heapless::{consts::*, String};
 
 // The number of ticks in the ADC sampling timer. The timer runs at 100MHz, so the step size is
 // equal to 10ns per tick.
-const ADC_SAMPLE_TICKS: u32 = 128;
+const ADC_SAMPLE_TICKS: u32 = 256;
 
 // The desired ADC sample processing buffer size.
-const SAMPLE_BUFFER_SIZE: usize = 8;
+const SAMPLE_BUFFER_SIZE: usize = 1;
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
@@ -831,7 +831,7 @@ const APP: () = {
         // Utilize the cycle counter for RTIC scheduling.
         cp.DWT.enable_cycle_counter();
 
-        let input_stamper = {
+        let mut input_stamper = {
             let trigger = gpioa.pa3.into_alternate_af2();
             digital_input_stamper::InputStamper::new(
                 trigger,
@@ -844,6 +844,7 @@ const APP: () = {
         // Start sampling ADCs.
         sampling_timer.start();
         timestamp_timer.start();
+        input_stamper.start();
 
         init::LateResources {
             afes: (afe0, afe1),
@@ -1083,11 +1084,6 @@ const APP: () = {
     #[task(binds = SPI5, priority = 3)]
     fn spi5(_: spi5::Context) {
         panic!("DAC1 output error");
-    }
-
-    #[task(binds = TIM5, priority = 3)]
-    fn di0(_: di0::Context) {
-        panic!("DI0 timestamp overrun");
     }
 
     extern "C" {

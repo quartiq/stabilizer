@@ -32,21 +32,6 @@ macro_rules! timer_channels {
                     self.channels.take().unwrap()
                 }
 
-                /// Get the prescaler of a timer.
-                #[allow(dead_code)]
-                pub fn get_prescaler(&self) -> u16 {
-                    let regs = unsafe { &*hal::stm32::$TY::ptr() };
-                    regs.psc.read().psc().bits() + 1
-                }
-
-                /// Manually set the prescaler of the timer.
-                #[allow(dead_code)]
-                pub fn set_prescaler(&mut self, prescaler: u16) {
-                    let regs = unsafe { &*hal::stm32::$TY::ptr() };
-                    assert!(prescaler >= 1);
-                    regs.psc.write(|w| w.psc().bits(prescaler - 1));
-                }
-
                 /// Get the period of the timer.
                 #[allow(dead_code)]
                 pub fn get_period(&self) -> u32 {
@@ -176,20 +161,6 @@ macro_rules! timer_channels {
                     }
                 }
 
-                /// Listen for over-capture events on the timer channel.
-                ///
-                /// # Note
-                /// An over-capture event is when a previous capture was lost due to a new capture.
-                ///
-                /// "Listening" is equivalent to enabling the interrupt for the event.
-                #[allow(dead_code)]
-                pub fn listen_overcapture(&self) {
-                    // Note(unsafe): This channel owns all access to the specific timer channel.
-                    // Only atomic operations on completed on the timer registers.
-                    let regs = unsafe { &*<$TY>::ptr() };
-                    regs.dier.modify(|_, w| w.[<cc $index ie>]().set_bit());
-                }
-
                 /// Allow the channel to generate DMA requests.
                 #[allow(dead_code)]
                 pub fn listen_dma(&self) {
@@ -197,6 +168,24 @@ macro_rules! timer_channels {
                     // Only atomic operations on completed on the timer registers.
                     let regs = unsafe { &*<$TY>::ptr() };
                     regs.dier.modify(|_, w| w.[< cc $index de >]().set_bit());
+                }
+
+                /// Enable the input capture to begin capturing timer values.
+                #[allow(dead_code)]
+                pub fn enable(&mut self) {
+                    // Note(unsafe): This channel owns all access to the specific timer channel.
+                    // Only atomic operations on completed on the timer registers.
+                    let regs = unsafe { &*<$TY>::ptr() };
+                    regs.ccer.modify(|_, w| w.[< cc $index e >]().set_bit());
+                }
+
+                /// Check if an over-capture event has occurred.
+                #[allow(dead_code)]
+                pub fn check_overcapture(&self) -> bool {
+                    // Note(unsafe): This channel owns all access to the specific timer channel.
+                    // Only atomic operations on completed on the timer registers.
+                    let regs = unsafe { &*<$TY>::ptr() };
+                    regs.sr.read().[< cc $index of >]().bit_is_set()
                 }
             }
 

@@ -8,10 +8,10 @@
 ///!
 ///! # Design
 ///! An input capture channel is configured on DI0 and fed into TIM5's capture channel 4. TIM5 is
-///! then run in a free-running mode with a configured frequency and period. Whenever an edge on DI0
-///! triggers, the current TIM5 counter value is captured and recorded as a timestamp. This timestamp can be
-///! either directly read from the timer channel or can be collected asynchronously via DMA
-///! collection.
+///! then run in a free-running mode with a configured tick rate (PSC) and maximum count value
+///! (ARR). Whenever an edge on DI0 triggers, the current TIM5 counter value is captured and
+///! recorded as a timestamp. This timestamp can be either directly read from the timer channel or
+///! can be collected asynchronously via DMA collection.
 ///!
 ///! When DMA is used for timestamp collection, a DMA transfer is configured to collect as many
 ///! timestamps as there are samples, but it is intended that this DMA transfer should never
@@ -19,9 +19,9 @@
 ///! checks to see how many timestamps were collected. These collected timestamps are then returned
 ///! for further processing.
 ///!
-///! To prevent silently discarding timestamps, the TIM5 input capture over-capture interrupt is
-///! used. Any over-capture event (which indicates an overwritten timestamp) then generates an ISR
-///! which handles the over-capture.
+///! To prevent silently discarding timestamps, the TIM5 input capture over-capture flag is
+///! continually checked. Any over-capture event (which indicates an overwritten timestamp) then
+///! triggers a panic to indicate the dropped timestamp so that design parameters can be adjusted.
 ///!
 ///! # Tradeoffs
 ///! It appears that DMA transfers can take a significant amount of time to disable (400ns) if they
@@ -77,9 +77,6 @@ impl InputStamper {
         let input_capture =
             timer_channel.to_input_capture(timers::tim5::CC4S_A::TI4);
 
-        // Listen for over-capture events, which indicates an over-run of DI0 timestamps.
-        input_capture.listen_overcapture();
-
         // For small batch sizes, the overhead of DMA can become burdensome to the point where
         // timing is not met. The DMA requires 500ns overhead, whereas a direct register read only
         // requires ~80ns. When batches of 2-or-greater are used, use a DMA-based approach.
@@ -89,7 +86,7 @@ impl InputStamper {
             // Set up the DMA transfer.
             let dma_config = DmaConfig::default().memory_increment(true);
 
-            let mut timestamp_transfer: Transfer<_, _, PeripheralToMemory, _> =
+            let timestamp_transfer: Transfer<_, _, PeripheralToMemory, _> =
                 Transfer::init(
                     stream,
                     input_capture,
@@ -97,8 +94,6 @@ impl InputStamper {
                     None,
                     dma_config,
                 );
-
-            timestamp_transfer.start(|_| {});
             (Some(timestamp_transfer), None)
         } else {
             (None, Some(input_capture))
@@ -112,11 +107,28 @@ impl InputStamper {
         }
     }
 
+    /// Start capture timestamps on DI0.
+    pub fn start(&mut self) {
+        if let Some(transfer) = &mut self.transfer {
+            transfer.start(|capture_channel| {
+                capture_channel.enable();
+            });
+        } else {
+            self.capture_channel.as_mut().unwrap().enable();
+        }
+    }
+
     /// Get all of the timestamps that have occurred during the last processing cycle.
     pub fn acquire_buffer(&mut self) -> &[u32] {
         // If we are using DMA, finish the transfer and swap over buffers.
         if self.transfer.is_some() {
             let next_buffer = self.next_buffer.take().unwrap();
+
+            self.transfer.as_mut().unwrap().pause(|channel| {
+                if channel.check_overcapture() {
+                    panic!("DI0 timestamp overrun");
+                }
+            });
 
             let (prev_buffer, _, remaining_transfers) = self
                 .transfer
@@ -132,6 +144,10 @@ impl InputStamper {
             // timestamps actually collected.
             &self.next_buffer.as_ref().unwrap()[..valid_count]
         } else {
+            if self.capture_channel.as_ref().unwrap().check_overcapture() {
+                panic!("DI0 timestamp overrun");
+            }
+
             // If we aren't using DMA, just manually check the input capture channel for a
             // timestamp.
             match self.capture_channel.as_mut().unwrap().latest_capture() {
