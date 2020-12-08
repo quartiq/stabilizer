@@ -30,6 +30,8 @@ extern crate panic_halt;
 #[macro_use]
 extern crate log;
 
+use core::convert::TryInto;
+
 // use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 use cortex_m_rt::exception;
 use rtic::cyccnt::{Instant, U32Ext};
@@ -54,11 +56,12 @@ use smoltcp::wire::Ipv4Address;
 
 use heapless::{consts::*, String};
 
-// The desired sampling frequency of the ADCs.
-const SAMPLE_FREQUENCY_KHZ: u32 = 500;
+// The number of ticks in the ADC sampling timer. The timer runs at 100MHz, so the step size is
+// equal to 10ns per tick.
+const ADC_SAMPLE_TICKS: u32 = 128;
 
 // The desired ADC sample processing buffer size.
-const SAMPLE_BUFFER_SIZE: usize = 1;
+const SAMPLE_BUFFER_SIZE: usize = 8;
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
@@ -282,29 +285,51 @@ const APP: () = {
             hal::dma::dma::StreamsTuple::new(dp.DMA1, ccdr.peripheral.DMA1);
 
         // Configure timer 2 to trigger conversions for the ADC
-        let timer2 = dp.TIM2.timer(
-            SAMPLE_FREQUENCY_KHZ.khz(),
-            ccdr.peripheral.TIM2,
-            &ccdr.clocks,
-        );
+        let mut sampling_timer = {
+            // The timer frequency is manually adjusted below, so the 1KHz setting here is a
+            // dont-care.
+            let mut timer2 =
+                dp.TIM2.timer(1.khz(), ccdr.peripheral.TIM2, &ccdr.clocks);
 
-        let mut sampling_timer = timers::SamplingTimer::new(timer2);
+            // Configure the timer to count at the designed tick rate. We will manually set the
+            // period below.
+            timer2.pause();
+            timer2.set_tick_freq(design_parameters::TIMER_FREQUENCY_MHZ.mhz());
+
+            let mut sampling_timer = timers::SamplingTimer::new(timer2);
+            sampling_timer.set_period(ADC_SAMPLE_TICKS - 1);
+
+            sampling_timer
+        };
+
         let sampling_timer_channels = sampling_timer.channels();
 
         let mut timestamp_timer = {
             // The timer frequency is manually adjusted below, so the 1KHz setting here is a
             // dont-care.
-            let timer5 =
+            let mut timer5 =
                 dp.TIM5.timer(1.khz(), ccdr.peripheral.TIM5, &ccdr.clocks);
+
+            // Configure the timer to count at the designed tick rate. We will manually set the
+            // period below.
+            timer5.pause();
+            timer5.set_tick_freq(design_parameters::TIMER_FREQUENCY_MHZ.mhz());
 
             // The time stamp timer must run at exactly a multiple of the sample timer based on the
             // batch size. To accomodate this, we manually set the period identical to the sample
             // timer, but use a prescaler that is `BATCH_SIZE` longer.
             let mut timer = timers::TimestampTimer::new(timer5);
-            timer.set_period(sampling_timer.get_period());
-            timer.set_prescaler(
-                sampling_timer.get_prescaler() * SAMPLE_BUFFER_SIZE as u16,
-            );
+
+            let period: u32 = {
+                let batch_duration: u64 =
+                    SAMPLE_BUFFER_SIZE as u64 * ADC_SAMPLE_TICKS as u64;
+                let batches_per_overflow: u64 =
+                    (1u64 + u32::MAX as u64) / batch_duration;
+                let period: u64 = batch_duration * batches_per_overflow - 1u64;
+                period.try_into().unwrap()
+            };
+
+            timer.set_period(period);
 
             timer
         };
@@ -667,9 +692,13 @@ const APP: () = {
                     );
 
                     // Ensure that we have enough time for an IO-update every sample.
-                    assert!(
-                        1.0 / (1000 * SAMPLE_FREQUENCY_KHZ) as f32 > 900_e-9
-                    );
+                    let sample_frequency =
+                        (design_parameters::TIMER_FREQUENCY_MHZ as f32
+                            * 1_000_000.0)
+                            / ADC_SAMPLE_TICKS as f32;
+
+                    let sample_period = 1.0 / sample_frequency;
+                    assert!(sample_period > 900_e-9);
 
                     hrtimer
                 };
