@@ -1,7 +1,7 @@
 use super::{SAMPLE_BUFFER_SIZE, hal, timers, DmaConfig, PeripheralToMemory, Transfer};
 
 #[link_section = ".axisram.buffers"]
-static mut BUF: [[u16; SAMPLE_BUFFER_SIZE]; 3] = [[0; SAMPLE_BUFFER_SIZE]; 3];
+static mut BUF: [[u16; SAMPLE_BUFFER_SIZE]; 2] = [[0; SAMPLE_BUFFER_SIZE]; 2];
 
 pub struct InputStamper {
     _di0_trigger: hal::gpio::gpioa::PA3<hal::gpio::Alternate<hal::gpio::AF2>>,
@@ -30,25 +30,23 @@ impl InputStamper {
         let dma_config = DmaConfig::default()
             .transfer_complete_interrupt(true)
             .memory_increment(true)
-            .circular_buffer(true)
-            .double_buffer(true)
             .peripheral_increment(false);
 
-        // This needs to operate in double-buffer+circular mode so that we don't potentially drop
-        // input timestamps.
+        // TODO: This needs to operate in double-buffer+circular mode so that we don't potentially
+        // drop input timestamps.
         let mut timestamp_transfer: Transfer<_, _, PeripheralToMemory, _> =
             Transfer::init(
                 stream,
                 input_capture,
                 unsafe { &mut BUF[0] },
-                unsafe { Some(&mut BUF[1]) },
+                None,
                 dma_config,
             );
 
         timestamp_transfer.start(|_| {});
 
         Self {
-            next_buffer: unsafe { Some(&mut BUF[2]) },
+            next_buffer: unsafe { Some(&mut BUF[1]) },
             transfer: timestamp_transfer,
             _di0_trigger: trigger,
         }
