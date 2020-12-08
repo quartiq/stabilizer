@@ -19,7 +19,7 @@
 ///! checks to see how many timestamps were collected. These collected timestamps are then returned
 ///! for further processing.
 ///!
-///! To prevent silently discarding timestamps, the TIm5 input capture over-capture interrupt is
+///! To prevent silently discarding timestamps, the TIM5 input capture over-capture interrupt is
 ///! used. Any over-capture event (which indicates an overwritten timestamp) then generates an ISR
 ///! which handles the over-capture.
 ///!
