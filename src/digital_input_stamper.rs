@@ -9,7 +9,7 @@
 ///! # Design
 ///! An input capture channel is configured on DI0 and fed into TIM5's capture channel 4. TIM5 is
 ///! then run in a free-running mode with a configured frequency and period. Whenever an edge on DI0
-///! triggers, the current TIM5 capture value is recorded as a timestamp. This timestamp can be
+///! triggers, the current TIM5 counter value is captured and recorded as a timestamp. This timestamp can be
 ///! either directly read from the timer channel or can be collected asynchronously via DMA
 ///! collection.
 ///!
