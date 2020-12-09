@@ -571,7 +571,7 @@ const APP: () = {
                     pounder::QspiInterface::new(qspi).unwrap()
                 };
 
-                let reset_pin = gpioa.pa0.into_push_pull_output();
+                let reset_pin = gpiog.pg6.into_push_pull_output();
                 let mut io_update = gpiog.pg7.into_push_pull_output();
 
                 let ad9959 = ad9959::Ad9959::new(
@@ -886,7 +886,7 @@ const APP: () = {
         }
     }
 
-    #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch, dds_output, input_stamper], priority=2)]
+    #[task(binds=DMA1_STR3, resources=[pounder_stamper, adcs, dacs, iir_state, iir_ch, dds_output, input_stamper], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -897,6 +897,7 @@ const APP: () = {
             c.resources.dacs.1.acquire_buffer(),
         ];
 
+        let _pounder_timestamps = c.resources.pounder_stamper.acquire_buffer();
         let _timestamps = c.resources.input_stamper.acquire_buffer();
 
         for channel in 0..adc_samples.len() {
