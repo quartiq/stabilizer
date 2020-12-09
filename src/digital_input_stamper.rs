@@ -75,7 +75,7 @@ impl InputStamper {
         // Utilize the TIM5 CH4 as an input capture channel - use TI4 (the DI0 input trigger) as the
         // capture source.
         let input_capture =
-            timer_channel.to_input_capture(timers::tim5::CC4S_A::TI4);
+            timer_channel.to_input_capture(timers::CaptureTrigger::Input24);
 
         // For small batch sizes, the overhead of DMA can become burdensome to the point where
         // timing is not met. The DMA requires 500ns overhead, whereas a direct register read only

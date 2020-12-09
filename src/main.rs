@@ -58,10 +58,10 @@ use heapless::{consts::*, String};
 
 // The number of ticks in the ADC sampling timer. The timer runs at 100MHz, so the step size is
 // equal to 10ns per tick.
-const ADC_SAMPLE_TICKS: u32 = 256;
+const ADC_SAMPLE_TICKS: u32 = 128;
 
 // The desired ADC sample processing buffer size.
-const SAMPLE_BUFFER_SIZE: usize = 1;
+const SAMPLE_BUFFER_SIZE: usize = 8;
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
@@ -853,15 +853,23 @@ const APP: () = {
 
         let pounder_stamper = {
             let etr_pin = gpioa.pa0.into_alternate_af3();
-            let timestamp_timer = pounder::timestamp::Timer::new(
-                dp.TIM8,
-                ccdr.peripheral.TIM8,
+
+            // The frequency in the constructor is dont-care, as we will modify the period + clock
+            // source manually below.
+            let tim8 =
+                dp.TIM8.timer(1.khz(), ccdr.peripheral.TIM8, &ccdr.clocks);
+            let mut timestamp_timer = timers::PounderTimestampTimer::new(tim8);
+            timestamp_timer.set_external_clock(timers::Prescaler::Div4);
+            timestamp_timer.set_period(128);
+            let tim8_channels = timestamp_timer.channels();
+
+            pounder::timestamp::Timestamper::new(
+                timestamp_timer,
+                dma_streams.7,
+                tim8_channels.ch1,
+                &mut sampling_timer,
                 etr_pin,
-                pounder::timestamp::Prescaler::Div4,
-                sampling_timer.update_event(),
-                128,
-            );
-            pounder::timestamp::Timestamper::new(timestamp_timer, dma_streams.7)
+            )
         };
 
         // Start sampling ADCs.
@@ -888,6 +896,8 @@ const APP: () = {
 
     #[task(binds=DMA1_STR3, resources=[pounder_stamper, adcs, dacs, iir_state, iir_ch, dds_output, input_stamper], priority=2)]
     fn process(c: process::Context) {
+        let _pounder_timestamps = c.resources.pounder_stamper.acquire_buffer();
+
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
             c.resources.adcs.1.acquire_buffer(),
@@ -897,7 +907,6 @@ const APP: () = {
             c.resources.dacs.1.acquire_buffer(),
         ];
 
-        let _pounder_timestamps = c.resources.pounder_stamper.acquire_buffer();
         let _timestamps = c.resources.input_stamper.acquire_buffer();
 
         for channel in 0..adc_samples.len() {

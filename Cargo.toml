@@ -54,7 +54,7 @@ default-features = false
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]
 git = "https://github.com/quartiq/stm32h7xx-hal"
-branch = "feature/number-of-transfers"
+branch = "feature/dma-buffer-swap/num-transfers"
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]

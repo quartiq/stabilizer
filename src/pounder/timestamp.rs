@@ -1,117 +1,19 @@
 ///! ADC sample timestamper using external Pounder reference clock.
 use stm32h7xx_hal as hal;
 
-use hal::{
-    dma::{
-        dma::{DMAReq, DmaConfig},
-        traits::TargetAddress,
-        PeripheralToMemory, Transfer,
-    },
-    rcc::ResetEnable,
-};
+use hal::dma::{dma::DmaConfig, PeripheralToMemory, Transfer};
 
 use crate::{timers, SAMPLE_BUFFER_SIZE};
-
-struct TimestampDma {
-    _dma_request: timers::tim2::UpdateEvent,
-}
-
-pub struct Timer {
-    timer: hal::stm32::TIM8,
-    dma: Option<TimestampDma>,
-}
-
-// Note(unsafe): This is safe to implement because we take ownership of the DMA request.
-// Additionally, we only read the registers in PeripheralToMemory mode, so it is always safe to
-// access them.
-unsafe impl TargetAddress<PeripheralToMemory> for TimestampDma {
-    // TIM8 is a 16-bit timer.
-    type MemSize = u16;
-
-    // Note: It is safe for us to us the TIM2_UPDATE DMA request because the Timer
-    // maintains ownership of the UpdateEvent object for this timer.
-    const REQUEST_LINE: Option<u8> = Some(DMAReq::TIM2_UP as u8);
-
-    fn address(&self) -> u32 {
-        let regs = unsafe { &*hal::stm32::TIM8::ptr() };
-        &regs.cnt as *const _ as u32
-    }
-}
-
-pub enum Prescaler {
-    Div4,
-    Div8,
-}
-
-impl Timer {
-    pub fn new(
-        timer: hal::stm32::TIM8,
-        prec: hal::rcc::rec::Tim8,
-        _external_source: hal::gpio::gpioa::PA0<
-            hal::gpio::Alternate<hal::gpio::AF3>,
-        >,
-        prescaler: Prescaler,
-        update_event: timers::tim2::UpdateEvent,
-        period: u16,
-    ) -> Self {
-        prec.reset().enable();
-
-        let divisor = match prescaler {
-            Prescaler::Div4 => hal::stm32::tim1::smcr::ETPS_A::DIV4,
-            Prescaler::Div8 => hal::stm32::tim1::smcr::ETPS_A::DIV8,
-        };
-
-        // Configure the timer to utilize an external clock source with the provided divider on the
-        // ETR.
-        timer
-            .smcr
-            .modify(|_, w| w.etps().variant(divisor).ece().set_bit());
-
-        // Set the timer period and generate an update of the timer registers so that ARR takes
-        // effect.
-        timer.arr.write(|w| w.arr().bits(period));
-
-        timer.egr.write(|w| w.ug().set_bit());
-
-        // Allow TIM2 updates to generate DMA requests.
-        update_event.listen_dma();
-
-        // Enable the timer.
-        timer.cr1.modify(|_, w| w.cen().set_bit());
-
-        let dma = TimestampDma {
-            _dma_request: update_event,
-        };
-
-        Self {
-            timer,
-            dma: Some(dma),
-        }
-    }
-
-    /// Update the timer period.
-    ///
-    /// # Note
-    /// Timer period updates will take effect after the current period elapses.
-    fn set_period(&mut self, period: u16) {
-        // Modify the period register.
-        self.timer.arr.write(|w| w.arr().bits(period));
-    }
-
-    fn dma_transfer(&mut self) -> TimestampDma {
-        self.dma.take().unwrap()
-    }
-}
 
 #[link_section = ".axisram.buffers"]
 static mut BUF: [[u16; SAMPLE_BUFFER_SIZE]; 3] = [[0; SAMPLE_BUFFER_SIZE]; 3];
 
 pub struct Timestamper {
     next_buffer: Option<&'static mut [u16; SAMPLE_BUFFER_SIZE]>,
-    timer: Timer,
+    timer: timers::PounderTimestampTimer,
     transfer: Transfer<
         hal::dma::dma::Stream7<hal::stm32::DMA1>,
-        TimestampDma,
+        timers::tim8::Channel1InputCapture,
         PeripheralToMemory,
         &'static mut [u16; SAMPLE_BUFFER_SIZE],
     >,
@@ -119,19 +21,36 @@ pub struct Timestamper {
 
 impl Timestamper {
     pub fn new(
-        mut timer: Timer,
+        mut timestamp_timer: timers::PounderTimestampTimer,
         stream: hal::dma::dma::Stream7<hal::stm32::DMA1>,
+        capture_channel: timers::tim8::Channel1,
+        sampling_timer: &mut timers::SamplingTimer,
+        _clock_input: hal::gpio::gpioa::PA0<
+            hal::gpio::Alternate<hal::gpio::AF3>,
+        >,
     ) -> Self {
         let config = DmaConfig::default()
             .memory_increment(true)
             .circular_buffer(true)
             .double_buffer(true);
 
+        // The sampling timer should generate a trigger output when CH1 comparison occurs.
+        sampling_timer.generate_trigger(timers::TriggerGenerator::ComparePulse);
+
+        // The timestamp timer trigger input should use TIM2 (SamplingTimer)'s trigger, which is
+        // mapped to ITR1.
+        timestamp_timer.set_trigger_source(timers::TriggerSource::Trigger1);
+
+        // The capture channel should capture whenever the trigger input occurs.
+        let input_capture = capture_channel
+            .to_input_capture(timers::CaptureTrigger::TriggerInput);
+        input_capture.listen_dma();
+
         // The data transfer is always a transfer of data from the peripheral to a RAM buffer.
         let mut data_transfer: Transfer<_, _, PeripheralToMemory, _> =
             Transfer::init(
                 stream,
-                timer.dma_transfer(),
+                input_capture,
                 // Note(unsafe): The BUF[0] and BUF[1] is "owned" by this peripheral.
                 // It shall not be used anywhere else in the module.
                 unsafe { &mut BUF[0] },
@@ -139,10 +58,10 @@ impl Timestamper {
                 config,
             );
 
-        data_transfer.start(|_| {});
+        data_transfer.start(|capture_channel| capture_channel.enable());
 
         Self {
-            timer,
+            timer: timestamp_timer,
             transfer: data_transfer,
             next_buffer: unsafe { Some(&mut BUF[2]) },
         }
@@ -165,7 +84,6 @@ impl Timestamper {
         let next_buffer = self.next_buffer.take().unwrap();
 
         // Start the next transfer.
-        self.transfer.clear_interrupts();
         let (prev_buffer, _, _) =
             self.transfer.next_transfer(next_buffer).unwrap();
 
