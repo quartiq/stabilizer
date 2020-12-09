@@ -220,6 +220,7 @@ const APP: () = {
         mac_addr: net::wire::EthernetAddress,
 
         pounder: Option<pounder::PounderDevices>,
+        pounder_stamper: pounder::timestamp::Timestamper,
 
         // Format: iir_state[ch][cascade-no][coeff]
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
@@ -850,6 +851,19 @@ const APP: () = {
             )
         };
 
+        let pounder_stamper = {
+            let etr_pin = gpioa.pa0.into_alternate_af3();
+            let timestamp_timer = pounder::timestamp::Timer::new(
+                dp.TIM8,
+                ccdr.peripheral.TIM8,
+                etr_pin,
+                pounder::timestamp::Prescaler::Div4,
+                sampling_timer.update_event(),
+                128,
+            );
+            pounder::timestamp::Timestamper::new(timestamp_timer, dma_streams.7)
+        };
+
         // Start sampling ADCs.
         sampling_timer.start();
         timestamp_timer.start();
@@ -863,6 +877,7 @@ const APP: () = {
             input_stamper,
             dds_output,
             pounder: pounder_devices,
+            pounder_stamper,
 
             eeprom_i2c,
             net_interface: network_interface,

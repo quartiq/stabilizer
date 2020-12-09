@@ -9,6 +9,7 @@ macro_rules! timer_channels {
             pub struct $name {
                 timer: hal::timer::Timer<hal::stm32::[< $TY >]>,
                 channels: Option<[< $TY:lower >]::Channels>,
+                update_event: Option<[< $TY:lower >]::UpdateEvent>,
             }
 
             impl $name {
@@ -18,18 +19,25 @@ macro_rules! timer_channels {
 
                     Self {
                         timer,
-                        // Note(unsafe): Once these channels are taken, we guarantee that we do not modify any
-                        // of the underlying timer channel registers, as ownership of the channels is now
-                        // provided through the associated channel structures. We additionally guarantee this
-                        // can only be called once because there is only one Timer2 and this resource takes
-                        // ownership of it once instantiated.
+                        // Note(unsafe): Once these channels are taken, we guarantee that we do not
+                        // modify any of the underlying timer channel registers, as ownership of the
+                        // channels is now provided through the associated channel structures. We
+                        // additionally guarantee this can only be called once because there is only
+                        // one Timer2 and this resource takes ownership of it once instantiated.
                         channels: unsafe { Some([< $TY:lower >]::Channels::new()) },
+                        update_event: unsafe { Some([< $TY:lower >]::UpdateEvent::new()) },
                     }
                 }
 
                 /// Get the timer capture/compare channels.
                 pub fn channels(&mut self) -> [< $TY:lower >]::Channels {
                     self.channels.take().unwrap()
+                }
+
+                /// Get the timer update event.
+                #[allow(dead_code)]
+                pub fn update_event(&mut self) -> [< $TY:lower >]::UpdateEvent {
+                    self.update_event.take().unwrap()
                 }
 
                 /// Get the period of the timer.
@@ -63,6 +71,26 @@ macro_rules! timer_channels {
                 use stm32h7xx_hal as hal;
                 use hal::dma::{traits::TargetAddress, PeripheralToMemory, dma::DMAReq};
                 use hal::stm32::$TY;
+
+                pub struct UpdateEvent {}
+
+                impl UpdateEvent {
+                    /// Create a new update event
+                    ///
+                    /// Note(unsafe): This is only safe to call once.
+                    #[allow(dead_code)]
+                    pub unsafe fn new() -> Self {
+                        Self {}
+                    }
+
+                    /// Enable DMA requests upon timer updates.
+                    #[allow(dead_code)]
+                    pub fn listen_dma(&self) {
+                        // Note(unsafe): We perofmr only atomic operations on the timer registers.
+                        let regs = unsafe { &*<$TY>::ptr() };
+                        regs.dier.modify(|_, w| w.ude().set_bit());
+                    }
+                }
 
                 /// The channels representing the timer.
                 pub struct Channels {

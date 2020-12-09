@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 mod attenuators;
 mod dds_output;
 mod rf_power;
+pub mod timestamp;
 
 pub use dds_output::DdsOutput;
 
