@@ -1,7 +1,7 @@
-use std::fs::File;
-use std::path::Path;
-use std::io::prelude::*;
 use std::f64::consts::PI;
+use std::fs::File;
+use std::io::prelude::*;
+use std::path::Path;
 
 const TABLE_DEPTH: usize = 8;
 const TABLE_SIZE: usize = 1 << TABLE_DEPTH;

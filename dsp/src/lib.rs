@@ -17,7 +17,6 @@ pub fn shift_round(x: i32, shift: i32) -> i32 {
     (x + (1 << (shift - 1))) >> shift
 }
 
-
 pub mod iir;
 pub mod lockin;
 pub mod pll;

@@ -1,5 +1,5 @@
+use super::{shift_round, Complex};
 use core::mem::swap;
-use super::{Complex, shift_round};
 
 const PHASE_BITS: i32 = 20;
 const LUT_DEPTH: i32 = 8;
