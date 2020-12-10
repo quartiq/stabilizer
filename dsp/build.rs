@@ -37,6 +37,8 @@ fn write_cossin_table() {
         write!(file, " ({}, {}),", cos, sin).unwrap();
     }
     writeln!(file, "\n];").unwrap();
+
+    println!("cargo:rerun-if-changed=build.rs");
 }
 
 fn main() {
