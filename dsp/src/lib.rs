@@ -18,7 +18,6 @@ pub fn shift_round(x: i32, shift: usize) -> i32 {
     (x + (1 << (shift - 1))) >> shift
 }
 
-mod cossin_table;
 pub mod iir;
 pub mod lockin;
 pub mod pll;

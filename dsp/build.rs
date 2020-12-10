@@ -1,3 +1,4 @@
+use std::env;
 use std::f64::consts::PI;
 use std::fs::File;
 use std::io::prelude::*;
@@ -6,8 +7,10 @@ use std::path::Path;
 fn write_cossin_table() {
     const DEPTH: usize = 7;
 
-    let mut file =
-        File::create(Path::new("src").join("cossin_table.rs")).unwrap();
+    let out_dir = env::var_os("OUT_DIR").unwrap();
+    let dest_path = Path::new(&out_dir).join("cossin_table.rs");
+    let mut file = File::create(dest_path).unwrap();
+
     writeln!(file, "pub(crate) const COSSIN_DEPTH: usize = {};", DEPTH)
         .unwrap();
     write!(

@@ -1,8 +1,7 @@
-use super::{
-    cossin_table::{COSSIN, COSSIN_DEPTH},
-    Complex,
-};
+use super::Complex;
 use core::f64::consts::PI;
+
+include!(concat!(env!("OUT_DIR"), "/cossin_table.rs"));
 
 /// Compute the cosine and sine of an angle.
 /// This is ported from the MiSoC cossin core.
