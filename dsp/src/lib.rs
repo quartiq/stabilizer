@@ -13,10 +13,12 @@ pub type Complex<T> = (T, T);
 /// # Returns
 ///
 /// Shifted and rounded value.
-pub fn shift_round(x: i32, shift: i32) -> i32 {
+#[inline(always)]
+pub fn shift_round(x: i32, shift: usize) -> i32 {
     (x + (1 << (shift - 1))) >> shift
 }
 
+mod cossin_table;
 pub mod iir;
 pub mod lockin;
 pub mod pll;

@@ -3,41 +3,39 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
-const TABLE_DEPTH: usize = 8;
-const TABLE_SIZE: usize = 1 << TABLE_DEPTH;
-// Treat sin and cos as unsigned values since the sign will always be
-// positive in the range [0, pi/4).
-const SINCOS_MAX: f64 = u16::MAX as f64;
+fn write_cossin_table() {
+    const DEPTH: usize = 7;
+
+    let mut file =
+        File::create(Path::new("src").join("cossin_table.rs")).unwrap();
+    writeln!(file, "pub(crate) const COSSIN_DEPTH: usize = {};", DEPTH)
+        .unwrap();
+    write!(
+        file,
+        "pub(crate) const COSSIN: [(u16, u16); 1 << COSSIN_DEPTH] = ["
+    )
+    .unwrap();
+
+    // Treat sin and cos as unsigned values since the sign will always be
+    // positive in the range [0, pi/4).
+    // No headroom for interpolation rounding error (this is needed for
+    // DEPTH = 6 for example).
+    const AMPLITUDE: f64 = u16::MAX as f64;
+
+    for i in 0..(1 << DEPTH) {
+        // use midpoint samples to save one entry in the LUT
+        let phase = (PI / 4. / (1 << DEPTH) as f64) * (i as f64 + 0.5);
+        // add one bit accuracy to cos due to 0.5 < cos(z) <= 1 for |z| < pi/4
+        let cos = ((phase.cos() - 0.5) * 2. * AMPLITUDE).round() as u16;
+        let sin = (phase.sin() * AMPLITUDE).round() as u16;
+        if i % 4 == 0 {
+            write!(file, "\n   ").unwrap();
+        }
+        write!(file, " ({}, {}),", cos, sin).unwrap();
+    }
+    writeln!(file, "\n];").unwrap();
+}
 
 fn main() {
-    let path = Path::new("src").join("cossin_table.txt");
-    let display = path.display();
-
-    let mut file = match File::create(&path) {
-        Err(why) => panic!("failed to write to {}: {}", display, why),
-        Ok(file) => file,
-    };
-
-    match file.write_all("[\n".as_bytes()) {
-        Err(why) => panic!("failed to write to {}: {}", display, why),
-        Ok(_) => (),
-    }
-
-    let phase_delta = PI / 4. / TABLE_SIZE as f64;
-    let phase_offset = phase_delta / 2.;
-    for i in 0..TABLE_SIZE {
-        let phase = phase_offset + phase_delta * (i as f64);
-        let cos = ((phase.cos() - 0.5) * 2. * SINCOS_MAX).round() as u16;
-        let sin = (phase.sin() * SINCOS_MAX).round() as u16;
-        let s = format!("    ({}, {}),\n", cos, sin);
-        match file.write_all(s.as_bytes()) {
-            Err(why) => panic!("failed to write to {}: {}", display, why),
-            Ok(_) => (),
-        }
-    }
-
-    match file.write_all("]\n".as_bytes()) {
-        Err(why) => panic!("failed to write to {}: {}", display, why),
-        Ok(_) => (),
-    }
+    write_cossin_table();
 }
