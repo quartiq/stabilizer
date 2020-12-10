@@ -2,9 +2,25 @@
 #![cfg_attr(feature = "nightly", feature(asm, core_intrinsics))]
 
 pub type Complex<T> = (T, T);
+
+/// Round up half.
+///
+/// # Arguments
+///
+/// `x` - Value to shift and round.
+/// `shift` - Number of bits to right shift `x`.
+///
+/// # Returns
+///
+/// Shifted and rounded value.
+pub fn shift_round(x: i32, shift: i32) -> i32 {
+    (x + (1 << (shift - 1))) >> shift
+}
+
 pub mod iir;
 pub mod lockin;
 pub mod pll;
+pub mod trig;
 pub mod unwrap;
 
 #[cfg(test)]
