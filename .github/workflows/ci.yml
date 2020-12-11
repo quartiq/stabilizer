@@ -46,6 +46,7 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
           target: thumbv7em-none-eabihf
           override: true
+          components: llvm-tools-preview
       - name: cargo check
         uses: actions-rs/cargo@v1
         with:
@@ -60,6 +61,22 @@ jobs:
         with:
           command: build
           args: --release
+      - name: cargo-binutils
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-binutils
+      - name: cargo objcopy
+        uses: actions-rs/cargo@v1
+        with:
+          command: objcopy
+          args: --release -- -O binary stabilizer.bin
+      - uses: actions/upload-artifact@v1
+        with:
+          name: stabilizer_${{ github.sha }}_bin
+          path: |
+            ./target/thumbv7em-none-eabihf/release/stabilizer
+            ./stabilizer.bin
 
   test:
     runs-on: ubuntu-latest
