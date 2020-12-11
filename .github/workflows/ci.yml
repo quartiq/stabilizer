@@ -66,17 +66,22 @@ jobs:
         with:
           command: install
           args: cargo-binutils
+      - name: cargo size
+        uses: actions-rs/cargo@v1
+        with:
+          command: size
+          args: --release
       - name: cargo objcopy
         uses: actions-rs/cargo@v1
         with:
           command: objcopy
-          args: --release -- -O binary stabilizer.bin
+          args: --release --verbose -- -O binary stabilizer.bin
       - uses: actions/upload-artifact@v1
         with:
           name: stabilizer_${{ github.sha }}_bin
           path: |
-            ./target/thumbv7em-none-eabihf/release/stabilizer
-            ./stabilizer.bin
+            target/*/release/stabilizer
+            stabilizer.bin
 
   test:
     runs-on: ubuntu-latest
@@ -104,7 +109,7 @@ jobs:
       - uses: actions/upload-artifact@v1
         with:
           name: stabilizer_${{ github.sha }}_criterion
-          path: ./dsp/target/criterion
+          path: dsp/target/criterion
 
   # Tell bors about it
   # https://github.com/rtic-rs/cortex-m-rtic/blob/8a4f9c6b8ae91bebeea0791680f89375a78bffc6/.github/workflows/build.yml#L566-L603
