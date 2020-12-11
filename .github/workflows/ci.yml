@@ -87,7 +87,7 @@ jobs:
       - uses: actions/upload-artifact@v1
         with:
           name: stabilizer_${{ github.sha }}_criterion
-          path: ./target/criterion
+          path: ./dsp/target/criterion
 
   # Tell bors about it
   # https://github.com/rtic-rs/cortex-m-rtic/blob/8a4f9c6b8ae91bebeea0791680f89375a78bffc6/.github/workflows/build.yml#L566-L603
