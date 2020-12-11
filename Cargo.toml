@@ -24,6 +24,9 @@ maintenance = { status = "experimental" }
 features = []
 default-target = "thumbv7em-none-eabihf"
 
+[workspace]
+members = ["ad9959", "dsp"]
+
 [dependencies]
 cortex-m = { version = "0.6", features = ["const-fn"] }
 cortex-m-rt = { version = "0.6", features = ["device"] }
