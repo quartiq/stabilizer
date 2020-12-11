@@ -96,8 +96,8 @@ jobs:
     if: github.event_name == 'push' && success()
     needs:
       - style
-      - clippy
       - compile
+      - test
     runs-on: ubuntu-latest
     steps:
       - name: Mark the job as a success
@@ -107,8 +107,8 @@ jobs:
     if: github.event_name == 'push' && !success()
     needs:
       - style
-      - clippy
       - compile
+      - test
     runs-on: ubuntu-latest
     steps:
       - name: Mark the job as a failure
