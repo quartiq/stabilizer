@@ -78,7 +78,7 @@ jobs:
           args: --release --verbose -- -O binary stabilizer-release.bin
       - uses: actions/upload-artifact@v2
         with:
-          name: stabilizer_${{ github.sha }}_bin
+          name: stabilizer_${{ github.sha }}_rust-${{ matrix.toolchain }}
           path: |
             target/*/*/stabilizer
             stabilizer-release.bin
