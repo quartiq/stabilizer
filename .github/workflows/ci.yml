@@ -75,13 +75,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: objcopy
-          args: --release --verbose -- -O binary stabilizer.bin
-      - uses: actions/upload-artifact@v1
+          args: --release --verbose -- -O binary stabilizer-release.bin
+      - uses: actions/upload-artifact@v2
         with:
           name: stabilizer_${{ github.sha }}_bin
           path: |
-            target/*/release/stabilizer
-            stabilizer.bin
+            target/*/*/stabilizer
+            stabilizer-release.bin
 
   test:
     runs-on: ubuntu-latest
