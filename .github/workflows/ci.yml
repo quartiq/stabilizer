@@ -18,25 +18,16 @@ jobs:
         with:
           profile: minimal
           toolchain: nightly
+          target: thumbv7em-none-eabihf
           override: true
-          components: rustfmt
+          components:
+            - rustfmt
+            - clippy
       - name: cargo fmt --check
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
-
-  clippy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          target: thumbv7em-none-eabihf
-          override: true
-          components: clippy
       - uses: actions-rs/clippy-check@v1
         continue-on-error: true
         with:
@@ -71,11 +62,6 @@ jobs:
         with:
           command: build
           args: --release
-      - name: cargo build release+semihosting
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --features semihosting
 
   test:
     runs-on: ubuntu-latest
@@ -95,6 +81,15 @@ jobs:
         with:
           command: test
           args: --package dsp --target=x86_64-unknown-linux-gnu
+      - name: cargo bench
+        uses: actions-rs/cargo@v1
+        with:
+          command: bench
+          args: --package dsp --target=x86_64-unknown-linux-gnu
+      - uses: actions/upload-artifact@v1
+        with:
+          name: stabilizer_${{ github.sha }}_criterion
+          path: ./target/criterion
 
   # Tell bors about it
   # https://github.com/rtic-rs/cortex-m-rtic/blob/8a4f9c6b8ae91bebeea0791680f89375a78bffc6/.github/workflows/build.yml#L566-L603
