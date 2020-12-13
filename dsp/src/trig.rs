@@ -86,15 +86,16 @@ mod tests {
         let mut sum: Complex<f64> = (0., 0.);
         let mut demod: Complex<f64> = (0., 0.);
 
-        // use std::{fs::File, io::prelude::*, path::Path};
-        // let mut file = File::create(Path::new("data.csv")).unwrap();
+        // use std::{fs::File, io::{BufWriter, prelude::*}, path::Path};
+        // let mut file = BufWriter::new(File::create(Path::new("data.bin")).unwrap());
 
         const PHASE_DEPTH: usize = 20;
 
         for phase in 0..(1 << PHASE_DEPTH) {
             let phase = (phase << (32 - PHASE_DEPTH)) as i32;
             let have = cossin(phase);
-            // writeln!(file, " {},{}", have.0, have.1).unwrap();
+            // file.write(&have.0.to_le_bytes()).unwrap();
+            // file.write(&have.1.to_le_bytes()).unwrap();
 
             let have = (have.0 as f64 / AMPLITUDE, have.1 as f64 / AMPLITUDE);
 
