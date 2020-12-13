@@ -77,10 +77,11 @@ jobs:
           command: objcopy
           args: --release --verbose -- -O binary stabilizer-release.bin
       - uses: actions/upload-artifact@v2
+        if: ${{ matrix.toolchain == 'stable' }}
         with:
-          name: stabilizer_${{ github.sha }}_rust-${{ matrix.toolchain }}
+          name: stabilizer_${{ github.sha }}
           path: |
-            target/*/*/stabilizer
+            target/*/release/stabilizer
             stabilizer-release.bin
 
   test:
@@ -106,10 +107,6 @@ jobs:
         with:
           command: bench
           args: --package dsp --target=x86_64-unknown-linux-gnu
-      - uses: actions/upload-artifact@v1
-        with:
-          name: stabilizer_${{ github.sha }}_criterion
-          path: dsp/target/criterion
 
   # Tell bors about it
   # https://github.com/rtic-rs/cortex-m-rtic/blob/8a4f9c6b8ae91bebeea0791680f89375a78bffc6/.github/workflows/build.yml#L566-L603
