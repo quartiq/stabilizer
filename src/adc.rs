@@ -1,18 +1,75 @@
 ///! Stabilizer ADC management interface
 ///!
-///! The Stabilizer ADCs utilize a DMA channel to trigger sampling. The SPI streams are configured
-///! for full-duplex operation, but only RX is connected to physical pins. A timer channel is
-///! configured to generate a DMA write into the SPI TXFIFO, which initiates a SPI transfer and
-///! results in an ADC sample read for both channels.
+///! # Design
 ///!
-///! In order to read multiple samples without interrupting the CPU, a separate DMA transfer is
-///! configured to read from each of the ADC SPI RX FIFOs. Due to the design of the SPI peripheral,
-///! these DMA transfers stall when no data is available in the FIFO. Thus, the DMA transfer only
-///! completes after all samples have been read. When this occurs, a CPU interrupt is generated so
-///! that software can process the acquired samples from both ADCs. Only one of the ADC DMA streams
-///! is configured to generate an interrupt to handle both transfers, so it is necessary to ensure
-///! both transfers are completed before reading the data. This is usually not significant for
-///! busy-waiting because the transfers should complete at approximately the same time.
+///! Stabilizer ADCs are connected to the MCU via a simplex, SPI-compatible interface. The ADCs
+///! require a setup conversion time after asserting the CSn (convert) signal to generate the ADC
+///! code from the sampled level. Once the setup time has elapsed, the ADC data is clocked out of
+///! MISO. The internal setup time is managed by the SPI peripheral via a CSn setup time parameter
+///! during SPI configuration, which allows offloading the management of the setup time to hardware.
+///!
+///! Because of the SPI-compatibility of the ADCs, a single SPI peripheral + DMA is used to automate
+///! the collection of multiple ADC samples without requiring processing by the CPU, which reduces
+///! overhead and provides the CPU with more time for processing-intensive tasks, like DSP.
+///!
+///! The automation of sample collection utilizes two DMA streams, the SPI peripheral, and a timer
+///! compare channel for each ADC. The timer comparison channel is configured to generate a
+///! comparison event every time the timer is equal to a specific value. Each comparison then
+///! generates a DMA transfer event to write into the SPI TX buffer. Although the SPI is a simplex,
+///! RX-only interface, it is configured in full-duplex mode and the TX pin is left disconnected.
+///! This allows the SPI interface to periodically read a single word whenever a word is written to
+///! the TX side. Thus, by running a continuous DMA transfer to periodically write a value into the
+///! TX FIFO, we can schedule the regular collection of ADC samples in the SPI RX buffer.
+///!
+///! In order to collect the acquired ADC samples into a RAM buffer, a second DMA transfer is
+///! configured to read from the SPI RX FIFO into RAM. The request for this transfer is connected to
+///! the SPI RX data signal, so the SPI peripheral will request to move data into RAM whenever it is
+///! available. When enough samples have been collected, a transfer-complete interrupt is generated
+///! and the ADC samples are available for processing.
+///!
+///! The SPI peripheral internally has an 8- or 16-byte TX and RX FIFO, which corresponds to a 4- or
+///! 8-sample buffer for incoming ADC samples. During the handling of the DMA transfer completion,
+///! there is a small window where buffers are swapped over where it's possible that a sample could
+///! be lost. In order to avoid this, the SPI RX FIFO is effectively used as a "sample overflow"
+///! region and can buffer a number of samples until the next DMA transfer is configured. If a DMA
+///! transfer is still not set in time, the SPI peripheral will generate an input-overrun interrupt.
+///! This interrupt then serves as a means of detecting if samples have been lost, which will occur
+///! whenever data processing takes longer than the collection period.
+///!
+///!
+///! ## Starting Data Collection
+///!
+///! Because the DMA data collection is automated via timer count comparisons and DMA transfers, the
+///! ADCs can be initialized and configured, but will not begin sampling the external ADCs until the
+///! sampling timer is enabled. As such, the sampling timer should be enabled after all
+///! initialization has completed and immediately before the embedded processing loop begins.
+///!
+///!
+///! ## Batch Sizing
+///!
+///! The ADCs collect a group of N samples, which is referred to as a batch. The size of the batch
+///! is configured by the user at compile-time to allow for a custom-tailored implementation. Larger
+///! batch sizes generally provide for more processing time per sample, but come at the expense of
+///! increased input -> output latency.
+///!
+///!
+///! # Note
+///!
+///! While there are two ADCs, only a single ADC is configured to generate transfer-complete
+///! interrupts. This is done because it is assumed that the ADCs will always be sampled
+///! simultaneously. If only a single ADC is used, it must always be ADC0, as ADC1 will not generate
+///! transfer-complete interrupts.
+///!
+///! There is a very small amount of latency between sampling of ADCs due to bus matrix priority. As
+///! such, one of the ADCs will be sampled marginally earlier before the other because the DMA
+///! requests are generated simultaneously. This can be avoided by providing a known offset to the
+///! sample DMA requests, which can be completed by setting e.g. ADC0's comparison to a counter
+///! value of 0 and ADC1's comparison to a counter value of 1.
+///!
+///! In this implementation, single buffer mode DMA transfers are used because the SPI RX FIFO can
+///! be used as a means to both detect and buffer ADC samples during the buffer swap-over. Because
+///! of this, double-buffered mode does not offer any advantages over single-buffered mode (unless
+///! double-buffered mode offers less overhead when accessing data).
 use super::{
     hal, sampling_timer, DMAReq, DmaConfig, MemoryToPeripheral,
     PeripheralToMemory, Priority, TargetAddress, Transfer, SAMPLE_BUFFER_SIZE,

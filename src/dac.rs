@@ -1,8 +1,45 @@
 ///! Stabilizer DAC management interface
 ///!
-///! The Stabilizer DAC utilize a DMA channel to generate output updates.  A timer channel is
-///! configured to generate a DMA write into the SPI TXFIFO, which initiates a SPI transfer and
-///! results in DAC update for both channels.
+///! # Design
+///!
+///! Stabilizer DACs are connected to the MCU via a simplex, SPI-compatible interface. Each DAC
+///! accepts a 16-bit output code.
+///!
+///! In order to maximize CPU processing time, the DAC code updates are offloaded to hardware using
+///! a timer compare channel, DMA stream, and the DAC SPI interface.
+///!
+///! The timer comparison channel is configured to generate a DMA request whenever the comparison
+///! occurs. Thus, whenever a comparison happens, a single DAC code can be written to the output. By
+///! configuring a DMA stream for a number of successive DAC codes, hardware can regularly update
+///! the DAC without requiring the CPU.
+///!
+///! ## Multiple Samples to Single DAC Codes
+///!
+///! For some applications, it may be desirable to generate a single DAC code from multiple ADC
+///! samples. In order to maintain timing characteristics between ADC samples and DAC code outputs,
+///! applications are required to generate one DAC code for each ADC sample. To accomodate mapping
+///! multiple inputs to a single output, the output code can be repeated a number of times in the
+///! output buffer corresponding with the number of input samples that were used to generate it.
+///!
+///!
+///! # Note
+///!
+///! There is a very small amount of latency between updating the two DACs due to bus matrix
+///! priority. As such, one of the DACs will be updated marginally earlier before the other because
+///! the DMA requests are generated simultaneously. This can be avoided by providing a known offset
+///! to other DMA requests, which can be completed by setting e.g. DAC0's comparison to a
+///! counter value of 2 and DAC1's comparison to a counter value of 3. This will have the effect of
+///! generating the DAC updates with a known latency of 1 timer tick to each other and prevent the
+///! DMAs from racing for the bus. As implemented, the DMA channels utilize natural priority of the
+///! DMA channels to arbitrate which transfer occurs first.
+///!
+///!
+///! # Future Improvements
+///!
+///! In this implementation, single buffer mode DMA transfers are used. As a result of this, it's
+///! possible that a timer comparison could be missed during the swap-over, which will result in a
+///! delay of a single output code. In the future, this can be remedied by utilize double-buffer
+///! mode for the DMA transfers.
 use super::{
     hal, sampling_timer, DMAReq, DmaConfig, MemoryToPeripheral, TargetAddress,
     Transfer, SAMPLE_BUFFER_SIZE,
@@ -90,12 +127,11 @@ macro_rules! dac_output {
                 let mut spi = spi.disable();
                 spi.listen(hal::spi::Event::Error);
 
-                // Allow the SPI FIFOs to operate using only DMA data channels.
-                spi.enable_dma_tx();
-
-                // Enable SPI and start it in infinite transaction mode.
-                spi.inner().cr1.modify(|_, w| w.spe().set_bit());
-                spi.inner().cr1.modify(|_, w| w.cstart().started());
+                // AXISRAM is uninitialized. As such, we manually zero-initialize it here before
+                // starting the transfer.
+                for byte in DAC_BUF[$index].iter_mut() {
+                    *byte = 0;
+                }
 
                 // Construct the trigger stream to write from memory to the peripheral.
                 let transfer: Transfer<_, _, MemoryToPeripheral, _> =
@@ -107,6 +143,15 @@ macro_rules! dac_output {
                         None,
                         trigger_config,
                     );
+
+                transfer.start(|spi| {
+                    // Allow the SPI FIFOs to operate using only DMA data channels.
+                    spi.enable_dma_tx();
+
+                    // Enable SPI and start it in infinite transaction mode.
+                    spi.inner().cr1.modify(|_, w| w.spe().set_bit());
+                    spi.inner().cr1.modify(|_, w| w.cstart().started());
+                });
 
                 Self {
                     transfer,
@@ -131,15 +176,9 @@ macro_rules! dac_output {
                 &mut self,
                 next_buffer: &'static mut [u16; SAMPLE_BUFFER_SIZE],
             ) {
-                // If the last transfer was not complete, we didn't write all our previous DAC codes.
-                // Wait for all the DAC codes to get written as well.
-                if self.first_transfer {
-                    self.first_transfer = false
-                } else {
-                    // Note: If a device hangs up, check that this conditional is passing correctly, as
-                    // there is no time-out checks here in the interest of execution speed.
-                    while !self.transfer.get_transfer_complete_flag() {}
-                }
+                // Note: If a device hangs up, check that this conditional is passing correctly, as
+                // there is no time-out checks here in the interest of execution speed.
+                while !self.transfer.get_transfer_complete_flag() {}
 
                 // Start the next transfer.
                 self.transfer.clear_interrupts();
