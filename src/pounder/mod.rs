@@ -275,7 +275,6 @@ impl PounderDevices {
     /// Construct and initialize pounder-specific hardware.
     ///
     /// Args:
-    /// * `ad9959` - The DDS driver for the pounder hardware.
     /// * `attenuator_spi` - A SPI interface to control digital attenuators.
     /// * `adc1` - The ADC1 peripheral for measuring power.
     /// * `adc2` - The ADC2 peripheral for measuring power.
@@ -283,7 +282,6 @@ impl PounderDevices {
     /// * `adc2_in_p` - The input channel for the RF power measurement on IN1.
     pub fn new(
         mcp23017: mcp23017::MCP23017<hal::i2c::I2c<hal::stm32::I2C1>>,
-        ad9959: &mut ad9959::Ad9959<QspiInterface>,
         attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
         adc1: hal::adc::Adc<hal::stm32::ADC1, hal::adc::Enabled>,
         adc2: hal::adc::Adc<hal::stm32::ADC2, hal::adc::Enabled>,
@@ -315,14 +313,10 @@ impl PounderDevices {
             .write_gpio(mcp23017::Port::GPIOB, 1 << 5)
             .map_err(|_| Error::I2c)?;
 
-        // Select the on-board clock with a 4x prescaler (400MHz).
         devices
             .mcp23017
             .digital_write(EXT_CLK_SEL_PIN, false)
             .map_err(|_| Error::I2c)?;
-        ad9959
-            .configure_system_clock(100_000_000f32, 4)
-            .map_err(|_| Error::Dds)?;
 
         Ok(devices)
     }

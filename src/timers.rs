@@ -29,6 +29,8 @@ pub enum TriggerSource {
 }
 
 pub enum Prescaler {
+    Div1 = 0b00,
+    Div2 = 0b01,
     Div4 = 0b10,
     Div8 = 0b11,
 }
@@ -100,17 +102,17 @@ macro_rules! timer_channels {
                     let regs = unsafe { &*hal::stm32::$TY::ptr() };
                     regs.smcr.modify(|_, w| w.etps().bits(prescaler as u8).ece().set_bit());
 
-                    // Use a DIV4 prescaler.
-
+                    // Clear any other prescaler configuration.
+                    regs.psc.write(|w| w.psc().bits(0));
                 }
 
                 /// Start the timer.
                 #[allow(dead_code)]
-                pub fn start(mut self) {
+                pub fn start(&mut self) {
                     // Force a refresh of the frequency settings.
                     self.timer.apply_freq();
-
                     self.timer.reset_counter();
+
                     self.timer.resume();
                 }
 

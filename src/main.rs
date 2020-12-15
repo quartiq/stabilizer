@@ -527,7 +527,7 @@ const APP: () = {
         delay.delay_ms(2u8);
         let (pounder_devices, dds_output) = if pounder_pgood.is_high().unwrap()
         {
-            let mut ad9959 = {
+            let ad9959 = {
                 let qspi_interface = {
                     // Instantiate the QUADSPI pins and peripheral interface.
                     let qspi_pins = {
@@ -580,8 +580,8 @@ const APP: () = {
                     &mut io_update,
                     &mut delay,
                     ad9959::Mode::FourBitSerial,
-                    100_000_000_f32,
-                    5,
+                    design_parameters::DDS_REF_CLK_MHZ as f32 * 1_000_000_f32,
+                    design_parameters::DDS_MULTIPLIER,
                 )
                 .unwrap();
 
@@ -660,7 +660,6 @@ const APP: () = {
 
             let pounder_devices = pounder::PounderDevices::new(
                 io_expander,
-                &mut ad9959,
                 spi,
                 adc1,
                 adc2,
@@ -686,8 +685,8 @@ const APP: () = {
                     );
 
                     // IO_Update should be latched for 4 SYNC_CLK cycles after the QSPI profile
-                    // write. With pounder SYNC_CLK running at 100MHz (1/4 of the pounder reference
-                    // clock of 400MHz), this corresponds to 40ns. To accomodate rounding errors, we
+                    // write. With pounder SYNC_CLK running at 125MHz (1/4 of the pounder reference
+                    // clock of 500MHz), this corresponds to 32ns. To accomodate rounding errors, we
                     // use 50ns instead.
                     //
                     // Profile writes are always 16 bytes, with 2 cycles required per byte, coming
@@ -859,8 +858,21 @@ const APP: () = {
             let tim8 =
                 dp.TIM8.timer(1.khz(), ccdr.peripheral.TIM8, &ccdr.clocks);
             let mut timestamp_timer = timers::PounderTimestampTimer::new(tim8);
+
+            // Pounder is configured to generate a 400MHz reference clock, so a 125MHz sync-clock is
+            // output. As a result, dividing the 125MHz sync-clk provides a 31.25MHz tick rate for
+            // the timestamp timer. 31.25MHz corresponds with a 32ns tick rate.
             timestamp_timer.set_external_clock(timers::Prescaler::Div4);
-            timestamp_timer.set_period(128);
+            timestamp_timer.start();
+
+            // We want the pounder timestamp timer to overflow once per batch.
+            let tick_ratio = design_parameters::DDS_SYNC_CLK_MHZ as f32
+                / design_parameters::TIMER_FREQUENCY_MHZ as f32;
+            let period = (tick_ratio
+                * ADC_SAMPLE_TICKS as f32
+                * SAMPLE_BUFFER_SIZE as f32) as u32
+                / 4;
+            timestamp_timer.set_period((period - 1).try_into().unwrap());
             let tim8_channels = timestamp_timer.channels();
 
             pounder::timestamp::Timestamper::new(
