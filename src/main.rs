@@ -844,9 +844,7 @@ const APP: () = {
             let trigger = gpioa.pa3.into_alternate_af2();
             digital_input_stamper::InputStamper::new(
                 trigger,
-                dma_streams.6,
                 timestamp_timer_channels.ch4,
-                SAMPLE_BUFFER_SIZE,
             )
         };
 
@@ -882,7 +880,7 @@ const APP: () = {
             c.resources.dacs.1.acquire_buffer(),
         ];
 
-        let _timestamps = c.resources.input_stamper.acquire_buffer();
+        let _timestamp = c.resources.input_stamper.latest_timestamp();
 
         for channel in 0..adc_samples.len() {
             for sample in 0..adc_samples[0].len() {
