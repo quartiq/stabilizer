@@ -18,10 +18,11 @@ pub fn shift_round(x: i32, shift: usize) -> i32 {
     (x + (1 << (shift - 1))) >> shift
 }
 
+pub mod atan2;
+pub mod cossin;
 pub mod iir;
 pub mod lockin;
 pub mod pll;
-pub mod trig;
 pub mod unwrap;
 
 #[cfg(test)]
