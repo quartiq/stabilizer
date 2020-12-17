@@ -179,10 +179,10 @@ mod tests {
             test_vals[i] = val_bounds.0 + i as f64 * val_delta;
         }
 
+        let atol: f64 = 4e-5;
+        let rtol: f64 = 0.127;
         for &x in test_vals.iter() {
             for &y in test_vals.iter() {
-                let atol: f64 = 4e-5;
-                let rtol: f64 = 0.127;
                 let actual = (y.atan2(x) as f64 * i16::MAX as f64).round()
                     / i16::MAX as f64;
                 let tol = atol + rtol * angle_to_axis(actual).abs();
@@ -200,6 +200,29 @@ mod tests {
                     println!("tolerance: {}\n", tol);
                     assert!(false);
                 }
+            }
+        }
+
+        // test min and max explicitly
+        for (x, y) in [
+            ((i16::MIN as i32 + 1) << 16, -(1 << 16) as i32),
+            ((i16::MIN as i32 + 1) << 16, (1 << 16) as i32),
+        ]
+        .iter()
+        {
+            let yf = *y as f64 / ((i16::MAX as i32) << 16) as f64;
+            let xf = *x as f64 / ((i16::MAX as i32) << 16) as f64;
+            let actual =
+                (yf.atan2(xf) * i16::MAX as f64).round() / i16::MAX as f64;
+            let computed = (atan2(*y, *x) >> 16) as f64 / i16::MAX as f64 * PI;
+            let tol = atol + rtol * angle_to_axis(actual).abs();
+
+            if !isclose(computed, actual, 0., tol) {
+                println!("(x, y)   : {}, {}", *x, *y);
+                println!("actual   : {}", actual);
+                println!("computed : {}", computed);
+                println!("tolerance: {}\n", tol);
+                assert!(false);
             }
         }
     }
