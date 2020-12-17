@@ -1,4 +1,4 @@
-use super::{abs, shift_round, Complex};
+use super::{shift_round, Complex};
 use core::f64::consts::PI;
 
 include!(concat!(env!("OUT_DIR"), "/cossin_table.rs"));
@@ -22,11 +22,18 @@ include!(concat!(env!("OUT_DIR"), "/cossin_table.rs"));
 /// corresponds to an angle of -pi and i32::MAX corresponds to an
 /// angle of +pi.
 pub fn atan2(y: i32, x: i32) -> i32 {
-    let y = y >> 16;
-    let x = x >> 16;
+    let mut y = y >> 16;
+    let mut x = x >> 16;
 
-    let ux = abs(x);
-    let uy = abs(y);
+    let sign = ((y >> 14) & 2) | ((x >> 15) & 1);
+    if sign & 1 == 1 {
+        x *= -1;
+    }
+    if sign & 2 == 2 {
+        y *= -1;
+    }
+
+    let y_greater = y > x;
 
     // Uses the general procedure described in the following
     // Mathematics stack exchange answer:
@@ -41,7 +48,7 @@ pub fn atan2(y: i32, x: i32) -> i32 {
     //
     // which is taken from Rajan 2006: Efficient Approximations for
     // the Arctangent Function.
-    let (min, max) = if ux < uy { (ux, uy) } else { (uy, ux) };
+    let (min, max) = if y_greater { (x, y) } else { (y, x) };
 
     if max == 0 {
         return 0;
@@ -64,15 +71,15 @@ pub fn atan2(y: i32, x: i32) -> i32 {
         ratio * K1 - K2 * shift_round(ratio * ratio, ATAN_ARGUMENT_BITS)
     };
 
-    if uy > ux {
+    if y_greater {
         angle = (i32::MAX >> 1) - angle;
     }
 
-    if x < 0 {
+    if sign & 1 == 1 {
         angle = i32::MAX - angle;
     }
 
-    if y < 0 {
+    if sign & 2 == 2 {
         angle *= -1;
     }
 
