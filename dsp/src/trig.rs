@@ -169,6 +169,42 @@ mod tests {
     }
 
     #[test]
+    fn atan2_absolute_error() {
+        const NUM_VALS: usize = 1_001;
+        let mut test_vals: [f64; NUM_VALS] = [0.; NUM_VALS];
+        let val_bounds: (f64, f64) = (-1., 1.);
+        let val_delta: f64 =
+            (val_bounds.1 - val_bounds.0) / (NUM_VALS - 1) as f64;
+        for i in 0..NUM_VALS {
+            test_vals[i] = val_bounds.0 + i as f64 * val_delta;
+        }
+
+        for &x in test_vals.iter() {
+            for &y in test_vals.iter() {
+                let atol: f64 = 4e-5;
+                let rtol: f64 = 0.127;
+                let actual = (y.atan2(x) as f64 * i16::MAX as f64).round()
+                    / i16::MAX as f64;
+                let tol = atol + rtol * angle_to_axis(actual).abs();
+                let computed = (atan2(
+                    ((y * i16::MAX as f64) as i32) << 16,
+                    ((x * i16::MAX as f64) as i32) << 16,
+                ) >> 16) as f64
+                    / i16::MAX as f64
+                    * PI;
+
+                if !isclose(computed, actual, 0., tol) {
+                    println!("(x, y)   : {}, {}", x, y);
+                    println!("actual   : {}", actual);
+                    println!("computed : {}", computed);
+                    println!("tolerance: {}\n", tol);
+                    assert!(false);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn cossin_error_max_rms_all_phase() {
         // Constant amplitude error due to LUT data range.
         const AMPLITUDE: f64 = ((1i64 << 31) - (1i64 << 15)) as f64;
@@ -235,41 +271,5 @@ mod tests {
 
         assert!(max_err.0 < 1.1e-5);
         assert!(max_err.1 < 1.1e-5);
-    }
-
-    #[test]
-    fn atan2_absolute_error() {
-        const NUM_VALS: usize = 1_001;
-        let mut test_vals: [f64; NUM_VALS] = [0.; NUM_VALS];
-        let val_bounds: (f64, f64) = (-1., 1.);
-        let val_delta: f64 =
-            (val_bounds.1 - val_bounds.0) / (NUM_VALS - 1) as f64;
-        for i in 0..NUM_VALS {
-            test_vals[i] = val_bounds.0 + i as f64 * val_delta;
-        }
-
-        for &x in test_vals.iter() {
-            for &y in test_vals.iter() {
-                let atol: f64 = 4e-5;
-                let rtol: f64 = 0.127;
-                let actual = (y.atan2(x) as f64 * i16::MAX as f64).round()
-                    / i16::MAX as f64;
-                let tol = atol + rtol * angle_to_axis(actual).abs();
-                let computed = (atan2(
-                    ((y * i16::MAX as f64) as i32) << 16,
-                    ((x * i16::MAX as f64) as i32) << 16,
-                ) >> 16) as f64
-                    / i16::MAX as f64
-                    * PI;
-
-                if !isclose(computed, actual, 0., tol) {
-                    println!("(x, y)   : {}, {}", x, y);
-                    println!("actual   : {}", actual);
-                    println!("computed : {}", computed);
-                    println!("tolerance: {}\n", tol);
-                    assert!(false);
-                }
-            }
-        }
     }
 }
