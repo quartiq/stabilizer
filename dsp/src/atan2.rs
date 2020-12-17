@@ -80,8 +80,8 @@ pub fn atan2(y: i32, x: i32) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core::f64::consts::PI;
     use crate::testing::isclose;
+    use core::f64::consts::PI;
 
     fn angle_to_axis(angle: f64) -> f64 {
         let angle = angle % (PI / 2.);

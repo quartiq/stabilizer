@@ -1,8 +1,8 @@
 use core::ops::{Add, Mul, Neg};
 use serde::{Deserialize, Serialize};
 
-use core::f32;
 use super::abs;
+use core::f32;
 
 // These are implemented here because core::f32 doesn't have them (yet).
 // They are naive and don't handle inf/nan.
