@@ -69,6 +69,15 @@ macro_rules! dac_output {
             ) -> Self {
                 Self { _channel, spi }
             }
+
+            pub fn start_dma(&mut self) {
+                // Allow the SPI FIFOs to operate using only DMA data channels.
+                self.spi.enable_dma_tx();
+
+                // Enable SPI and start it in infinite transaction mode.
+                self.spi.inner().cr1.modify(|_, w| w.spe().set_bit());
+                self.spi.inner().cr1.modify(|_, w| w.cstart().started());
+            }
         }
 
         // Note(unsafe): This is safe because the DMA request line is logically owned by this module.
@@ -97,7 +106,6 @@ macro_rules! dac_output {
                 MemoryToPeripheral,
                 &'static mut [u16; SAMPLE_BUFFER_SIZE],
             >,
-            first_transfer: bool,
         }
 
         impl $name {
@@ -129,12 +137,14 @@ macro_rules! dac_output {
 
                 // AXISRAM is uninitialized. As such, we manually zero-initialize it here before
                 // starting the transfer.
-                for byte in DAC_BUF[$index].iter_mut() {
-                    *byte = 0;
+                for buf in unsafe { DAC_BUF[$index].iter_mut() } {
+                    for byte in buf.iter_mut() {
+                        *byte = 0;
+                    }
                 }
 
                 // Construct the trigger stream to write from memory to the peripheral.
-                let transfer: Transfer<_, _, MemoryToPeripheral, _> =
+                let mut transfer: Transfer<_, _, MemoryToPeripheral, _> =
                     Transfer::init(
                         stream,
                         $spi::new(trigger_channel, spi),
@@ -144,41 +154,22 @@ macro_rules! dac_output {
                         trigger_config,
                     );
 
-                transfer.start(|spi| {
-                    // Allow the SPI FIFOs to operate using only DMA data channels.
-                    spi.enable_dma_tx();
-
-                    // Enable SPI and start it in infinite transaction mode.
-                    spi.inner().cr1.modify(|_, w| w.spe().set_bit());
-                    spi.inner().cr1.modify(|_, w| w.cstart().started());
-                });
+                transfer.start(|spi| spi.start_dma());
 
                 Self {
                     transfer,
                     // Note(unsafe): This buffer is only used once and provided for the next DMA transfer.
                     next_buffer: unsafe { Some(&mut DAC_BUF[$index][1]) },
-                    first_transfer: true,
                 }
             }
 
             /// Acquire the next output buffer to populate it with DAC codes.
-            pub fn acquire_buffer(
-                &mut self,
-            ) -> &'static mut [u16; SAMPLE_BUFFER_SIZE] {
-                self.next_buffer.take().unwrap()
-            }
-
-            /// Enqueue the next buffer for transmission to the DAC.
-            ///
-            /// # Args
-            /// * `data` - The next data to write to the DAC.
-            pub fn release_buffer(
-                &mut self,
-                next_buffer: &'static mut [u16; SAMPLE_BUFFER_SIZE],
-            ) {
+            pub fn acquire_buffer(&mut self) -> &mut [u16; SAMPLE_BUFFER_SIZE] {
                 // Note: If a device hangs up, check that this conditional is passing correctly, as
                 // there is no time-out checks here in the interest of execution speed.
                 while !self.transfer.get_transfer_complete_flag() {}
+
+                let next_buffer = self.next_buffer.take().unwrap();
 
                 // Start the next transfer.
                 self.transfer.clear_interrupts();
@@ -187,6 +178,8 @@ macro_rules! dac_output {
 
                 // .unwrap_none() https://github.com/rust-lang/rust/issues/62633
                 self.next_buffer.replace(prev_buffer);
+
+                self.next_buffer.as_mut().unwrap()
             }
         }
     };

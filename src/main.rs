@@ -805,6 +805,7 @@ const APP: () = {
             c.resources.adcs.0.acquire_buffer(),
             c.resources.adcs.1.acquire_buffer(),
         ];
+
         let dac_samples = [
             c.resources.dacs.0.acquire_buffer(),
             c.resources.dacs.1.acquire_buffer(),
@@ -836,10 +837,6 @@ const APP: () = {
 
             builder.write_profile();
         }
-
-        let [dac0, dac1] = dac_samples;
-        c.resources.dacs.0.release_buffer(dac0);
-        c.resources.dacs.1.release_buffer(dac1);
     }
 
     #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afes])]
