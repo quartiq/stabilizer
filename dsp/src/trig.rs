@@ -57,7 +57,9 @@ pub fn atan2(y: i32, x: i32) -> i32 {
     // We need to share the 31 available non-sign bits between the
     // atan argument and constant factors used in the atan
     // approximation. Sharing the bits roughly equally between them
-    // gives good accuracy.
+    // gives good accuracy. Additionally, we cannot increase the
+    // number of atan argument bits beyond 15 because we must square
+    // it.
     const ATAN_ARGUMENT_BITS: usize = 15;
     let ratio = (min << ATAN_ARGUMENT_BITS) / max;
 
