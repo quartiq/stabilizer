@@ -161,7 +161,7 @@ mod tests {
     }
 
     #[test]
-    fn error_max_rms_all_phase() {
+    fn cossin_error_max_rms_all_phase() {
         // Constant amplitude error due to LUT data range.
         const AMPLITUDE: f64 = ((1i64 << 31) - (1i64 << 15)) as f64;
         const MAX_PHASE: f64 = (1i64 << 32) as f64;
@@ -230,7 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn absolute_error() {
+    fn atan2_absolute_error() {
         const NUM_VALS: usize = 1_001;
         let mut test_vals: [f64; NUM_VALS] = [0.; NUM_VALS];
         let val_bounds: (f64, f64) = (-1., 1.);
