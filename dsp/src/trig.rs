@@ -47,16 +47,21 @@ pub fn atan2(y: i32, x: i32) -> i32 {
         return 0;
     }
 
-    let ratio = (min << 15) / max;
+    // We need to share the 31 available non-sign bits between the
+    // atan argument and constant factors used in the atan
+    // approximation. Sharing the bits roughly equally between them
+    // gives good accuracy.
+    const ATAN_ARGUMENT_BITS: usize = 15;
+    let ratio = (min << ATAN_ARGUMENT_BITS) / max;
 
     let mut angle = {
-        const K1: i32 =
-            ((1_f64 / 4_f64 + 0.285_f64 / PI) * (1 << 16) as f64) as i32;
-        const K2: i32 = ((0.285_f64 / PI) * (1 << 16) as f64) as i32;
+        const K1: i32 = ((1. / 4. + 0.285 / PI)
+            * (1 << (31 - ATAN_ARGUMENT_BITS)) as f64)
+            as i32;
+        const K2: i32 =
+            ((0.285 / PI) * (1 << (31 - ATAN_ARGUMENT_BITS)) as f64) as i32;
 
-        let ratio_squared = shift_round(ratio * ratio, 15);
-
-        ratio * K1 - K2 * ratio_squared
+        ratio * K1 - K2 * shift_round(ratio * ratio, ATAN_ARGUMENT_BITS)
     };
 
     if uy > ux {
