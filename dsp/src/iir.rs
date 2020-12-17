@@ -2,22 +2,12 @@ use core::ops::{Add, Mul, Neg};
 use serde::{Deserialize, Serialize};
 
 use core::f32;
+use super::abs;
 
 // These are implemented here because core::f32 doesn't have them (yet).
 // They are naive and don't handle inf/nan.
 // `compiler-intrinsics`/llvm should have better (robust, universal, and
 // faster) implementations.
-
-fn abs<T>(x: T) -> T
-where
-    T: PartialOrd + Default + Neg<Output = T>,
-{
-    if x >= T::default() {
-        x
-    } else {
-        -x
-    }
-}
 
 fn copysign<T>(x: T, y: T) -> T
 where
