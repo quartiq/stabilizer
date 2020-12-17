@@ -25,8 +25,8 @@ pub fn atan2(y: i32, x: i32) -> i32 {
     let y = y >> 16;
     let x = x >> 16;
 
-    let ux = abs::<i32>(x);
-    let uy = abs::<i32>(y);
+    let ux = abs(x);
+    let uy = abs(y);
 
     // Uses the general procedure described in the following
     // Mathematics stack exchange answer:
