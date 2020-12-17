@@ -31,11 +31,10 @@ where
     }
 }
 
-pub mod atan2;
-pub mod cossin;
 pub mod iir;
 pub mod lockin;
 pub mod pll;
+pub mod trig;
 pub mod unwrap;
 
 #[cfg(test)]

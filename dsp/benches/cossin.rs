@@ -1,6 +1,6 @@
 use core::f32::consts::PI;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use dsp::trig::cossin;
+use dsp::cossin::cossin;
 
 fn cossin_bench(c: &mut Criterion) {
     let zi = -0x7304_2531_i32;
