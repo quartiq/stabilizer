@@ -48,9 +48,11 @@ pub fn atan2(y: i32, x: i32) -> i32 {
     //
     // which is taken from Rajan 2006: Efficient Approximations for
     // the Arctangent Function.
-    let (min, max) = if y_greater { (x, y) } else { (y, x) };
+    if y_greater {
+        core::mem::swap(&mut x, &mut y);
+    }
 
-    if max == 0 {
+    if x == 0 {
         return 0;
     }
 
@@ -61,7 +63,7 @@ pub fn atan2(y: i32, x: i32) -> i32 {
     // number of atan argument bits beyond 15 because we must square
     // it.
     const ATAN_ARGUMENT_BITS: usize = 15;
-    let ratio = (min << ATAN_ARGUMENT_BITS) / max;
+    let ratio = (y << ATAN_ARGUMENT_BITS) / x;
 
     let mut angle = {
         const K1: i32 = ((1. / 4. + 0.285 / PI)
