@@ -18,7 +18,7 @@ include!(concat!(env!("OUT_DIR"), "/cossin_table.rs"));
 /// # Returns
 ///
 /// The angle between the x-axis and the ray to the point (x,y). The
-/// result range is from i32::MIN to i32::MAX, where i32::MIN
+/// result range is from i32::MIN+1 to i32::MAX, where i32::MIN+1
 /// corresponds to an angle of -pi and i32::MAX corresponds to an
 /// angle of +pi.
 pub fn atan2(y: i32, x: i32) -> i32 {
