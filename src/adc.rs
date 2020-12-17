@@ -117,11 +117,11 @@ macro_rules! adc_input {
 
             /// Whenever the DMA request occurs, it should write into SPI's TX FIFO to start a DMA
             /// transfer.
-            fn address(&self) -> u32 {
+            fn address(&self) -> usize {
                 // Note(unsafe): It is assumed that SPI is owned by another DMA transfer and this DMA is
                 // only used for the transmit-half of DMA.
                 let regs = unsafe { &*hal::stm32::$spi::ptr() };
-                &regs.txdr as *const _ as u32
+                &regs.txdr as *const _ as usize
             }
         }
 

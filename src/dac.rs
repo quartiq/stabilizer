@@ -34,12 +34,11 @@
 ///! DMA channels to arbitrate which transfer occurs first.
 ///!
 ///!
-///! # Future Improvements
+///! # Limitations
 ///!
-///! In this implementation, single buffer mode DMA transfers are used. As a result of this, it's
-///! possible that a timer comparison could be missed during the swap-over, which will result in a
-///! delay of a single output code. In the future, this can be remedied by utilize double-buffer
-///! mode for the DMA transfers.
+///! While double-buffered mode is used for DMA to avoid lost DAC-update events, there is no check
+///! for re-use of a previously provided DAC output buffer. It is assumed that the DMA request is
+///! served promptly after the transfer completes.
 use super::{
     hal, sampling_timer, DMAReq, DmaConfig, MemoryToPeripheral, TargetAddress,
     Transfer, SAMPLE_BUFFER_SIZE,
@@ -50,8 +49,8 @@ use super::{
 // processed). Note that the contents of AXI SRAM is uninitialized, so the buffer contents on
 // startup are undefined. The dimensions are `ADC_BUF[adc_index][ping_pong_index][sample_index]`.
 #[link_section = ".axisram.buffers"]
-static mut DAC_BUF: [[[u16; SAMPLE_BUFFER_SIZE]; 2]; 2] =
-    [[[0; SAMPLE_BUFFER_SIZE]; 2]; 2];
+static mut DAC_BUF: [[[u16; SAMPLE_BUFFER_SIZE]; 3]; 2] =
+    [[[0; SAMPLE_BUFFER_SIZE]; 3]; 2];
 
 macro_rules! dac_output {
     ($name:ident, $index:literal, $data_stream:ident,
@@ -92,8 +91,8 @@ macro_rules! dac_output {
             const REQUEST_LINE: Option<u8> = Some(DMAReq::$dma_req as u8);
 
             /// Whenever the DMA request occurs, it should write into SPI's TX FIFO.
-            fn address(&self) -> u32 {
-                &self.spi.inner().txdr as *const _ as u32
+            fn address(&self) -> usize {
+                &self.spi.inner().txdr as *const _ as usize
             }
         }
 
@@ -129,6 +128,7 @@ macro_rules! dac_output {
                 // The stream constantly writes to the TX FIFO to write new update codes.
                 let trigger_config = DmaConfig::default()
                     .memory_increment(true)
+                    .double_buffer(true)
                     .peripheral_increment(false);
 
                 // Listen for any potential SPI error signals, which may indicate that we are not generating
@@ -153,7 +153,8 @@ macro_rules! dac_output {
                         $spi::new(trigger_channel, spi),
                         // Note(unsafe): This buffer is only used once and provided for the DMA transfer.
                         unsafe { &mut DAC_BUF[$index][0] },
-                        None,
+                        // Note(unsafe): This buffer is only used once and provided for the DMA transfer.
+                        unsafe { Some(&mut DAC_BUF[$index][1]) },
                         trigger_config,
                     );
 
@@ -162,7 +163,7 @@ macro_rules! dac_output {
                 Self {
                     transfer,
                     // Note(unsafe): This buffer is only used once and provided for the next DMA transfer.
-                    next_buffer: unsafe { Some(&mut DAC_BUF[$index][1]) },
+                    next_buffer: unsafe { Some(&mut DAC_BUF[$index][2]) },
                 }
             }
 
