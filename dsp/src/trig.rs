@@ -50,19 +50,13 @@ pub fn atan2(y: i32, x: i32) -> i32 {
     let ratio = (min << 15) / max;
 
     let mut angle = {
-        // pi/4, referenced to i16::MAX
-        const PI_4_FACTOR: i32 = 25735;
-        // 0.285, referenced to i16::MAX
-        const FACTOR_0285: i32 = 9339;
-        // 1/pi, referenced to u16::MAX
-        const PI_INVERTED_FACTOR: i32 = 20861;
+        const K1: i32 =
+            ((1_f64 / 4_f64 + 0.285_f64 / PI) * (1 << 16) as f64) as i32;
+        const K2: i32 = ((0.285_f64 / PI) * (1 << 16) as f64) as i32;
 
-        let r1 = shift_round(ratio * PI_4_FACTOR, 15);
-        let r2 = shift_round(
-            (shift_round(ratio * FACTOR_0285, 15)) * (i16::MAX as i32 - ratio),
-            15,
-        );
-        (r1 + r2) * PI_INVERTED_FACTOR
+        let ratio_squared = shift_round(ratio * ratio, 15);
+
+        ratio * K1 - K2 * ratio_squared
     };
 
     if uy > ux {
