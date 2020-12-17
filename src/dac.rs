@@ -138,6 +138,8 @@ macro_rules! dac_output {
 
                 // AXISRAM is uninitialized. As such, we manually zero-initialize it here before
                 // starting the transfer.
+                // Note(unsafe): We currently own all DAC_BUF[index] buffers and are not using them
+                // elsewhere, so it is safe to access them here.
                 for buf in unsafe { DAC_BUF[$index].iter_mut() } {
                     for byte in buf.iter_mut() {
                         *byte = 0;
