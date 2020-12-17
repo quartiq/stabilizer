@@ -70,6 +70,7 @@ macro_rules! dac_output {
                 Self { _channel, spi }
             }
 
+            /// Start the SPI and begin operating in a DMA-driven transfer mode.
             pub fn start_dma(&mut self) {
                 // Allow the SPI FIFOs to operate using only DMA data channels.
                 self.spi.enable_dma_tx();
