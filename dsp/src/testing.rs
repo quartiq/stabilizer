@@ -1,6 +1,10 @@
 use super::Complex;
 
-pub fn isclose(a: f32, b: f32, rtol: f32, atol: f32) -> bool {
+pub fn isclose(a: f64, b: f64, rtol: f64, atol: f64) -> bool {
+    (a - b).abs() <= a.abs().max(b.abs()) * rtol + atol
+}
+
+pub fn isclosef(a: f32, b: f32, rtol: f32, atol: f32) -> bool {
     (a - b).abs() <= a.abs().max(b.abs()) * rtol + atol
 }
 
@@ -10,7 +14,7 @@ pub fn complex_isclose(
     rtol: f32,
     atol: f32,
 ) -> bool {
-    isclose(a.0, b.0, rtol, atol) && isclose(a.1, b.1, rtol, atol)
+    isclosef(a.0, b.0, rtol, atol) && isclosef(a.1, b.1, rtol, atol)
 }
 
 pub fn complex_allclose(
