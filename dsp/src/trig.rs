@@ -1,4 +1,4 @@
-use super::{shift_round, Complex};
+use super::Complex;
 use core::f64::consts::PI;
 
 include!(concat!(env!("OUT_DIR"), "/cossin_table.rs"));
@@ -22,18 +22,25 @@ include!(concat!(env!("OUT_DIR"), "/cossin_table.rs"));
 /// represents -pi and, equivalently, +pi. i32::MAX represents one
 /// count less than +pi.
 pub fn atan2(y: i32, x: i32) -> i32 {
-    let mut y = y >> 16;
-    let mut x = x >> 16;
+    let sign = (x < 0, y < 0);
 
-    let sign = ((y >> 14) & 2) | ((x >> 15) & 1);
-    if sign & 1 == 1 {
-        x *= -1;
-    }
-    if sign & 2 == 2 {
-        y *= -1;
-    }
+    let mut y = y.wrapping_abs() as u32;
+    let mut x = x.wrapping_abs() as u32;
 
     let y_greater = y > x;
+    if y_greater {
+        core::mem::swap(&mut y, &mut x);
+    }
+
+    let z = (16 - y.leading_zeros() as i32).max(0);
+
+    x >>= z;
+    if x == 0 {
+        return 0;
+    }
+    y >>= z;
+    let r = (y << 16) / x;
+    debug_assert!(r <= 1 << 16);
 
     // Uses the general procedure described in the following
     // Mathematics stack exchange answer:
@@ -44,47 +51,37 @@ pub fn atan2(y: i32, x: i32) -> i32 {
     // to compute and to be more compatible with integer
     // arithmetic. The approximation technique used here is
     //
-    // pi / 4 * x + 0.285 * x * (1 - abs(x))
+    // pi / 4 * r + C * r * (1 - abs(r))
     //
     // which is taken from Rajan 2006: Efficient Approximations for
     // the Arctangent Function.
-    if y_greater {
-        core::mem::swap(&mut x, &mut y);
-    }
+    //
+    // The least mean squared error solution is C = 0.279 (no the 0.285 that
+    // Rajan uses). K = C*4/pi.
+    // Q5 for K provides sufficient correction accuracy while preserving
+    // as much smoothness of the quadratic correction as possible.
+    const FP_K: usize = 5;
+    const K: u32 = (0.35489 * (1 << FP_K) as f64) as u32;
+    // debug_assert!(K == 11);
 
-    if x == 0 {
-        return 0;
-    }
-
-    // We need to share the 31 available non-sign bits between the
-    // atan argument and constant factors used in the atan
-    // approximation. Sharing the bits roughly equally between them
-    // gives good accuracy. Additionally, we cannot increase the
-    // number of atan argument bits beyond 15 because we must square
-    // it.
-    const ATAN_ARGUMENT_BITS: usize = 15;
-    let ratio = (y << ATAN_ARGUMENT_BITS) / x;
-
-    let mut angle = {
-        const K1: i32 = ((1. / 4. + 0.285 / PI)
-            * (1 << (31 - ATAN_ARGUMENT_BITS)) as f64)
-            as i32;
-        const K2: i32 =
-            ((0.285 / PI) * (1 << (31 - ATAN_ARGUMENT_BITS)) as f64) as i32;
-
-        ratio * K1 - K2 * shift_round(ratio * ratio, ATAN_ARGUMENT_BITS)
-    };
+    // `r` is unsigned Q16.16 and <= 1
+    // `angle` is signed Q1.31 with 1 << 31 == +- pi
+    // Since K < 0.5 and r*(1 - r) <= 0.25 the correction product can use
+    // 4 bits for K, and 15 bits for r and 1-r to remain within the u32 range.
+    let mut angle = ((r << 13)
+        + ((K * (r >> 1) * ((1 << 15) - (r >> 1))) >> (FP_K + 1)))
+        as i32;
 
     if y_greater {
-        angle = (i32::MAX >> 1) - angle;
+        angle = (1 << 30) - angle;
     }
 
-    if sign & 1 == 1 {
+    if sign.0 {
         angle = i32::MAX - angle;
     }
 
-    if sign & 2 == 2 {
-        angle *= -1;
+    if sign.1 {
+        angle = angle.wrapping_neg();
     }
 
     angle
@@ -162,7 +159,6 @@ pub fn cossin(phase: i32) -> Complex<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::isclose;
     use core::f64::consts::PI;
 
     fn angle_to_axis(angle: f64) -> f64 {
@@ -172,61 +168,43 @@ mod tests {
 
     #[test]
     fn atan2_absolute_error() {
-        const NUM_VALS: usize = 1_001;
-        let mut test_vals: [f64; NUM_VALS] = [0.; NUM_VALS];
-        let val_bounds: (f64, f64) = (-1., 1.);
-        let val_delta: f64 =
-            (val_bounds.1 - val_bounds.0) / (NUM_VALS - 1) as f64;
-        for i in 0..NUM_VALS {
-            test_vals[i] = val_bounds.0 + i as f64 * val_delta;
+        const N: usize = 321;
+        let mut test_vals = [0i32; N + 4];
+        let scale = (1i64 << 31) as f64;
+        for i in 0..N {
+            test_vals[i] = (scale * (-1. + 2. * i as f64 / N as f64)) as i32;
         }
 
-        let atol: f64 = 4e-5;
-        let rtol: f64 = 0.127;
+        assert!(test_vals.contains(&i32::MIN));
+        test_vals[N] = i32::MAX;
+        test_vals[N + 1] = 0;
+        test_vals[N + 2] = -1;
+        test_vals[N + 3] = 1;
+
+        let mut rms_err = 0f64;
+        let mut abs_err = 0f64;
+        let mut rel_err = 0f64;
+
         for &x in test_vals.iter() {
             for &y in test_vals.iter() {
-                let actual = (y.atan2(x) as f64 * i16::MAX as f64).round()
-                    / i16::MAX as f64;
-                let tol = atol + rtol * angle_to_axis(actual).abs();
-                let computed = (atan2(
-                    ((y * i16::MAX as f64) as i32) << 16,
-                    ((x * i16::MAX as f64) as i32) << 16,
-                ) >> 16) as f64
-                    / i16::MAX as f64
-                    * PI;
+                let want = (y as f64 / scale).atan2(x as f64 / scale);
+                let have = atan2(y, x) as f64 * PI / scale;
 
-                if !isclose(computed, actual, 0., tol) {
-                    println!("(x, y)   : {}, {}", x, y);
-                    println!("actual   : {}", actual);
-                    println!("computed : {}", computed);
-                    println!("tolerance: {}\n", tol);
-                    assert!(false);
+                let err = (have - want).abs();
+                abs_err = abs_err.max(err);
+                rms_err += err * err;
+                if err > 3e-5 {
+                    rel_err = rel_err.max(err / angle_to_axis(want));
                 }
             }
         }
-
-        // test min and max explicitly
-        for (x, y) in [
-            ((i16::MIN as i32 + 1) << 16, -(1 << 16) as i32),
-            ((i16::MIN as i32 + 1) << 16, (1 << 16) as i32),
-        ]
-        .iter()
-        {
-            let yf = *y as f64 / ((i16::MAX as i32) << 16) as f64;
-            let xf = *x as f64 / ((i16::MAX as i32) << 16) as f64;
-            let actual =
-                (yf.atan2(xf) * i16::MAX as f64).round() / i16::MAX as f64;
-            let computed = (atan2(*y, *x) >> 16) as f64 / i16::MAX as f64 * PI;
-            let tol = atol + rtol * angle_to_axis(actual).abs();
-
-            if !isclose(computed, actual, 0., tol) {
-                println!("(x, y)   : {}, {}", *x, *y);
-                println!("actual   : {}", actual);
-                println!("computed : {}", computed);
-                println!("tolerance: {}\n", tol);
-                assert!(false);
-            }
-        }
+        rms_err = rms_err.sqrt() / test_vals.len() as f64;
+        println!("max abs err: {:.2e}", abs_err);
+        println!("rms abs err: {:.2e}", rms_err);
+        println!("max rel err: {:.2e}", rel_err);
+        assert!(abs_err < 5e-3);
+        assert!(rms_err < 3e-3);
+        assert!(rel_err < 0.6);
     }
 
     #[test]

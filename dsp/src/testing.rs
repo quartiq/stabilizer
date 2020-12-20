@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use super::Complex;
 
 pub fn isclose(a: f64, b: f64, rtol: f64, atol: f64) -> bool {
@@ -23,9 +24,7 @@ pub fn complex_allclose(
     rtol: f32,
     atol: f32,
 ) -> bool {
-    let mut result: bool = true;
-    a.iter().zip(b.iter()).for_each(|(i, j)| {
-        result &= complex_isclose(*i, *j, rtol, atol);
-    });
-    result
+    a.iter()
+        .zip(b)
+        .all(|(&i, &j)| complex_isclose(i, j, rtol, atol))
 }
