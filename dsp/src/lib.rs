@@ -98,6 +98,7 @@ where
 }
 
 pub mod iir;
+pub mod iir_int;
 pub mod lockin;
 pub mod pll;
 pub mod trig;
