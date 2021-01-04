@@ -318,7 +318,8 @@ const APP: () = {
             // timer, but use a period that is longer.
             let mut timer = timers::TimestampTimer::new(timer5);
 
-            let period = digital_input_stamper::calculate_timestamp_timer_period();
+            let period =
+                digital_input_stamper::calculate_timestamp_timer_period();
             timer.set_period_ticks(period);
 
             timer
@@ -543,7 +544,7 @@ const APP: () = {
                     let qspi = hal::qspi::Qspi::bank2(
                         dp.QUADSPI,
                         qspi_pins,
-                        40.mhz(),
+                        design_parameters::POUNDER_QSPI_FREQUENCY,
                         &ccdr.clocks,
                         ccdr.peripheral.QSPI,
                     );
@@ -665,30 +666,26 @@ const APP: () = {
                         ccdr.peripheral.HRTIM,
                     );
 
-                    // IO_Update should be latched for 4 SYNC_CLK cycles after the QSPI profile
-                    // write. With pounder SYNC_CLK running at 100MHz (1/4 of the pounder reference
-                    // clock of 400MHz), this corresponds to 40ns. To accomodate rounding errors, we
-                    // use 50ns instead.
-                    //
-                    // Profile writes are always 16 bytes, with 2 cycles required per byte, coming
-                    // out to a total of 32 QSPI clock cycles. The QSPI is configured for 40MHz, so
-                    // this comes out to an offset of 800nS. We use 900ns to be safe - note that the
-                    // timer is triggered after the QSPI write, which can take approximately 120nS,
-                    // so there is additional margin.
+                    // IO_Update occurs after a fixed delay from the QSPI write. Note that the timer
+                    // is triggered after the QSPI write, which can take approximately 120nS, so
+                    // there is additional margin.
                     hrtimer.configure_single_shot(
                         hrtimer::Channel::Two,
-                        50_e-9,
-                        900_e-9,
+                        design_parameters::POUNDER_IO_UPDATE_DURATION,
+                        design_parameters::POUNDER_IO_UPDATE_DELAY,
                     );
 
                     // Ensure that we have enough time for an IO-update every sample.
-                    let sample_frequency =
-                        (design_parameters::TIMER_FREQUENCY.0 as f32
-                            * 1_000_000.0)
-                            / ADC_SAMPLE_TICKS as f32;
+                    let sample_frequency = (design_parameters::TIMER_FREQUENCY.0
+                        as f32
+                        * 1_000_000.0)
+                        / ADC_SAMPLE_TICKS as f32;
 
                     let sample_period = 1.0 / sample_frequency;
-                    assert!(sample_period > 900_e-9);
+                    assert!(
+                        sample_period
+                            > design_parameters::POUNDER_IO_UPDATE_DELAY
+                    );
 
                     hrtimer
                 };
