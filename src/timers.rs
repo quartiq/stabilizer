@@ -41,7 +41,7 @@ macro_rules! timer_channels {
 
                 /// Manually set the period of the timer.
                 #[allow(dead_code)]
-                pub fn set_period(&mut self, period: u32) {
+                pub fn set_period_ticks(&mut self, period: u32) {
                     let regs = unsafe { &*hal::stm32::$TY::ptr() };
                     regs.arr.write(|w| w.arr().bits(period));
                 }
@@ -136,7 +136,7 @@ macro_rules! timer_channels {
                 /// # Args
                 /// * `input` - The input source for the input capture event.
                 #[allow(dead_code)]
-                pub fn to_input_capture(self, input: hal::stm32::tim2::[< $ccmrx _input >]::[< CC $index S_A >]) -> [< Channel $index InputCapture >]{
+                pub fn into_input_capture(self, input: hal::stm32::tim2::[< $ccmrx _input >]::[< CC $index S_A >]) -> [< Channel $index InputCapture >]{
                     let regs = unsafe { &*<$TY>::ptr() };
                     regs.[< $ccmrx _input >]().modify(|_, w| w.[< cc $index s>]().variant(input));
 
