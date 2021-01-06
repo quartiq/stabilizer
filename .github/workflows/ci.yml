@@ -29,6 +29,7 @@ jobs:
       - uses: actions-rs/clippy-check@v1
         continue-on-error: true
         with:
+          toolchain: stable
           token: ${{ secrets.GITHUB_TOKEN }}
 
   compile:

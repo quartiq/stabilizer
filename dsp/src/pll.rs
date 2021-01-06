@@ -45,7 +45,7 @@ impl PLL {
     /// The signal's phase/frequency is reconstructed relative to the sampling period.
     ///
     /// Args:
-    /// * `input`: New input phase sample.
+    /// * `x`: New input phase sample.
     /// * `shift_frequency`: Frequency error scaling. The frequency gain per update is
     ///   `1/(1 << shift_frequency)`.
     /// * `shift_phase`: Phase error scaling. The phase gain is `1/(1 << shift_phase)`

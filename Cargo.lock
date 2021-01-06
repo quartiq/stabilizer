@@ -874,7 +874,7 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.8.0"
-source = "git+https://github.com/quartiq/stm32h7xx-hal?branch=feature/dma-buffer-swap-logic#5f97920b639f8cb29c9f30c89a33960d5b2082f8"
+source = "git+https://github.com/stm32-rs/stm32h7xx-hal?branch=dma#25ee0f3a9ae27d1fd6bb390d6045aa312f29f096"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",
