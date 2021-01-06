@@ -21,7 +21,8 @@
 ///! transfer completion is handled). In this mode, by the time DMA swaps buffers, there is always a valid buffer in the
 ///! "next-transfer" double-buffer location for the DMA transfer. Once a transfer completes,
 ///! software then has exactly one batch duration to fill the next buffer before its
-///! transfer begins.
+///! transfer begins. If software does not meet this deadline, old data will be repeatedly generated
+///! on the output and output will be shifted by one batch.
 ///!
 ///! ## Multiple Samples to Single DAC Codes
 ///!
