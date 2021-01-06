@@ -859,7 +859,7 @@ const APP: () = {
                 dp.TIM8.timer(1.khz(), ccdr.peripheral.TIM8, &ccdr.clocks);
             let mut timestamp_timer = timers::PounderTimestampTimer::new(tim8);
 
-            // Pounder is configured to generate a 400MHz reference clock, so a 125MHz sync-clock is
+            // Pounder is configured to generate a 500MHz reference clock, so a 125MHz sync-clock is
             // output. As a result, dividing the 125MHz sync-clk provides a 31.25MHz tick rate for
             // the timestamp timer. 31.25MHz corresponds with a 32ns tick rate.
             timestamp_timer.set_external_clock(timers::Prescaler::Div4);
