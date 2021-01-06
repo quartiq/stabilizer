@@ -14,8 +14,8 @@
 ///! both transfers are completed before reading the data. This is usually not significant for
 ///! busy-waiting because the transfers should complete at approximately the same time.
 use super::{
-    hal, sampling_timer, DMAReq, DmaConfig, MemoryToPeripheral,
-    PeripheralToMemory, Priority, TargetAddress, Transfer, SAMPLE_BUFFER_SIZE,
+    hal, timers, DMAReq, DmaConfig, MemoryToPeripheral, PeripheralToMemory,
+    Priority, TargetAddress, Transfer, SAMPLE_BUFFER_SIZE,
 };
 
 // The following data is written by the timer ADC sample trigger into each of the SPI TXFIFOs. Note
@@ -38,12 +38,10 @@ macro_rules! adc_input {
         /// $spi is used as a type for indicating a DMA transfer into the SPI TX FIFO
         /// whenever the tim2 update dma request occurs.
         struct $spi {
-            _channel: sampling_timer::tim2::$trigger_channel,
+            _channel: timers::tim2::$trigger_channel,
         }
         impl $spi {
-            pub fn new(
-                _channel: sampling_timer::tim2::$trigger_channel,
-            ) -> Self {
+            pub fn new(_channel: timers::tim2::$trigger_channel) -> Self {
                 Self { _channel }
             }
         }
@@ -100,7 +98,7 @@ macro_rules! adc_input {
                     hal::stm32::DMA1,
                 >,
                 data_stream: hal::dma::dma::$data_stream<hal::stm32::DMA1>,
-                trigger_channel: sampling_timer::tim2::$trigger_channel,
+                trigger_channel: timers::tim2::$trigger_channel,
             ) -> Self {
                 // Generate DMA events when an output compare of the timer hitting zero (timer roll over)
                 // occurs.
@@ -195,7 +193,7 @@ macro_rules! adc_input {
 
                 // Start the next transfer.
                 self.transfer.clear_interrupts();
-                let (prev_buffer, _) =
+                let (prev_buffer, _, _) =
                     self.transfer.next_transfer(next_buffer).unwrap();
 
                 self.next_buffer.replace(prev_buffer); // .unwrap_none() https://github.com/rust-lang/rust/issues/62633

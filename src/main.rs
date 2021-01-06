@@ -54,8 +54,10 @@ use smoltcp::wire::Ipv4Address;
 
 use heapless::{consts::*, String};
 
-// The desired sampling frequency of the ADCs.
-const SAMPLE_FREQUENCY_KHZ: u32 = 500;
+// The number of ticks in the ADC sampling timer. The timer runs at 100MHz, so the step size is
+// equal to 10ns per tick.
+// Currently, the sample rate is equal to: Fsample = 100/256 MHz = 390.625 KHz
+const ADC_SAMPLE_TICKS: u32 = 256;
 
 // The desired ADC sample processing buffer size.
 const SAMPLE_BUFFER_SIZE: usize = 1;
@@ -70,11 +72,12 @@ mod adc;
 mod afe;
 mod dac;
 mod design_parameters;
+mod digital_input_stamper;
 mod eeprom;
 mod hrtimer;
 mod pounder;
-mod sampling_timer;
 mod server;
+mod timers;
 
 use adc::{Adc0Input, Adc1Input};
 use dac::{Dac0Output, Dac1Output};
@@ -196,9 +199,9 @@ macro_rules! route_request {
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
-
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
+        input_stamper: digital_input_stamper::InputStamper,
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
@@ -281,14 +284,49 @@ const APP: () = {
             hal::dma::dma::StreamsTuple::new(dp.DMA1, ccdr.peripheral.DMA1);
 
         // Configure timer 2 to trigger conversions for the ADC
-        let timer2 = dp.TIM2.timer(
-            SAMPLE_FREQUENCY_KHZ.khz(),
-            ccdr.peripheral.TIM2,
-            &ccdr.clocks,
-        );
+        let mut sampling_timer = {
+            // The timer frequency is manually adjusted below, so the 1KHz setting here is a
+            // dont-care.
+            let mut timer2 =
+                dp.TIM2.timer(1.khz(), ccdr.peripheral.TIM2, &ccdr.clocks);
 
-        let mut sampling_timer = sampling_timer::SamplingTimer::new(timer2);
+            // Configure the timer to count at the designed tick rate. We will manually set the
+            // period below.
+            timer2.pause();
+            timer2.set_tick_freq(design_parameters::TIMER_FREQUENCY);
+
+            let mut sampling_timer = timers::SamplingTimer::new(timer2);
+            sampling_timer.set_period_ticks(ADC_SAMPLE_TICKS - 1);
+
+            sampling_timer
+        };
+
         let sampling_timer_channels = sampling_timer.channels();
+
+        let mut timestamp_timer = {
+            // The timer frequency is manually adjusted below, so the 1KHz setting here is a
+            // dont-care.
+            let mut timer5 =
+                dp.TIM5.timer(1.khz(), ccdr.peripheral.TIM5, &ccdr.clocks);
+
+            // Configure the timer to count at the designed tick rate. We will manually set the
+            // period below.
+            timer5.pause();
+            timer5.set_tick_freq(design_parameters::TIMER_FREQUENCY);
+
+            // The time stamp timer must run at exactly a multiple of the sample timer based on the
+            // batch size. To accomodate this, we manually set the prescaler identical to the sample
+            // timer, but use a period that is longer.
+            let mut timer = timers::TimestampTimer::new(timer5);
+
+            let period =
+                digital_input_stamper::calculate_timestamp_timer_period();
+            timer.set_period_ticks(period);
+
+            timer
+        };
+
+        let timestamp_timer_channels = timestamp_timer.channels();
 
         // Configure the SPI interfaces to the ADCs and DACs.
         let adcs = {
@@ -317,7 +355,7 @@ const APP: () = {
                 let spi: hal::spi::Spi<_, _, u16> = dp.SPI2.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
+                    design_parameters::ADC_DAC_SCK_MAX,
                     ccdr.peripheral.SPI2,
                     &ccdr.clocks,
                 );
@@ -355,7 +393,7 @@ const APP: () = {
                 let spi: hal::spi::Spi<_, _, u16> = dp.SPI3.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
+                    design_parameters::ADC_DAC_SCK_MAX,
                     ccdr.peripheral.SPI3,
                     &ccdr.clocks,
                 );
@@ -405,7 +443,7 @@ const APP: () = {
                 dp.SPI4.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
+                    design_parameters::ADC_DAC_SCK_MAX,
                     ccdr.peripheral.SPI4,
                     &ccdr.clocks,
                 )
@@ -437,7 +475,7 @@ const APP: () = {
                 dp.SPI5.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
+                    design_parameters::ADC_DAC_SCK_MAX,
                     ccdr.peripheral.SPI5,
                     &ccdr.clocks,
                 )
@@ -507,7 +545,7 @@ const APP: () = {
                     let qspi = hal::qspi::Qspi::bank2(
                         dp.QUADSPI,
                         qspi_pins,
-                        40.mhz(),
+                        design_parameters::POUNDER_QSPI_FREQUENCY,
                         &ccdr.clocks,
                         ccdr.peripheral.QSPI,
                     );
@@ -629,25 +667,26 @@ const APP: () = {
                         ccdr.peripheral.HRTIM,
                     );
 
-                    // IO_Update should be latched for 4 SYNC_CLK cycles after the QSPI profile
-                    // write. With pounder SYNC_CLK running at 100MHz (1/4 of the pounder reference
-                    // clock of 400MHz), this corresponds to 40ns. To accomodate rounding errors, we
-                    // use 50ns instead.
-                    //
-                    // Profile writes are always 16 bytes, with 2 cycles required per byte, coming
-                    // out to a total of 32 QSPI clock cycles. The QSPI is configured for 40MHz, so
-                    // this comes out to an offset of 800nS. We use 900ns to be safe - note that the
-                    // timer is triggered after the QSPI write, which can take approximately 120nS,
-                    // so there is additional margin.
+                    // IO_Update occurs after a fixed delay from the QSPI write. Note that the timer
+                    // is triggered after the QSPI write, which can take approximately 120nS, so
+                    // there is additional margin.
                     hrtimer.configure_single_shot(
                         hrtimer::Channel::Two,
-                        50_e-9,
-                        900_e-9,
+                        design_parameters::POUNDER_IO_UPDATE_DURATION,
+                        design_parameters::POUNDER_IO_UPDATE_DELAY,
                     );
 
                     // Ensure that we have enough time for an IO-update every sample.
+                    let sample_frequency = {
+                        let timer_frequency: hal::time::Hertz =
+                            design_parameters::TIMER_FREQUENCY.into();
+                        timer_frequency.0 as f32 / ADC_SAMPLE_TICKS as f32
+                    };
+
+                    let sample_period = 1.0 / sample_frequency;
                     assert!(
-                        1.0 / (1000 * SAMPLE_FREQUENCY_KHZ) as f32 > 900_e-9
+                        sample_period
+                            > design_parameters::POUNDER_IO_UPDATE_DELAY
                     );
 
                     hrtimer
@@ -781,14 +820,25 @@ const APP: () = {
         // Utilize the cycle counter for RTIC scheduling.
         cp.DWT.enable_cycle_counter();
 
+        let mut input_stamper = {
+            let trigger = gpioa.pa3.into_alternate_af2();
+            digital_input_stamper::InputStamper::new(
+                trigger,
+                timestamp_timer_channels.ch4,
+            )
+        };
+
         // Start sampling ADCs.
         sampling_timer.start();
+        timestamp_timer.start();
+        input_stamper.start();
 
         init::LateResources {
             afes: (afe0, afe1),
 
             adcs,
             dacs,
+            input_stamper,
             dds_output,
             pounder: pounder_devices,
 
@@ -799,7 +849,7 @@ const APP: () = {
         }
     }
 
-    #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch, dds_output], priority=2)]
+    #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch, dds_output, input_stamper], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -809,6 +859,8 @@ const APP: () = {
             c.resources.dacs.0.acquire_buffer(),
             c.resources.dacs.1.acquire_buffer(),
         ];
+
+        let _timestamp = c.resources.input_stamper.latest_timestamp();
 
         for channel in 0..adc_samples.len() {
             for sample in 0..adc_samples[0].len() {

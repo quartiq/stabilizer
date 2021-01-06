@@ -4,7 +4,7 @@
 ///! configured to generate a DMA write into the SPI TXFIFO, which initiates a SPI transfer and
 ///! results in DAC update for both channels.
 use super::{
-    hal, sampling_timer, DMAReq, DmaConfig, MemoryToPeripheral, TargetAddress,
+    hal, timers, DMAReq, DmaConfig, MemoryToPeripheral, TargetAddress,
     Transfer, SAMPLE_BUFFER_SIZE,
 };
 
@@ -22,12 +22,12 @@ macro_rules! dac_output {
         /// $spi is used as a type for indicating a DMA transfer into the SPI TX FIFO
         struct $spi {
             spi: hal::spi::Spi<hal::stm32::$spi, hal::spi::Disabled, u16>,
-            _channel: sampling_timer::tim2::$trigger_channel,
+            _channel: timers::tim2::$trigger_channel,
         }
 
         impl $spi {
             pub fn new(
-                _channel: sampling_timer::tim2::$trigger_channel,
+                _channel: timers::tim2::$trigger_channel,
                 spi: hal::spi::Spi<hal::stm32::$spi, hal::spi::Disabled, u16>,
             ) -> Self {
                 Self { _channel, spi }
@@ -73,7 +73,7 @@ macro_rules! dac_output {
             pub fn new(
                 spi: hal::spi::Spi<hal::stm32::$spi, hal::spi::Enabled, u16>,
                 stream: hal::dma::dma::$data_stream<hal::stm32::DMA1>,
-                trigger_channel: sampling_timer::tim2::$trigger_channel,
+                trigger_channel: timers::tim2::$trigger_channel,
             ) -> Self {
                 // Generate DMA events when an output compare of the timer hitting zero (timer roll over)
                 // occurs.
@@ -143,7 +143,7 @@ macro_rules! dac_output {
 
                 // Start the next transfer.
                 self.transfer.clear_interrupts();
-                let (prev_buffer, _) =
+                let (prev_buffer, _, _) =
                     self.transfer.next_transfer(next_buffer).unwrap();
 
                 // .unwrap_none() https://github.com/rust-lang/rust/issues/62633
