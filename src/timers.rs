@@ -208,9 +208,9 @@ macro_rules! timer_channels {
 
                 const REQUEST_LINE: Option<u8> = Some(DMAReq::[< $TY _CH $index >]as u8);
 
-                fn address(&self) -> u32 {
+                fn address(&self) -> usize {
                     let regs = unsafe { &*<$TY>::ptr() };
-                    &regs.[<ccr $index >] as *const _ as u32
+                    &regs.[<ccr $index >] as *const _ as usize
                 }
             }
         }
