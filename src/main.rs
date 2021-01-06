@@ -30,6 +30,7 @@ extern crate panic_halt;
 #[macro_use]
 extern crate log;
 
+#[allow(unused_imports)]
 use core::convert::TryInto;
 
 // use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};

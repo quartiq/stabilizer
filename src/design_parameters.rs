@@ -32,8 +32,10 @@ pub const DDS_REF_CLK: MegaHertz = MegaHertz(100);
 pub const DDS_MULTIPLIER: u8 = 5;
 
 /// The DDS system clock frequency after the internal PLL multiplication.
+#[allow(dead_code)]
 pub const DDS_SYSTEM_CLK: MegaHertz =
     MegaHertz(DDS_REF_CLK.0 * DDS_MULTIPLIER as u32);
 
 /// The divider from the DDS system clock to the SYNC_CLK output (sync-clk is always 1/4 of sysclk).
+#[allow(dead_code)]
 pub const DDS_SYNC_CLK_DIV: u8 = 4;
