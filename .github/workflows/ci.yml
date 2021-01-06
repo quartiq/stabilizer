@@ -89,7 +89,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --features ${{ matrix.features }}
+          args: --features pounder_v1_1
 
   test:
     runs-on: ubuntu-latest
