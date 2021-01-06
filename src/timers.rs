@@ -1,6 +1,7 @@
 ///! The sampling timer is used for managing ADC sampling and external reference timestamping.
 use super::hal;
 
+/// The source of an input capture trigger.
 #[allow(dead_code)]
 pub enum CaptureTrigger {
     Input13 = 0b01,
@@ -8,6 +9,7 @@ pub enum CaptureTrigger {
     TriggerInput = 0b11,
 }
 
+/// The event that should generate an external trigger from the peripheral.
 #[allow(dead_code)]
 pub enum TriggerGenerator {
     Reset = 0b000,
@@ -20,6 +22,7 @@ pub enum TriggerGenerator {
     Ch4Compare = 0b111,
 }
 
+/// Selects the trigger source for the timer peripheral.
 #[allow(dead_code)]
 pub enum TriggerSource {
     Trigger0 = 0,
@@ -28,6 +31,7 @@ pub enum TriggerSource {
     Trigger3 = 0b11,
 }
 
+/// Prescalers for externally-supplied reference clocks.
 pub enum Prescaler {
     Div1 = 0b00,
     Div2 = 0b01,
@@ -116,6 +120,8 @@ macro_rules! timer_channels {
                     self.timer.resume();
                 }
 
+                /// Configure the timer peripheral to generate a trigger based on the provided
+                /// source.
                 #[allow(dead_code)]
                 pub fn generate_trigger(&mut self, source: TriggerGenerator) {
                     let regs = unsafe { &*hal::stm32::$TY::ptr() };
@@ -125,6 +131,7 @@ macro_rules! timer_channels {
 
                 }
 
+                /// Select a trigger source for the timer peripheral.
                 #[allow(dead_code)]
                 pub fn set_trigger_source(&mut self, source: TriggerSource) {
                     let regs = unsafe { &*hal::stm32::$TY::ptr() };
