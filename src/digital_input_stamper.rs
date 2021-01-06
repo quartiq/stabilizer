@@ -56,7 +56,7 @@ pub fn calculate_timestamp_timer_period() -> u32 {
     // period of the timestamp timer. The period is always 1 larger than the value configured in the
     // register.
     let period: u64 = batch_duration_ticks * j - 1u64;
-    assert!(period < u32::MAX as u64);
+    assert!(period <= u32::MAX as u64);
 
     period as u32
 }

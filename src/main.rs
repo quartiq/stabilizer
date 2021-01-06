@@ -677,10 +677,11 @@ const APP: () = {
                     );
 
                     // Ensure that we have enough time for an IO-update every sample.
-                    let sample_frequency = (design_parameters::TIMER_FREQUENCY.0
-                        as f32
-                        * 1_000_000.0)
-                        / ADC_SAMPLE_TICKS as f32;
+                    let sample_frequency = {
+                        let timer_frequency: hal::time::Hertz =
+                            design_parameters::TIMER_FREQUENCY.into();
+                        timer_frequency.0 as f32 / ADC_SAMPLE_TICKS as f32
+                    };
 
                     let sample_period = 1.0 / sample_frequency;
                     assert!(
