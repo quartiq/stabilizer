@@ -49,7 +49,7 @@
 ///!
 ///! The ADCs collect a group of N samples, which is referred to as a batch. The size of the batch
 ///! is configured by the user at compile-time to allow for a custom-tailored implementation. Larger
-///! batch sizes generally provide for more processing time per sample, but come at the expense of
+///! batch sizes generally provide for lower overhead and more processing time per sample, but come at the expense of
 ///! increased input -> output latency.
 ///!
 ///!
@@ -69,7 +69,7 @@
 ///! In this implementation, single buffer mode DMA transfers are used because the SPI RX FIFO can
 ///! be used as a means to both detect and buffer ADC samples during the buffer swap-over. Because
 ///! of this, double-buffered mode does not offer any advantages over single-buffered mode (unless
-///! double-buffered mode offers less overhead when accessing data).
+///! double-buffered mode offers less overhead due to the DMA disable/enable procedure).
 use super::{
     hal, timers, DMAReq, DmaConfig, MemoryToPeripheral, PeripheralToMemory,
     Priority, TargetAddress, Transfer, SAMPLE_BUFFER_SIZE,
