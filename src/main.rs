@@ -220,7 +220,8 @@ const APP: () = {
         mac_addr: net::wire::EthernetAddress,
 
         pounder: Option<pounder::PounderDevices>,
-        pounder_stamper: pounder::timestamp::Timestamper,
+
+        pounder_stamper: Option<pounder::timestamp::Timestamper>,
 
         // Format: iir_state[ch][cascade-no][coeff]
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
@@ -571,7 +572,11 @@ const APP: () = {
                     pounder::QspiInterface::new(qspi).unwrap()
                 };
 
+                #[cfg(feature = "pounder_v1_1")]
                 let reset_pin = gpiog.pg6.into_push_pull_output();
+                #[cfg(not(feature = "pounder_v1_1"))]
+                let reset_pin = gpioa.pa0.into_push_pull_output();
+
                 let mut io_update = gpiog.pg7.into_push_pull_output();
 
                 let ad9959 = ad9959::Ad9959::new(
@@ -850,6 +855,7 @@ const APP: () = {
             )
         };
 
+        #[cfg(feature = "pounder_v1_1")]
         let pounder_stamper = {
             let etr_pin = gpioa.pa0.into_alternate_af3();
 
@@ -875,14 +881,19 @@ const APP: () = {
             timestamp_timer.set_period((period - 1).try_into().unwrap());
             let tim8_channels = timestamp_timer.channels();
 
-            pounder::timestamp::Timestamper::new(
+            let stamper = pounder::timestamp::Timestamper::new(
                 timestamp_timer,
                 dma_streams.7,
                 tim8_channels.ch1,
                 &mut sampling_timer,
                 etr_pin,
-            )
+            );
+
+            Some(stamper)
         };
+
+        #[cfg(not(feature = "pounder_v1_1"))]
+        let pounder_stamper = None;
 
         // Start sampling ADCs.
         sampling_timer.start();
@@ -908,7 +919,10 @@ const APP: () = {
 
     #[task(binds=DMA1_STR3, resources=[pounder_stamper, adcs, dacs, iir_state, iir_ch, dds_output, input_stamper], priority=2)]
     fn process(c: process::Context) {
-        let _pounder_timestamps = c.resources.pounder_stamper.acquire_buffer();
+        if let Some(stamper) = c.resources.pounder_stamper {
+            let pounder_timestamps = stamper.acquire_buffer();
+            info!("{:?}", pounder_timestamps);
+        }
 
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),

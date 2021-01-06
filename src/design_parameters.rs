@@ -14,5 +14,9 @@ pub const DDS_REF_CLK_MHZ: u32 = 100;
 /// The multiplier used for the DDS reference clock PLL.
 pub const DDS_MULTIPLIER: u8 = 5;
 
+/// The DDS system clock frequency after the internal PLL multiplication.
+pub const DDS_SYSTEM_CLK_MHZ: u32 = DDS_REF_CLK_MHZ * DDS_MULTIPLIER as u32;
+
 /// The rate of the DDS SYNC_CLK in MHz is always 1/4 that of the internal PLL clock.
-pub const DDS_SYNC_CLK_MHZ: u32 = DDS_REF_CLK_MHZ * DDS_MULTIPLIER as u32 / 4;
+#[allow(dead_code)]
+pub const DDS_SYNC_CLK_MHZ: u32 = DDS_SYSTEM_CLK_MHZ / 4;
