@@ -85,6 +85,12 @@ jobs:
             target/*/release/stabilizer
             stabilizer-release.bin
 
+      - name: Build (Pounder v1.1)
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --features ${{ matrix.features }}
+
   test:
     runs-on: ubuntu-latest
     strategy:

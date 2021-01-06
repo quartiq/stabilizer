@@ -21,19 +21,19 @@ pub const POUNDER_IO_UPDATE_DELAY: f32 = 900_e-9;
 
 /// The duration to assert IO_Update for the pounder DDS.
 // IO_Update should be latched for 4 SYNC_CLK cycles after the QSPI profile write. With pounder
-// SYNC_CLK running at 100MHz (1/4 of the pounder reference clock of 400MHz), this corresponds to
-// 40ns. To accomodate rounding errors, we use 50ns instead.
+// SYNC_CLK running at 100MHz (1/4 of the pounder reference clock of 500MHz), this corresponds to
+// 32ns. To accomodate rounding errors, we use 50ns instead.
 pub const POUNDER_IO_UPDATE_DURATION: f32 = 50_e-9;
 
 /// The DDS reference clock frequency in MHz.
-pub const DDS_REF_CLK_MHZ: u32 = 100;
+pub const DDS_REF_CLK: MegaHertz = MegaHertz(100);
 
 /// The multiplier used for the DDS reference clock PLL.
 pub const DDS_MULTIPLIER: u8 = 5;
 
 /// The DDS system clock frequency after the internal PLL multiplication.
-pub const DDS_SYSTEM_CLK_MHZ: u32 = DDS_REF_CLK_MHZ * DDS_MULTIPLIER as u32;
+pub const DDS_SYSTEM_CLK: MegaHertz =
+    MegaHertz(DDS_REF_CLK.0 * DDS_MULTIPLIER as u32);
 
-/// The rate of the DDS SYNC_CLK in MHz is always 1/4 that of the internal PLL clock.
-#[allow(dead_code)]
-pub const DDS_SYNC_CLK_MHZ: u32 = DDS_SYSTEM_CLK_MHZ / 4;
+/// The divider from the DDS system clock to the SYNC_CLK output (sync-clk is always 1/4 of sysclk).
+pub const DDS_SYNC_CLK_DIV: u8 = 4;

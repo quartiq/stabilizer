@@ -30,6 +30,8 @@ extern crate panic_halt;
 #[macro_use]
 extern crate log;
 
+use core::convert::TryInto;
+
 // use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 use cortex_m_rt::exception;
 use rtic::cyccnt::{Instant, U32Ext};
@@ -562,13 +564,16 @@ const APP: () = {
 
                 let mut io_update = gpiog.pg7.into_push_pull_output();
 
+                let ref_clk: hal::time::Hertz =
+                    design_parameters::DDS_REF_CLK.into();
+
                 let ad9959 = ad9959::Ad9959::new(
                     qspi_interface,
                     reset_pin,
                     &mut io_update,
                     &mut delay,
                     ad9959::Mode::FourBitSerial,
-                    design_parameters::DDS_REF_CLK_MHZ as f32 * 1_000_000_f32,
+                    ref_clk.0 as f32,
                     design_parameters::DDS_MULTIPLIER,
                 )
                 .unwrap();
@@ -850,13 +855,18 @@ const APP: () = {
             timestamp_timer.start();
 
             // We want the pounder timestamp timer to overflow once per batch.
-            let tick_ratio = design_parameters::DDS_SYNC_CLK_MHZ as f32
-                / design_parameters::TIMER_FREQUENCY_MHZ as f32;
+            let tick_ratio = {
+                let sync_clk_mhz: f32 = design_parameters::DDS_SYSTEM_CLK.0
+                    as f32
+                    / design_parameters::DDS_SYNC_CLK_DIV as f32;
+                sync_clk_mhz / design_parameters::TIMER_FREQUENCY.0 as f32
+            };
+
             let period = (tick_ratio
                 * ADC_SAMPLE_TICKS as f32
                 * SAMPLE_BUFFER_SIZE as f32) as u32
                 / 4;
-            timestamp_timer.set_period((period - 1).try_into().unwrap());
+            timestamp_timer.set_period_ticks((period - 1).try_into().unwrap());
             let tim8_channels = timestamp_timer.channels();
 
             let stamper = pounder::timestamp::Timestamper::new(
