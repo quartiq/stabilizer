@@ -43,7 +43,7 @@ impl Timestamper {
 
         // The capture channel should capture whenever the trigger input occurs.
         let input_capture = capture_channel
-            .to_input_capture(timers::CaptureTrigger::TriggerInput);
+            .into_input_capture(timers::CaptureTrigger::TriggerInput);
         input_capture.listen_dma();
 
         // The data transfer is always a transfer of data from the peripheral to a RAM buffer.
@@ -68,7 +68,7 @@ impl Timestamper {
     }
 
     pub fn update_period(&mut self, period: u16) {
-        self.timer.set_period(period);
+        self.timer.set_period_ticks(period);
     }
 
     /// Obtain a buffer filled with timestamps.

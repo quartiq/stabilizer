@@ -18,6 +18,9 @@ load
 # tbreak cortex_m_rt::reset_handler
 monitor reset halt
 
+source ../../PyCortexMDebug/cmdebug/svd_gdb.py
+svd_load ~/Downloads/STM32H743x.svd
+
 # cycle counter delta tool, place two bkpts around the section
 set var $cc=0xe0001004
 define qq

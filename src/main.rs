@@ -30,8 +30,6 @@ extern crate panic_halt;
 #[macro_use]
 extern crate log;
 
-use core::convert::TryInto;
-
 // use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 use cortex_m_rt::exception;
 use rtic::cyccnt::{Instant, U32Ext};
@@ -58,7 +56,8 @@ use heapless::{consts::*, String};
 
 // The number of ticks in the ADC sampling timer. The timer runs at 100MHz, so the step size is
 // equal to 10ns per tick.
-const ADC_SAMPLE_TICKS: u32 = 128;
+// Currently, the sample rate is equal to: Fsample = 100/256 MHz = 390.625 KHz
+const ADC_SAMPLE_TICKS: u32 = 256;
 
 // The desired ADC sample processing buffer size.
 const SAMPLE_BUFFER_SIZE: usize = 8;
@@ -296,10 +295,10 @@ const APP: () = {
             // Configure the timer to count at the designed tick rate. We will manually set the
             // period below.
             timer2.pause();
-            timer2.set_tick_freq(design_parameters::TIMER_FREQUENCY_MHZ.mhz());
+            timer2.set_tick_freq(design_parameters::TIMER_FREQUENCY);
 
             let mut sampling_timer = timers::SamplingTimer::new(timer2);
-            sampling_timer.set_period(ADC_SAMPLE_TICKS - 1);
+            sampling_timer.set_period_ticks(ADC_SAMPLE_TICKS - 1);
 
             sampling_timer
         };
@@ -315,32 +314,16 @@ const APP: () = {
             // Configure the timer to count at the designed tick rate. We will manually set the
             // period below.
             timer5.pause();
-            timer5.set_tick_freq(design_parameters::TIMER_FREQUENCY_MHZ.mhz());
+            timer5.set_tick_freq(design_parameters::TIMER_FREQUENCY);
 
             // The time stamp timer must run at exactly a multiple of the sample timer based on the
-            // batch size. To accomodate this, we manually set the period identical to the sample
-            // timer, but use a prescaler that is `BATCH_SIZE` longer.
+            // batch size. To accomodate this, we manually set the prescaler identical to the sample
+            // timer, but use a period that is longer.
             let mut timer = timers::TimestampTimer::new(timer5);
 
-            let period: u32 = {
-                let batch_duration: u64 =
-                    SAMPLE_BUFFER_SIZE as u64 * ADC_SAMPLE_TICKS as u64;
-                let batches_per_overflow: u64 =
-                    (1u64 + u32::MAX as u64) / batch_duration;
-
-                // Calculate the largest power-of-two that is less than `batches_per_overflow`.
-                // This is completed by eliminating the least significant bits of the value until
-                // only the msb remains, which is always a power of two.
-                let mut j = batches_per_overflow;
-                while (j & (j - 1)) != 0 {
-                    j = j & (j - 1);
-                }
-
-                let period: u64 = batch_duration * j - 1u64;
-                period.try_into().unwrap()
-            };
-
-            timer.set_period(period);
+            let period =
+                digital_input_stamper::calculate_timestamp_timer_period();
+            timer.set_period_ticks(period);
 
             timer
         };
@@ -374,7 +357,7 @@ const APP: () = {
                 let spi: hal::spi::Spi<_, _, u16> = dp.SPI2.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
+                    design_parameters::ADC_DAC_SCK_MAX,
                     ccdr.peripheral.SPI2,
                     &ccdr.clocks,
                 );
@@ -412,7 +395,7 @@ const APP: () = {
                 let spi: hal::spi::Spi<_, _, u16> = dp.SPI3.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
+                    design_parameters::ADC_DAC_SCK_MAX,
                     ccdr.peripheral.SPI3,
                     &ccdr.clocks,
                 );
@@ -462,7 +445,7 @@ const APP: () = {
                 dp.SPI4.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
+                    design_parameters::ADC_DAC_SCK_MAX,
                     ccdr.peripheral.SPI4,
                     &ccdr.clocks,
                 )
@@ -494,7 +477,7 @@ const APP: () = {
                 dp.SPI5.spi(
                     (spi_sck, spi_miso, hal::spi::NoMosi),
                     config,
-                    design_parameters::ADC_DAC_SCK_MHZ_MAX.mhz(),
+                    design_parameters::ADC_DAC_SCK_MAX,
                     ccdr.peripheral.SPI5,
                     &ccdr.clocks,
                 )
@@ -564,7 +547,7 @@ const APP: () = {
                     let qspi = hal::qspi::Qspi::bank2(
                         dp.QUADSPI,
                         qspi_pins,
-                        40.mhz(),
+                        design_parameters::POUNDER_QSPI_FREQUENCY,
                         &ccdr.clocks,
                         ccdr.peripheral.QSPI,
                     );
@@ -689,30 +672,27 @@ const APP: () = {
                         ccdr.peripheral.HRTIM,
                     );
 
-                    // IO_Update should be latched for 4 SYNC_CLK cycles after the QSPI profile
-                    // write. With pounder SYNC_CLK running at 125MHz (1/4 of the pounder reference
-                    // clock of 500MHz), this corresponds to 32ns. To accomodate rounding errors, we
-                    // use 50ns instead.
-                    //
-                    // Profile writes are always 16 bytes, with 2 cycles required per byte, coming
-                    // out to a total of 32 QSPI clock cycles. The QSPI is configured for 40MHz, so
-                    // this comes out to an offset of 800nS. We use 900ns to be safe - note that the
-                    // timer is triggered after the QSPI write, which can take approximately 120nS,
-                    // so there is additional margin.
+                    // IO_Update occurs after a fixed delay from the QSPI write. Note that the timer
+                    // is triggered after the QSPI write, which can take approximately 120nS, so
+                    // there is additional margin.
                     hrtimer.configure_single_shot(
                         hrtimer::Channel::Two,
-                        50_e-9,
-                        900_e-9,
+                        design_parameters::POUNDER_IO_UPDATE_DURATION,
+                        design_parameters::POUNDER_IO_UPDATE_DELAY,
                     );
 
                     // Ensure that we have enough time for an IO-update every sample.
-                    let sample_frequency =
-                        (design_parameters::TIMER_FREQUENCY_MHZ as f32
-                            * 1_000_000.0)
-                            / ADC_SAMPLE_TICKS as f32;
+                    let sample_frequency = {
+                        let timer_frequency: hal::time::Hertz =
+                            design_parameters::TIMER_FREQUENCY.into();
+                        timer_frequency.0 as f32 / ADC_SAMPLE_TICKS as f32
+                    };
 
                     let sample_period = 1.0 / sample_frequency;
-                    assert!(sample_period > 900_e-9);
+                    assert!(
+                        sample_period
+                            > design_parameters::POUNDER_IO_UPDATE_DELAY
+                    );
 
                     hrtimer
                 };
@@ -849,9 +829,7 @@ const APP: () = {
             let trigger = gpioa.pa3.into_alternate_af2();
             digital_input_stamper::InputStamper::new(
                 trigger,
-                dma_streams.6,
                 timestamp_timer_channels.ch4,
-                SAMPLE_BUFFER_SIZE,
             )
         };
 
@@ -933,7 +911,7 @@ const APP: () = {
             c.resources.dacs.1.acquire_buffer(),
         ];
 
-        let _timestamps = c.resources.input_stamper.acquire_buffer();
+        let _timestamp = c.resources.input_stamper.latest_timestamp();
 
         for channel in 0..adc_samples.len() {
             for sample in 0..adc_samples[0].len() {
