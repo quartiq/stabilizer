@@ -5,7 +5,7 @@ use core::ops::{Add, Mul, Neg};
 
 pub type Complex<T> = (T, T);
 
-/// Round up half.
+/// Bit shift, round up half.
 ///
 /// # Arguments
 ///
@@ -18,6 +18,25 @@ pub type Complex<T> = (T, T);
 #[inline(always)]
 pub fn shift_round(x: i32, shift: usize) -> i32 {
     (x + (1 << (shift - 1))) >> shift
+}
+
+/// Integer division, round up half.
+///
+/// # Arguments
+///
+/// `dividend` - Value to divide.
+/// `divisor` - Value that divides the dividend.
+///
+/// # Returns
+///
+/// Divided and rounded value.
+#[inline(always)]
+pub fn divide_round(dividend: i64, divisor: i64) -> i64 {
+    debug_assert!(
+        dividend as i128 + (divisor as i128 - 1) < i64::MAX as i128
+            && dividend as i128 + (divisor as i128 - 1) > i64::MIN as i128
+    );
+    (dividend + (divisor - 1)) / divisor
 }
 
 fn abs<T>(x: T) -> T
