@@ -13,6 +13,6 @@ jobs:
       - uses: peter-evans/repository-dispatch@v1
         with:
           token: ${{ secrets.DISPATCH_PAT }}
-          event-type: hitl
+          event-type: stabilizer
           repository: quartiq/hitl
           client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
