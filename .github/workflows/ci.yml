@@ -17,7 +17,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: stable
           target: thumbv7em-none-eabihf
           override: true
           components: rustfmt, clippy
@@ -29,7 +29,6 @@ jobs:
       - uses: actions-rs/clippy-check@v1
         continue-on-error: true
         with:
-          toolchain: stable
           token: ${{ secrets.GITHUB_TOKEN }}
 
   compile:
