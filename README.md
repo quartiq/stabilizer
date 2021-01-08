@@ -1,4 +1,5 @@
 [![QUARTIQ Matrix Chat](https://img.shields.io/matrix/quartiq:matrix.org)](https://matrix.to/#/#quartiq:matrix.org)
+[![HITL (private)](https://github.com/quartiq/hitl/workflows/Stabilizer/badge.svg)](https://github.com/quartiq/hitl/actions?query=workflow%3AStabilizer)
 
 # Stabilizer Firmware
 

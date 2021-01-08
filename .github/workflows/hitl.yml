@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  cd:
+  hitl:
     runs-on: ubuntu-latest
     environment: hitl
     steps:
