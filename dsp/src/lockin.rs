@@ -165,8 +165,9 @@ impl Lockin {
                     frequency = self.last_frequency.unwrap();
                 }
                 None => {
-                    self.batch_index += 1;
-                    if self.batch_index == ADC_BATCHES as u32 {
+                    if self.batch_index < ADC_BATCHES as u32 - 1 {
+                        self.batch_index += 1;
+                    } else {
                         self.batch_index = 0;
                     }
                     return Err("insufficient timestamps");
