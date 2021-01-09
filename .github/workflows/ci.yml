@@ -79,7 +79,7 @@ jobs:
       - uses: actions/upload-artifact@v2
         if: ${{ matrix.toolchain == 'stable' }}
         with:
-          name: stabilizer_${{ github.sha }}
+          name: bin
           path: |
             target/*/release/stabilizer
             stabilizer-release.bin

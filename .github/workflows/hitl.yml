@@ -15,4 +15,4 @@ jobs:
           token: ${{ secrets.DISPATCH_PAT }}
           event-type: stabilizer
           repository: quartiq/hitl
-          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
+          client-payload: '{"github": ${{ toJson(github) }}}'
