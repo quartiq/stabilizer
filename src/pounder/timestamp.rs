@@ -39,7 +39,7 @@ pub struct Timestamper {
     next_buffer: Option<&'static mut [u16; SAMPLE_BUFFER_SIZE]>,
     timer: timers::PounderTimestampTimer,
     transfer: Transfer<
-        hal::dma::dma::Stream7<hal::stm32::DMA1>,
+        hal::dma::dma::Stream0<hal::stm32::DMA2>,
         timers::tim8::Channel1InputCapture,
         PeripheralToMemory,
         &'static mut [u16; SAMPLE_BUFFER_SIZE],
@@ -64,7 +64,7 @@ impl Timestamper {
     /// The new pounder timestamper in an operational state.
     pub fn new(
         mut timestamp_timer: timers::PounderTimestampTimer,
-        stream: hal::dma::dma::Stream7<hal::stm32::DMA1>,
+        stream: hal::dma::dma::Stream0<hal::stm32::DMA2>,
         capture_channel: timers::tim8::Channel1,
         sampling_timer: &mut timers::SamplingTimer,
         _clock_input: hal::gpio::gpioa::PA0<

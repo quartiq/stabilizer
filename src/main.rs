@@ -60,7 +60,7 @@ use heapless::{consts::*, String};
 // The number of ticks in the ADC sampling timer. The timer runs at 100MHz, so the step size is
 // equal to 10ns per tick.
 // Currently, the sample rate is equal to: Fsample = 100/256 MHz = 390.625 KHz
-const ADC_SAMPLE_TICKS: u32 = 256;
+const ADC_SAMPLE_TICKS: u16 = 256;
 
 // The desired ADC sample processing buffer size.
 const SAMPLE_BUFFER_SIZE: usize = 8;
@@ -301,12 +301,44 @@ const APP: () = {
             timer2.set_tick_freq(design_parameters::TIMER_FREQUENCY);
 
             let mut sampling_timer = timers::SamplingTimer::new(timer2);
-            sampling_timer.set_period_ticks(ADC_SAMPLE_TICKS - 1);
+            sampling_timer.set_period_ticks((ADC_SAMPLE_TICKS - 1) as u32);
+
+            // The sampling timer is used as the master timer for the shadow-sampling timer. Thus,
+            // it generates a trigger whenever it is enabled.
 
             sampling_timer
         };
 
+        let mut shadow_sampling_timer = {
+            // The timer frequency is manually adjusted below, so the 1KHz setting here is a
+            // dont-care.
+            let mut timer3 =
+                dp.TIM3.timer(1.khz(), ccdr.peripheral.TIM3, &ccdr.clocks);
+
+            // Configure the timer to count at the designed tick rate. We will manually set the
+            // period below.
+            timer3.pause();
+            timer3.set_tick_freq(design_parameters::TIMER_FREQUENCY);
+
+            let mut shadow_sampling_timer =
+                timers::ShadowSamplingTimer::new(timer3);
+            shadow_sampling_timer.set_period_ticks(ADC_SAMPLE_TICKS - 1);
+
+            // The shadow sampling timer is a slave-mode timer to the sampling timer. It should
+            // always be in-sync - thus, we configure it to operate in slave mode using "Trigger
+            // mode".
+            // For TIM3, TIM2 can be made the internal trigger connection using ITR1. Thus, the
+            // SamplingTimer start now gates the start of the ShadowSamplingTimer.
+            shadow_sampling_timer.set_slave_mode(
+                timers::TriggerSource::Trigger1,
+                timers::SlaveMode::Trigger,
+            );
+
+            shadow_sampling_timer
+        };
+
         let sampling_timer_channels = sampling_timer.channels();
+        let shadow_sampling_timer_channels = shadow_sampling_timer.channels();
 
         let mut timestamp_timer = {
             // The timer frequency is manually adjusted below, so the 1KHz setting here is a
@@ -355,6 +387,7 @@ const APP: () = {
                 })
                 .manage_cs()
                 .suspend_when_inactive()
+                .communication_mode(hal::spi::CommunicationMode::Receiver)
                 .cs_delay(design_parameters::ADC_SETUP_TIME);
 
                 let spi: hal::spi::Spi<_, _, u16> = dp.SPI2.spi(
@@ -369,7 +402,9 @@ const APP: () = {
                     spi,
                     dma_streams.0,
                     dma_streams.1,
+                    dma_streams.2,
                     sampling_timer_channels.ch1,
+                    shadow_sampling_timer_channels.ch1,
                 )
             };
 
@@ -393,6 +428,7 @@ const APP: () = {
                 })
                 .manage_cs()
                 .suspend_when_inactive()
+                .communication_mode(hal::spi::CommunicationMode::Receiver)
                 .cs_delay(design_parameters::ADC_SETUP_TIME);
 
                 let spi: hal::spi::Spi<_, _, u16> = dp.SPI3.spi(
@@ -405,9 +441,11 @@ const APP: () = {
 
                 Adc1Input::new(
                     spi,
-                    dma_streams.2,
                     dma_streams.3,
+                    dma_streams.4,
+                    dma_streams.5,
                     sampling_timer_channels.ch2,
+                    shadow_sampling_timer_channels.ch2,
                 )
             };
 
@@ -488,12 +526,12 @@ const APP: () = {
 
             let dac0 = Dac0Output::new(
                 dac0_spi,
-                dma_streams.4,
+                dma_streams.6,
                 sampling_timer_channels.ch3,
             );
             let dac1 = Dac1Output::new(
                 dac1_spi,
-                dma_streams.5,
+                dma_streams.7,
                 sampling_timer_channels.ch4,
             );
             (dac0, dac1)
@@ -841,6 +879,9 @@ const APP: () = {
 
         #[cfg(feature = "pounder_v1_1")]
         let pounder_stamper = {
+            let dma2_streams =
+                hal::dma::dma::StreamsTuple::new(dp.DMA2, ccdr.peripheral.DMA2);
+
             let etr_pin = gpioa.pa0.into_alternate_af3();
 
             // The frequency in the constructor is dont-care, as we will modify the period + clock
@@ -872,7 +913,7 @@ const APP: () = {
 
             let stamper = pounder::timestamp::Timestamper::new(
                 timestamp_timer,
-                dma_streams.7,
+                dma2_streams.0,
                 tim8_channels.ch1,
                 &mut sampling_timer,
                 etr_pin,
@@ -883,6 +924,10 @@ const APP: () = {
 
         #[cfg(not(feature = "pounder_v1_1"))]
         let pounder_stamper = None;
+
+        // Force an update of the shadow sampling timer configuration and enable it. It will not
+        // start counting until the sampling timer starts due to the slave mode configuration.
+        shadow_sampling_timer.start();
 
         // Start sampling ADCs.
         sampling_timer.start();
