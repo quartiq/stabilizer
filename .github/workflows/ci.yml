@@ -84,6 +84,12 @@ jobs:
             target/*/release/stabilizer
             stabilizer-release.bin
 
+      - name: Build (Pounder v1.1)
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --features pounder_v1_1
+
   test:
     runs-on: ubuntu-latest
     strategy:

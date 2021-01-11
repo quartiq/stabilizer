@@ -45,8 +45,8 @@ macro_rules! dac_output {
             const REQUEST_LINE: Option<u8> = Some(DMAReq::$dma_req as u8);
 
             /// Whenever the DMA request occurs, it should write into SPI's TX FIFO.
-            fn address(&self) -> u32 {
-                &self.spi.inner().txdr as *const _ as u32
+            fn address(&self) -> usize {
+                &self.spi.inner().txdr as *const _ as usize
             }
         }
 
