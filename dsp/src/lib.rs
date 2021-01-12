@@ -25,17 +25,15 @@ pub fn shift_round(x: i32, shift: usize) -> i32 {
 /// # Arguments
 ///
 /// `dividend` - Value to divide.
-/// `divisor` - Value that divides the dividend.
+/// `divisor` - Value that divides the
+/// dividend. `dividend`+`divisor`-1 must be inside [i64::MIN,
+/// i64::MAX].
 ///
 /// # Returns
 ///
 /// Divided and rounded value.
 #[inline(always)]
 pub fn divide_round(dividend: i64, divisor: i64) -> i64 {
-    debug_assert!(
-        dividend as i128 + (divisor as i128 - 1) < i64::MAX as i128
-            && dividend as i128 + (divisor as i128 - 1) > i64::MIN as i128
-    );
     (dividend + (divisor - 1)) / divisor
 }
 
