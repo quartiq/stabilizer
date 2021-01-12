@@ -60,13 +60,33 @@ use heapless::{consts::*, String};
 // The number of ticks in the ADC sampling timer. The timer runs at 100MHz, so the step size is
 // equal to 10ns per tick.
 // Currently, the sample rate is equal to: Fsample = 100/256 MHz = 390.625 KHz
-const ADC_SAMPLE_TICKS: u16 = 256;
+const ADC_SAMPLE_TICKS_LOG2: u16 = 8;
+const ADC_SAMPLE_TICKS: u16 = 1 << ADC_SAMPLE_TICKS_LOG2;
 
 // The desired ADC sample processing buffer size.
-const SAMPLE_BUFFER_SIZE: usize = 8;
+const SAMPLE_BUFFER_SIZE_LOG2: usize = 3;
+const SAMPLE_BUFFER_SIZE: usize = 1 << SAMPLE_BUFFER_SIZE_LOG2;
+
+// The number of ADC batches in one timer overflow period.
+pub const ADC_BATCHES_LOG2: usize =
+    32 - SAMPLE_BUFFER_SIZE_LOG2 - ADC_SAMPLE_TICKS_LOG2 as usize;
+pub const ADC_BATCHES: usize = 1 << ADC_BATCHES_LOG2;
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
+
+// TODO should these be global consts?
+
+// Frequency scaling factor for lock-in harmonic demodulation.
+const HARMONIC: u32 = 1;
+
+// Phase offset applied to the lock-in demodulation signal.
+const PHASE_OFFSET: u32 = 0;
+
+// The PLL locks to an external reference signal. See `PLL::update()`
+// for a description of shift_frequency and shift_phase.
+const PLL_SHIFT_FREQUENCY: u8 = 4;
+const PLL_SHIFT_PHASE: u8 = 3;
 
 #[link_section = ".sram3.eth"]
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
@@ -84,7 +104,11 @@ mod timers;
 
 use adc::{Adc0Input, Adc1Input};
 use dac::{Dac0Output, Dac1Output};
-use dsp::iir;
+use dsp::{
+    divide_round, iir, iir_int,
+    pll::PLL,
+    trig::{atan2, cossin},
+};
 use pounder::DdsOutput;
 
 #[cfg(not(feature = "semihosting"))]
@@ -205,6 +229,12 @@ const APP: () = {
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         input_stamper: digital_input_stamper::InputStamper,
+        pll: PLL,
+        batch_index: u32,
+        reference_phase: i64,
+        reference_frequency: i64,
+        iir_lockin: iir_int::IIR,
+        iir_state_lockin: [iir_int::IIRState; 2],
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
@@ -927,6 +957,13 @@ const APP: () = {
         #[cfg(not(feature = "pounder_v1_1"))]
         let pounder_stamper = None;
 
+        let pll = PLL::default();
+        let batch_index = 0;
+        let reference_phase = 0;
+        let reference_frequency = 0;
+        let iir_lockin = iir_int::IIR { ba: [0; 5] };
+        let iir_state_lockin = [[0; 5]; 2];
+
         // Start sampling ADCs.
         sampling_timer.start();
         timestamp_timer.start();
@@ -942,6 +979,13 @@ const APP: () = {
             pounder: pounder_devices,
             pounder_stamper,
 
+            pll,
+            batch_index,
+            reference_phase,
+            reference_frequency,
+            iir_lockin,
+            iir_state_lockin,
+
             eeprom_i2c,
             net_interface: network_interface,
             eth_mac,
@@ -949,7 +993,7 @@ const APP: () = {
         }
     }
 
-    #[task(binds=DMA1_STR4, resources=[pounder_stamper, adcs, dacs, iir_state, iir_ch, dds_output, input_stamper], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[pounder_stamper, adcs, dacs, iir_state, iir_ch, dds_output, input_stamper, pll, iir_lockin, iir_state_lockin, batch_index, reference_phase, reference_frequency], priority=2)]
     fn process(c: process::Context) {
         if let Some(stamper) = c.resources.pounder_stamper {
             let pounder_timestamps = stamper.acquire_buffer();
@@ -965,23 +1009,70 @@ const APP: () = {
             c.resources.dacs.1.acquire_buffer(),
         ];
 
-        let _timestamp = c.resources.input_stamper.latest_timestamp();
+        let reference_phase = c.resources.reference_phase;
+        let reference_frequency = c.resources.reference_frequency;
 
-        for channel in 0..adc_samples.len() {
-            for sample in 0..adc_samples[0].len() {
-                let x = f32::from(adc_samples[channel][sample] as i16);
-                let mut y = x;
-                for i in 0..c.resources.iir_state[channel].len() {
-                    y = c.resources.iir_ch[channel][i]
-                        .update(&mut c.resources.iir_state[channel][i], y);
-                }
-                // Note(unsafe): The filter limits ensure that the value is in range.
-                // The truncation introduces 1/2 LSB distortion.
-                let y = unsafe { y.to_int_unchecked::<i16>() };
-                // Convert to DAC code
-                dac_samples[channel][sample] = y as u16 ^ 0x8000;
-            }
+        if let Some(t) = c.resources.input_stamper.latest_timestamp() {
+            let res = c.resources.pll.update(
+                t as i32,
+                PLL_SHIFT_FREQUENCY,
+                PLL_SHIFT_PHASE,
+            );
+            *reference_phase = res.0 as u32 as i64;
+            *reference_frequency = res.1 as u32 as i64;
         }
+
+        let demodulation_frequency = divide_round(
+            1 << (64 - SAMPLE_BUFFER_SIZE_LOG2 - ADC_BATCHES_LOG2),
+            *reference_frequency,
+        ) as u32;
+        let batch_index = c.resources.batch_index;
+        let demodulation_initial_phase = divide_round(
+            (((*batch_index as i64) << (32 - ADC_BATCHES_LOG2))
+                - *reference_phase)
+                << 32,
+            *reference_frequency,
+        ) as u32;
+
+        if *batch_index < ADC_BATCHES as u32 - 1 {
+            *batch_index += 1;
+        } else {
+            *batch_index = 0;
+            *reference_phase -= 1 << 32;
+        }
+
+        let [dac0, dac1] = dac_samples;
+        let iir_lockin = c.resources.iir_lockin;
+        let iir_state_lockin = c.resources.iir_state_lockin;
+
+        dac0.iter_mut().zip(dac1.iter_mut()).enumerate().for_each(
+            |(i, (d0, d1))| {
+                let sample_phase = (HARMONIC.wrapping_mul(
+                    (demodulation_frequency.wrapping_mul(i as u32))
+                        .wrapping_add(demodulation_initial_phase),
+                ))
+                .wrapping_add(PHASE_OFFSET);
+                let (cos, sin) = cossin(sample_phase as i32);
+
+                let mut signal = (0_i32, 0_i32);
+
+                signal.0 = ((adc_samples[0][i] as i16 as i64 * cos as i64)
+                    >> 16) as i32;
+                signal.1 = ((adc_samples[0][i] as i16 as i64 * sin as i64)
+                    >> 16) as i32;
+
+                signal.0 =
+                    iir_lockin.update(&mut iir_state_lockin[0], signal.0);
+                signal.1 =
+                    iir_lockin.update(&mut iir_state_lockin[1], signal.0);
+
+                let magnitude = signal.0 * signal.0 + signal.1 * signal.1;
+                let phase = atan2(signal.0, signal.0);
+
+                *d0 = (magnitude >> 16) as i16 as u16;
+                *d1 = (phase >> 16) as i16 as u16;
+            },
+        );
 
         if let Some(dds_output) = c.resources.dds_output {
             let builder = dds_output.builder().update_channels(
@@ -994,7 +1085,6 @@ const APP: () = {
             builder.write_profile();
         }
 
-        let [dac0, dac1] = dac_samples;
         c.resources.dacs.0.release_buffer(dac0);
         c.resources.dacs.1.release_buffer(dac1);
     }
