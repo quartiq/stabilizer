@@ -1,6 +1,6 @@
 ///! Stabilizer ADC management interface
 ///!
-///! The Stabilizer ADCs utilize three DMA channels: one to trigger sampling, one to collect
+///! The Stabilizer ADCs utilize three DMA channels each: one to trigger sampling, one to collect
 ///! samples, and one to clear the EOT flag betwen samples. The SPI interfaces are configured
 ///! for receiver-only operation. A timer channel is
 ///! configured to generate a DMA write into the SPI CR1 register, which initiates a SPI transfer and
