@@ -101,6 +101,7 @@ use dac::{Dac0Output, Dac1Output};
 use dsp::{
     divide_round, iir, iir_int,
     pll::PLL,
+    shift_round, shift_round64,
     trig::{atan2, cossin},
 };
 use pounder::DdsOutput;
@@ -196,7 +197,7 @@ impl TimestampHandler {
         }
     }
 
-    /// Compute the initial phase value and frequency of the demodulation signal.
+    /// Compute the initial phase and frequency of the demodulation signal.
     ///
     /// # Args
     /// * `timestamp` - Counter value corresponding to an external reference edge.
@@ -1087,10 +1088,15 @@ const APP: () = {
 
                 let mut signal = (0_i32, 0_i32);
 
-                signal.0 = ((adc_samples[0][i] as i16 as i64 * cos as i64)
-                    >> 16) as i32;
-                signal.1 = ((adc_samples[0][i] as i16 as i64 * sin as i64)
-                    >> 16) as i32;
+                // TODO should we shift cos/sin first to avoid i64?
+                signal.0 = shift_round64(
+                    adc_samples[0][i] as i16 as i64 * cos as i64,
+                    16,
+                ) as i32;
+                signal.1 = shift_round64(
+                    adc_samples[0][i] as i16 as i64 * sin as i64,
+                    16,
+                ) as i32;
 
                 signal.0 =
                     iir_lockin.update(&mut iir_state_lockin[0], signal.0);
@@ -1100,8 +1106,8 @@ const APP: () = {
                 let magnitude = signal.0 * signal.0 + signal.1 * signal.1;
                 let phase = atan2(signal.1, signal.0);
 
-                *d0 = (magnitude >> 16) as i16 as u16;
-                *d1 = (phase >> 16) as i16 as u16;
+                *d0 = shift_round(magnitude, 16) as i16 as u16;
+                *d1 = shift_round(phase, 16) as i16 as u16;
             },
         );
 
