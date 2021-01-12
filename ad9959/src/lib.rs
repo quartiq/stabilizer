@@ -172,6 +172,17 @@ impl<I: Interface> Ad9959<I> {
 
         // Set the clock frequency to configure the device as necessary.
         ad9959.configure_system_clock(clock_frequency, multiplier)?;
+
+        // Latch the new clock configuration.
+        io_update.set_high().or(Err(Error::Pin))?;
+
+        // Delay for at least 1 SYNC_CLK period for the update to occur. The SYNC_CLK is guaranteed
+        // to be at least 250KHz (1/4 of 1MHz minimum REF_CLK). We use 5uS instead of 4uS to
+        // guarantee conformance with datasheet requirements.
+        delay.delay_us(5);
+
+        io_update.set_low().or(Err(Error::Pin))?;
+
         Ok(ad9959)
     }
 
@@ -195,7 +206,7 @@ impl<I: Interface> Ad9959<I> {
     ///
     /// Returns:
     /// The actual frequency configured for the internal system clock.
-    pub fn configure_system_clock(
+    fn configure_system_clock(
         &mut self,
         reference_clock_frequency: f32,
         multiplier: u8,

@@ -30,6 +30,9 @@ extern crate panic_halt;
 #[macro_use]
 extern crate log;
 
+#[allow(unused_imports)]
+use core::convert::TryInto;
+
 // use core::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 use cortex_m_rt::exception;
 use rtic::cyccnt::{Instant, U32Ext};
@@ -57,10 +60,10 @@ use heapless::{consts::*, String};
 // The number of ticks in the ADC sampling timer. The timer runs at 100MHz, so the step size is
 // equal to 10ns per tick.
 // Currently, the sample rate is equal to: Fsample = 100/256 MHz = 390.625 KHz
-const ADC_SAMPLE_TICKS: u32 = 256;
+const ADC_SAMPLE_TICKS: u16 = 256;
 
 // The desired ADC sample processing buffer size.
-const SAMPLE_BUFFER_SIZE: usize = 1;
+const SAMPLE_BUFFER_SIZE: usize = 8;
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
@@ -220,6 +223,8 @@ const APP: () = {
 
         pounder: Option<pounder::PounderDevices>,
 
+        pounder_stamper: Option<pounder::timestamp::Timestamper>,
+
         // Format: iir_state[ch][cascade-no][coeff]
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
         iir_state: [[iir::IIRState; IIR_CASCADE_LENGTH]; 2],
@@ -293,15 +298,49 @@ const APP: () = {
             // Configure the timer to count at the designed tick rate. We will manually set the
             // period below.
             timer2.pause();
+            timer2.reset_counter();
             timer2.set_tick_freq(design_parameters::TIMER_FREQUENCY);
 
             let mut sampling_timer = timers::SamplingTimer::new(timer2);
-            sampling_timer.set_period_ticks(ADC_SAMPLE_TICKS - 1);
+            sampling_timer.set_period_ticks((ADC_SAMPLE_TICKS - 1) as u32);
+
+            // The sampling timer is used as the master timer for the shadow-sampling timer. Thus,
+            // it generates a trigger whenever it is enabled.
 
             sampling_timer
         };
 
+        let mut shadow_sampling_timer = {
+            // The timer frequency is manually adjusted below, so the 1KHz setting here is a
+            // dont-care.
+            let mut timer3 =
+                dp.TIM3.timer(1.khz(), ccdr.peripheral.TIM3, &ccdr.clocks);
+
+            // Configure the timer to count at the designed tick rate. We will manually set the
+            // period below.
+            timer3.pause();
+            timer3.reset_counter();
+            timer3.set_tick_freq(design_parameters::TIMER_FREQUENCY);
+
+            let mut shadow_sampling_timer =
+                timers::ShadowSamplingTimer::new(timer3);
+            shadow_sampling_timer.set_period_ticks(ADC_SAMPLE_TICKS - 1);
+
+            // The shadow sampling timer is a slave-mode timer to the sampling timer. It should
+            // always be in-sync - thus, we configure it to operate in slave mode using "Trigger
+            // mode".
+            // For TIM3, TIM2 can be made the internal trigger connection using ITR1. Thus, the
+            // SamplingTimer start now gates the start of the ShadowSamplingTimer.
+            shadow_sampling_timer.set_slave_mode(
+                timers::TriggerSource::Trigger1,
+                timers::SlaveMode::Trigger,
+            );
+
+            shadow_sampling_timer
+        };
+
         let sampling_timer_channels = sampling_timer.channels();
+        let shadow_sampling_timer_channels = shadow_sampling_timer.channels();
 
         let mut timestamp_timer = {
             // The timer frequency is manually adjusted below, so the 1KHz setting here is a
@@ -350,6 +389,7 @@ const APP: () = {
                 })
                 .manage_cs()
                 .suspend_when_inactive()
+                .communication_mode(hal::spi::CommunicationMode::Receiver)
                 .cs_delay(design_parameters::ADC_SETUP_TIME);
 
                 let spi: hal::spi::Spi<_, _, u16> = dp.SPI2.spi(
@@ -364,7 +404,9 @@ const APP: () = {
                     spi,
                     dma_streams.0,
                     dma_streams.1,
+                    dma_streams.2,
                     sampling_timer_channels.ch1,
+                    shadow_sampling_timer_channels.ch1,
                 )
             };
 
@@ -388,6 +430,7 @@ const APP: () = {
                 })
                 .manage_cs()
                 .suspend_when_inactive()
+                .communication_mode(hal::spi::CommunicationMode::Receiver)
                 .cs_delay(design_parameters::ADC_SETUP_TIME);
 
                 let spi: hal::spi::Spi<_, _, u16> = dp.SPI3.spi(
@@ -400,9 +443,11 @@ const APP: () = {
 
                 Adc1Input::new(
                     spi,
-                    dma_streams.2,
                     dma_streams.3,
+                    dma_streams.4,
+                    dma_streams.5,
                     sampling_timer_channels.ch2,
+                    shadow_sampling_timer_channels.ch2,
                 )
             };
 
@@ -483,12 +528,12 @@ const APP: () = {
 
             let dac0 = Dac0Output::new(
                 dac0_spi,
-                dma_streams.4,
+                dma_streams.6,
                 sampling_timer_channels.ch3,
             );
             let dac1 = Dac1Output::new(
                 dac1_spi,
-                dma_streams.5,
+                dma_streams.7,
                 sampling_timer_channels.ch4,
             );
             (dac0, dac1)
@@ -509,7 +554,7 @@ const APP: () = {
         delay.delay_ms(2u8);
         let (pounder_devices, dds_output) = if pounder_pgood.is_high().unwrap()
         {
-            let mut ad9959 = {
+            let ad9959 = {
                 let qspi_interface = {
                     // Instantiate the QUADSPI pins and peripheral interface.
                     let qspi_pins = {
@@ -553,8 +598,15 @@ const APP: () = {
                     pounder::QspiInterface::new(qspi).unwrap()
                 };
 
+                #[cfg(feature = "pounder_v1_1")]
+                let reset_pin = gpiog.pg6.into_push_pull_output();
+                #[cfg(not(feature = "pounder_v1_1"))]
                 let reset_pin = gpioa.pa0.into_push_pull_output();
+
                 let mut io_update = gpiog.pg7.into_push_pull_output();
+
+                let ref_clk: hal::time::Hertz =
+                    design_parameters::DDS_REF_CLK.into();
 
                 let ad9959 = ad9959::Ad9959::new(
                     qspi_interface,
@@ -562,8 +614,8 @@ const APP: () = {
                     &mut io_update,
                     &mut delay,
                     ad9959::Mode::FourBitSerial,
-                    100_000_000_f32,
-                    5,
+                    ref_clk.0 as f32,
+                    design_parameters::DDS_MULTIPLIER,
                 )
                 .unwrap();
 
@@ -642,7 +694,6 @@ const APP: () = {
 
             let pounder_devices = pounder::PounderDevices::new(
                 io_expander,
-                &mut ad9959,
                 spi,
                 adc1,
                 adc2,
@@ -828,6 +879,54 @@ const APP: () = {
             )
         };
 
+        #[cfg(feature = "pounder_v1_1")]
+        let pounder_stamper = {
+            let dma2_streams =
+                hal::dma::dma::StreamsTuple::new(dp.DMA2, ccdr.peripheral.DMA2);
+
+            let etr_pin = gpioa.pa0.into_alternate_af3();
+
+            // The frequency in the constructor is dont-care, as we will modify the period + clock
+            // source manually below.
+            let tim8 =
+                dp.TIM8.timer(1.khz(), ccdr.peripheral.TIM8, &ccdr.clocks);
+            let mut timestamp_timer = timers::PounderTimestampTimer::new(tim8);
+
+            // Pounder is configured to generate a 500MHz reference clock, so a 125MHz sync-clock is
+            // output. As a result, dividing the 125MHz sync-clk provides a 31.25MHz tick rate for
+            // the timestamp timer. 31.25MHz corresponds with a 32ns tick rate.
+            timestamp_timer.set_external_clock(timers::Prescaler::Div4);
+            timestamp_timer.start();
+
+            // We want the pounder timestamp timer to overflow once per batch.
+            let tick_ratio = {
+                let sync_clk_mhz: f32 = design_parameters::DDS_SYSTEM_CLK.0
+                    as f32
+                    / design_parameters::DDS_SYNC_CLK_DIV as f32;
+                sync_clk_mhz / design_parameters::TIMER_FREQUENCY.0 as f32
+            };
+
+            let period = (tick_ratio
+                * ADC_SAMPLE_TICKS as f32
+                * SAMPLE_BUFFER_SIZE as f32) as u32
+                / 4;
+            timestamp_timer.set_period_ticks((period - 1).try_into().unwrap());
+            let tim8_channels = timestamp_timer.channels();
+
+            let stamper = pounder::timestamp::Timestamper::new(
+                timestamp_timer,
+                dma2_streams.0,
+                tim8_channels.ch1,
+                &mut sampling_timer,
+                etr_pin,
+            );
+
+            Some(stamper)
+        };
+
+        #[cfg(not(feature = "pounder_v1_1"))]
+        let pounder_stamper = None;
+
         // Start sampling ADCs.
         sampling_timer.start();
         timestamp_timer.start();
@@ -841,6 +940,7 @@ const APP: () = {
             input_stamper,
             dds_output,
             pounder: pounder_devices,
+            pounder_stamper,
 
             eeprom_i2c,
             net_interface: network_interface,
@@ -865,8 +965,13 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR3, resources=[adcs, dacs, iir_state, iir_ch, dds_output, input_stamper], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[pounder_stamper, adcs, dacs, iir_state, iir_ch, dds_output, input_stamper], priority=2)]
     fn process(c: process::Context) {
+        if let Some(stamper) = c.resources.pounder_stamper {
+            let pounder_timestamps = stamper.acquire_buffer();
+            info!("{:?}", pounder_timestamps);
+        }
+
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
             c.resources.adcs.1.acquire_buffer(),
