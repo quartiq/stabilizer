@@ -98,6 +98,9 @@ macro_rules! timer_channels {
                 pub fn set_period_ticks(&mut self, period: $size) {
                     let regs = unsafe { &*hal::stm32::$TY::ptr() };
                     regs.arr.write(|w| w.arr().bits(period));
+
+                    // Force the new period to take effect immediately.
+                    self.timer.apply_freq();
                 }
 
                 /// Clock the timer from an external source.

@@ -298,6 +298,7 @@ const APP: () = {
             // Configure the timer to count at the designed tick rate. We will manually set the
             // period below.
             timer2.pause();
+            timer2.reset_counter();
             timer2.set_tick_freq(design_parameters::TIMER_FREQUENCY);
 
             let mut sampling_timer = timers::SamplingTimer::new(timer2);
@@ -318,6 +319,7 @@ const APP: () = {
             // Configure the timer to count at the designed tick rate. We will manually set the
             // period below.
             timer3.pause();
+            timer3.reset_counter();
             timer3.set_tick_freq(design_parameters::TIMER_FREQUENCY);
 
             let mut shadow_sampling_timer =
@@ -925,10 +927,6 @@ const APP: () = {
         #[cfg(not(feature = "pounder_v1_1"))]
         let pounder_stamper = None;
 
-        // Force an update of the shadow sampling timer configuration and enable it. It will not
-        // start counting until the sampling timer starts due to the slave mode configuration.
-        shadow_sampling_timer.start();
-
         // Start sampling ADCs.
         sampling_timer.start();
         timestamp_timer.start();
@@ -951,7 +949,7 @@ const APP: () = {
         }
     }
 
-    #[task(binds=DMA1_STR3, resources=[pounder_stamper, adcs, dacs, iir_state, iir_ch, dds_output, input_stamper], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[pounder_stamper, adcs, dacs, iir_state, iir_ch, dds_output, input_stamper], priority=2)]
     fn process(c: process::Context) {
         if let Some(stamper) = c.resources.pounder_stamper {
             let pounder_timestamps = stamper.acquire_buffer();
