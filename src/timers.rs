@@ -39,6 +39,12 @@ pub enum Prescaler {
     Div8 = 0b11,
 }
 
+/// Optional slave operation modes of a timer.
+pub enum SlaveMode {
+    Disabled = 0,
+    Trigger = 0b0110,
+}
+
 macro_rules! timer_channels {
     ($name:ident, $TY:ident, $size:ty) => {
         paste::paste! {
@@ -92,6 +98,9 @@ macro_rules! timer_channels {
                 pub fn set_period_ticks(&mut self, period: $size) {
                     let regs = unsafe { &*hal::stm32::$TY::ptr() };
                     regs.arr.write(|w| w.arr().bits(period));
+
+                    // Force the new period to take effect immediately.
+                    self.timer.apply_freq();
                 }
 
                 /// Clock the timer from an external source.
@@ -138,6 +147,14 @@ macro_rules! timer_channels {
                     // Note(unsafe) The TriggerSource enumeration is specified such that this is
                     // always in range.
                     regs.smcr.modify(|_, w| unsafe { w.ts().bits(source as u8) } );
+                }
+
+                #[allow(dead_code)]
+                pub fn set_slave_mode(&mut self, source: TriggerSource, mode: SlaveMode) {
+                    let regs = unsafe { &*hal::stm32::$TY::ptr() };
+                    // Note(unsafe) The TriggerSource and SlaveMode enumerations are specified such
+                    // that they are always in range.
+                    regs.smcr.modify(|_, w| unsafe { w.sms().bits(mode as u8).ts().bits(source as u8) } );
                 }
             }
 
@@ -333,5 +350,7 @@ macro_rules! timer_channels {
 }
 
 timer_channels!(SamplingTimer, TIM2, u32);
+timer_channels!(ShadowSamplingTimer, TIM3, u16);
+
 timer_channels!(TimestampTimer, TIM5, u32);
 timer_channels!(PounderTimestampTimer, TIM8, u16);
