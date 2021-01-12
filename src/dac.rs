@@ -187,7 +187,6 @@ macro_rules! dac_output {
                 let next_buffer = self.next_buffer.take().unwrap();
 
                 // Start the next transfer.
-                self.transfer.clear_interrupts();
                 let (prev_buffer, _, _) =
                     self.transfer.next_transfer(next_buffer).unwrap();
 
