@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use serde_json_core::{de::from_slice, ser::to_string};
 
+use super::iir;
 use super::net;
-use super::IIR;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub enum AccessRequest {
@@ -25,7 +25,7 @@ pub struct Request<'a> {
 #[derive(Serialize, Deserialize)]
 pub struct IirRequest {
     pub channel: u8,
-    pub iir: IIR,
+    pub iir: iir::IIR,
 }
 
 #[derive(Serialize)]
@@ -137,10 +137,10 @@ impl Response {
 #[derive(Serialize)]
 pub struct Status {
     pub t: u32,
-    pub x0: i32,
-    pub y0: i32,
-    pub x1: i32,
-    pub y1: i32,
+    pub x0: f32,
+    pub y0: f32,
+    pub x1: f32,
+    pub y1: f32,
 }
 
 pub fn json_reply<T: Serialize>(socket: &mut net::socket::TcpSocket, msg: &T) {
