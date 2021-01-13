@@ -117,6 +117,7 @@ where
 pub mod iir;
 pub mod iir_int;
 pub mod pll;
+pub mod reciprocal_pll;
 pub mod trig;
 pub mod unwrap;
 
