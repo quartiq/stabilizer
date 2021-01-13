@@ -68,7 +68,6 @@ const SAMPLE_BUFFER_SIZE_LOG2: usize = 3;
 const SAMPLE_BUFFER_SIZE: usize = 1 << SAMPLE_BUFFER_SIZE_LOG2;
 
 // The number of ADC batches in one timer overflow period.
-// TODO almost the same as `calculate_timestamp_timer_period`.
 pub const ADC_BATCHES_LOG2: usize =
     32 - SAMPLE_BUFFER_SIZE_LOG2 - ADC_SAMPLE_TICKS_LOG2 as usize;
 pub const ADC_BATCHES: usize = 1 << ADC_BATCHES_LOG2;
