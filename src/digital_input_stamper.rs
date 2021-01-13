@@ -26,13 +26,13 @@
 ///! timestamping is desired in DI1, a separate timer + capture channel will be necessary.
 use super::{hal, timers, ADC_SAMPLE_TICKS, SAMPLE_BUFFER_SIZE};
 
-/// Calculate the period of the digital input timestampe timer.
+/// Calculate the period of the digital input timestamp timer.
 ///
 /// # Note
 /// The period returned will be 1 less than the required period in timer ticks. The value returned
 /// can be immediately programmed into a hardware timer period register.
 ///
-/// The period is calcualted to be some power-of-two multiple of the batch size, such that N batches
+/// The period is calculated to be some power-of-two multiple of the batch size, such that N batches
 /// will occur between each timestamp timer overflow.
 ///
 /// # Returns
