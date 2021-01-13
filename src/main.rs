@@ -75,7 +75,6 @@ pub const ADC_BATCHES: usize = 1 << ADC_BATCHES_LOG2;
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
 
-// TODO should these be global consts?
 // Frequency scaling factor for lock-in harmonic demodulation.
 const HARMONIC: u32 = 1;
 // Phase offset applied to the lock-in demodulation signal.
@@ -98,7 +97,8 @@ mod timers;
 use adc::{Adc0Input, Adc1Input};
 use dac::{Dac0Output, Dac1Output};
 use dsp::{
-    divide_round, iir, iir_int,
+    divide_round,
+    iir_int::{IIRState, IIR},
     pll::PLL,
     shift_round,
     trig::{atan2, cossin},
@@ -146,8 +146,6 @@ static mut NET_STORE: NetStorage = NetStorage {
     routes_storage: [None; 1],
 };
 
-const SCALE: f32 = ((1 << 15) - 1) as f32;
-
 // static ETHERNET_PENDING: AtomicBool = AtomicBool::new(true);
 
 const TCP_RX_BUFFER_SIZE: usize = 8192;
@@ -163,8 +161,8 @@ type AFE1 = afe::ProgrammableGainAmplifier<
     hal::gpio::gpiod::PD15<hal::gpio::Output<hal::gpio::PushPull>>,
 >;
 
-/// Locks a PLL to an external reference and computes the initial phase value and frequency of the
-/// demodulation signal.
+/// Processes external timestamps to produce the frequency and initial phase of the demodulation
+/// signal.
 pub struct TimestampHandler {
     pll: PLL,
     pll_shift_frequency: u8,
@@ -297,8 +295,8 @@ const APP: () = {
         dacs: (Dac0Output, Dac1Output),
         input_stamper: digital_input_stamper::InputStamper,
         timestamp_handler: TimestampHandler,
-        iir_lockin: iir_int::IIR,
-        iir_state_lockin: [iir_int::IIRState; 2],
+        iir_lockin: IIR,
+        iir_state_lockin: [IIRState; 2],
 
         eeprom_i2c: hal::i2c::I2c<hal::stm32::I2C2>,
 
@@ -320,10 +318,10 @@ const APP: () = {
         pounder_stamper: Option<pounder::timestamp::Timestamper>,
 
         // Format: iir_state[ch][cascade-no][coeff]
-        #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
-        iir_state: [[iir::IIRState; IIR_CASCADE_LENGTH]; 2],
-        #[init([[iir::IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; IIR_CASCADE_LENGTH]; 2])]
-        iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+        #[init([[[0; 5]; IIR_CASCADE_LENGTH]; 2])]
+        iir_state: [[IIRState; IIR_CASCADE_LENGTH]; 2],
+        #[init([[IIR { ba: [1, 0, 0, 0, 0] }; IIR_CASCADE_LENGTH]; 2])]
+        iir_ch: [[IIR; IIR_CASCADE_LENGTH]; 2],
     }
 
     #[init]
@@ -1022,7 +1020,7 @@ const APP: () = {
         let pounder_stamper = None;
 
         let timestamp_handler = TimestampHandler::new(4, 3);
-        let iir_lockin = iir_int::IIR { ba: [0; 5] };
+        let iir_lockin = IIR { ba: [1, 0, 0, 0, 0] };
         let iir_state_lockin = [[0; 5]; 2];
 
         // Start sampling ADCs.
@@ -1075,6 +1073,8 @@ const APP: () = {
         let [dac0, dac1] = dac_samples;
         let iir_lockin = c.resources.iir_lockin;
         let iir_state_lockin = c.resources.iir_state_lockin;
+        let iir_ch = c.resources.iir_ch;
+        let iir_state = c.resources.iir_state;
 
         dac0.iter_mut().zip(dac1.iter_mut()).enumerate().for_each(
             |(i, (d0, d1))| {
@@ -1098,8 +1098,14 @@ const APP: () = {
                 signal.1 =
                     iir_lockin.update(&mut iir_state_lockin[1], signal.1);
 
-                let magnitude = signal.0 * signal.0 + signal.1 * signal.1;
-                let phase = atan2(signal.1, signal.0);
+                let mut magnitude = signal.0 * signal.0 + signal.1 * signal.1;
+                let mut phase = atan2(signal.1, signal.0);
+
+                for j in 0..iir_state[0].len() {
+                    magnitude =
+                        iir_ch[0][j].update(&mut iir_state[0][j], magnitude);
+                    phase = iir_ch[1][j].update(&mut iir_state[1][j], phase);
+                }
 
                 *d0 = shift_round(magnitude, 16) as i16 as u16;
                 *d1 = shift_round(phase, 16) as i16 as u16;
