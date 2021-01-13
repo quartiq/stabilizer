@@ -1020,7 +1020,9 @@ const APP: () = {
         let pounder_stamper = None;
 
         let timestamp_handler = TimestampHandler::new(4, 3);
-        let iir_lockin = IIR { ba: [1, 0, 0, 0, 0] };
+        let iir_lockin = IIR {
+            ba: [1, 0, 0, 0, 0],
+        };
         let iir_state_lockin = [[0; 5]; 2];
 
         // Start sampling ADCs.
