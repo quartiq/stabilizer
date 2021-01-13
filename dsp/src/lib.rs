@@ -20,12 +20,6 @@ pub fn shift_round(x: i32, shift: usize) -> i32 {
     (x + (1 << (shift - 1))) >> shift
 }
 
-/// TODO consolidate with `shift_round`.
-#[inline(always)]
-pub fn shift_round64(x: i64, shift: usize) -> i64 {
-    (x + (1 << (shift - 1))) >> shift
-}
-
 /// Integer division, round up half.
 ///
 /// # Arguments
