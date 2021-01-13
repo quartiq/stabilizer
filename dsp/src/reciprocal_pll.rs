@@ -78,7 +78,7 @@ impl TimestampHandler {
         if self.batch_index
             < (1 << (32
                 - self.adc_sample_ticks_log2
-                - self.sample_buffer_size_log2)) as u32
+                - self.sample_buffer_size_log2))
                 - 1
         {
             self.batch_index += 1;
