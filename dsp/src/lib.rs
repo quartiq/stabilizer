@@ -17,7 +17,7 @@ pub type Complex<T> = (T, T);
 /// Shifted and rounded value.
 #[inline(always)]
 pub fn shift_round(x: i32, shift: usize) -> i32 {
-    (x + (1 << (shift - 1))) >> shift
+    x.saturating_add(1 << (shift - 1)) >> shift
 }
 
 /// Integer division, round up half.
