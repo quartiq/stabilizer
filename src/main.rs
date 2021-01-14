@@ -1019,9 +1019,9 @@ const APP: () = {
 
                 // shift cos/sin before multiplying to avoid i64 multiplication
                 signal.0 =
-                    adc_samples[0][i] as i16 as i32 * shift_round(cos, 16);
-                signal.1 =
                     adc_samples[0][i] as i16 as i32 * shift_round(sin, 16);
+                signal.1 =
+                    adc_samples[0][i] as i16 as i32 * shift_round(cos, 16);
 
                 signal.0 =
                     iir_lockin.update(&mut iir_state_lockin[0], signal.0);
