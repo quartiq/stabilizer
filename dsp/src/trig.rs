@@ -153,7 +153,7 @@ pub fn cossin(phase: i32) -> Complex<i32> {
         sin *= -1;
     }
 
-    (cos, sin)
+    Complex(cos, sin)
 }
 
 #[cfg(test)]
@@ -210,13 +210,13 @@ mod tests {
     #[test]
     fn cossin_error_max_rms_all_phase() {
         // Constant amplitude error due to LUT data range.
-        const AMPLITUDE: f64 = ((1i64 << 31) - (1i64 << 15)) as f64;
-        const MAX_PHASE: f64 = (1i64 << 32) as f64;
-        let mut rms_err: Complex<f64> = (0., 0.);
-        let mut sum_err: Complex<f64> = (0., 0.);
-        let mut max_err: Complex<f64> = (0., 0.);
-        let mut sum: Complex<f64> = (0., 0.);
-        let mut demod: Complex<f64> = (0., 0.);
+        const AMPLITUDE: f64 = ((1i64 << 31) - (1i64 << 15)) as _;
+        const MAX_PHASE: f64 = (1i64 << 32) as _;
+        let mut rms_err = Complex(0., 0.);
+        let mut sum_err = Complex(0., 0.);
+        let mut max_err = Complex(0f64, 0.);
+        let mut sum = Complex(0., 0.);
+        let mut demod = Complex(0., 0.);
 
         // use std::{fs::File, io::{BufWriter, prelude::*}, path::Path};
         // let mut file = BufWriter::new(File::create(Path::new("data.bin")).unwrap());

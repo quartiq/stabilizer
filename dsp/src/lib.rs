@@ -2,8 +2,10 @@
 #![cfg_attr(feature = "nightly", feature(asm, core_intrinsics))]
 
 use core::ops::{Add, Mul, Neg};
+use serde::{Deserialize, Serialize};
 
-pub type Complex<T> = (T, T);
+#[derive(Copy, Clone, Default, Deserialize, Serialize)]
+pub struct Complex<T>(pub T, pub T);
 
 /// Bit shift, round up half.
 ///
@@ -17,7 +19,7 @@ pub type Complex<T> = (T, T);
 /// Shifted and rounded value.
 #[inline(always)]
 pub fn shift_round(x: i32, shift: usize) -> i32 {
-    x.saturating_add(1 << (shift - 1)) >> shift
+    (x + (1 << (shift - 1))) >> shift
 }
 
 /// Integer division, round up half.
@@ -122,4 +124,4 @@ pub mod trig;
 pub mod unwrap;
 
 #[cfg(test)]
-mod testing;
+pub mod testing;

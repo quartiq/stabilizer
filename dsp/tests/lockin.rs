@@ -1,7 +1,6 @@
 use dsp::{
     iir_int::{IIRState, IIR},
     reciprocal_pll::TimestampHandler,
-    shift_round,
     trig::{atan2, cossin},
     Complex,
 };
@@ -9,191 +8,113 @@ use dsp::{
 use std::f64::consts::PI;
 use std::vec::Vec;
 
-const ADC_MAX: f64 = 1.;
+// TODO: -> dsp/src/testing.rs
+/// Maximum acceptable error between a computed and actual value given fixed and relative
+/// tolerances.
+///
+/// # Args
+/// * `a` - First input.
+/// * `b` - Second input. The relative tolerance is computed with respect to the maximum of the
+/// absolute values of the first and second inputs.
+/// * `rtol` - Relative tolerance.
+/// * `atol` - Fixed tolerance.
+///
+/// # Returns
+/// Maximum acceptable error.
+pub fn max_error(a: f64, b: f64, rtol: f64, atol: f64) -> f64 {
+    rtol * a.abs().max(b.abs()) + atol
+}
+
+pub fn isclose(a: f64, b: f64, rtol: f64, atol: f64) -> bool {
+    (a - b).abs() <= a.abs().max(b.abs()) * rtol + atol
+}
+
 const ADC_MAX_COUNT: f64 = (1 << 15) as f64;
 
 struct Lockin {
     harmonic: u32,
-    phase_offset: u32,
+    phase: u32,
     iir: IIR,
     iir_state: [IIRState; 2],
 }
 
 impl Lockin {
-    /// Construct a new `Lockin` instance.
-    ///
-    /// # Args
-    /// * `harmonic` - Factor for harmonic demodulation. For example, a value of 1 would demodulate
-    /// with the reference frequency whereas a value of 2 would demodulate with the first harmonic
-    /// of the reference frequency.
-    /// * `phase_offset` - Phase offset of the scaled (see `harmonic`) demodulation signal relative
-    /// to the reference signal.
-    /// * `iir` - IIR coefficients (see `iir_int::IIR`) used for filtering the demodulated in-phase
-    /// and quadrature signals.
-    pub fn new(harmonic: u32, phase_offset: u32, iir: IIR) -> Self {
+    pub fn new(harmonic: u32, phase: u32, iir: IIR) -> Self {
         Lockin {
             harmonic,
-            phase_offset,
+            phase,
             iir,
-            iir_state: [[0; 5]; 2],
+            iir_state: [IIRState::default(); 2],
         }
     }
 
-    /// Compute the in-phase and quadrature signals. This is intended to mimic the lock-in
-    /// processing routine invoked in main.rs.
-    ///
-    /// # Args
-    /// * `adc_samples` - ADC samples.
-    /// * `demodulation_initial_phase` - Phase value of the demodulation signal corresponding to the
-    /// first ADC sample.
-    /// * `demodulation_frequency` - Demodulation frequency.
     pub fn update(
         &mut self,
-        adc_samples: Vec<i16>,
-        demodulation_initial_phase: u32,
-        demodulation_frequency: u32,
+        input: Vec<i16>,
+        phase: u32,
+        frequency: u32,
     ) -> Complex<i32> {
-        let mut signal = Vec::<Complex<i32>>::new();
+        let frequency = frequency.wrapping_mul(self.harmonic);
+        let mut phase =
+            self.phase.wrapping_add(phase.wrapping_mul(self.harmonic));
+        let mut last = Complex::default();
 
-        adc_samples.iter().enumerate().for_each(|(i, s)| {
-            let sample_phase = self
-                .harmonic
-                .wrapping_mul(
-                    (demodulation_frequency.wrapping_mul(i as u32))
-                        .wrapping_add(demodulation_initial_phase),
-                )
-                .wrapping_add(self.phase_offset);
-            let (cos, sin) = cossin(sample_phase as i32);
+        for s in input.iter() {
+            let m = cossin(-(phase as i32));
+            phase = phase.wrapping_add(frequency);
 
-            signal.push((
-                *s as i32 * shift_round(sin, 16),
-                *s as i32 * shift_round(cos, 16),
-            ));
-
-            signal[i].0 = self.iir.update(&mut self.iir_state[0], signal[i].0);
-            signal[i].1 = self.iir.update(&mut self.iir_state[1], signal[i].1);
-        });
-
-        (signal[0].0, signal[0].1)
+            last = Complex(
+                self.iir.update(
+                    &mut self.iir_state[0],
+                    ((*s as i64 * m.0 as i64) >> 16) as i32,
+                ),
+                self.iir.update(
+                    &mut self.iir_state[1],
+                    ((*s as i64 * m.1 as i64) >> 16) as i32,
+                ),
+            );
+        }
+        last
     }
 }
 
 /// Single-frequency sinusoid.
 #[derive(Copy, Clone)]
-struct PureSine {
+struct Tone {
     // Frequency (in Hz).
     frequency: f64,
-    // Amplitude in dBFS (decibels relative to full-scale). A 16-bit ADC has a minimum dBFS for each
-    // sample of -90.
-    amplitude_dbfs: f64,
     // Phase offset (in radians).
-    phase_offset: f64,
+    phase: f64,
+    // Amplitude in dBFS (decibels relative to full-scale).
+    // A 16-bit ADC has a minimum dBFS for each sample of -90.
+    amplitude_dbfs: f64,
 }
 
-/// Convert a dBFS voltage ratio to a linear ratio.
-///
-/// # Args
-/// * `dbfs` - dB ratio relative to full scale.
-///
-/// # Returns
-/// Linear value.
+/// Convert dBFS to a linear ratio.
 fn linear(dbfs: f64) -> f64 {
-    let base = 10_f64;
-    ADC_MAX * base.powf(dbfs / 20.)
+    10f64.powf(dbfs / 20.)
 }
 
-/// Convert a linear voltage ratio to a dBFS ratio.
-///
-/// # Args
-/// * `linear` - Linear voltage ratio.
-///
-/// # Returns
-/// dBFS value.
-fn dbfs(linear: f64) -> f64 {
-    20. * (linear / ADC_MAX).log10()
-}
-
-/// Convert a real ADC input value in the range `-ADC_MAX` to `+ADC_MAX` to an equivalent 16-bit ADC
-/// sampled value. This models the ideal ADC transfer function.
-///
-/// # Args
-/// * `x` - Real ADC input value.
-///
-/// # Returns
-/// Sampled ADC value.
-fn real_to_adc_sample(x: f64) -> i16 {
-    let max: i32 = i16::MAX as i32;
-    let min: i32 = i16::MIN as i32;
-
-    let xi: i32 = (x / ADC_MAX * ADC_MAX_COUNT) as i32;
-
-    // It's difficult to characterize the correct output result when the inputs are clipped, so
-    // panic instead.
-    if xi > max {
-        panic!("Input clipped to maximum, result is unlikely to be correct.");
-    } else if xi < min {
-        panic!("Input clipped to minimum, result is unlikely to be correct.");
-    }
-
-    xi as i16
-}
-
-/// Generate a full batch of ADC samples starting at `timestamp_start`.
-///
-/// # Args
-/// * `pure_signals` - Pure sinusoidal components of the ADC-sampled signal.
-/// * `timestamp_start` - Starting time of ADC-sampled signal in terms of the internal clock count.
-/// * `internal_frequency` - Internal clock frequency (in Hz).
-/// * `adc_frequency` - ADC sampling frequency (in Hz).
-/// * `sample_buffer_size` - The number of ADC samples in one processing batch.
-///
-/// # Returns
-/// The sampled signal at the ADC input.
+/// Generate a full batch of samples starting at `time_offset`.
 fn adc_sampled_signal(
-    pure_signals: &Vec<PureSine>,
-    timestamp_start: u64,
-    internal_frequency: f64,
-    adc_frequency: f64,
+    tones: &Vec<Tone>,
+    time_offset: f64,
+    sampling_frequency: f64,
     sample_buffer_size: u32,
 ) -> Vec<i16> {
-    // amplitude of each pure signal
-    let mut amplitude: Vec<f64> = Vec::<f64>::new();
-    // initial phase value for each pure signal
-    let mut initial_phase: Vec<f64> = Vec::<f64>::new();
-    // phase increment at each ADC sample for each pure signal
-    let mut phase_increment: Vec<f64> = Vec::<f64>::new();
-    let adc_period = internal_frequency / adc_frequency;
-
-    // For each pure sinusoid, compute the amplitude, phase corresponding to the first ADC sample,
-    // and phase increment for each subsequent ADC sample.
-    for pure_signal in pure_signals.iter() {
-        let signal_period = internal_frequency / pure_signal.frequency;
-        let phase_offset_count =
-            pure_signal.phase_offset / (2. * PI) * signal_period;
-        let initial_phase_count =
-            (phase_offset_count + timestamp_start as f64) % signal_period;
-
-        amplitude.push(linear(pure_signal.amplitude_dbfs));
-        initial_phase.push(2. * PI * initial_phase_count / signal_period);
-        phase_increment.push(2. * PI * adc_period / signal_period);
-    }
-
-    // Compute the input signal corresponding to each ADC sample by summing the contributions from
-    // each pure sinusoid.
     let mut signal = Vec::<i16>::new();
 
     for i in 0..sample_buffer_size {
-        signal.push(real_to_adc_sample(
-            amplitude
-                .iter()
-                .zip(initial_phase.iter())
-                .zip(phase_increment.iter())
-                .fold(0., |acc, ((a, phi), theta)| {
-                    acc + a * (phi + theta * i as f64).sin()
-                }),
-        ));
+        let time = 2. * PI * (time_offset + i as f64 / sampling_frequency);
+        let x: f64 = tones
+            .iter()
+            .map(|&t| {
+                linear(t.amplitude_dbfs) * (t.phase + t.frequency * time).cos()
+            })
+            .sum();
+        assert!(-1. < x && x < 1.);
+        signal.push((x * ADC_MAX_COUNT) as i16);
     }
-
     signal
 }
 
@@ -235,76 +156,36 @@ fn adc_batch_timestamps(
 /// https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
 ///
 /// # Args
-/// * `corner_frequency` - Corner frequency, or 3dB cutoff frequency (in Hz).
-/// * `sampling_frequency` - Sampling frequency (in Hz).
+/// * `fc` - Corner frequency, or 3dB cutoff frequency (in Hz).
+/// * `q` - Quality factor (1/sqrt(2) for critical).
+/// * `k` - DC gain.
 ///
 /// # Returns
 /// 2nd-order IIR filter coefficients in the form [b0,b1,b2,a1,a2]. a0 is set to -1.
-fn lowpass_iir_coefficients(
-    corner_frequency: f64,
-    sampling_frequency: f64,
-) -> [i32; 5] {
-    let normalized_angular_frequency: f64 =
-        2. * PI * corner_frequency / sampling_frequency;
-    let quality_factor: f64 = 1. / 2f64.sqrt();
-    let alpha: f64 = normalized_angular_frequency.sin() / (2. * quality_factor);
-    // All b coefficients have been multiplied by a factor of 2 in comparison with the link above in
-    // order to set the passband gain to 2.
-    let mut b0: f64 = 1. - normalized_angular_frequency.cos();
-    let mut b1: f64 = 2. * (1. - normalized_angular_frequency.cos());
-    let mut b2: f64 = b0;
-    let a0: f64 = 1. + alpha;
-    let mut a1: f64 = -2. * normalized_angular_frequency.cos();
-    let mut a2: f64 = 1. - alpha;
-    b0 /= a0;
-    b1 /= a0;
-    b2 /= a0;
-    a1 /= -a0;
-    a2 /= -a0;
+fn lowpass_iir_coefficients(fc: f64, q: f64, k: f64) -> IIRState {
+    let f = 2. * PI * fc;
+    let a = f.sin() / (2. * q);
+    // IIR uses Q2.30 fixed point
+    let a0 = (1. + a) / (1 << IIR::SHIFT) as f64;
+    let b0 = (k / 2. * (1. - f.cos()) / a0).round() as _;
+    let a1 = (2. * f.cos() / a0).round() as _;
+    let a2 = ((a - 1.) / a0).round() as _;
 
-    // iir uses Q2.30 fixed point
-    [
-        (b0 * (1 << 30) as f64).round() as i32,
-        (b1 * (1 << 30) as f64).round() as i32,
-        (b2 * (1 << 30) as f64).round() as i32,
-        (a1 * (1 << 30) as f64).round() as i32,
-        (a2 * (1 << 30) as f64).round() as i32,
-    ]
-}
-
-/// Maximum acceptable error between a computed and actual value given fixed and relative
-/// tolerances.
-///
-/// # Args
-/// * `a` - First input.
-/// * `b` - Second input. The relative tolerance is computed with respect to the maximum of the
-/// absolute values of the first and second inputs.
-/// * `rtol` - Relative tolerance.
-/// * `atol` - Fixed tolerance.
-///
-/// # Returns
-/// Maximum acceptable error.
-fn max_error(a: f64, b: f64, rtol: f64, atol: f64) -> f64 {
-    rtol * a.abs().max(b.abs()) + atol
-}
-
-// TODO this is (mostly) copied from testing.rs.
-pub fn isclose(a: f64, b: f64, rtol: f64, atol: f64) -> bool {
-    (a - b).abs() <= max_error(a, b, rtol, atol)
+    IIRState([b0, 2 * b0, b0, a1, a2])
 }
 
 /// Total noise amplitude of the input signal after sampling by the ADC. This computes an upper
 /// bound of the total noise amplitude, rather than its actual value.
 ///
 /// # Args
-/// * `noise_inputs` - Noise sources at the ADC input.
+/// * `tones` - Noise sources at the ADC input.
 /// * `demodulation_frequency` - Frequency of the demodulation signal (in Hz).
 /// * `corner_frequency` - Low-pass filter 3dB corner (cutoff) frequency.
 ///
 /// # Returns
 /// Upper bound of the total amplitude of all noise sources.
 fn sampled_noise_amplitude(
-    noise_inputs: &Vec<PureSine>,
+    tones: &Vec<Tone>,
     demodulation_frequency: f64,
     corner_frequency: f64,
 ) -> f64 {
@@ -315,7 +196,7 @@ fn sampled_noise_amplitude(
     // amplitudes of the individual noise sources. We treat this as an upper bound, and use it as an
     // approximation of the actual amplitude.
 
-    let mut noise: f64 = noise_inputs
+    let mut noise: f64 = tones
         .iter()
         .map(|n| {
             // Noise inputs create an oscillation at the output, where the oscillation magnitude is
@@ -325,7 +206,7 @@ fn sampled_noise_amplitude(
                 / corner_frequency)
                 .log2();
             // 2nd-order filter. Approximately 12dB/octave rolloff.
-            let attenuation = -2. * 20. * 2_f64.log10() * octaves;
+            let attenuation = -2. * 20. * 2f64.log10() * octaves;
             linear(n.amplitude_dbfs + attenuation)
         })
         .sum();
@@ -498,8 +379,8 @@ fn phase_noise(
 /// * `pll_shift_frequency` - See `pll::update()`.
 /// * `pll_shift_phase` - See `pll::update()`.
 /// * `corner_frequency` - Lowpass filter 3dB cutoff frequency.
-/// * `desired_input` - `PureSine` giving the frequency, amplitude and phase of the desired result.
-/// * `noise_inputs` - Vector of `PureSine` for any noise inputs on top of `desired_input`.
+/// * `desired_input` - `Tone` giving the frequency, amplitude and phase of the desired result.
+/// * `noise_inputs` - Vector of `Tone` for any noise inputs on top of `desired_input`.
 /// * `time_constant_factor` - Number of time constants after which the output is considered valid.
 /// * `tolerance` - Acceptable relative tolerance for the magnitude and angle outputs. This is added
 /// to fixed tolerance values computed inside this function. The outputs must remain within this
@@ -514,8 +395,8 @@ fn lowpass_test(
     pll_shift_frequency: u8,
     pll_shift_phase: u8,
     corner_frequency: f64,
-    desired_input: PureSine,
-    noise_inputs: &mut Vec<PureSine>,
+    desired_input: Tone,
+    tones: &mut Vec<Tone>,
     time_constant_factor: f64,
     tolerance: f64,
 ) {
@@ -543,7 +424,11 @@ fn lowpass_test(
         (demodulation_phase_offset / (2. * PI) * (1_u64 << 32) as f64).round()
             as u32,
         IIR {
-            ba: lowpass_iir_coefficients(corner_frequency, adc_frequency),
+            ba: lowpass_iir_coefficients(
+                corner_frequency / adc_frequency,
+                1. / 2f64.sqrt(),
+                2.,
+            ),
         },
     );
     let mut timestamp_handler = TimestampHandler::new(
@@ -569,14 +454,14 @@ fn lowpass_test(
         1_u64 << (adc_sample_ticks_log2 + sample_buffer_size_log2);
 
     let effective_phase_offset =
-        desired_input.phase_offset - demodulation_phase_offset;
+        desired_input.phase - demodulation_phase_offset;
     let in_phase_actual =
         linear(desired_input.amplitude_dbfs) * effective_phase_offset.cos();
     let quadrature_actual =
         linear(desired_input.amplitude_dbfs) * effective_phase_offset.sin();
 
     let total_noise_amplitude = sampled_noise_amplitude(
-        noise_inputs,
+        tones,
         reference_frequency * harmonic as f64,
         corner_frequency,
     );
@@ -593,14 +478,12 @@ fn lowpass_test(
         phase_noise(total_noise_amplitude, in_phase_actual, quadrature_actual)
             + 1e-2 * 2. * PI;
 
-    let pure_signals = noise_inputs;
-    pure_signals.push(desired_input);
+    tones.push(desired_input);
 
     for n in 0..(samples + extra_samples) {
         let adc_signal = adc_sampled_signal(
-            &pure_signals,
-            timestamp_start,
-            internal_frequency,
+            &tones,
+            timestamp_start as f64 / internal_frequency,
             adc_frequency,
             1 << sample_buffer_size_log2,
         );
@@ -610,19 +493,19 @@ fn lowpass_test(
             timestamp_start + batch_sample_count - 1,
             internal_frequency,
         );
+        timestamp_start += batch_sample_count;
 
         let (demodulation_initial_phase, demodulation_frequency) =
             timestamp_handler.update(timestamp);
-
-        let (in_phase, quadrature) = lockin.update(
+        let output = lockin.update(
             adc_signal,
             demodulation_initial_phase,
             demodulation_frequency,
         );
-
-        let magnitude = shift_round(in_phase, 16) * shift_round(in_phase, 16)
-            + shift_round(quadrature, 16) * shift_round(quadrature, 16);
-        let phase = atan2(quadrature, in_phase);
+        let magnitude = (((output.0 as i64) * (output.0 as i64)
+            + (output.1 as i64) * (output.1 as i64))
+            >> 32) as i32;
+        let phase = atan2(output.1, output.0);
 
         // Ensure stable within tolerance for 1 time constant after `time_constant_factor`.
         if n >= samples {
@@ -638,7 +521,7 @@ fn lowpass_test(
                 linear(desired_input.amplitude_dbfs),
                 desired_input.amplitude_dbfs,
                 amplitude_normalized,
-                dbfs(amplitude_normalized),
+                20.*amplitude_normalized.log10(),
                 max_error(linear(desired_input.amplitude_dbfs), amplitude_normalized, tolerance, total_magnitude_noise),
             );
             let phase_normalized =
@@ -661,8 +544,8 @@ fn lowpass_test(
                 ),
             );
 
-            let in_phase_normalized = in_phase as f64 / (1 << 30) as f64;
-            let quadrature_normalized = quadrature as f64 / (1 << 30) as f64;
+            let in_phase_normalized = output.0 as f64 / (1 << 30) as f64;
+            let quadrature_normalized = output.1 as f64 / (1 << 30) as f64;
 
             assert!(
                 isclose(
@@ -699,8 +582,6 @@ fn lowpass_test(
                 ),
             );
         }
-
-        timestamp_start += batch_sample_count;
     }
 }
 
@@ -729,21 +610,21 @@ fn lowpass() {
         pll_shift_frequency,
         pll_shift_phase,
         corner_frequency,
-        PureSine {
+        Tone {
             frequency: demodulation_frequency,
             amplitude_dbfs: -30.,
-            phase_offset: 0.,
+            phase: 0.,
         },
         &mut vec![
-            PureSine {
+            Tone {
                 frequency: 1.1 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
-            PureSine {
+            Tone {
                 frequency: 0.9 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
         ],
         time_constant_factor,
@@ -776,21 +657,21 @@ fn lowpass_demodulation_phase_offset_pi_2() {
         pll_shift_frequency,
         pll_shift_phase,
         corner_frequency,
-        PureSine {
+        Tone {
             frequency: demodulation_frequency,
             amplitude_dbfs: -30.,
-            phase_offset: 0.,
+            phase: 0.,
         },
         &mut vec![
-            PureSine {
+            Tone {
                 frequency: 1.1 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
-            PureSine {
+            Tone {
                 frequency: 0.9 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
         ],
         time_constant_factor,
@@ -823,21 +704,21 @@ fn lowpass_phase_offset_pi_2() {
         pll_shift_frequency,
         pll_shift_phase,
         corner_frequency,
-        PureSine {
+        Tone {
             frequency: demodulation_frequency,
             amplitude_dbfs: -30.,
-            phase_offset: PI / 2.,
+            phase: PI / 2.,
         },
         &mut vec![
-            PureSine {
+            Tone {
                 frequency: 1.1 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
-            PureSine {
+            Tone {
                 frequency: 0.9 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
         ],
         time_constant_factor,
@@ -870,21 +751,21 @@ fn lowpass_fundamental_111e3_phase_offset_pi_4() {
         pll_shift_frequency,
         pll_shift_phase,
         corner_frequency,
-        PureSine {
+        Tone {
             frequency: demodulation_frequency,
             amplitude_dbfs: -30.,
-            phase_offset: PI / 4.,
+            phase: PI / 4.,
         },
         &mut vec![
-            PureSine {
+            Tone {
                 frequency: 1.1 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
-            PureSine {
+            Tone {
                 frequency: 0.9 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
         ],
         time_constant_factor,
@@ -917,21 +798,21 @@ fn lowpass_first_harmonic() {
         pll_shift_frequency,
         pll_shift_phase,
         corner_frequency,
-        PureSine {
+        Tone {
             frequency: demodulation_frequency,
             amplitude_dbfs: -30.,
-            phase_offset: 0.,
+            phase: 0.,
         },
         &mut vec![
-            PureSine {
+            Tone {
                 frequency: 1.2 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
-            PureSine {
+            Tone {
                 frequency: 0.8 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
         ],
         time_constant_factor,
@@ -964,21 +845,21 @@ fn lowpass_second_harmonic() {
         pll_shift_frequency,
         pll_shift_phase,
         corner_frequency,
-        PureSine {
+        Tone {
             frequency: demodulation_frequency,
             amplitude_dbfs: -30.,
-            phase_offset: 0.,
+            phase: 0.,
         },
         &mut vec![
-            PureSine {
+            Tone {
                 frequency: 1.2 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
-            PureSine {
+            Tone {
                 frequency: 0.8 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
         ],
         time_constant_factor,
@@ -1011,21 +892,21 @@ fn lowpass_third_harmonic() {
         pll_shift_frequency,
         pll_shift_phase,
         corner_frequency,
-        PureSine {
+        Tone {
             frequency: demodulation_frequency,
             amplitude_dbfs: -30.,
-            phase_offset: 0.,
+            phase: 0.,
         },
         &mut vec![
-            PureSine {
+            Tone {
                 frequency: 1.2 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
-            PureSine {
+            Tone {
                 frequency: 0.8 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
         ],
         time_constant_factor,
@@ -1058,21 +939,21 @@ fn lowpass_first_harmonic_phase_shift() {
         pll_shift_frequency,
         pll_shift_phase,
         corner_frequency,
-        PureSine {
+        Tone {
             frequency: demodulation_frequency,
             amplitude_dbfs: -30.,
-            phase_offset: PI / 4.,
+            phase: PI / 4.,
         },
         &mut vec![
-            PureSine {
+            Tone {
                 frequency: 1.2 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
-            PureSine {
+            Tone {
                 frequency: 0.8 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
         ],
         time_constant_factor,
@@ -1105,21 +986,21 @@ fn lowpass_adc_frequency_1e6() {
         pll_shift_frequency,
         pll_shift_phase,
         corner_frequency,
-        PureSine {
+        Tone {
             frequency: demodulation_frequency,
             amplitude_dbfs: -30.,
-            phase_offset: 0.,
+            phase: 0.,
         },
         &mut vec![
-            PureSine {
+            Tone {
                 frequency: 1.2 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
-            PureSine {
+            Tone {
                 frequency: 0.8 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
         ],
         time_constant_factor,
@@ -1152,21 +1033,21 @@ fn lowpass_internal_frequency_125e6() {
         pll_shift_frequency,
         pll_shift_phase,
         corner_frequency,
-        PureSine {
+        Tone {
             frequency: demodulation_frequency,
             amplitude_dbfs: -30.,
-            phase_offset: 0.,
+            phase: 0.,
         },
         &mut vec![
-            PureSine {
+            Tone {
                 frequency: 1.2 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
-            PureSine {
+            Tone {
                 frequency: 0.8 * demodulation_frequency,
                 amplitude_dbfs: -20.,
-                phase_offset: 0.,
+                phase: 0.,
             },
         ],
         time_constant_factor,
@@ -1199,15 +1080,15 @@ fn lowpass_low_signal_frequency() {
         pll_shift_frequency,
         pll_shift_phase,
         corner_frequency,
-        PureSine {
+        Tone {
             frequency: demodulation_frequency,
             amplitude_dbfs: -30.,
-            phase_offset: 0.,
+            phase: 0.,
         },
-        &mut vec![PureSine {
+        &mut vec![Tone {
             frequency: 1.1 * demodulation_frequency,
             amplitude_dbfs: -20.,
-            phase_offset: 0.,
+            phase: 0.,
         }],
         time_constant_factor,
         tolerance,

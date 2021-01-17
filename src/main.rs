@@ -94,8 +94,8 @@ use dac::{Dac0Output, Dac1Output};
 use dsp::{
     iir, iir_int,
     reciprocal_pll::TimestampHandler,
-    shift_round,
     trig::{atan2, cossin},
+    Complex,
 };
 use pounder::DdsOutput;
 
@@ -948,10 +948,8 @@ const APP: () = {
             ADC_SAMPLE_TICKS_LOG2 as usize,
             SAMPLE_BUFFER_SIZE_LOG2,
         );
-        let iir_lockin = iir_int::IIR {
-            ba: [1, 0, 0, 0, 0],
-        };
-        let iir_state_lockin = [[0; 5]; 2];
+        let iir_lockin = iir_int::IIR::default();
+        let iir_state_lockin = [iir_int::IIRState::default(); 2];
 
         // Start sampling ADCs.
         sampling_timer.start();
@@ -995,47 +993,39 @@ const APP: () = {
             c.resources.dacs.1.acquire_buffer(),
         ];
 
-        let (demodulation_initial_phase, demodulation_frequency) = c
-            .resources
-            .timestamp_handler
-            .update(c.resources.input_stamper.latest_timestamp());
-
         let [dac0, dac1] = dac_samples;
         let iir_lockin = c.resources.iir_lockin;
         let iir_state_lockin = c.resources.iir_state_lockin;
         let iir_ch = c.resources.iir_ch;
         let iir_state = c.resources.iir_state;
 
+        let (pll_phase, pll_frequency) = c
+            .resources
+            .timestamp_handler
+            .update(c.resources.input_stamper.latest_timestamp());
+        let frequency = pll_frequency.wrapping_mul(HARMONIC);
+        let mut phase =
+            PHASE_OFFSET.wrapping_add(pll_phase.wrapping_mul(HARMONIC));
+
         dac0.iter_mut().zip(dac1.iter_mut()).enumerate().for_each(
             |(i, (d0, d1))| {
-                let sample_phase = (HARMONIC.wrapping_mul(
-                    (demodulation_frequency.wrapping_mul(i as u32))
-                        .wrapping_add(demodulation_initial_phase),
-                ))
-                .wrapping_add(PHASE_OFFSET);
-                let (cos, sin) = cossin(sample_phase as i32);
+                let m = cossin(-(phase as i32));
+                phase = phase.wrapping_add(frequency);
 
-                let mut signal = (0_i32, 0_i32);
+                let signal = Complex(
+                    iir_lockin.update(
+                        &mut iir_state_lockin[0],
+                        ((adc_samples[0][i] as i64 * m.0 as i64) >> 16) as i32,
+                    ),
+                    iir_lockin.update(
+                        &mut iir_state_lockin[1],
+                        ((adc_samples[0][i] as i64 * m.1 as i64) >> 16) as i32,
+                    ),
+                );
 
-                // shift cos/sin before multiplying to avoid i64 multiplication
-                signal.0 =
-                    adc_samples[0][i] as i16 as i32 * shift_round(sin, 16);
-                signal.1 =
-                    adc_samples[0][i] as i16 as i32 * shift_round(cos, 16);
-
-                signal.0 =
-                    iir_lockin.update(&mut iir_state_lockin[0], signal.0);
-                signal.1 =
-                    iir_lockin.update(&mut iir_state_lockin[1], signal.1);
-
-                let mut magnitude = f32::from(shift_round(
-                    signal.0 * signal.0 + signal.1 * signal.1,
-                    16,
-                ) as i16);
-                let mut phase = f32::from(shift_round(
-                    atan2(signal.1, signal.0),
-                    16,
-                ) as i16);
+                let mut magnitude =
+                    (signal.0 * signal.0 + signal.1 * signal.1) as f32;
+                let mut phase = atan2(signal.1, signal.0) as f32;
 
                 for j in 0..iir_state[0].len() {
                     magnitude =
