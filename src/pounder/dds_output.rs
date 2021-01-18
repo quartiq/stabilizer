@@ -1,4 +1,57 @@
 ///! The DdsOutput is used as an output stream to the pounder DDS.
+///!
+///! # Design
+///!
+///! The DDS stream interface is a means of quickly updating pounder DDS (direct digital synthesis)
+///! outputs of the AD9959 DDS chip. The DDS communicates via a quad-SPI interface and a single
+///! IO-update output pin.
+///!
+///! In order to update the DDS interface, the frequency tuning word, amplitude control word, and
+///! the phase offset word for a channel can be modified to change the frequency, amplitude, or
+///! phase on any of the 4 available output channels. Changes do not propagate to DDS outputs until
+///! the IO-update pin is toggled high to activate the new configurations. This allows multiple
+///! channels or parameters to be updated and then effects can take place simultaneously.
+///!
+///! In this implementation, the phase, frequency, or amplitude can be updated for any single
+///! collection of outputs simultaneously. This is done by serializing the register writes to the
+///! DDS into a single buffer of data and then writing the data over QSPI to the DDS.
+///!
+///! In order to minimize software overhead, data is written directly into the QSPI output FIFO. In
+///! order to accomplish this most efficiently, serialized data is written as 32-bit words to
+///! minimize the number of bus cycles necessary to write to the peripheral FIFO. A consequence of
+///! this is that additional unneeded register writes may be appended to align a transfer to 32-bit
+///! word sizes.
+///!
+///! In order to pulse the IO-update signal, the high-resolution timer output is used. The timer is
+///! configured to assert the IO-update signal after a predefined delay and then de-assert the
+///! signal after a predefined assertion duration. This allows for the actual QSPI transfer and
+///! IO-update toggle to be completed asynchronously to the rest of software processing - that is,
+///! software can schedule the DDS updates and then continue data processing. DDS updates then take
+///! place in the future when the IO-update is toggled by hardware.
+///!
+///!
+///! # Limitations
+///!
+///! The QSPI output FIFO is used as an intermediate buffer for holding pending QSPI writes. Because
+///! of this, the implementation only supports up to 16 serialized bytes (the QSPI FIFO is 4 32-bit
+///! words wide) in a single update.
+///!
+///! There is currently no synchronization between completion of the QSPI data write and the
+///! IO-update signal. It is currently assumed that the QSPI transfer will always complete within a
+///! predefined delay (the pre-programmed IO-update timer delay).
+///!
+///!
+///! # Future Improvement
+///!
+///! In the future, it would be possible to utilize a DMA transfer to complete the QSPI transfer.
+///! Once the QSPI transfer completed, this could trigger the IO-update timer to start to
+///! asynchronously complete IO-update automatically. This would allow for arbitrary profile sizes
+///! and ensure that IO-update was in-sync with the QSPI transfer.
+///!
+///! Currently, serialization is performed on each processing cycle. If there is a
+///! compile-time-known register update sequence needed for the application, the serialization
+///! process can be done once and then register values can be written into a pre-computed serialized
+///! buffer to avoid the software overhead of much of the serialization process.
 use super::QspiInterface;
 use crate::hrtimer::HighResTimerE;
 use ad9959::{Channel, DdsConfig, ProfileSerializer};

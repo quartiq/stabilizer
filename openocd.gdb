@@ -14,6 +14,9 @@ break DefaultHandler
 break HardFault
 break rust_begin_unwind
 
+source ../../PyCortexMDebug/cmdebug/svd_gdb.py
+svd_load ~/Downloads/STM32H743x.svd
+
 load
 # tbreak cortex_m_rt::reset_handler
 monitor reset halt
