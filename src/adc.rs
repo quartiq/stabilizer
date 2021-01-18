@@ -246,7 +246,7 @@ macro_rules! adc_input {
                     // Generate DMA events when an output compare of the timer hits the specified
                     // value.
                     trigger_channel.listen_dma();
-                    trigger_channel.to_output_compare(2);
+                    trigger_channel.to_output_compare(2 + $index);
 
                     // The trigger stream constantly writes to the SPI CR1 using a static word
                     // (which is a static value to enable the SPI transfer).  Thus, neither the
