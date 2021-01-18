@@ -5,12 +5,6 @@
 
 use stm32h7xx_hal as hal;
 
-#[cfg(feature = "semihosting")]
-use panic_semihosting as _;
-
-#[cfg(not(any(feature = "nightly", feature = "semihosting")))]
-use panic_halt as _;
-
 #[macro_use]
 extern crate log;
 
