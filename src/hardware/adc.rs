@@ -328,6 +328,7 @@ macro_rules! adc_input {
                 }
 
                 /// Enable the ADC DMA transfer sequence.
+                #[allow(dead_code)]
                 pub fn start(&mut self) {
                     self.transfer.start(|spi| {
                         spi.enable_dma_rx();
@@ -345,6 +346,7 @@ macro_rules! adc_input {
                 ///
                 /// # Returns
                 /// A reference to the underlying buffer that has been filled with ADC samples.
+                #[allow(dead_code)]
                 pub fn acquire_buffer(&mut self) -> &[u16; SAMPLE_BUFFER_SIZE] {
                     // Wait for the transfer to fully complete before continuing.  Note: If a device
                     // hangs up, check that this conditional is passing correctly, as there is no

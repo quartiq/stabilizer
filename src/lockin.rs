@@ -21,12 +21,12 @@ const ADC_SAMPLE_TICKS: u16 = 256;
 const SAMPLE_BUFFER_SIZE: usize = 8;
 
 // A constant sinusoid to send on the DAC output.
-const DAC_SEQUENCE: [8; i16] = [0, 0.707, 1, 0.707, 0, -0.707, -1, -0.707];
+const DAC_SEQUENCE: [f32; 8] = [0.0, 0.707, 1.0, 0.707, 0.0, -0.707, -1.0, -0.707];
 
 #[macro_use]
 mod server;
 mod hardware;
-use hardware::{Adc0Input, Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
+use hardware::{Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
 use dsp::iir;
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
@@ -38,15 +38,15 @@ const TCP_TX_BUFFER_SIZE: usize = 8192;
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
-        adcs: (Adc0Input, Adc1Input),
+        adc1: Adc1Input,
         dacs: (Dac0Output, Dac1Output),
         net_interface: hardware::Ethernet,
 
-        // Format: iir_state[ch][coeff]
-        #[init([[0.; 5]; 2])]
-        iir_state: [iir::IIRState; 2],
-        #[init([[iir::IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; IIR_CASCADE_LENGTH]; 2])]
-        iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+        #[init([0.; 5])]
+        iir_state: iir::IIRState,
+
+        #[init(iir::IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE })]
+        iir: iir::IIR,
     }
 
     #[init]
@@ -55,7 +55,6 @@ const APP: () = {
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
         // Enable ADC/DAC events
-        stabilizer.adcs.0.start();
         stabilizer.adcs.1.start();
         stabilizer.dacs.0.start();
         stabilizer.dacs.1.start();
@@ -65,7 +64,7 @@ const APP: () = {
 
         init::LateResources {
             afes: stabilizer.afes,
-            adcs: stabilizer.adcs,
+            adc1: stabilizer.adcs.1,
             dacs: stabilizer.dacs,
             net_interface: stabilizer.net.interface,
         }
@@ -87,45 +86,41 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adcs, dacs, iir_state, iir_ch], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adc1, dacs, iir_state, iir], priority=2)]
     fn process(c: process::Context) {
-        let adc_samples = [
-            c.resources.adcs.0.acquire_buffer(),
-            c.resources.adcs.1.acquire_buffer(),
-        ];
+        let _adc_samples = c.resources.adc1.acquire_buffer();
         let dac_samples = [
             c.resources.dacs.0.acquire_buffer(),
             c.resources.dacs.1.acquire_buffer(),
         ];
 
         // DAC0 always generates a fixed sinusoidal output.
-        for value in DAC_SEQUENCE.iter() {
-            let y = value * i16::MAX;
+        for (i, value) in DAC_SEQUENCE.iter().enumerate() {
+            let y = value * i16::MAX as f32;
             // Note(unsafe): The DAC_SEQUENCE values are guaranteed to be normalized.
             let y = unsafe { y.to_int_unchecked::<i16>() };
 
             // Convert to DAC code
-            dac_samples[0][sample] = y as u16 ^ 0x8000;
+            dac_samples[0][i] = y as u16 ^ 0x8000;
         }
 
-        for channel in 0..adc_samples.len() {
-            for sample in 0..adc_samples[0].len() {
-                let x = f32::from(adc_samples[channel][sample] as i16);
-                let mut y = x;
-                for i in 0..c.resources.iir_state[channel].len() {
-                    y = c.resources.iir_ch[channel][i]
-                        .update(&mut c.resources.iir_state[channel][i], y);
-                }
-                // Note(unsafe): The filter limits ensure that the value is in range.
-                // The truncation introduces 1/2 LSB distortion.
-                let y = unsafe { y.to_int_unchecked::<i16>() };
-                // Convert to DAC code
-                dac_samples[channel][sample] = y as u16 ^ 0x8000;
-            }
+        // TODO: Introduce a "dummy" PLL here.
+
+        // TODO: Demodulate the ADC0 input samples with the dummy PLL.
+
+        // TODO: Filter the demodulated ADC values
+
+        // TODO: Compute phase of the last sample
+
+        // TODO: Place last sample phase into DAC1s output buffer.
+        let y = 0.0;
+
+        for value in dac_samples[1].iter_mut() {
+            *value = y as u16 ^ 0x8000
         }
     }
 
-    #[idle(resources=[net_interface, iir_state, iir_ch, afes])]
+    #[idle(resources=[net_interface, iir_state, iir, afes])]
     fn idle(mut c: idle::Context) -> ! {
         let mut socket_set_entries: [_; 8] = Default::default();
         let mut sockets =
@@ -177,10 +172,10 @@ const APP: () = {
                                     let state = c.resources.iir_state.lock(|iir_state|
                                         server::Status {
                                             t: time,
-                                            x0: iir_state[0][0],
-                                            y0: iir_state[0][2],
-                                            x1: iir_state[1][0],
-                                            y1: iir_state[1][2],
+                                            x0: iir_state[0],
+                                            y0: iir_state[2],
+                                            x1: iir_state[0],
+                                            y1: iir_state[2],
                                     });
 
                                     Ok::<server::Status, ()>(state)
@@ -190,28 +185,16 @@ const APP: () = {
                             ],
 
                             modifiable_attributes: [
-                                "stabilizer/iir0/state": server::IirRequest, (|req: server::IirRequest| {
-                                    c.resources.iir_ch.lock(|iir_ch| {
-                                        if req.channel > 1 {
+                                "stabilizer/iir/state": server::IirRequest, (|req: server::IirRequest| {
+                                    c.resources.iir.lock(|iir| {
+                                        if req.channel >= 1 {
                                             return Err(());
                                         }
 
-                                        iir_ch[req.channel as usize] = req.iir;
+                                        *iir = req.iir;
 
                                         Ok::<server::IirRequest, ()>(req)
                                     })
-                                }),
-                                "stabilizer/iir1/state": server::IirRequest, (|req: server::IirRequest| {
-                                    c.resources.iir_ch.lock(|iir_ch| {
-                                        if req.channel > 1 {
-                                            return Err(());
-                                        }
-
-                                        iir_ch[req.channel as usize] = req.iir;
-
-                                        Ok::<server::IirRequest, ()>(req)
-                                    })
-                                }),
                                 }),
                                 "stabilizer/afe0/gain": hardware::AfeGain, (|gain| {
                                     c.resources.afes.0.set_gain(gain);
@@ -257,7 +240,7 @@ const APP: () = {
 
     #[task(binds = SPI3, priority = 3)]
     fn spi3(_: spi3::Context) {
-        panic!("ADC0 input overrun");
+        panic!("ADC1 input overrun");
     }
 
     #[task(binds = SPI4, priority = 3)]
