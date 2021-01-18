@@ -353,7 +353,7 @@ const APP: () = {
             timer5.pause();
             timer5.set_tick_freq(design_parameters::TIMER_FREQUENCY);
 
-            // The time stamp timer must run at exactly a multiple of the sample timer based on the
+            // The timestamp timer must run at exactly a multiple of the sample timer based on the
             // batch size. To accomodate this, we manually set the prescaler identical to the sample
             // timer, but use a period that is longer.
             let mut timer = timers::TimestampTimer::new(timer5);
