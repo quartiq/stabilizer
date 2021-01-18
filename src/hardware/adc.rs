@@ -1,10 +1,3 @@
-use super::timers;
-use hal::dma::{
-    config::Priority,
-    dma::{DMAReq, DmaConfig},
-    traits::TargetAddress,
-    MemoryToPeripheral, PeripheralToMemory, Transfer,
-};
 ///! Stabilizer ADC management interface
 ///!
 ///! # Design
@@ -82,6 +75,14 @@ use hal::dma::{
 use stm32h7xx_hal as hal;
 
 use crate::SAMPLE_BUFFER_SIZE;
+
+use super::timers;
+use hal::dma::{
+    config::Priority,
+    dma::{DMAReq, DmaConfig},
+    traits::TargetAddress,
+    MemoryToPeripheral, PeripheralToMemory, Transfer,
+};
 
 // The following data is written by the timer ADC sample trigger into the SPI CR1 to start the
 // transfer. Data in AXI SRAM is not initialized on boot, so the contents are random. This value is
