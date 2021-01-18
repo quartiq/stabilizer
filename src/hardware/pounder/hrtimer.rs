@@ -1,8 +1,11 @@
 ///! The HRTimer (High Resolution Timer) is used to generate IO_Update pulses to the Pounder DDS.
-use crate::hal;
-use hal::rcc::{rec, CoreClocks, ResetEnable};
+use stm32h7xx_hal::{
+    self as hal,
+    rcc::{rec, CoreClocks, ResetEnable},
+};
 
 /// A HRTimer output channel.
+#[allow(dead_code)]
 pub enum Channel {
     One,
     Two,

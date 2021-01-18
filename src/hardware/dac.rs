@@ -50,9 +50,15 @@
 ///! While double-buffered mode is used for DMA to avoid lost DAC-update events, there is no check
 ///! for re-use of a previously provided DAC output buffer. It is assumed that the DMA request is
 ///! served promptly after the transfer completes.
-use super::{
-    hal, timers, DMAReq, DmaConfig, MemoryToPeripheral, TargetAddress,
-    Transfer, SAMPLE_BUFFER_SIZE,
+use stm32h7xx_hal as hal;
+
+use crate::SAMPLE_BUFFER_SIZE;
+
+use super::timers;
+use hal::dma::{
+    dma::{DMAReq, DmaConfig},
+    traits::TargetAddress,
+    MemoryToPeripheral, Transfer,
 };
 
 // The following global buffers are used for the DAC code DMA transfers. Two buffers are used for
@@ -158,7 +164,7 @@ macro_rules! dac_output {
                 }
 
                 // Construct the trigger stream to write from memory to the peripheral.
-                let mut transfer: Transfer<_, _, MemoryToPeripheral, _> =
+                let transfer: Transfer<_, _, MemoryToPeripheral, _> =
                     Transfer::init(
                         stream,
                         $spi::new(trigger_channel, spi),
@@ -169,13 +175,15 @@ macro_rules! dac_output {
                         trigger_config,
                     );
 
-                transfer.start(|spi| spi.start_dma());
-
                 Self {
                     transfer,
                     // Note(unsafe): This buffer is only used once and provided for the next DMA transfer.
                     next_buffer: unsafe { Some(&mut DAC_BUF[$index][2]) },
                 }
+            }
+
+            pub fn start(&mut self) {
+                self.transfer.start(|spi| spi.start_dma());
             }
 
             /// Acquire the next output buffer to populate it with DAC codes.
