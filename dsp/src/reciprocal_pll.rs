@@ -62,18 +62,26 @@ impl TimestampHandler {
             self.reference_frequency = frequency as u32 as i64;
         }
 
-        let demodulation_frequency = divide_round(
-            1 << (32 + self.adc_sample_ticks_log2),
-            self.reference_frequency,
-        ) as u32;
-        let demodulation_initial_phase = divide_round(
-            (((self.batch_index as i64)
-                << (self.adc_sample_ticks_log2
-                    + self.sample_buffer_size_log2))
-                - self.reference_phase)
-                << 32,
-            self.reference_frequency,
-        ) as u32;
+        let demodulation_frequency: u32;
+        let demodulation_initial_phase: u32;
+
+        if self.reference_frequency == 0 {
+            demodulation_frequency = u32::MAX;
+            demodulation_initial_phase = u32::MAX;
+        } else {
+            demodulation_frequency = divide_round(
+                1 << (32 + self.adc_sample_ticks_log2),
+                self.reference_frequency,
+            ) as u32;
+            demodulation_initial_phase = divide_round(
+                (((self.batch_index as i64)
+                    << (self.adc_sample_ticks_log2
+                        + self.sample_buffer_size_log2))
+                    - self.reference_phase)
+                    << 32,
+                self.reference_frequency,
+            ) as u32;
+        }
 
         if self.batch_index
             < (1 << (32
