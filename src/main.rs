@@ -977,6 +977,22 @@ const APP: () = {
         }
     }
 
+    /// Main DSP processing routine for Stabilizer.
+    ///
+    /// # Note
+    /// Processing time for the DSP application code is bounded by the following constraints:
+    ///
+    /// DSP application code starts after the ADC has generated a batch of samples and must be
+    /// completed by the time the next batch of ADC samples has been acquired (plus the FIFO buffer
+    /// time). If this constraint is not met, firmware will panic due to an ADC input overrun.
+    ///
+    /// The DSP application code must also fill out the next DAC output buffer in time such that the
+    /// DAC can switch to it when it has completed the current buffer. If this constraint is not met
+    /// it's possible that old DAC codes will be generated on the output and the output samples will
+    /// be delayed by 1 batch.
+    ///
+    /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
+    /// the same time bounds, meeting one also means the other is also met.
     #[task(binds=DMA1_STR4, resources=[pounder_stamper, adcs, dacs, iir_state, iir_ch, dds_output, input_stamper, timestamp_handler, iir_lockin, iir_state_lockin], priority=2)]
     fn process(c: process::Context) {
         if let Some(stamper) = c.resources.pounder_stamper {
@@ -988,6 +1004,7 @@ const APP: () = {
             c.resources.adcs.0.acquire_buffer(),
             c.resources.adcs.1.acquire_buffer(),
         ];
+
         let dac_samples = [
             c.resources.dacs.0.acquire_buffer(),
             c.resources.dacs.1.acquire_buffer(),
@@ -1053,9 +1070,6 @@ const APP: () = {
 
             builder.write_profile();
         }
-
-        c.resources.dacs.0.release_buffer(dac0);
-        c.resources.dacs.1.release_buffer(dac1);
     }
 
     #[idle(resources=[net_interface, pounder, mac_addr, eth_mac, iir_state, iir_ch, afes])]
