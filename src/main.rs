@@ -1026,7 +1026,7 @@ const APP: () = {
 
         dac0.iter_mut().zip(dac1.iter_mut()).enumerate().for_each(
             |(i, (d0, d1))| {
-                let m = cossin(-(phase as i32));
+                let m = cossin((phase as i32).wrapping_neg());
                 phase = phase.wrapping_add(frequency);
 
                 let signal = Complex(

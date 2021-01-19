@@ -60,7 +60,7 @@ impl Lockin {
         let mut last = Complex::default();
 
         for s in input.iter() {
-            let m = cossin(-(phase as i32));
+            let m = cossin((phase as i32).wrapping_neg());
             phase = phase.wrapping_add(frequency);
 
             last = Complex(
