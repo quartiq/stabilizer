@@ -143,10 +143,12 @@ const APP: () = {
             let signal = (adc_samples[0][i] as i16 as i32) << 16;
             let signal = Complex(
                 iir_lockin.update(
-                    &mut iir_state_lockin[0], ((signal as i64 * m.0 as i64) >> 32) as _,
+                    &mut iir_state_lockin[0],
+                    ((signal as i64 * m.0 as i64) >> 32) as _,
                 ),
                 iir_lockin.update(
-                    &mut iir_state_lockin[1], ((signal as i64 * m.1 as i64) >> 16) as _,
+                    &mut iir_state_lockin[1],
+                    ((signal as i64 * m.1 as i64) >> 16) as _,
                 ),
             );
 
