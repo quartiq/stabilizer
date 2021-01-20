@@ -2,7 +2,6 @@ use embedded_hal::blocking::i2c::WriteRead;
 
 const I2C_ADDR: u8 = 0x50;
 
-#[allow(dead_code)]
 pub fn read_eui48<T>(i2c: &mut T) -> Result<[u8; 6], T::Error>
 where
     T: WriteRead,

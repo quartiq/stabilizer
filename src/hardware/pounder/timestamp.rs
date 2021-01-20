@@ -26,7 +26,7 @@ use stm32h7xx_hal as hal;
 
 use hal::dma::{dma::DmaConfig, PeripheralToMemory, Transfer};
 
-use crate::{timers, SAMPLE_BUFFER_SIZE};
+use crate::{hardware::timers, SAMPLE_BUFFER_SIZE};
 
 // Three buffers are required for double buffered mode - 2 are owned by the DMA stream and 1 is the
 // working data provided to the application. These buffers must exist in a DMA-accessible memory
@@ -89,7 +89,7 @@ impl Timestamper {
         input_capture.listen_dma();
 
         // The data transfer is always a transfer of data from the peripheral to a RAM buffer.
-        let mut data_transfer: Transfer<_, _, PeripheralToMemory, _> =
+        let data_transfer: Transfer<_, _, PeripheralToMemory, _> =
             Transfer::init(
                 stream,
                 input_capture,
@@ -99,8 +99,6 @@ impl Timestamper {
                 unsafe { Some(&mut BUF[1]) },
                 config,
             );
-
-        data_transfer.start(|capture_channel| capture_channel.enable());
 
         Self {
             timer: timestamp_timer,
@@ -112,7 +110,15 @@ impl Timestamper {
         }
     }
 
+    /// Start the DMA transfer for collecting timestamps.
+    #[allow(dead_code)]
+    pub fn start(&mut self) {
+        self.transfer
+            .start(|capture_channel| capture_channel.enable());
+    }
+
     /// Update the period of the underlying timestamp timer.
+    #[allow(dead_code)]
     pub fn update_period(&mut self, period: u16) {
         self.timer.set_period_ticks(period);
     }
@@ -121,6 +127,7 @@ impl Timestamper {
     ///
     /// # Returns
     /// A reference to the underlying buffer that has been filled with timestamps.
+    #[allow(dead_code)]
     pub fn acquire_buffer(&mut self) -> &[u16; SAMPLE_BUFFER_SIZE] {
         // Wait for the transfer to fully complete before continuing.
         // Note: If a device hangs up, check that this conditional is passing correctly, as there is

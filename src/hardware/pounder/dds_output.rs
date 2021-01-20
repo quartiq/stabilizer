@@ -52,8 +52,7 @@
 ///! compile-time-known register update sequence needed for the application, the serialization
 ///! process can be done once and then register values can be written into a pre-computed serialized
 ///! buffer to avoid the software overhead of much of the serialization process.
-use super::QspiInterface;
-use crate::hrtimer::HighResTimerE;
+use super::{hrtimer::HighResTimerE, QspiInterface};
 use ad9959::{Channel, DdsConfig, ProfileSerializer};
 use stm32h7xx_hal as hal;
 
@@ -90,6 +89,7 @@ impl DdsOutput {
     }
 
     /// Get a builder for serializing a Pounder DDS profile.
+    #[allow(dead_code)]
     pub fn builder(&mut self) -> ProfileBuilder {
         let builder = self.config.builder();
         ProfileBuilder {
@@ -145,6 +145,7 @@ impl<'a> ProfileBuilder<'a> {
     /// * `ftw` - If provided, indicates a frequency tuning word for the channels.
     /// * `pow` - If provided, indicates a phase offset word for the channels.
     /// * `acr` - If provided, indicates the amplitude control register for the channels.
+    #[allow(dead_code)]
     pub fn update_channels(
         mut self,
         channels: &[Channel],
@@ -157,6 +158,7 @@ impl<'a> ProfileBuilder<'a> {
     }
 
     /// Write the profile to the DDS asynchronously.
+    #[allow(dead_code)]
     pub fn write_profile(mut self) {
         let profile = self.serializer.finalize();
         self.dds_stream.write_profile(profile);
