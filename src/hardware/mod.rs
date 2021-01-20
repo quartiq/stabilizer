@@ -20,6 +20,7 @@ mod timers;
 pub use adc::{Adc0Input, Adc1Input};
 pub use afe::Gain as AfeGain;
 pub use dac::{Dac0Output, Dac1Output};
+pub use digital_input_stamper::InputStamper;
 pub use pounder::DdsOutput;
 
 // Type alias for the analog front-end (AFE) for ADC0.

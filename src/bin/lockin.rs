@@ -14,8 +14,22 @@ use heapless::{consts::*, String};
 
 use stabilizer::{hardware, server};
 
-use dsp::iir;
-use hardware::{Adc0Input, Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
+use dsp::{
+    iir, iir_int,
+    reciprocal_pll::TimestampHandler,
+    trig::{atan2, cossin},
+    Complex,
+};
+use hardware::{
+    Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
+};
+
+// Frequency scaling factor for lock-in harmonic demodulation.
+const HARMONIC: u32 = 1;
+// Phase offset applied to the lock-in demodulation signal.
+const PHASE_OFFSET: u32 = 0;
+const ADC_SAMPLE_TICKS_LOG2: u16 = 8;
+const SAMPLE_BUFFER_SIZE_LOG2: usize = 3;
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
 
@@ -38,12 +52,26 @@ const APP: () = {
         iir_state: [[iir::IIRState; IIR_CASCADE_LENGTH]; 2],
         #[init([[iir::IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; IIR_CASCADE_LENGTH]; 2])]
         iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+
+        timestamper: InputStamper,
+        timestamp_handler: TimestampHandler,
+        iir_lockin: iir_int::IIR,
+        iir_state_lockin: [iir_int::IIRState; 2],
     }
 
     #[init]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
+
+        let timestamp_handler = TimestampHandler::new(
+            4,
+            3,
+            ADC_SAMPLE_TICKS_LOG2 as usize,
+            SAMPLE_BUFFER_SIZE_LOG2,
+        );
+        let iir_lockin = iir_int::IIR::default();
+        let iir_state_lockin = [iir_int::IIRState::default(); 2];
 
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();
@@ -59,6 +87,11 @@ const APP: () = {
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
             net_interface: stabilizer.net.interface,
+            timestamper: stabilizer.timestamper,
+
+            timestamp_handler,
+            iir_lockin,
+            iir_state_lockin,
         }
     }
 
@@ -78,7 +111,7 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adcs, dacs, iir_state, iir_ch], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, dacs, iir_state, iir_ch, iir_lockin, iir_state_lockin, timestamp_handler, timestamper], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -98,7 +131,7 @@ const APP: () = {
         let (pll_phase, pll_frequency) = c
             .resources
             .timestamp_handler
-            .update(c.resources.input_stamper.latest_timestamp());
+            .update(c.resources.timestamper.latest_timestamp());
         let frequency = pll_frequency.wrapping_mul(HARMONIC);
         let mut phase =
             PHASE_OFFSET.wrapping_add(pll_phase.wrapping_mul(HARMONIC));
