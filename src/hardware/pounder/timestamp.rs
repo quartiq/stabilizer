@@ -111,12 +111,14 @@ impl Timestamper {
     }
 
     /// Start the DMA transfer for collecting timestamps.
+    #[allow(dead_code)]
     pub fn start(&mut self) {
         self.transfer
             .start(|capture_channel| capture_channel.enable());
     }
 
     /// Update the period of the underlying timestamp timer.
+    #[allow(dead_code)]
     pub fn update_period(&mut self, period: u16) {
         self.timer.set_period_ticks(period);
     }
@@ -125,6 +127,7 @@ impl Timestamper {
     ///
     /// # Returns
     /// A reference to the underlying buffer that has been filled with timestamps.
+    #[allow(dead_code)]
     pub fn acquire_buffer(&mut self) -> &[u16; SAMPLE_BUFFER_SIZE] {
         // Wait for the transfer to fully complete before continuing.
         // Note: If a device hangs up, check that this conditional is passing correctly, as there is

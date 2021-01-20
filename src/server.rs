@@ -62,7 +62,6 @@ macro_rules! route_request {
     }
 }
 
-
 #[derive(Deserialize, Serialize, Debug)]
 pub enum AccessRequest {
     Read,

@@ -6,6 +6,9 @@ use crate::ADC_SAMPLE_TICKS;
 #[cfg(feature = "pounder_v1_1")]
 use crate::SAMPLE_BUFFER_SIZE;
 
+#[cfg(feature = "pounder_v1_1")]
+use core::convert::TryInto;
+
 use smoltcp::{iface::Routes, wire::Ipv4Address};
 
 use stm32h7xx_hal::{
@@ -541,16 +544,6 @@ pub fn setup(
     fp_led_2.set_low().unwrap();
     fp_led_3.set_low().unwrap();
 
-    let stabilizer = StabilizerDevices {
-        afes,
-        adcs,
-        dacs,
-        timestamper: input_stamper,
-        net: network_devices,
-        adc_dac_timer: sampling_timer,
-        timestamp_timer,
-    };
-
     // Measure the Pounder PGOOD output to detect if pounder is present on Stabilizer.
     let pounder_pgood = gpiob.pb13.into_pull_down_input();
     delay.delay_ms(2u8);
@@ -803,6 +796,16 @@ pub fn setup(
         })
     } else {
         None
+    };
+
+    let stabilizer = StabilizerDevices {
+        afes,
+        adcs,
+        dacs,
+        timestamper: input_stamper,
+        net: network_devices,
+        adc_dac_timer: sampling_timer,
+        timestamp_timer,
     };
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());

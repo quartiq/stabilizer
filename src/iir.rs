@@ -26,8 +26,8 @@ const IIR_CASCADE_LENGTH: usize = 1;
 #[macro_use]
 mod server;
 mod hardware;
-use hardware::{Adc0Input, Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
 use dsp::iir;
+use hardware::{Adc0Input, Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
 
