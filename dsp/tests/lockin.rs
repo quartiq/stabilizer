@@ -59,18 +59,19 @@ impl Lockin {
             self.phase.wrapping_add(phase.wrapping_mul(self.harmonic));
         let mut last = Complex::default();
 
-        for s in input.iter() {
+        for &s in input.iter() {
             let m = cossin((phase as i32).wrapping_neg());
             phase = phase.wrapping_add(frequency);
 
+            let signal = (s as i32) << 16;
             last = Complex(
                 self.iir.update(
                     &mut self.iir_state[0],
-                    ((*s as i64 * m.0 as i64) >> 16) as i32,
+                    ((signal as i64 * m.0 as i64) >> 32) as i32,
                 ),
                 self.iir.update(
                     &mut self.iir_state[1],
-                    ((*s as i64 * m.1 as i64) >> 16) as i32,
+                    ((signal as i64 * m.1 as i64) >> 32) as i32,
                 ),
             );
         }
