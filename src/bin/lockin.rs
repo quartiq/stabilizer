@@ -13,13 +13,14 @@ use rtic::cyccnt::{Instant, U32Ext};
 use heapless::{consts::*, String};
 
 // A constant sinusoid to send on the DAC output.
-const DAC_SEQUENCE: [f32; 8] = [0.0, 0.707, 1.0, 0.707, 0.0, -0.707, -1.0, -0.707];
+const DAC_SEQUENCE: [f32; 8] =
+    [0.0, 0.707, 1.0, 0.707, 0.0, -0.707, -1.0, -0.707];
 
+use dsp::iir;
 use stabilizer::{
     hardware::{self, Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1},
-    server
+    server,
 };
-use dsp::iir;
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
 
