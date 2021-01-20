@@ -12,20 +12,8 @@ use rtic::cyccnt::{Instant, U32Ext};
 
 use heapless::{consts::*, String};
 
-// The number of ticks in the ADC sampling timer. The timer runs at 100MHz, so the step size is
-// equal to 10ns per tick.
-// Currently, the sample rate is equal to: Fsample = 100/256 MHz = 390.625 KHz
-const ADC_SAMPLE_TICKS: u16 = 256;
+use stabilizer::{hardware, server};
 
-// The desired ADC sample processing buffer size.
-const SAMPLE_BUFFER_SIZE: usize = 8;
-
-// The number of cascaded IIR biquads per channel. Select 1 or 2!
-const IIR_CASCADE_LENGTH: usize = 1;
-
-#[macro_use]
-mod server;
-mod hardware;
 use dsp::iir;
 use hardware::{Adc0Input, Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
 
@@ -33,6 +21,9 @@ const SCALE: f32 = ((1 << 15) - 1) as f32;
 
 const TCP_RX_BUFFER_SIZE: usize = 8192;
 const TCP_TX_BUFFER_SIZE: usize = 8192;
+
+// The number of cascaded IIR biquads per channel. Select 1 or 2!
+const IIR_CASCADE_LENGTH: usize = 1;
 
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
@@ -162,7 +153,7 @@ const APP: () = {
                 } else {
                     server.poll(socket, |req| {
                         info!("Got request: {:?}", req);
-                        route_request!(req,
+                        stabilizer::route_request!(req,
                             readable_attributes: [
                                 "stabilizer/iir/state": (|| {
                                     let state = c.resources.iir_state.lock(|iir_state|
