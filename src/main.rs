@@ -1010,7 +1010,6 @@ const APP: () = {
             c.resources.dacs.1.acquire_buffer(),
         ];
 
-        let [dac0, dac1] = dac_samples;
         let iir_lockin = c.resources.iir_lockin;
         let iir_state_lockin = c.resources.iir_state_lockin;
         let iir_ch = c.resources.iir_ch;
@@ -1024,41 +1023,39 @@ const APP: () = {
         let mut phase =
             PHASE_OFFSET.wrapping_add(pll_phase.wrapping_mul(HARMONIC));
 
-        dac0.iter_mut().zip(dac1.iter_mut()).enumerate().for_each(
-            |(i, (d0, d1))| {
-                let m = cossin((phase as i32).wrapping_neg());
-                phase = phase.wrapping_add(frequency);
+        for i in 0..adc_samples[0].len() {
+            let m = cossin((phase as i32).wrapping_neg());
+            phase = phase.wrapping_add(frequency);
 
-                let signal = Complex(
-                    iir_lockin.update(
-                        &mut iir_state_lockin[0],
-                        ((adc_samples[0][i] as i64 * m.0 as i64) >> 16) as i32,
-                    ),
-                    iir_lockin.update(
-                        &mut iir_state_lockin[1],
-                        ((adc_samples[0][i] as i64 * m.1 as i64) >> 16) as i32,
-                    ),
-                );
+            let signal = Complex(
+                iir_lockin.update(
+                    &mut iir_state_lockin[0],
+                    ((adc_samples[0][i] as i64 * m.0 as i64) >> 16) as _,
+                ),
+                iir_lockin.update(
+                    &mut iir_state_lockin[1],
+                    ((adc_samples[0][i] as i64 * m.1 as i64) >> 16) as _,
+                ),
+            );
 
-                let mut magnitude =
-                    (signal.0 * signal.0 + signal.1 * signal.1) as f32;
-                let mut phase = atan2(signal.1, signal.0) as f32;
+            let mut magnitude =
+                (signal.0 * signal.0 + signal.1 * signal.1) as _;
+            let mut phase = atan2(signal.1, signal.0) as _;
 
-                for j in 0..iir_state[0].len() {
-                    magnitude =
-                        iir_ch[0][j].update(&mut iir_state[0][j], magnitude);
-                    phase = iir_ch[1][j].update(&mut iir_state[1][j], phase);
-                }
+            for j in 0..iir_state[0].len() {
+                magnitude =
+                    iir_ch[0][j].update(&mut iir_state[0][j], magnitude);
+                phase = iir_ch[1][j].update(&mut iir_state[1][j], phase);
+            }
 
-                unsafe {
-                    let magnitude = magnitude.to_int_unchecked::<i16>();
-                    let phase = phase.to_int_unchecked::<i16>();
-
-                    *d0 = magnitude as u16 ^ 0x8000;
-                    *d1 = phase as u16 ^ 0x8000;
-                }
-            },
-        );
+            // Note(unsafe): range clipping to i16 is ensured by IIR filters above.
+            unsafe {
+                dac_samples[0][i] =
+                    magnitude.to_int_unchecked::<i16>() as u16 ^ 0x8000;
+                dac_samples[1][i] =
+                    phase.to_int_unchecked::<i16>() as u16 ^ 0x8000;
+            }
+        }
 
         if let Some(dds_output) = c.resources.dds_output {
             let builder = dds_output.builder().update_channels(
