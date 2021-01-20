@@ -72,9 +72,16 @@
 ///! be used as a means to both detect and buffer ADC samples during the buffer swap-over. Because
 ///! of this, double-buffered mode does not offer any advantages over single-buffered mode (unless
 ///! double-buffered mode offers less overhead due to the DMA disable/enable procedure).
-use super::{
-    hal, timers, DMAReq, DmaConfig, MemoryToPeripheral, PeripheralToMemory,
-    Priority, TargetAddress, Transfer, SAMPLE_BUFFER_SIZE,
+use stm32h7xx_hal as hal;
+
+use crate::SAMPLE_BUFFER_SIZE;
+
+use super::timers;
+use hal::dma::{
+    config::Priority,
+    dma::{DMAReq, DmaConfig},
+    traits::TargetAddress,
+    MemoryToPeripheral, PeripheralToMemory, Transfer,
 };
 
 // The following data is written by the timer ADC sample trigger into the SPI CR1 to start the
@@ -174,13 +181,13 @@ macro_rules! adc_input {
                     PeripheralToMemory,
                     &'static mut [u16; SAMPLE_BUFFER_SIZE],
                 >,
-                _trigger_transfer: Transfer<
+                trigger_transfer: Transfer<
                     hal::dma::dma::$trigger_stream<hal::stm32::DMA1>,
                     [< $spi CR >],
                     MemoryToPeripheral,
                     &'static mut [u32; 1],
                 >,
-                _flag_clear_transfer: Transfer<
+                clear_transfer: Transfer<
                     hal::dma::dma::$clear_stream<hal::stm32::DMA1>,
                     [< $spi IFCR >],
                     MemoryToPeripheral,
@@ -227,7 +234,7 @@ macro_rules! adc_input {
                     clear_channel.listen_dma();
                     clear_channel.to_output_compare(0);
 
-                    let mut clear_transfer: Transfer<
+                    let clear_transfer: Transfer<
                         _,
                         _,
                         MemoryToPeripheral,
@@ -264,7 +271,7 @@ macro_rules! adc_input {
                     };
 
                     // Construct the trigger stream to write from memory to the peripheral.
-                    let mut trigger_transfer: Transfer<
+                    let trigger_transfer: Transfer<
                         _,
                         _,
                         MemoryToPeripheral,
@@ -299,7 +306,7 @@ macro_rules! adc_input {
 
                     // The data transfer is always a transfer of data from the peripheral to a RAM
                     // buffer.
-                    let mut data_transfer: Transfer<_, _, PeripheralToMemory, _> =
+                    let data_transfer: Transfer<_, _, PeripheralToMemory, _> =
                         Transfer::init(
                             data_stream,
                             spi,
@@ -310,27 +317,28 @@ macro_rules! adc_input {
                             data_config,
                         );
 
-                    data_transfer.start(|spi| {
-                        // Allow the SPI RX FIFO to generate DMA transfer requests when data is
-                        // available.
-                        spi.enable_dma_rx();
-
-                        // Each transaction is 1 word (16 bytes).
-                        spi.inner().cr2.modify(|_, w| w.tsize().bits(1));
-                        spi.inner().cr1.modify(|_, w| w.spe().set_bit());
-                    });
-
-                    clear_transfer.start(|_| {});
-                    trigger_transfer.start(|_| {});
-
                     Self {
                         // Note(unsafe): The ADC_BUF[$index][1] is "owned" by this peripheral. It
                         // shall not be used anywhere else in the module.
                         next_buffer: unsafe { Some(&mut ADC_BUF[$index][1]) },
                         transfer: data_transfer,
-                        _trigger_transfer: trigger_transfer,
-                        _flag_clear_transfer: clear_transfer,
+                        trigger_transfer,
+                        clear_transfer,
                     }
+                }
+
+                /// Enable the ADC DMA transfer sequence.
+                pub fn start(&mut self) {
+                    self.transfer.start(|spi| {
+                        spi.enable_dma_rx();
+
+                        spi.inner().cr2.modify(|_, w| w.tsize().bits(1));
+                        spi.inner().cr1.modify(|_, w| w.spe().set_bit());
+                    });
+
+                    self.clear_transfer.start(|_| {});
+                    self.trigger_transfer.start(|_| {});
+
                 }
 
                 /// Obtain a buffer filled with ADC samples.
