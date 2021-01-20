@@ -50,7 +50,7 @@ ad9959 = { path = "ad9959" }
 git = "https://github.com/mrd0ll4r/mcp23017.git"
 
 [dependencies.smoltcp]
-version = "0.6"
+version = "0.7"
 features = ["ethernet", "proto-ipv4", "socket-tcp", "proto-ipv6"]
 default-features = false
 
