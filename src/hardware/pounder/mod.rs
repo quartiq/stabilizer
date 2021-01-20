@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 
 mod attenuators;
 mod dds_output;
+pub mod hrtimer;
 mod rf_power;
+
+#[cfg(feature = "pounder_v1_1")]
 pub mod timestamp;
 
 pub use dds_output::DdsOutput;
@@ -27,13 +30,11 @@ const ATT_LE0_PIN: u8 = 8;
 pub enum Error {
     Spi,
     I2c,
-    Dds,
     Qspi,
     Bounds,
     InvalidAddress,
     InvalidChannel,
     Adc,
-    Access,
 }
 
 #[derive(Debug, Copy, Clone)]

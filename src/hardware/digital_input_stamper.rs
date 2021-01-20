@@ -24,15 +24,16 @@
 ///!
 ///! This module only supports DI0 for timestamping due to trigger constraints on the DIx pins. If
 ///! timestamping is desired in DI1, a separate timer + capture channel will be necessary.
-use super::{hal, timers, ADC_SAMPLE_TICKS, SAMPLE_BUFFER_SIZE};
+use super::{hal, timers};
+use crate::{ADC_SAMPLE_TICKS, SAMPLE_BUFFER_SIZE};
 
-/// Calculate the period of the digital input timestampe timer.
+/// Calculate the period of the digital input timestamp timer.
 ///
 /// # Note
 /// The period returned will be 1 less than the required period in timer ticks. The value returned
 /// can be immediately programmed into a hardware timer period register.
 ///
-/// The period is calcualted to be some power-of-two multiple of the batch size, such that N batches
+/// The period is calculated to be some power-of-two multiple of the batch size, such that N batches
 /// will occur between each timestamp timer overflow.
 ///
 /// # Returns
@@ -89,6 +90,7 @@ impl InputStamper {
     }
 
     /// Start to capture timestamps on DI0.
+    #[allow(dead_code)]
     pub fn start(&mut self) {
         self.capture_channel.enable();
     }
@@ -101,6 +103,7 @@ impl InputStamper {
     ///
     /// To prevent timestamp loss, the batch size and sampling rate must be adjusted such that at
     /// most one timestamp will occur in each data processing cycle.
+    #[allow(dead_code)]
     pub fn latest_timestamp(&mut self) -> Option<u32> {
         self.capture_channel
             .latest_capture()

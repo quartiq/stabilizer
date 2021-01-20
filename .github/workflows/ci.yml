@@ -27,7 +27,6 @@ jobs:
           command: fmt
           args: --all -- --check
       - uses: actions-rs/clippy-check@v1
-        continue-on-error: true
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 

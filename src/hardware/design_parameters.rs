@@ -1,4 +1,4 @@
-use super::hal::time::MegaHertz;
+use stm32h7xx_hal::time::MegaHertz;
 
 /// The ADC setup time is the number of seconds after the CSn line goes low before the serial clock
 /// may begin. This is used for performing the internal ADC conversion.
@@ -17,13 +17,13 @@ pub const POUNDER_QSPI_FREQUENCY: MegaHertz = MegaHertz(40);
 // Pounder Profile writes are always 16 bytes, with 2 cycles required per byte, coming out to a
 // total of 32 QSPI clock cycles. The QSPI is configured for 40MHz, so this comes out to an offset
 // of 800nS. We use 900ns to be safe.
-pub const POUNDER_IO_UPDATE_DELAY: f32 = 900_e-9;
+pub const POUNDER_IO_UPDATE_DELAY: f32 = 900e-9;
 
 /// The duration to assert IO_Update for the pounder DDS.
 // IO_Update should be latched for 4 SYNC_CLK cycles after the QSPI profile write. With pounder
 // SYNC_CLK running at 100MHz (1/4 of the pounder reference clock of 500MHz), this corresponds to
 // 32ns. To accomodate rounding errors, we use 50ns instead.
-pub const POUNDER_IO_UPDATE_DURATION: f32 = 50_e-9;
+pub const POUNDER_IO_UPDATE_DURATION: f32 = 50e-9;
 
 /// The DDS reference clock frequency in MHz.
 pub const DDS_REF_CLK: MegaHertz = MegaHertz(100);

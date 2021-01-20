@@ -1,13 +1,64 @@
-use heapless::{consts::*, String, Vec};
-
 use core::fmt::Write;
-
+use heapless::{consts::*, String, Vec};
 use serde::{Deserialize, Serialize};
-
 use serde_json_core::{de::from_slice, ser::to_string};
+use smoltcp as net;
 
-use super::iir;
-use super::net;
+use dsp::iir;
+
+#[macro_export]
+macro_rules! route_request {
+    ($request:ident,
+            readable_attributes: [$($read_attribute:tt: $getter:tt),*],
+            modifiable_attributes: [$($write_attribute:tt: $TYPE:ty, $setter:tt),*]) => {
+        match $request.req {
+            server::AccessRequest::Read => {
+                match $request.attribute {
+                $(
+                    $read_attribute => {
+                        #[allow(clippy::redundant_closure_call)]
+                        let value = match $getter() {
+                            Ok(data) => data,
+                            Err(_) => return server::Response::error($request.attribute,
+                                                                     "Failed to read attribute"),
+                        };
+
+                        let encoded_data: String<U256> = match serde_json_core::to_string(&value) {
+                            Ok(data) => data,
+                            Err(_) => return server::Response::error($request.attribute,
+                                    "Failed to encode attribute value"),
+                        };
+
+                        server::Response::success($request.attribute, &encoded_data)
+                    },
+                 )*
+                    _ => server::Response::error($request.attribute, "Unknown attribute")
+                }
+            },
+            server::AccessRequest::Write => {
+                match $request.attribute {
+                $(
+                    $write_attribute => {
+                        let new_value = match serde_json_core::from_str::<$TYPE>(&$request.value) {
+                            Ok(data) => data,
+                            Err(_) => return server::Response::error($request.attribute,
+                                    "Failed to decode value"),
+                        };
+
+                        #[allow(clippy::redundant_closure_call)]
+                        match $setter(new_value) {
+                            Ok(_) => server::Response::success($request.attribute, &$request.value),
+                            Err(_) => server::Response::error($request.attribute,
+                                    "Failed to set attribute"),
+                        }
+                    }
+                 )*
+                    _ => server::Response::error($request.attribute, "Unknown attribute")
+                }
+            }
+        }
+    }
+}
 
 #[derive(Deserialize, Serialize, Debug)]
 pub enum AccessRequest {

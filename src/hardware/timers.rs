@@ -32,6 +32,7 @@ pub enum TriggerSource {
 }
 
 /// Prescalers for externally-supplied reference clocks.
+#[allow(dead_code)]
 pub enum Prescaler {
     Div1 = 0b00,
     Div2 = 0b01,
@@ -40,6 +41,7 @@ pub enum Prescaler {
 }
 
 /// Optional slave operation modes of a timer.
+#[allow(dead_code)]
 pub enum SlaveMode {
     Disabled = 0,
     Trigger = 0b0110,
