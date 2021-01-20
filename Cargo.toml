@@ -75,11 +75,3 @@ opt-level = 3
 debug = true
 lto = true
 codegen-units = 1
-
-[[bin]]
-name = "iir"
-path = "src/iir.rs"
-
-[[bin]]
-name = "lockin"
-path = "src/lockin.rs"
