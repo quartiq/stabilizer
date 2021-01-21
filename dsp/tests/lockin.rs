@@ -29,7 +29,8 @@ pub fn isclose(a: f64, b: f64, rtol: f64, atol: f64) -> bool {
     (a - b).abs() <= a.abs().max(b.abs()) * rtol + atol
 }
 
-const ADC_MAX_COUNT: f64 = (1 << 15) as f64;
+/// ADC full scale in machine units (16 bit signed).
+const ADC_SCALE: f64 = ((1 << 15) - 1) as f64;
 
 struct Lockin {
     harmonic: u32,
@@ -57,25 +58,26 @@ impl Lockin {
         let frequency = frequency.wrapping_mul(self.harmonic);
         let mut phase =
             self.phase.wrapping_add(phase.wrapping_mul(self.harmonic));
-        let mut last = Complex::default();
+        input
+            .iter()
+            .map(|&s| {
+                let m = cossin((phase as i32).wrapping_neg());
+                phase = phase.wrapping_add(frequency);
 
-        for &s in input.iter() {
-            let m = cossin((phase as i32).wrapping_neg());
-            phase = phase.wrapping_add(frequency);
-
-            let signal = (s as i32) << 16;
-            last = Complex(
-                self.iir.update(
-                    &mut self.iir_state[0],
-                    ((signal as i64 * m.0 as i64) >> 32) as i32,
-                ),
-                self.iir.update(
-                    &mut self.iir_state[1],
-                    ((signal as i64 * m.1 as i64) >> 32) as i32,
-                ),
-            );
-        }
-        last
+                let signal = (s as i32) << 16;
+                Complex(
+                    self.iir.update(
+                        &mut self.iir_state[0],
+                        ((signal as i64 * m.0 as i64) >> 32) as _,
+                    ),
+                    self.iir.update(
+                        &mut self.iir_state[1],
+                        ((signal as i64 * m.1 as i64) >> 32) as _,
+                    ),
+                )
+            })
+            .last()
+            .unwrap_or(Complex::default())
     }
 }
 
@@ -96,27 +98,53 @@ fn linear(dbfs: f64) -> f64 {
     10f64.powf(dbfs / 20.)
 }
 
-/// Generate a full batch of samples starting at `time_offset`.
-fn adc_sampled_signal(
+impl Tone {
+    fn eval(&self, time: f64) -> f64 {
+        linear(self.amplitude_dbfs) * (self.phase + self.frequency * time).cos()
+    }
+}
+
+/// Generate a full batch of samples with size `sample_buffer_size` starting at `time_offset`.
+fn sample_tones(
     tones: &Vec<Tone>,
     time_offset: f64,
-    sampling_frequency: f64,
     sample_buffer_size: u32,
 ) -> Vec<i16> {
-    let mut signal = Vec::<i16>::new();
+    (0..sample_buffer_size)
+        .map(|i| {
+            let time = 2. * PI * (time_offset + i as f64);
+            let x: f64 = tones.iter().map(|t| t.eval(time)).sum();
+            assert!(-1. < x && x < 1.);
+            (x * ADC_SCALE) as i16
+        })
+        .collect()
+}
 
-    for i in 0..sample_buffer_size {
-        let time = 2. * PI * (time_offset + i as f64 / sampling_frequency);
-        let x: f64 = tones
-            .iter()
-            .map(|&t| {
-                linear(t.amplitude_dbfs) * (t.phase + t.frequency * time).cos()
-            })
-            .sum();
-        assert!(-1. < x && x < 1.);
-        signal.push((x * ADC_MAX_COUNT) as i16);
-    }
-    signal
+/// Total maximum noise amplitude of the input signal after 2nd order lowpass filter.
+/// Constructive interference is assumed.
+///
+/// # Args
+/// * `tones` - Noise sources at the ADC input.
+/// * `frequency` - Frequency of the signal of interest.
+/// * `corner` - Low-pass filter 3dB corner cutoff frequency.
+///
+/// # Returns
+/// Upper bound of the total amplitude of all noise sources in linear units full scale.
+fn sampled_noise_amplitude(
+    tones: &Vec<Tone>,
+    frequency: f64,
+    corner: f64,
+) -> f64 {
+    tones
+        .iter()
+        .map(|t| {
+            let decades =
+                ((t.frequency - frequency) / corner).abs().max(1.).log10();
+            // 2nd-order filter: 40dB/decade rolloff.
+            linear(t.amplitude_dbfs - 40. * decades)
+        })
+        .sum::<f64>()
+        .max(1. / ADC_SCALE / 2.) // 1/2 LSB from quantization
 }
 
 /// Reference clock timestamp values in one ADC batch period starting at `timestamp_start`. The
@@ -173,49 +201,6 @@ fn lowpass_iir_coefficients(fc: f64, q: f64, k: f64) -> IIRState {
     let a2 = ((a - 1.) / a0).round() as _;
 
     IIRState([b0, 2 * b0, b0, a1, a2])
-}
-
-/// Total noise amplitude of the input signal after sampling by the ADC. This computes an upper
-/// bound of the total noise amplitude, rather than its actual value.
-///
-/// # Args
-/// * `tones` - Noise sources at the ADC input.
-/// * `demodulation_frequency` - Frequency of the demodulation signal (in Hz).
-/// * `corner_frequency` - Low-pass filter 3dB corner (cutoff) frequency.
-///
-/// # Returns
-/// Upper bound of the total amplitude of all noise sources.
-fn sampled_noise_amplitude(
-    tones: &Vec<Tone>,
-    demodulation_frequency: f64,
-    corner_frequency: f64,
-) -> f64 {
-    // There is not a simple way to compute the amplitude of a superpostition of sinusoids with
-    // different frequencies and phases. Although we can compute the amplitude in special cases
-    // (e.g., two signals whose periods have a common multiple), these do not help us in the general
-    // case. However, we can say that the total amplitude will not be greater than the sum of the
-    // amplitudes of the individual noise sources. We treat this as an upper bound, and use it as an
-    // approximation of the actual amplitude.
-
-    let mut noise: f64 = tones
-        .iter()
-        .map(|n| {
-            // Noise inputs create an oscillation at the output, where the oscillation magnitude is
-            // determined by the strength of the noise and its attenuation (attenuation is
-            // determined by its proximity to the demodulation frequency and filter rolloff).
-            let octaves = ((n.frequency - demodulation_frequency).abs()
-                / corner_frequency)
-                .log2();
-            // 2nd-order filter. Approximately 12dB/octave rolloff.
-            let attenuation = -2. * 20. * 2f64.log10() * octaves;
-            linear(n.amplitude_dbfs + attenuation)
-        })
-        .sum();
-
-    // Add in 1/2 LSB for the maximum amplitude deviation resulting from quantization.
-    noise += 1. / ADC_MAX_COUNT / 2.;
-
-    noise
 }
 
 /// Compute the maximum effect of input noise on the lock-in magnitude computation.
@@ -369,7 +354,6 @@ fn phase_noise(
 /// # Args
 /// * `internal_frequency` - Internal clock frequency (Hz). The internal clock increments timestamp
 /// counter values used to record the edges of the external reference.
-/// * `adc_frequency` - ADC sampling frequency (in Hz).
 /// * `reference_frequency` - External reference frequency (in Hz).
 /// * `demodulation_phase_offset` - Phase offset applied to the in-phase and quadrature demodulation
 /// signals.
@@ -388,7 +372,6 @@ fn phase_noise(
 /// tolerance between `time_constant_factor` and `time_constant_factor+1` time constants.
 fn lowpass_test(
     internal_frequency: f64,
-    adc_frequency: f64,
     reference_frequency: f64,
     demodulation_phase_offset: f64,
     harmonic: u32,
@@ -402,19 +385,18 @@ fn lowpass_test(
     tolerance: f64,
 ) {
     assert!(
-        isclose((internal_frequency / adc_frequency).log2(), (internal_frequency / adc_frequency).log2().round(), 0., 1e-5),
+        isclose((internal_frequency).log2(), (internal_frequency).log2().round(), 0., 1e-5),
         "The number of internal clock cycles in one ADC sampling period must be a power-of-two."
     );
 
     assert!(
         internal_frequency / reference_frequency
-            >= internal_frequency / adc_frequency
+            >= internal_frequency
             * (1 << sample_buffer_size_log2) as f64,
         "Too many timestamps per batch. Each batch can have at most 1 timestamp."
     );
 
-    let adc_sample_ticks_log2 =
-        (internal_frequency / adc_frequency).log2().round() as usize;
+    let adc_sample_ticks_log2 = (internal_frequency).log2().round() as usize;
     assert!(
         adc_sample_ticks_log2 + sample_buffer_size_log2 <= 32,
         "The base-2 log of the number of ADC ticks in a sampling period plus the base-2 log of the sample buffer size must be less than 32."
@@ -426,7 +408,7 @@ fn lowpass_test(
             as u32,
         IIR {
             ba: lowpass_iir_coefficients(
-                corner_frequency / adc_frequency,
+                corner_frequency,
                 1. / 2f64.sqrt(),
                 2.,
             ),
@@ -444,13 +426,13 @@ fn lowpass_test(
     // Account for the pll settling time (see its documentation).
     let pll_time_constant_samples =
         (1 << pll_shift_phase.max(pll_shift_frequency)) as usize;
-    let low_pass_time_constant_samples =
-        (time_constant_factor * time_constant * adc_frequency
-            / (1 << sample_buffer_size_log2) as f64) as usize;
+    let low_pass_time_constant_samples = (time_constant_factor * time_constant
+        / (1 << sample_buffer_size_log2) as f64)
+        as usize;
     let samples = pll_time_constant_samples + low_pass_time_constant_samples;
     // Ensure the result remains within tolerance for 1 time constant after `time_constant_factor`
     // time constants.
-    let extra_samples = (time_constant * adc_frequency) as usize;
+    let extra_samples = time_constant as usize;
     let batch_sample_count =
         1_u64 << (adc_sample_ticks_log2 + sample_buffer_size_log2);
 
@@ -482,10 +464,9 @@ fn lowpass_test(
     tones.push(desired_input);
 
     for n in 0..(samples + extra_samples) {
-        let adc_signal = adc_sampled_signal(
+        let adc_signal = sample_tones(
             &tones,
             timestamp_start as f64 / internal_frequency,
-            adc_frequency,
             1 << sample_buffer_size_log2,
         );
         let timestamp = adc_batch_timestamps(
@@ -588,14 +569,13 @@ fn lowpass_test(
 
 #[test]
 fn lowpass() {
-    let internal_frequency: f64 = 100e6;
-    let adc_frequency: f64 = internal_frequency / 64.;
-    let signal_frequency: f64 = 100e3;
+    let internal_frequency: f64 = 64.;
+    let signal_frequency: f64 = 64e-3;
     let harmonic: u32 = 1;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 3;
     let pll_shift_phase: u8 = 2;
-    let corner_frequency: f64 = 1e3;
+    let corner_frequency: f64 = 1e-3;
     let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
     let demodulation_phase_offset: f64 = 0.;
     let time_constant_factor: f64 = 6.;
@@ -603,7 +583,6 @@ fn lowpass() {
 
     lowpass_test(
         internal_frequency,
-        adc_frequency,
         signal_frequency,
         demodulation_phase_offset,
         harmonic,
@@ -635,14 +614,13 @@ fn lowpass() {
 
 #[test]
 fn lowpass_demodulation_phase_offset_pi_2() {
-    let internal_frequency: f64 = 100e6;
-    let adc_frequency: f64 = internal_frequency / 64.;
-    let signal_frequency: f64 = 100e3;
+    let internal_frequency: f64 = 64.;
+    let signal_frequency: f64 = 64e-3;
     let harmonic: u32 = 1;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 3;
     let pll_shift_phase: u8 = 2;
-    let corner_frequency: f64 = 1e3;
+    let corner_frequency: f64 = 1e-3;
     let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
     let demodulation_phase_offset: f64 = PI / 2.;
     let time_constant_factor: f64 = 6.;
@@ -650,7 +628,6 @@ fn lowpass_demodulation_phase_offset_pi_2() {
 
     lowpass_test(
         internal_frequency,
-        adc_frequency,
         signal_frequency,
         demodulation_phase_offset,
         harmonic,
@@ -682,14 +659,13 @@ fn lowpass_demodulation_phase_offset_pi_2() {
 
 #[test]
 fn lowpass_phase_offset_pi_2() {
-    let internal_frequency: f64 = 100e6;
-    let adc_frequency: f64 = internal_frequency / 64.;
-    let signal_frequency: f64 = 100e3;
+    let internal_frequency: f64 = 64.;
+    let signal_frequency: f64 = 64e-3;
     let harmonic: u32 = 1;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 3;
     let pll_shift_phase: u8 = 2;
-    let corner_frequency: f64 = 1e3;
+    let corner_frequency: f64 = 1e-3;
     let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
     let demodulation_phase_offset: f64 = 0.;
     let time_constant_factor: f64 = 6.;
@@ -697,7 +673,6 @@ fn lowpass_phase_offset_pi_2() {
 
     lowpass_test(
         internal_frequency,
-        adc_frequency,
         signal_frequency,
         demodulation_phase_offset,
         harmonic,
@@ -728,15 +703,14 @@ fn lowpass_phase_offset_pi_2() {
 }
 
 #[test]
-fn lowpass_fundamental_111e3_phase_offset_pi_4() {
-    let internal_frequency: f64 = 100e6;
-    let adc_frequency: f64 = internal_frequency / 64.;
-    let signal_frequency: f64 = 111e3;
+fn lowpass_fundamental_71e_3_phase_offset_pi_4() {
+    let internal_frequency: f64 = 64.;
+    let signal_frequency: f64 = 71e-3;
     let harmonic: u32 = 1;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 3;
     let pll_shift_phase: u8 = 2;
-    let corner_frequency: f64 = 1e3;
+    let corner_frequency: f64 = 0.6e-3;
     let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
     let demodulation_phase_offset: f64 = 0.;
     let time_constant_factor: f64 = 5.;
@@ -744,7 +718,6 @@ fn lowpass_fundamental_111e3_phase_offset_pi_4() {
 
     lowpass_test(
         internal_frequency,
-        adc_frequency,
         signal_frequency,
         demodulation_phase_offset,
         harmonic,
@@ -776,14 +749,13 @@ fn lowpass_fundamental_111e3_phase_offset_pi_4() {
 
 #[test]
 fn lowpass_first_harmonic() {
-    let internal_frequency: f64 = 100e6;
-    let adc_frequency: f64 = internal_frequency / 64.;
-    let signal_frequency: f64 = 50e3;
+    let internal_frequency: f64 = 64.;
+    let signal_frequency: f64 = 50e-3;
     let harmonic: u32 = 2;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 2;
     let pll_shift_phase: u8 = 1;
-    let corner_frequency: f64 = 1e3;
+    let corner_frequency: f64 = 1e-3;
     let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
     let demodulation_phase_offset: f64 = 0.;
     let time_constant_factor: f64 = 5.;
@@ -791,7 +763,6 @@ fn lowpass_first_harmonic() {
 
     lowpass_test(
         internal_frequency,
-        adc_frequency,
         signal_frequency,
         demodulation_phase_offset,
         harmonic,
@@ -823,14 +794,13 @@ fn lowpass_first_harmonic() {
 
 #[test]
 fn lowpass_second_harmonic() {
-    let internal_frequency: f64 = 100e6;
-    let adc_frequency: f64 = internal_frequency / 64.;
-    let signal_frequency: f64 = 50e3;
+    let internal_frequency: f64 = 64.;
+    let signal_frequency: f64 = 50e-3;
     let harmonic: u32 = 3;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 2;
     let pll_shift_phase: u8 = 1;
-    let corner_frequency: f64 = 1e3;
+    let corner_frequency: f64 = 1e-3;
     let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
     let demodulation_phase_offset: f64 = 0.;
     let time_constant_factor: f64 = 5.;
@@ -838,7 +808,6 @@ fn lowpass_second_harmonic() {
 
     lowpass_test(
         internal_frequency,
-        adc_frequency,
         signal_frequency,
         demodulation_phase_offset,
         harmonic,
@@ -870,14 +839,13 @@ fn lowpass_second_harmonic() {
 
 #[test]
 fn lowpass_third_harmonic() {
-    let internal_frequency: f64 = 100e6;
-    let adc_frequency: f64 = internal_frequency / 64.;
-    let signal_frequency: f64 = 50e3;
+    let internal_frequency: f64 = 64.;
+    let signal_frequency: f64 = 50e-3;
     let harmonic: u32 = 4;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 2;
     let pll_shift_phase: u8 = 1;
-    let corner_frequency: f64 = 1e3;
+    let corner_frequency: f64 = 1e-3;
     let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
     let demodulation_phase_offset: f64 = 0.;
     let time_constant_factor: f64 = 5.;
@@ -885,7 +853,6 @@ fn lowpass_third_harmonic() {
 
     lowpass_test(
         internal_frequency,
-        adc_frequency,
         signal_frequency,
         demodulation_phase_offset,
         harmonic,
@@ -917,14 +884,13 @@ fn lowpass_third_harmonic() {
 
 #[test]
 fn lowpass_first_harmonic_phase_shift() {
-    let internal_frequency: f64 = 100e6;
-    let adc_frequency: f64 = internal_frequency / 64.;
-    let signal_frequency: f64 = 50e3;
+    let internal_frequency: f64 = 64.;
+    let signal_frequency: f64 = 50e-3;
     let harmonic: u32 = 2;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 2;
     let pll_shift_phase: u8 = 1;
-    let corner_frequency: f64 = 1e3;
+    let corner_frequency: f64 = 1e-3;
     let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
     let demodulation_phase_offset: f64 = 0.;
     let time_constant_factor: f64 = 5.;
@@ -932,7 +898,6 @@ fn lowpass_first_harmonic_phase_shift() {
 
     lowpass_test(
         internal_frequency,
-        adc_frequency,
         signal_frequency,
         demodulation_phase_offset,
         harmonic,
@@ -964,14 +929,13 @@ fn lowpass_first_harmonic_phase_shift() {
 
 #[test]
 fn lowpass_adc_frequency_1e6() {
-    let internal_frequency: f64 = 100e6;
-    let adc_frequency: f64 = internal_frequency / 32.;
-    let signal_frequency: f64 = 100e3;
+    let internal_frequency: f64 = 32.;
+    let signal_frequency: f64 = 100e-3;
     let harmonic: u32 = 1;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 2;
     let pll_shift_phase: u8 = 1;
-    let corner_frequency: f64 = 1e3;
+    let corner_frequency: f64 = 1e-3;
     let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
     let demodulation_phase_offset: f64 = 0.;
     let time_constant_factor: f64 = 5.;
@@ -979,7 +943,6 @@ fn lowpass_adc_frequency_1e6() {
 
     lowpass_test(
         internal_frequency,
-        adc_frequency,
         signal_frequency,
         demodulation_phase_offset,
         harmonic,
@@ -1011,14 +974,13 @@ fn lowpass_adc_frequency_1e6() {
 
 #[test]
 fn lowpass_internal_frequency_125e6() {
-    let internal_frequency: f64 = 125e6;
-    let adc_frequency: f64 = internal_frequency / 64.;
-    let signal_frequency: f64 = 100e3;
+    let internal_frequency: f64 = 64.;
+    let signal_frequency: f64 = 100e-3;
     let harmonic: u32 = 1;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 2;
     let pll_shift_phase: u8 = 1;
-    let corner_frequency: f64 = 1e3;
+    let corner_frequency: f64 = 1e-3;
     let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
     let demodulation_phase_offset: f64 = 0.;
     let time_constant_factor: f64 = 5.;
@@ -1026,7 +988,6 @@ fn lowpass_internal_frequency_125e6() {
 
     lowpass_test(
         internal_frequency,
-        adc_frequency,
         signal_frequency,
         demodulation_phase_offset,
         harmonic,
@@ -1058,14 +1019,13 @@ fn lowpass_internal_frequency_125e6() {
 
 #[test]
 fn lowpass_low_signal_frequency() {
-    let internal_frequency: f64 = 100e6;
-    let adc_frequency: f64 = internal_frequency / 64.;
-    let signal_frequency: f64 = 10e3;
+    let internal_frequency: f64 = 64.;
+    let signal_frequency: f64 = 10e-3;
     let harmonic: u32 = 1;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 2;
     let pll_shift_phase: u8 = 1;
-    let corner_frequency: f64 = 1e3;
+    let corner_frequency: f64 = 1e-3;
     let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
     let demodulation_phase_offset: f64 = 0.;
     let time_constant_factor: f64 = 5.;
@@ -1073,7 +1033,6 @@ fn lowpass_low_signal_frequency() {
 
     lowpass_test(
         internal_frequency,
-        adc_frequency,
         signal_frequency,
         demodulation_phase_offset,
         harmonic,
