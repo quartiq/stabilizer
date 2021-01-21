@@ -12,24 +12,14 @@ use rtic::cyccnt::{Instant, U32Ext};
 
 use heapless::{consts::*, String};
 
-use stabilizer::{hardware, server};
-
-use dsp::{
-    iir, iir_int,
-    reciprocal_pll::TimestampHandler,
-    trig::{atan2, cossin},
-    Complex,
+use stabilizer::{
+    hardware, server, ADC_SAMPLE_TICKS_LOG2, SAMPLE_BUFFER_SIZE_LOG2,
 };
+
+use dsp::{iir, lockin::Lockin, reciprocal_pll::TimestampHandler};
 use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
 };
-
-// Frequency scaling factor for lock-in harmonic demodulation.
-const HARMONIC: u32 = 1;
-// Phase offset applied to the lock-in demodulation signal.
-const PHASE_OFFSET: u32 = 0;
-const ADC_SAMPLE_TICKS_LOG2: u16 = 8;
-const SAMPLE_BUFFER_SIZE_LOG2: usize = 3;
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
 
@@ -54,9 +44,8 @@ const APP: () = {
         iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
 
         timestamper: InputStamper,
-        timestamp_handler: TimestampHandler,
-        iir_lockin: iir_int::IIR,
-        iir_state_lockin: [iir_int::IIRState; 2],
+        pll: TimestampHandler,
+        lockin: Lockin,
     }
 
     #[init]
@@ -64,14 +53,16 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let timestamp_handler = TimestampHandler::new(
-            4,
-            3,
+        let pll = TimestampHandler::new(
+            4, // relative PLL frequency bandwidth: 2**-4, TODO: expose
+            3, // relative PLL phase bandwidth: 2**-3, TODO: expose
             ADC_SAMPLE_TICKS_LOG2 as usize,
             SAMPLE_BUFFER_SIZE_LOG2,
         );
-        let iir_lockin = iir_int::IIR::default();
-        let iir_state_lockin = [iir_int::IIRState::default(); 2];
+
+        let lockin = Lockin::new(
+            10, // relative Locking lowpass filter bandwidth, TODO: expose
+        );
 
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();
@@ -82,6 +73,9 @@ const APP: () = {
         // Start sampling ADCs.
         stabilizer.adc_dac_timer.start();
 
+        // Start recording digital input timestamps.
+        stabilizer.timestamp_timer.start();
+
         init::LateResources {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
@@ -89,9 +83,8 @@ const APP: () = {
             net_interface: stabilizer.net.interface,
             timestamper: stabilizer.timestamper,
 
-            timestamp_handler,
-            iir_lockin,
-            iir_state_lockin,
+            pll,
+            lockin,
         }
     }
 
@@ -111,7 +104,9 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adcs, dacs, iir_state, iir_ch, iir_lockin, iir_state_lockin, timestamp_handler, timestamper], priority=2)]
+    ///
+    /// TODO: document lockin
+    #[task(binds=DMA1_STR4, resources=[adcs, dacs, iir_state, iir_ch, lockin, timestamper, pll], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -123,49 +118,47 @@ const APP: () = {
             c.resources.dacs.1.acquire_buffer(),
         ];
 
-        let iir_lockin = c.resources.iir_lockin;
-        let iir_state_lockin = c.resources.iir_state_lockin;
         let iir_ch = c.resources.iir_ch;
         let iir_state = c.resources.iir_state;
+        let lockin = c.resources.lockin;
 
         let (pll_phase, pll_frequency) = c
             .resources
-            .timestamp_handler
+            .pll
             .update(c.resources.timestamper.latest_timestamp());
-        let frequency = pll_frequency.wrapping_mul(HARMONIC);
-        let mut phase =
-            PHASE_OFFSET.wrapping_add(pll_phase.wrapping_mul(HARMONIC));
+
+        // Harmonic index to demodulate
+        let harmonic: i32 = -1;
+        // Demodulation LO phase offset
+        let phase_offset: i32 = 0;
+        let sample_frequency = (pll_frequency as i32).wrapping_mul(harmonic);
+        let mut sample_phase = phase_offset
+            .wrapping_add((pll_phase as i32).wrapping_mul(harmonic));
 
         for i in 0..adc_samples[0].len() {
-            let m = cossin((phase as i32).wrapping_neg());
-            phase = phase.wrapping_add(frequency);
+            // Convert to signed, MSB align the ADC sample.
+            let input = (adc_samples[0][i] as i16 as i32) << 16;
+            // Obtain demodulated, filtered IQ sample.
+            lockin.update(input, sample_phase);
+            // Advance the sample phase.
+            sample_phase = sample_phase.wrapping_add(sample_frequency);
 
-            let signal = (adc_samples[0][i] as i16 as i32) << 16;
-            let signal = Complex(
-                iir_lockin.update(
-                    &mut iir_state_lockin[0],
-                    ((signal as i64 * m.0 as i64) >> 32) as _,
-                ),
-                iir_lockin.update(
-                    &mut iir_state_lockin[1],
-                    ((signal as i64 * m.1 as i64) >> 16) as _,
-                ),
-            );
+            // Convert from IQ to power and phase.
+            let mut power = lockin.power() as _;
+            let mut phase = lockin.phase() as _;
 
-            let mut magnitude =
-                (signal.0 * signal.0 + signal.1 * signal.1) as _;
-            let mut phase = atan2(signal.1, signal.0) as _;
-
+            // Filter power and phase through IIR filters.
+            // Note: Normalization to be done in filters. Phase will wrap happily.
             for j in 0..iir_state[0].len() {
-                magnitude =
-                    iir_ch[0][j].update(&mut iir_state[0][j], magnitude);
+                power = iir_ch[0][j].update(&mut iir_state[0][j], power);
                 phase = iir_ch[1][j].update(&mut iir_state[1][j], phase);
             }
 
             // Note(unsafe): range clipping to i16 is ensured by IIR filters above.
+            // Convert to DAC data.
             unsafe {
                 dac_samples[0][i] =
-                    magnitude.to_int_unchecked::<i16>() as u16 ^ 0x8000;
+                    power.to_int_unchecked::<i16>() as u16 ^ 0x8000;
                 dac_samples[1][i] =
                     phase.to_int_unchecked::<i16>() as u16 ^ 0x8000;
             }
