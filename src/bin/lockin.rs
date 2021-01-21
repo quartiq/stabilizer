@@ -70,11 +70,11 @@ const APP: () = {
         stabilizer.dacs.0.start();
         stabilizer.dacs.1.start();
 
-        // Start sampling ADCs.
-        stabilizer.adc_dac_timer.start();
-
         // Start recording digital input timestamps.
         stabilizer.timestamp_timer.start();
+
+        // Start sampling ADCs.
+        stabilizer.adc_dac_timer.start();
 
         init::LateResources {
             afes: stabilizer.afes,
@@ -127,7 +127,7 @@ const APP: () = {
             .pll
             .update(c.resources.timestamper.latest_timestamp());
 
-        // Harmonic index to demodulate
+        // Harmonic index of the LO: -1 to _de_modulate the fundamental
         let harmonic: i32 = -1;
         // Demodulation LO phase offset
         let phase_offset: i32 = 0;
@@ -139,13 +139,13 @@ const APP: () = {
             // Convert to signed, MSB align the ADC sample.
             let input = (adc_samples[0][i] as i16 as i32) << 16;
             // Obtain demodulated, filtered IQ sample.
-            lockin.update(input, sample_phase);
+            let output = lockin.update(input, sample_phase);
             // Advance the sample phase.
             sample_phase = sample_phase.wrapping_add(sample_frequency);
 
             // Convert from IQ to power and phase.
-            let mut power = lockin.power() as _;
-            let mut phase = lockin.phase() as _;
+            let mut power = output.power() as _;
+            let mut phase = output.phase() as _;
 
             // Filter power and phase through IIR filters.
             // Note: Normalization to be done in filters. Phase will wrap happily.

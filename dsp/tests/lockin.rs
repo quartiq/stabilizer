@@ -1,7 +1,7 @@
 use dsp::{
+    atan2, cossin,
     iir_int::{IIRState, IIR},
     reciprocal_pll::TimestampHandler,
-    trig::{atan2, cossin},
     Complex,
 };
 
@@ -185,7 +185,7 @@ fn adc_batch_timestamps(
 /// https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
 ///
 /// # Args
-/// * `fc` - Corner frequency, or 3dB cutoff frequency (in Hz).
+/// * `fc` - Corner frequency, or 3dB cutoff frequency (in units of sample rate).
 /// * `q` - Quality factor (1/sqrt(2) for critical).
 /// * `k` - DC gain.
 ///

@@ -1,8 +1,4 @@
-use super::{
-    iir_int,
-    trig::{atan2, cossin},
-    Complex,
-};
+use super::{cossin, iir_int, Complex};
 use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, Default, Deserialize, Serialize)]
@@ -36,20 +32,5 @@ impl Lockin {
                 ((signal as i64 * m.1 as i64) >> 32) as _,
             ),
         )
-    }
-
-    pub fn iq(&self) -> Complex<i32> {
-        Complex(self.iir_state[0].get_y(0), self.iir_state[1].get_y(0))
-    }
-
-    pub fn power(&self) -> i32 {
-        let iq = self.iq();
-        (((iq.0 as i64) * (iq.0 as i64) + (iq.1 as i64) * (iq.1 as i64)) >> 32)
-            as i32
-    }
-
-    pub fn phase(&self) -> i32 {
-        let iq = self.iq();
-        atan2(iq.1, iq.0)
     }
 }
