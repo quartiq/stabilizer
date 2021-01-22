@@ -61,7 +61,7 @@ const APP: () = {
         );
 
         let lockin = Lockin::new(
-            &iir_int::IIRState::default(),  // TODO: lowpass, expose
+            &iir_int::IIRState::default(), // TODO: lowpass, expose
         );
 
         // Enable ADC/DAC events
