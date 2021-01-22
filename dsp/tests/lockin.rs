@@ -1,7 +1,8 @@
 use dsp::{
-    atan2, cossin,
+    atan2,
     iir_int::{IIRState, IIR},
     reciprocal_pll::TimestampHandler,
+    lockin::Lockin,
     Complex,
 };
 
@@ -30,51 +31,39 @@ pub fn isclose(a: f64, b: f64, rtol: f64, atol: f64) -> bool {
 }
 
 /// ADC full scale in machine units (16 bit signed).
-const ADC_SCALE: f64 = ((1 << 15) - 1) as f64;
+const ADC_SCALE: f64 = ((1 << 15) - 1) as _;
 
-struct Lockin {
-    harmonic: u32,
-    phase: u32,
-    iir: IIR,
-    iir_state: [IIRState; 2],
+struct PllLockin {
+    harmonic: i32,
+    phase: i32,
+    lockin: Lockin,
 }
 
-impl Lockin {
-    pub fn new(harmonic: u32, phase: u32, iir: IIR) -> Self {
-        Lockin {
+impl PllLockin {
+    pub fn new(harmonic: i32, phase: i32, iir: &IIRState) -> Self {
+        PllLockin {
             harmonic,
             phase,
-            iir,
-            iir_state: [IIRState::default(); 2],
+            lockin: Lockin::new(iir)
         }
     }
 
     pub fn update(
         &mut self,
         input: Vec<i16>,
-        phase: u32,
-        frequency: u32,
+        phase: i32,
+        frequency: i32,
     ) -> Complex<i32> {
-        let frequency = frequency.wrapping_mul(self.harmonic);
-        let mut phase =
+        let sample_frequency = frequency.wrapping_mul(self.harmonic);
+        let mut sample_phase =
             self.phase.wrapping_add(phase.wrapping_mul(self.harmonic));
         input
             .iter()
             .map(|&s| {
-                let m = cossin((phase as i32).wrapping_neg());
-                phase = phase.wrapping_add(frequency);
-
-                let signal = (s as i32) << 16;
-                Complex(
-                    self.iir.update(
-                        &mut self.iir_state[0],
-                        ((signal as i64 * m.0 as i64) >> 32) as _,
-                    ),
-                    self.iir.update(
-                        &mut self.iir_state[1],
-                        ((signal as i64 * m.1 as i64) >> 32) as _,
-                    ),
-                )
+                let input = (s as i32) << 16;
+                let signal = self.lockin.update(input, sample_phase.wrapping_neg());
+                sample_phase = sample_phase.wrapping_add(sample_frequency);
+                signal
             })
             .last()
             .unwrap_or(Complex::default())
@@ -138,10 +127,9 @@ fn sampled_noise_amplitude(
     tones
         .iter()
         .map(|t| {
-            let decades =
-                ((t.frequency - frequency) / corner).abs().max(1.).log10();
-            // 2nd-order filter: 40dB/decade rolloff.
-            linear(t.amplitude_dbfs - 40. * decades)
+            let df = (t.frequency - frequency) / corner;
+            // Assuming a 2nd order lowpass filter: 40dB/decade.
+            linear(t.amplitude_dbfs - 40. * df.abs().max(1.).log10())
         })
         .sum::<f64>()
         .max(1. / ADC_SCALE / 2.) // 1/2 LSB from quantization
@@ -152,21 +140,18 @@ fn sampled_noise_amplitude(
 /// only if one occurred during the batch.
 ///
 /// # Args
-/// * `reference_frequency` - External reference signal frequency (in Hz).
+/// * `reference_period` - External reference signal period in units of the internal clock period.
 /// * `timestamp_start` - Start time in terms of the internal clock count. This is the start time of
 /// the current processing sequence.
 /// * `timestamp_stop` - Stop time in terms of the internal clock count.
-/// * `internal_frequency` - Internal clock frequency (in Hz).
 ///
 /// # Returns
 /// An Option, containing a timestamp if one occurred during the current batch period.
 fn adc_batch_timestamps(
-    reference_frequency: f64,
+    reference_period: f64,
     timestamp_start: u64,
     timestamp_stop: u64,
-    internal_frequency: f64,
 ) -> Option<u32> {
-    let reference_period = internal_frequency / reference_frequency;
     let start_count = timestamp_start as f64 % reference_period;
 
     let timestamp = (reference_period - start_count) % reference_period;
@@ -374,7 +359,7 @@ fn lowpass_test(
     internal_frequency: f64,
     reference_frequency: f64,
     demodulation_phase_offset: f64,
-    harmonic: u32,
+    harmonic: i32,
     sample_buffer_size_log2: usize,
     pll_shift_frequency: u8,
     pll_shift_phase: u8,
@@ -402,17 +387,14 @@ fn lowpass_test(
         "The base-2 log of the number of ADC ticks in a sampling period plus the base-2 log of the sample buffer size must be less than 32."
     );
 
-    let mut lockin = Lockin::new(
+    let mut lockin = PllLockin::new(
         harmonic,
-        (demodulation_phase_offset / (2. * PI) * (1_u64 << 32) as f64).round()
-            as u32,
-        IIR {
-            ba: lowpass_iir_coefficients(
+        (demodulation_phase_offset / (2. * PI) * (1i64 << 32) as f64).round()
+            as i32,
+        &lowpass_iir_coefficients(
                 corner_frequency,
-                1. / 2f64.sqrt(),
-                2.,
-            ),
-        },
+                1. / 2f64.sqrt(),  // critical q
+                2.)  // DC gain to get to full scale with the image filtered out
     );
     let mut timestamp_handler = TimestampHandler::new(
         pll_shift_frequency,
@@ -470,10 +452,9 @@ fn lowpass_test(
             1 << sample_buffer_size_log2,
         );
         let timestamp = adc_batch_timestamps(
-            reference_frequency,
+            internal_frequency/reference_frequency,
             timestamp_start,
             timestamp_start + batch_sample_count - 1,
-            internal_frequency,
         );
         timestamp_start += batch_sample_count;
 
@@ -481,8 +462,8 @@ fn lowpass_test(
             timestamp_handler.update(timestamp);
         let output = lockin.update(
             adc_signal,
-            demodulation_initial_phase,
-            demodulation_frequency,
+            demodulation_initial_phase as i32,
+            demodulation_frequency as i32,
         );
         let magnitude = (((output.0 as i64) * (output.0 as i64)
             + (output.1 as i64) * (output.1 as i64))
@@ -571,7 +552,7 @@ fn lowpass_test(
 fn lowpass() {
     let internal_frequency: f64 = 64.;
     let signal_frequency: f64 = 64e-3;
-    let harmonic: u32 = 1;
+    let harmonic: i32 = 1;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 3;
     let pll_shift_phase: u8 = 2;
@@ -616,7 +597,7 @@ fn lowpass() {
 fn lowpass_demodulation_phase_offset_pi_2() {
     let internal_frequency: f64 = 64.;
     let signal_frequency: f64 = 64e-3;
-    let harmonic: u32 = 1;
+    let harmonic: i32 = 1;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 3;
     let pll_shift_phase: u8 = 2;
@@ -661,7 +642,7 @@ fn lowpass_demodulation_phase_offset_pi_2() {
 fn lowpass_phase_offset_pi_2() {
     let internal_frequency: f64 = 64.;
     let signal_frequency: f64 = 64e-3;
-    let harmonic: u32 = 1;
+    let harmonic: i32 = 1;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 3;
     let pll_shift_phase: u8 = 2;
@@ -706,7 +687,7 @@ fn lowpass_phase_offset_pi_2() {
 fn lowpass_fundamental_71e_3_phase_offset_pi_4() {
     let internal_frequency: f64 = 64.;
     let signal_frequency: f64 = 71e-3;
-    let harmonic: u32 = 1;
+    let harmonic: i32 = 1;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 3;
     let pll_shift_phase: u8 = 2;
@@ -751,7 +732,7 @@ fn lowpass_fundamental_71e_3_phase_offset_pi_4() {
 fn lowpass_first_harmonic() {
     let internal_frequency: f64 = 64.;
     let signal_frequency: f64 = 50e-3;
-    let harmonic: u32 = 2;
+    let harmonic: i32 = 2;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 2;
     let pll_shift_phase: u8 = 1;
@@ -796,7 +777,7 @@ fn lowpass_first_harmonic() {
 fn lowpass_second_harmonic() {
     let internal_frequency: f64 = 64.;
     let signal_frequency: f64 = 50e-3;
-    let harmonic: u32 = 3;
+    let harmonic: i32 = 3;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 2;
     let pll_shift_phase: u8 = 1;
@@ -841,7 +822,7 @@ fn lowpass_second_harmonic() {
 fn lowpass_third_harmonic() {
     let internal_frequency: f64 = 64.;
     let signal_frequency: f64 = 50e-3;
-    let harmonic: u32 = 4;
+    let harmonic: i32 = 4;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 2;
     let pll_shift_phase: u8 = 1;
@@ -886,7 +867,7 @@ fn lowpass_third_harmonic() {
 fn lowpass_first_harmonic_phase_shift() {
     let internal_frequency: f64 = 64.;
     let signal_frequency: f64 = 50e-3;
-    let harmonic: u32 = 2;
+    let harmonic: i32 = 2;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 2;
     let pll_shift_phase: u8 = 1;
@@ -931,7 +912,7 @@ fn lowpass_first_harmonic_phase_shift() {
 fn lowpass_adc_frequency_1e6() {
     let internal_frequency: f64 = 32.;
     let signal_frequency: f64 = 100e-3;
-    let harmonic: u32 = 1;
+    let harmonic: i32 = 1;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 2;
     let pll_shift_phase: u8 = 1;
@@ -976,7 +957,7 @@ fn lowpass_adc_frequency_1e6() {
 fn lowpass_internal_frequency_125e6() {
     let internal_frequency: f64 = 64.;
     let signal_frequency: f64 = 100e-3;
-    let harmonic: u32 = 1;
+    let harmonic: i32 = 1;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 2;
     let pll_shift_phase: u8 = 1;
@@ -1021,7 +1002,7 @@ fn lowpass_internal_frequency_125e6() {
 fn lowpass_low_signal_frequency() {
     let internal_frequency: f64 = 64.;
     let signal_frequency: f64 = 10e-3;
-    let harmonic: u32 = 1;
+    let harmonic: i32 = 1;
     let sample_buffer_size_log2: usize = 2;
     let pll_shift_frequency: u8 = 2;
     let pll_shift_phase: u8 = 1;

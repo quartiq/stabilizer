@@ -8,16 +8,18 @@ pub struct Lockin {
 }
 
 impl Lockin {
-    pub fn new(_corner: u8) -> Self {
+    pub fn new(ba: &iir_int::IIRState) -> Self {
+        let mut iir = iir_int::IIR::default();
+        iir.ba.0.copy_from_slice(&ba.0);
         Lockin {
-            iir: iir_int::IIR::default(), // TODO: lowpass coefficients from corner
+            iir,
             iir_state: [iir_int::IIRState::default(); 2],
         }
     }
 
     pub fn update(&mut self, signal: i32, phase: i32) -> Complex<i32> {
         // Get the LO signal for demodulation.
-        let m = cossin(phase.wrapping_neg());
+        let m = cossin(phase);
 
         // Mix with the LO signal, filter with the IIR lowpass,
         // return IQ (in-phase and quadrature) data.

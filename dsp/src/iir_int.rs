@@ -3,20 +3,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Copy, Clone, Default, Deserialize, Serialize)]
 pub struct IIRState(pub [i32; 5]);
 
-impl IIRState {
-    #[inline(always)]
-    pub fn get_x(&self, index: usize) -> i32 {
-        // x0 is at index 0 in a biquad between updates
-        self.0[index]
-    }
-
-    #[inline(always)]
-    pub fn get_y(&self, index: usize) -> i32 {
-        // y0 is at index 2 in a biquad between updates
-        self.0[2 + index]
-    }
-}
-
 fn macc(y0: i32, x: &[i32], a: &[i32], shift: u32) -> i32 {
     // Rounding bias, half up
     let y0 = ((y0 as i64) << shift) + (1 << (shift - 1));
@@ -42,8 +28,8 @@ pub struct IIR {
 }
 
 impl IIR {
-    /// Coefficient fixed point: signed Q2.30.
-    /// Tailored to low-passes PI, II etc.
+    /// Coefficient fixed point format: signed Q2.30.
+    /// Tailored to low-passes, PI, II etc.
     pub const SHIFT: u32 = 30;
 
     /// Feed a new input value into the filter, update the filter state, and
