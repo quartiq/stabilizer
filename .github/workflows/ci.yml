@@ -29,6 +29,11 @@ jobs:
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+      - name: cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --verbose
 
   compile:
     runs-on: ubuntu-latest
@@ -37,6 +42,12 @@ jobs:
         toolchain:
           - stable
           - beta
+        bin:
+          - dual-iir
+          - lockin
+        features:
+          - ''
+          - pounder_v1_1
     steps:
       - uses: actions/checkout@v2
       - name: Install Rust ${{ matrix.toolchain }}
@@ -46,20 +57,11 @@ jobs:
           target: thumbv7em-none-eabihf
           override: true
           components: llvm-tools-preview
-      - name: cargo check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --verbose
-      - name: cargo build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
       - name: cargo build release
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release
+          args: --release --features "${{ matrix.features }}" --bin ${{ matrix.bin }}
       - name: cargo-binutils
         uses: actions-rs/cargo@v1
         with:
@@ -69,25 +71,19 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: size
-          args: --release
+          args: --release --features "${{ matrix.features }}" --bin ${{ matrix.bin }}
       - name: cargo objcopy
         uses: actions-rs/cargo@v1
         with:
           command: objcopy
-          args: --release --verbose -- -O binary stabilizer-release.bin
+          args: --release --features "${{ matrix.features }}" --bin ${{ matrix.bin }} --verbose -- -O binary ${{ matrix.bin }}-release.bin
       - uses: actions/upload-artifact@v2
-        if: ${{ matrix.toolchain == 'stable' }}
+        if: ${{ matrix.toolchain == 'stable' && matrix.features == '' }}
         with:
-          name: stabilizer_${{ github.sha }}
+          name: stabilizer_${{ matrix.bin }}
           path: |
-            target/*/release/stabilizer
-            stabilizer-release.bin
-
-      - name: Build (Pounder v1.1)
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --features pounder_v1_1
+            target/*/release/${{ matrix.bin }}
+            ${{ matrix.bin }}-release.bin
 
   test:
     runs-on: ubuntu-latest

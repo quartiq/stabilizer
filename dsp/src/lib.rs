@@ -3,8 +3,6 @@
 
 use core::ops::{Add, Mul, Neg};
 
-pub type Complex<T> = (T, T);
-
 /// Bit shift, round up half.
 ///
 /// # Arguments
@@ -114,12 +112,19 @@ where
         .fold(y0, |y, xa| y + xa)
 }
 
+mod atan2;
+mod complex;
+mod cossin;
 pub mod iir;
 pub mod iir_int;
+pub mod lockin;
 pub mod pll;
 pub mod reciprocal_pll;
-pub mod trig;
 pub mod unwrap;
 
+pub use atan2::atan2;
+pub use complex::Complex;
+pub use cossin::cossin;
+
 #[cfg(test)]
-mod testing;
+pub mod testing;
