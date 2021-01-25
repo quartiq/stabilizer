@@ -43,7 +43,7 @@ mod test {
         atan2,
         iir_int::{IIRState, IIR},
         lockin::Lockin,
-        reciprocal_pll::TimestampHandler,
+        rpll::TimestampHandler,
         testing::{isclose, max_error},
         Complex,
     };

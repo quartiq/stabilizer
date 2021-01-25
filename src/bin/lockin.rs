@@ -16,7 +16,7 @@ use stabilizer::{
     hardware, server, ADC_SAMPLE_TICKS_LOG2, SAMPLE_BUFFER_SIZE_LOG2,
 };
 
-use dsp::{iir, iir_int, lockin::Lockin, reciprocal_pll::TimestampHandler};
+use dsp::{iir, iir_int, lockin::Lockin, rpll::TimestampHandler};
 use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
 };
