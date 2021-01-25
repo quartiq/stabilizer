@@ -21,19 +21,22 @@ impl RPLL {
         shift_frequency: u8,
         shift_phase: u8,
     ) -> (i32, i32) {
-        self.y1 += self.f1;
+        debug_assert!(shift_frequency > 0);
+        debug_assert!(shift_phase > 0);
+        debug_assert!(32 + self.dt2 >= shift_frequency);
+        self.y1 = self.y1.wrapping_add(self.f1);
         if let Some(xj) = input {
-            self.f2 += (1i64 << 32 + self.dt2 - shift_frequency)
-                - (self.f2 * (xj - self.xj1) as i64
+            self.f2 = self.f2.wrapping_add((1i64 << 32 + self.dt2 - shift_frequency)
+                - (self.f2.wrapping_mul(xj.wrapping_sub(self.xj1) as i64)
                     + (1i64 << shift_frequency - 1)
-                    >> shift_frequency);
-            self.f1 = self.f2 as i32
-                + (self.f2 * (self.t - xj) as i64
+                    >> shift_frequency));
+            self.f1 = (self.f2 as i32)
+                .wrapping_add((self.f2.wrapping_mul(self.t.wrapping_sub(xj) as i64)
                     - ((self.y1 as i64) << self.dt2)
                     + (1i64 << shift_phase - 1)
-                    >> shift_phase) as i32;
+                    >> shift_phase) as i32);
         }
-        self.t += 1 << self.dt2;
+        self.t = self.t.wrapping_add(1 << self.dt2);
         (self.y1, self.f1)
     }
 }

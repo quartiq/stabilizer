@@ -384,7 +384,7 @@ mod test {
         reference_frequency: f64,
         demodulation_phase_offset: f64,
         harmonic: i32,
-        sample_buffer_size_log2: usize,
+        sample_buffer_size_log2: u8,
         pll_shift_frequency: u8,
         pll_shift_phase: u8,
         corner_frequency: f64,
@@ -406,7 +406,7 @@ mod test {
     );
 
         let adc_sample_ticks_log2 =
-            (internal_frequency).log2().round() as usize;
+            (internal_frequency).log2().round() as u8;
         assert!(
         adc_sample_ticks_log2 + sample_buffer_size_log2 <= 32,
         "The base-2 log of the number of ADC ticks in a sampling period plus the base-2 log of the sample buffer size must be less than 32."
@@ -423,7 +423,7 @@ mod test {
             ), // DC gain to get to full scale with the image filtered out
         );
         let mut timestamp_handler =
-            RPLL::new(adc_sample_ticks_log2 + sample_buffer_size_log2);
+            RPLL::new((adc_sample_ticks_log2 + sample_buffer_size_log2) as u8);
 
         let mut timestamp_start: u64 = 0;
         let time_constant: f64 = 1. / (2. * PI * corner_frequency);
@@ -484,7 +484,7 @@ mod test {
             timestamp_start += batch_sample_count;
 
             let (demodulation_initial_phase, demodulation_frequency) =
-                timestamp_handler.update(timestamp);
+                timestamp_handler.update(timestamp.map(|t| t as i32), pll_shift_frequency, pll_shift_phase);
             let output = lockin.update(
                 adc_signal,
                 demodulation_initial_phase as i32,
@@ -578,9 +578,9 @@ mod test {
         let internal_frequency: f64 = 64.;
         let signal_frequency: f64 = 64e-3;
         let harmonic: i32 = 1;
-        let sample_buffer_size_log2: usize = 2;
-        let pll_shift_frequency: u8 = 3;
-        let pll_shift_phase: u8 = 2;
+        let sample_buffer_size_log2: u8 = 2;
+        let pll_shift_frequency: u8 = 21;
+        let pll_shift_phase: u8 = 21;
         let corner_frequency: f64 = 1e-3;
         let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
         let demodulation_phase_offset: f64 = 0.;
@@ -623,9 +623,9 @@ mod test {
         let internal_frequency: f64 = 64.;
         let signal_frequency: f64 = 64e-3;
         let harmonic: i32 = 1;
-        let sample_buffer_size_log2: usize = 2;
-        let pll_shift_frequency: u8 = 3;
-        let pll_shift_phase: u8 = 2;
+        let sample_buffer_size_log2: u8 = 2;
+        let pll_shift_frequency: u8 = 21;
+        let pll_shift_phase: u8 = 21;
         let corner_frequency: f64 = 1e-3;
         let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
         let demodulation_phase_offset: f64 = PI / 2.;
@@ -668,9 +668,9 @@ mod test {
         let internal_frequency: f64 = 64.;
         let signal_frequency: f64 = 64e-3;
         let harmonic: i32 = 1;
-        let sample_buffer_size_log2: usize = 2;
-        let pll_shift_frequency: u8 = 3;
-        let pll_shift_phase: u8 = 2;
+        let sample_buffer_size_log2: u8 = 2;
+        let pll_shift_frequency: u8 = 21;
+        let pll_shift_phase: u8 = 21;
         let corner_frequency: f64 = 1e-3;
         let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
         let demodulation_phase_offset: f64 = 0.;
@@ -713,9 +713,9 @@ mod test {
         let internal_frequency: f64 = 64.;
         let signal_frequency: f64 = 71e-3;
         let harmonic: i32 = 1;
-        let sample_buffer_size_log2: usize = 2;
-        let pll_shift_frequency: u8 = 3;
-        let pll_shift_phase: u8 = 2;
+        let sample_buffer_size_log2: u8 = 2;
+        let pll_shift_frequency: u8 = 21;
+        let pll_shift_phase: u8 = 21;
         let corner_frequency: f64 = 0.6e-3;
         let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
         let demodulation_phase_offset: f64 = 0.;
@@ -758,9 +758,9 @@ mod test {
         let internal_frequency: f64 = 64.;
         let signal_frequency: f64 = 50e-3;
         let harmonic: i32 = 2;
-        let sample_buffer_size_log2: usize = 2;
-        let pll_shift_frequency: u8 = 2;
-        let pll_shift_phase: u8 = 1;
+        let sample_buffer_size_log2: u8 = 2;
+        let pll_shift_frequency: u8 = 21;
+        let pll_shift_phase: u8 = 21;
         let corner_frequency: f64 = 1e-3;
         let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
         let demodulation_phase_offset: f64 = 0.;
@@ -803,9 +803,9 @@ mod test {
         let internal_frequency: f64 = 64.;
         let signal_frequency: f64 = 50e-3;
         let harmonic: i32 = 3;
-        let sample_buffer_size_log2: usize = 2;
-        let pll_shift_frequency: u8 = 2;
-        let pll_shift_phase: u8 = 1;
+        let sample_buffer_size_log2: u8 = 2;
+        let pll_shift_frequency: u8 = 21;
+        let pll_shift_phase: u8 = 21;
         let corner_frequency: f64 = 1e-3;
         let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
         let demodulation_phase_offset: f64 = 0.;
@@ -848,9 +848,9 @@ mod test {
         let internal_frequency: f64 = 64.;
         let signal_frequency: f64 = 50e-3;
         let harmonic: i32 = 4;
-        let sample_buffer_size_log2: usize = 2;
-        let pll_shift_frequency: u8 = 2;
-        let pll_shift_phase: u8 = 1;
+        let sample_buffer_size_log2: u8 = 2;
+        let pll_shift_frequency: u8 = 21;
+        let pll_shift_phase: u8 = 21;
         let corner_frequency: f64 = 1e-3;
         let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
         let demodulation_phase_offset: f64 = 0.;
@@ -893,9 +893,9 @@ mod test {
         let internal_frequency: f64 = 64.;
         let signal_frequency: f64 = 50e-3;
         let harmonic: i32 = 2;
-        let sample_buffer_size_log2: usize = 2;
-        let pll_shift_frequency: u8 = 2;
-        let pll_shift_phase: u8 = 1;
+        let sample_buffer_size_log2: u8 = 2;
+        let pll_shift_frequency: u8 = 21;
+        let pll_shift_phase: u8 = 21;
         let corner_frequency: f64 = 1e-3;
         let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
         let demodulation_phase_offset: f64 = 0.;
@@ -938,9 +938,9 @@ mod test {
         let internal_frequency: f64 = 32.;
         let signal_frequency: f64 = 100e-3;
         let harmonic: i32 = 1;
-        let sample_buffer_size_log2: usize = 2;
-        let pll_shift_frequency: u8 = 2;
-        let pll_shift_phase: u8 = 1;
+        let sample_buffer_size_log2: u8 = 2;
+        let pll_shift_frequency: u8 = 21;
+        let pll_shift_phase: u8 = 21;
         let corner_frequency: f64 = 1e-3;
         let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
         let demodulation_phase_offset: f64 = 0.;
@@ -983,9 +983,9 @@ mod test {
         let internal_frequency: f64 = 64.;
         let signal_frequency: f64 = 100e-3;
         let harmonic: i32 = 1;
-        let sample_buffer_size_log2: usize = 2;
-        let pll_shift_frequency: u8 = 2;
-        let pll_shift_phase: u8 = 1;
+        let sample_buffer_size_log2: u8 = 2;
+        let pll_shift_frequency: u8 = 21;
+        let pll_shift_phase: u8 = 21;
         let corner_frequency: f64 = 1e-3;
         let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
         let demodulation_phase_offset: f64 = 0.;
@@ -1028,9 +1028,9 @@ mod test {
         let internal_frequency: f64 = 64.;
         let signal_frequency: f64 = 10e-3;
         let harmonic: i32 = 1;
-        let sample_buffer_size_log2: usize = 2;
-        let pll_shift_frequency: u8 = 2;
-        let pll_shift_phase: u8 = 1;
+        let sample_buffer_size_log2: u8 = 2;
+        let pll_shift_frequency: u8 = 21;
+        let pll_shift_phase: u8 = 21;
         let corner_frequency: f64 = 1e-3;
         let demodulation_frequency: f64 = harmonic as f64 * signal_frequency;
         let demodulation_phase_offset: f64 = 0.;
