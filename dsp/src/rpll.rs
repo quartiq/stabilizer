@@ -1,100 +1,39 @@
-use super::{divide_round, pll::PLL};
-
-/// Processes external timestamps to produce the frequency and initial phase of the demodulation
-/// signal.
-pub struct TimestampHandler {
-    pll: PLL,
-    pll_shift_frequency: u8,
-    pll_shift_phase: u8,
-    // Index of the current ADC batch.
-    batch_index: u32,
-    // Most recent phase and frequency values of the external reference.
-    reference_phase: i64,
-    reference_frequency: i64,
-    adc_sample_ticks_log2: usize,
-    sample_buffer_size_log2: usize,
+#[derive(Copy, Clone, Default)]
+pub struct RPLL {
+    dt2: u8,
+    t: i32,
+    f2: i64,
+    y1: i32,
+    xj1: i32,
+    f1: i32,
 }
 
-impl TimestampHandler {
-    /// Construct a new `TimestampHandler` instance.
-    ///
-    /// # Args
-    /// * `pll_shift_frequency` - See `PLL::update()`.
-    /// * `pll_shift_phase` - See `PLL::update()`.
-    /// * `adc_sample_ticks_log2` - Number of ticks in one ADC sampling timer period.
-    /// * `sample_buffer_size_log2` - Number of ADC samples in one processing batch.
-    ///
-    /// # Returns
-    /// New `TimestampHandler` instance.
-    pub fn new(
-        pll_shift_frequency: u8,
-        pll_shift_phase: u8,
-        adc_sample_ticks_log2: usize,
-        sample_buffer_size_log2: usize,
-    ) -> Self {
-        TimestampHandler {
-            pll: PLL::default(),
-            pll_shift_frequency,
-            pll_shift_phase,
-            batch_index: 0,
-            reference_phase: 0,
-            reference_frequency: 0,
-            adc_sample_ticks_log2,
-            sample_buffer_size_log2,
-        }
+impl RPLL {
+    pub fn new(dt2: u8) -> RPLL {
+        let mut pll = RPLL::default();
+        pll.dt2 = dt2;
+        pll
     }
 
-    /// Compute the initial phase and frequency of the demodulation signal.
-    ///
-    /// # Args
-    /// * `timestamp` - Counter value corresponding to an external reference edge.
-    ///
-    /// # Returns
-    /// Tuple consisting of the initial phase value and frequency of the demodulation signal.
-    pub fn update(&mut self, timestamp: Option<u32>) -> (u32, u32) {
-        if let Some(t) = timestamp {
-            let (phase, frequency) = self.pll.update(
-                t as i32,
-                self.pll_shift_frequency,
-                self.pll_shift_phase,
-            );
-            self.reference_phase = phase as u32 as i64;
-            self.reference_frequency = frequency as u32 as i64;
+    pub fn update(
+        &mut self,
+        input: Option<i32>,
+        shift_frequency: u8,
+        shift_phase: u8,
+    ) -> (i32, i32) {
+        self.y1 += self.f1;
+        if let Some(xj) = input {
+            self.f2 += (1i64 << 32 + self.dt2 - shift_frequency)
+                - (self.f2 * (xj - self.xj1) as i64
+                    + (1i64 << shift_frequency - 1)
+                    >> shift_frequency);
+            self.f1 = self.f2 as i32
+                + (self.f2 * (self.t - xj) as i64
+                    - ((self.y1 as i64) << self.dt2)
+                    + (1i64 << shift_phase - 1)
+                    >> shift_phase) as i32;
         }
-
-        let demodulation_frequency: u32;
-        let demodulation_initial_phase: u32;
-
-        if self.reference_frequency == 0 {
-            demodulation_frequency = u32::MAX;
-            demodulation_initial_phase = u32::MAX;
-        } else {
-            demodulation_frequency = divide_round(
-                1 << (32 + self.adc_sample_ticks_log2),
-                self.reference_frequency,
-            ) as u32;
-            demodulation_initial_phase = divide_round(
-                (((self.batch_index as i64)
-                    << (self.adc_sample_ticks_log2
-                        + self.sample_buffer_size_log2))
-                    - self.reference_phase)
-                    << 32,
-                self.reference_frequency,
-            ) as u32;
-        }
-
-        if self.batch_index
-            < (1 << (32
-                - self.adc_sample_ticks_log2
-                - self.sample_buffer_size_log2))
-                - 1
-        {
-            self.batch_index += 1;
-        } else {
-            self.batch_index = 0;
-            self.reference_phase -= 1 << 32;
-        }
-
-        (demodulation_initial_phase, demodulation_frequency)
+        self.t += 1 << self.dt2;
+        (self.y1, self.f1)
     }
 }

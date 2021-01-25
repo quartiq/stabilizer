@@ -16,7 +16,7 @@ use stabilizer::{
     hardware, server, ADC_SAMPLE_TICKS_LOG2, SAMPLE_BUFFER_SIZE_LOG2,
 };
 
-use dsp::{iir, iir_int, lockin::Lockin, rpll::TimestampHandler};
+use dsp::{iir, iir_int, lockin::Lockin, rpll::RPLL};
 use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
 };
@@ -44,7 +44,7 @@ const APP: () = {
         iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
 
         timestamper: InputStamper,
-        pll: TimestampHandler,
+        pll: RPLL,
         lockin: Lockin,
     }
 
@@ -53,12 +53,8 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let pll = TimestampHandler::new(
-            4, // relative PLL frequency bandwidth: 2**-4, TODO: expose
-            3, // relative PLL phase bandwidth: 2**-3, TODO: expose
-            ADC_SAMPLE_TICKS_LOG2 as usize,
-            SAMPLE_BUFFER_SIZE_LOG2,
-        );
+        let pll =
+            RPLL::new(ADC_SAMPLE_TICKS_LOG2 + SAMPLE_BUFFER_SIZE_LOG2);
 
         let lockin = Lockin::new(
             &iir_int::IIRState::default(), // TODO: lowpass, expose
@@ -122,10 +118,11 @@ const APP: () = {
         let iir_state = c.resources.iir_state;
         let lockin = c.resources.lockin;
 
-        let (pll_phase, pll_frequency) = c
-            .resources
-            .pll
-            .update(c.resources.timestamper.latest_timestamp());
+        let (pll_phase, pll_frequency) = c.resources.pll.update(
+            c.resources.timestamper.latest_timestamp().map(|t| t as i32),
+            21, // relative PLL frequency bandwidth: 2**-21, TODO: expose
+            21, // relative PLL phase bandwidth: 2**-21, TODO: expose
+        );
 
         // Harmonic index of the LO: -1 to _de_modulate the fundamental
         let harmonic: i32 = -1;

@@ -43,7 +43,7 @@ mod test {
         atan2,
         iir_int::{IIRState, IIR},
         lockin::Lockin,
-        rpll::TimestampHandler,
+        rpll::RPLL,
         testing::{isclose, max_error},
         Complex,
     };
@@ -422,12 +422,8 @@ mod test {
                 2.,
             ), // DC gain to get to full scale with the image filtered out
         );
-        let mut timestamp_handler = TimestampHandler::new(
-            pll_shift_frequency,
-            pll_shift_phase,
-            adc_sample_ticks_log2,
-            sample_buffer_size_log2,
-        );
+        let mut timestamp_handler =
+            RPLL::new(adc_sample_ticks_log2 + sample_buffer_size_log2);
 
         let mut timestamp_start: u64 = 0;
         let time_constant: f64 = 1. / (2. * PI * corner_frequency);
