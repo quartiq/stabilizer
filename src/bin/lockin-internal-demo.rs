@@ -16,10 +16,10 @@ use heapless::{consts::*, String};
 const DAC_SEQUENCE: [f32; 8] =
     [0.0, 0.707, 1.0, 0.707, 0.0, -0.707, -1.0, -0.707];
 
-use dsp::iir;
+use dsp::{iir, iir_int, lockin::Lockin, reciprocal_pll::TimestampHandler};
+use hardware::{Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
 use stabilizer::{
-    hardware::{self, Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1},
-    server,
+    hardware, server, ADC_SAMPLE_TICKS_LOG2, SAMPLE_BUFFER_SIZE_LOG2,
 };
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
@@ -40,12 +40,26 @@ const APP: () = {
 
         #[init(iir::IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE })]
         iir: iir::IIR,
+
+        pll: TimestampHandler,
+        lockin: Lockin,
     }
 
     #[init]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
+
+        let pll = TimestampHandler::new(
+            4, // relative PLL frequency bandwidth: 2**-4, TODO: expose
+            3, // relative PLL phase bandwidth: 2**-3, TODO: expose
+            ADC_SAMPLE_TICKS_LOG2 as usize,
+            SAMPLE_BUFFER_SIZE_LOG2,
+        );
+
+        let lockin = Lockin::new(
+            &iir_int::IIRState::default(), // TODO: lowpass, expose
+        );
 
         // Enable ADC/DAC events
         stabilizer.adcs.1.start();
@@ -56,6 +70,8 @@ const APP: () = {
         stabilizer.adc_dac_timer.start();
 
         init::LateResources {
+            lockin,
+            pll,
             afes: stabilizer.afes,
             adc1: stabilizer.adcs.1,
             dacs: stabilizer.dacs,
@@ -79,9 +95,11 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adc1, dacs, iir_state, iir], priority=2)]
-    fn process(c: process::Context) {
-        let _adc_samples = c.resources.adc1.acquire_buffer();
+    ///
+    /// TODO: Document
+    #[task(binds=DMA1_STR4, resources=[adc1, dacs, iir_state, iir, lockin, pll], priority=2)]
+    fn process(mut c: process::Context) {
+        let adc_samples = c.resources.adc1.acquire_buffer();
         let dac_samples = [
             c.resources.dacs.0.acquire_buffer(),
             c.resources.dacs.1.acquire_buffer(),
@@ -97,19 +115,39 @@ const APP: () = {
             dac_samples[0][i] = y as u16 ^ 0x8000;
         }
 
-        // TODO: Introduce a "dummy" PLL here.
+        // TODO: Verify that the DAC code is always generated at T=0
+        let (pll_phase, pll_frequency) = c.resources.pll.update(Some(0));
 
-        // TODO: Demodulate the ADC0 input samples with the dummy PLL.
+        // Harmonic index of the LO: -1 to _de_modulate the fundamental
+        let harmonic: i32 = -1;
 
-        // TODO: Filter the demodulated ADC values
+        // Demodulation LO phase offset
+        let phase_offset: i32 = 0;
+        let sample_frequency = (pll_frequency as i32).wrapping_mul(harmonic);
+        let mut sample_phase = phase_offset
+            .wrapping_add((pll_phase as i32).wrapping_mul(harmonic));
 
-        // TODO: Compute phase of the last sample
+        let mut phase = 0f32;
 
-        // TODO: Place last sample phase into DAC1s output buffer.
-        let y = 0.0;
+        for sample in adc_samples.iter() {
+            // Convert to signed, MSB align the ADC sample.
+            let input = (*sample as i16 as i32) << 16;
+
+            // Obtain demodulated, filtered IQ sample.
+            let output = c.resources.lockin.update(input, sample_phase);
+
+            // Advance the sample phase.
+            sample_phase = sample_phase.wrapping_add(sample_frequency);
+
+            // Convert from IQ to phase.
+            phase = output.phase() as _;
+        }
+
+        // Filter phase through an IIR.
+        phase = c.resources.iir.update(&mut c.resources.iir_state, phase);
 
         for value in dac_samples[1].iter_mut() {
-            *value = y as u16 ^ 0x8000
+            *value = phase as u16 ^ 0x8000
         }
     }
 
