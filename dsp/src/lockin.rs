@@ -405,8 +405,7 @@ mod test {
         "Too many timestamps per batch. Each batch can have at most 1 timestamp."
     );
 
-        let adc_sample_ticks_log2 =
-            (internal_frequency).log2().round() as u8;
+        let adc_sample_ticks_log2 = (internal_frequency).log2().round() as u8;
         assert!(
         adc_sample_ticks_log2 + sample_buffer_size_log2 <= 32,
         "The base-2 log of the number of ADC ticks in a sampling period plus the base-2 log of the sample buffer size must be less than 32."
@@ -422,8 +421,10 @@ mod test {
                 2.,
             ), // DC gain to get to full scale with the image filtered out
         );
-        let mut timestamp_handler =
-            RPLL::new((adc_sample_ticks_log2 + sample_buffer_size_log2) as u8);
+        let mut timestamp_handler = RPLL::new(
+            (adc_sample_ticks_log2 + sample_buffer_size_log2) as u8,
+            0,
+        );
 
         let mut timestamp_start: u64 = 0;
         let time_constant: f64 = 1. / (2. * PI * corner_frequency);
@@ -484,7 +485,11 @@ mod test {
             timestamp_start += batch_sample_count;
 
             let (demodulation_initial_phase, demodulation_frequency) =
-                timestamp_handler.update(timestamp.map(|t| t as i32), pll_shift_frequency, pll_shift_phase);
+                timestamp_handler.update(
+                    timestamp.map(|t| t as i32),
+                    pll_shift_frequency,
+                    pll_shift_phase,
+                );
             let output = lockin.update(
                 adc_signal,
                 demodulation_initial_phase as i32,

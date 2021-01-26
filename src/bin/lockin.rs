@@ -53,8 +53,7 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let pll =
-            RPLL::new(ADC_SAMPLE_TICKS_LOG2 + SAMPLE_BUFFER_SIZE_LOG2);
+        let pll = RPLL::new(ADC_SAMPLE_TICKS_LOG2 + SAMPLE_BUFFER_SIZE_LOG2, 0);
 
         let lockin = Lockin::new(
             &iir_int::IIRState::default(), // TODO: lowpass, expose
@@ -128,9 +127,10 @@ const APP: () = {
         let harmonic: i32 = -1;
         // Demodulation LO phase offset
         let phase_offset: i32 = 0;
-        let sample_frequency = (pll_frequency as i32).wrapping_mul(harmonic);
-        let mut sample_phase = phase_offset
-            .wrapping_add((pll_phase as i32).wrapping_mul(harmonic));
+        let sample_frequency =
+            (pll_frequency >> SAMPLE_BUFFER_SIZE_LOG2).wrapping_mul(harmonic);
+        let mut sample_phase =
+            phase_offset.wrapping_add(pll_phase.wrapping_mul(harmonic));
 
         for i in 0..adc_samples[0].len() {
             // Convert to signed, MSB align the ADC sample.
