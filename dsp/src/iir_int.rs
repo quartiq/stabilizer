@@ -19,8 +19,6 @@ impl IIRState {
     ///
     /// # Returns
     /// 2nd-order IIR filter coefficients in the form [b0,b1,b2,a1,a2]. a0 is set to -1.
-    ///
-    /// # Note
     pub fn lowpass(f: f64, q: f64, k: f64) -> IIRState {
         // 3rd order Taylor approximation of sin and cos.
         let f = f * 2. * PI;
