@@ -41,7 +41,7 @@ impl Lockin {
 mod test {
     use crate::{
         atan2,
-        iir_int::{IIRState, IIR},
+        iir_int::IIRState,
         lockin::Lockin,
         rpll::RPLL,
         testing::{isclose, max_error},
@@ -187,28 +187,6 @@ mod test {
         }
 
         None
-    }
-
-    /// Lowpass biquad filter using cutoff and sampling frequencies.  Taken from:
-    /// https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
-    ///
-    /// # Args
-    /// * `fc` - Corner frequency, or 3dB cutoff frequency (in units of sample rate).
-    /// * `q` - Quality factor (1/sqrt(2) for critical).
-    /// * `k` - DC gain.
-    ///
-    /// # Returns
-    /// 2nd-order IIR filter coefficients in the form [b0,b1,b2,a1,a2]. a0 is set to -1.
-    fn lowpass_iir_coefficients(fc: f64, q: f64, k: f64) -> IIRState {
-        let f = 2. * PI * fc;
-        let a = f.sin() / (2. * q);
-        // IIR uses Q2.30 fixed point
-        let a0 = (1. + a) / (1 << IIR::SHIFT) as f64;
-        let b0 = (k / 2. * (1. - f.cos()) / a0).round() as _;
-        let a1 = (2. * f.cos() / a0).round() as _;
-        let a2 = ((a - 1.) / a0).round() as _;
-
-        IIRState([b0, 2 * b0, b0, a1, a2])
     }
 
     /// Compute the maximum effect of input noise on the lock-in magnitude computation.
@@ -415,7 +393,7 @@ mod test {
             harmonic,
             (demodulation_phase_offset / (2. * PI) * (1i64 << 32) as f64)
                 .round() as i32,
-            &lowpass_iir_coefficients(
+            &IIRState::lowpass(
                 corner_frequency,
                 1. / 2f64.sqrt(), // critical q
                 2.,

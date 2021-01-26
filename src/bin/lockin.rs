@@ -56,7 +56,7 @@ const APP: () = {
         let pll = RPLL::new(ADC_SAMPLE_TICKS_LOG2 + SAMPLE_BUFFER_SIZE_LOG2, 0);
 
         let lockin = Lockin::new(
-            &iir_int::IIRState::default(), // TODO: lowpass, expose
+            &iir_int::IIRState::lowpass(1e-3, 0.707, 2.), // TODO: expose
         );
 
         // Enable ADC/DAC events
@@ -119,8 +119,8 @@ const APP: () = {
 
         let (pll_phase, pll_frequency) = c.resources.pll.update(
             c.resources.timestamper.latest_timestamp().map(|t| t as i32),
-            21, // relative PLL frequency bandwidth: 2**-21, TODO: expose
-            21, // relative PLL phase bandwidth: 2**-21, TODO: expose
+            22, // relative PLL frequency bandwidth: 2**-22, TODO: expose
+            22, // relative PLL phase bandwidth: 2**-22, TODO: expose
         );
 
         // Harmonic index of the LO: -1 to _de_modulate the fundamental

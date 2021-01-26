@@ -1,7 +1,38 @@
+use super::cossin;
 use serde::{Deserialize, Serialize};
 
+/// Generic vector for integer IIR filter.
+/// This struct is used to hold the x/y input/output data vector or the b/a coefficient
+/// vector.
 #[derive(Copy, Clone, Default, Deserialize, Serialize)]
 pub struct IIRState(pub [i32; 5]);
+
+impl IIRState {
+    /// Lowpass biquad filter using cutoff and sampling frequencies.  Taken from:
+    /// https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
+    ///
+    /// # Args
+    /// * `f` - Corner frequency, or 3dB cutoff frequency (in units of sample rate).
+    /// * `q` - Quality factor (1/sqrt(2) for critical).
+    /// * `k` - DC gain.
+    ///
+    /// # Returns
+    /// 2nd-order IIR filter coefficients in the form [b0,b1,b2,a1,a2]. a0 is set to -1.
+    pub fn lowpass(f: f64, q: f64, k: f64) -> IIRState {
+        let scale = (1i64 << 32) as f64;
+        let fcossin = cossin((f * scale) as u32 as i32);
+        let fcos = fcossin.0 as f64 / scale;
+        let fsin = fcossin.1 as f64 / scale;
+        let alpha = fsin / (2. * q);
+        // IIR uses Q2.30 fixed point
+        let a0 = (1. + alpha) / (1 << IIR::SHIFT) as f64;
+        let b0 = (k / 2. * (1. - fcos) / a0) as _;
+        let a1 = (2. * fcos / a0) as _;
+        let a2 = ((alpha - 1.) / a0) as _;
+
+        IIRState([b0, 2 * b0, b0, a1, a2])
+    }
+}
 
 fn macc(y0: i32, x: &[i32], a: &[i32], shift: u32) -> i32 {
     // Rounding bias, half up
