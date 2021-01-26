@@ -21,20 +21,12 @@ use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use super::{
     adc, afe, dac, design_parameters, digital_input_stamper, eeprom, pounder,
-    timers, DdsOutput, Ethernet, AFE0, AFE1,
+    smoltcp_nal::NetStorage, timers, DdsOutput, NetworkStack, AFE0, AFE1,
 };
-
-// Network storage definition for the ethernet interface.
-struct NetStorage {
-    ip_addrs: [smoltcp::wire::IpCidr; 1],
-    neighbor_cache:
-        [Option<(smoltcp::wire::IpAddress, smoltcp::iface::Neighbor)>; 8],
-    routes_storage: [Option<(smoltcp::wire::IpCidr, smoltcp::iface::Route)>; 1],
-}
 
 /// The available networking devices on Stabilizer.
 pub struct NetworkDevices {
-    pub interface: Ethernet,
+    pub stack: NetworkStack,
     pub phy: ethernet::phy::LAN8742A<ethernet::EthernetMAC>,
 }
 
@@ -71,7 +63,11 @@ static mut NET_STORE: NetStorage = NetStorage {
         smoltcp::wire::Ipv6Cidr::SOLICITED_NODE_PREFIX,
     )],
     neighbor_cache: [None; 8],
-    routes_storage: [None; 1],
+    routes_cache: [None; 8],
+    sockets: [None; 1],
+
+    tx_storage: [0; 4096],
+    rx_storage: [0; 4096],
 };
 
 /// Configure the stabilizer hardware for operation.
@@ -515,7 +511,7 @@ pub fn setup(
         );
 
         let default_v4_gw = Ipv4Address::new(10, 0, 16, 1);
-        let mut routes = Routes::new(&mut store.routes_storage[..]);
+        let mut routes = Routes::new(&mut store.routes_cache[..]);
         routes.add_default_ipv4_route(default_v4_gw).unwrap();
 
         let neighbor_cache =
@@ -528,8 +524,26 @@ pub fn setup(
             .routes(routes)
             .finalize();
 
+        let sockets = {
+            // Note(unsafe): Configuration is only called once, so we only access the global
+            // storage a single time.
+            let socket_storage = unsafe { &mut NET_STORE.sockets };
+            let mut sockets = smoltcp::socket::SocketSet::new(socket_storage);
+
+            let tcp_socket = {
+                // Note(unsafe): Configuration is only called once, so we only access the global
+                // storage a single time.
+                let rx_storage = unsafe { &mut NET_STORE.rx_storage[..] };
+                let tx_storage = unsafe { &mut NET_STORE.tx_storage[..] };
+                smoltcp::socket::TcpSocket::new(rx_storage, tx_storage)
+            };
+
+            sockets.add(tcp_socket);
+            sockets
+        };
+
         NetworkDevices {
-            interface,
+            stack: NetworkStack::new(interface, sockets),
             phy: lan8742a,
         }
     };
