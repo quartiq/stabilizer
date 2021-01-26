@@ -41,7 +41,6 @@ const APP: () = {
         #[init(iir::IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE })]
         iir: iir::IIR,
 
-        pll: TimestampHandler,
         lockin: Lockin,
     }
 
@@ -49,13 +48,6 @@ const APP: () = {
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
-
-        let pll = TimestampHandler::new(
-            4, // relative PLL frequency bandwidth: 2**-4, TODO: expose
-            3, // relative PLL phase bandwidth: 2**-3, TODO: expose
-            ADC_SAMPLE_TICKS_LOG2 as usize,
-            SAMPLE_BUFFER_SIZE_LOG2,
-        );
 
         let lockin = Lockin::new(
             &iir_int::IIRState::default(), // TODO: lowpass, expose
@@ -116,7 +108,8 @@ const APP: () = {
         }
 
         // TODO: Verify that the DAC code is always generated at T=0
-        let (pll_phase, pll_frequency) = c.resources.pll.update(Some(0));
+        let pll_phase = 0i32;
+        let pll_frequency = 1i32 << (32 - 3); // 1/8 of the sample rate
 
         // Harmonic index of the LO: -1 to _de_modulate the fundamental
         let harmonic: i32 = -1;
