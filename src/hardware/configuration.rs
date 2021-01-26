@@ -527,15 +527,25 @@ pub fn setup(
         let sockets = {
             // Note(unsafe): Configuration is only called once, so we only access the global
             // storage a single time.
-            let socket_storage = unsafe { &mut NET_STORE.sockets };
+            let socket_storage = unsafe { &mut NET_STORE.sockets[..] };
             let mut sockets = smoltcp::socket::SocketSet::new(socket_storage);
 
             let tcp_socket = {
-                // Note(unsafe): Configuration is only called once, so we only access the global
-                // storage a single time.
-                let rx_storage = unsafe { &mut NET_STORE.rx_storage[..] };
-                let tx_storage = unsafe { &mut NET_STORE.tx_storage[..] };
-                smoltcp::socket::TcpSocket::new(rx_storage, tx_storage)
+                let rx_buffer = {
+                    // Note(unsafe): Configuration is only called once, so we only access the global
+                    // storage a single time.
+                    let storage = unsafe { &mut NET_STORE.rx_storage[..] };
+                    smoltcp::socket::TcpSocketBuffer::new(storage)
+                };
+
+                let tx_buffer = {
+                    // Note(unsafe): Configuration is only called once, so we only access the global
+                    // storage a single time.
+                    let storage = unsafe { &mut NET_STORE.tx_storage[..] };
+                    smoltcp::socket::TcpSocketBuffer::new(storage)
+                };
+
+                smoltcp::socket::TcpSocket::new(rx_buffer, tx_buffer)
             };
 
             sockets.add(tcp_socket);

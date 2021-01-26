@@ -1,6 +1,11 @@
 use super::NetworkStack;
 
-use minimq::{QoS, Error, Property, MqttClient};
+use minimq::{
+    embedded_nal::{IpAddr, Ipv4Addr},
+    QoS, Error, Property, MqttClient
+};
+use heapless::{String, consts};
+use core::fmt::Write;
 
 pub enum Action {
     Continue,
@@ -8,10 +13,10 @@ pub enum Action {
     CommitSettings,
 }
 
-struct MqttInterface<T: miniconf::StringSet> {
-    client: MqttClient<minimq::consts::U256, NetworkStack>,
+pub struct MqttInterface<T: miniconf::StringSet> {
+    client: core::cell::RefCell<MqttClient<minimq::consts::U256, NetworkStack>>,
     subscribed: bool,
-    settings: T,
+    pub settings: core::cell::RefCell<T>,
 }
 
 impl<T> MqttInterface<T>
@@ -25,29 +30,25 @@ where
                 stack).unwrap();
 
         Self {
-            client,
+            client: core::cell::RefCell::new(client),
             subscribed: false,
-            settings,
+            settings: core::cell::RefCell::new(settings),
         }
     }
 
-    pub fn current_settings(&self) -> &T {
-        &self.settings
-    }
+    pub fn update(&mut self, time: u32) -> Result<Action, ()> {
 
-    pub fn update(&mut self, time: u32) -> Result<bool, ()> {
+        let sleep = self.client.borrow_mut().network_stack.update(time);
 
-        let sleep = self.client.network_stack.update(smoltcp::time::Instant::from_millis(time as i64));
-
-        if !self.subscribed && self.client.is_connected().unwrap() {
-            self.client.subscribe("stabilizer/settings/#", &[]);
-            self.client.subscribe("stabilizer/commit", &[]);
+        if !self.subscribed && self.client.borrow_mut().is_connected().unwrap() {
+            self.client.borrow_mut().subscribe("stabilizer/settings/#", &[]).unwrap();
+            self.client.borrow_mut().subscribe("stabilizer/commit", &[]).unwrap();
         }
 
         let mut commit = false;
 
-        match self.client.poll(|client, topic, message, properties| {
-            let split = topic.split('/').iter();
+        match self.client.borrow_mut().poll(|client, topic, message, properties| {
+            let mut split = topic.split('/');
             // TODO: Verify topic ID against our ID.
             let id = split.next().unwrap();
 
@@ -57,10 +58,10 @@ where
                 "settings" => {
                     // Handle settings failures
                     let mut response: String<consts::U512> = String::new();
-                    match self.settings.string_set(split.peekable(), message) {
+                    match self.settings.borrow_mut().string_set(split.peekable(), message) {
                         Ok(_) => write!(&mut response, "{} written", topic).unwrap(),
                         Err(error) => {
-                            write!(&mut response, "Settings failure: {}", error).unwrap();
+                            write!(&mut response, "Settings failure: {:?}", error).unwrap();
                         }
                     };
 
@@ -68,8 +69,9 @@ where
                 },
                 "commit" => {
                     commit = true;
-                    String::from("Committing pending settings");
-                }
+                    String::from("Committing pending settings")
+                },
+                _ => String::from("Unknown topic"),
             };
 
             // Publish the response to the request over MQTT using the ResponseTopic property if
@@ -81,7 +83,7 @@ where
                     false
                 }
             }).or(Some(&Property::ResponseTopic("stabilizer/log"))).unwrap() {
-                self.client.publish(topic, &response.into_bytes(), QoS::AtMostOnce, &[]).unwrap();
+                client.publish(topic, &response.into_bytes(), QoS::AtMostOnce, &[]).unwrap();
             }
         }) {
             Ok(_) => {},
@@ -90,7 +92,7 @@ where
         };
 
         let action = if commit {
-            Action::Commit
+            Action::CommitSettings
         } else if sleep {
             Action::Sleep
         } else {

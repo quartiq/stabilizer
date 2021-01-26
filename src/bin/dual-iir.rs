@@ -3,19 +3,16 @@
 #![no_main]
 #![cfg_attr(feature = "nightly", feature(core_intrinsics))]
 
-use stm32h7xx_hal as hal;
+use miniconf::StringSet;
 
-#[macro_use]
-extern crate log;
+use stm32h7xx_hal as hal;
 
 use rtic::cyccnt::{Instant, U32Ext};
 
-use heapless::{consts::*, String};
-
-use stabilizer::{hardware, server};
+use stabilizer::hardware;
 
 use dsp::iir;
-use hardware::{Adc0Input, Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
+use hardware::{Adc0Input, Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1, MqttAction};
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
 
@@ -25,10 +22,10 @@ const TCP_TX_BUFFER_SIZE: usize = 8192;
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
 
-#[derive(miniconf::StringSet)]
+#[derive(Default, StringSet)]
 struct Settings {
-    afe_gain: [hardware::AfeGain; 2],
-    iir: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+    pub afe_gain: [hardware::AfeGain; 2],
+    //iir: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
 }
 
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
@@ -37,7 +34,6 @@ const APP: () = {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        net_interface: hardware::Ethernet,
         mqtt_interface: hardware::MqttInterface<Settings>,
 
         // Format: iir_state[ch][cascade-no][coeff]
@@ -62,10 +58,10 @@ const APP: () = {
         stabilizer.adc_dac_timer.start();
 
         init::LateResources {
+            mqtt_interface: hardware::MqttInterface::new(stabilizer.net.stack, Settings::default()),
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            net_interface: stabilizer.net.interface,
         }
     }
 
@@ -130,22 +126,18 @@ const APP: () = {
                 time += 1;
             }
 
-            let sleep = c.resources.network_stack.update(
-                smoltcp::time::Instant::from_millis(time as i64),
-            );
-
             match c.resources.mqtt_interface.lock(|interface| interface.update(time).unwrap()) {
-                Action::Sleep => cortex_m::asm::wfi(),
-                Action::Continue => {},
-                Action::CommitSettings => c.spawn.settings_update().unwrap();
+                MqttAction::Sleep => cortex_m::asm::wfi(),
+                MqttAction::Continue => {},
+                MqttAction::CommitSettings => c.spawn.settings_update().unwrap(),
             }
         }
     }
 
     #[task(priority = 1, resources=[mqtt_interface, afes, iir_ch])]
     fn settings_update(c: settings_update::Context) {
-        let settings = c.resources.mqtt_interface.current_settings();
-        c.resources.iir_ch.lock(|iir_ch| *iir_ch = settings.iir);
+        let settings = c.resources.mqtt_interface.settings.borrow();
+        //c.resources.iir_ch.lock(|iir_ch| *iir_ch = settings.iir);
         c.resources.afes.0.set_gain(settings.afe_gain[0]);
         c.resources.afes.1.set_gain(settings.afe_gain[1]);
     }

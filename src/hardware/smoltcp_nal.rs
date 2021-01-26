@@ -77,7 +77,10 @@ impl<'a, 'b, 'c> NetworkStack<'a, 'b, 'c> {
     }
 }
 
-impl<'a, 'b, 'c> NetworkStack<'a, 'b, 'c> {
+impl<'a, 'b, 'c> nal::TcpStack for NetworkStack<'a, 'b, 'c> {
+    type Error = NetworkError;
+    type TcpSocket = smoltcp::socket::SocketHandle;
+
     fn open(
         &self,
         _mode: nal::Mode,
