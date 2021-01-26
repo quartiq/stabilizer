@@ -119,7 +119,7 @@ pub mod iir;
 pub mod iir_int;
 pub mod lockin;
 pub mod pll;
-pub mod reciprocal_pll;
+pub mod rpll;
 pub mod unwrap;
 
 pub use atan2::atan2;
