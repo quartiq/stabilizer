@@ -1,4 +1,4 @@
-use core::f64::consts::PI;
+use core::f32::consts::PI;
 use serde::{Deserialize, Serialize};
 
 /// Generic vector for integer IIR filter.
@@ -19,14 +19,14 @@ impl IIRState {
     ///
     /// # Returns
     /// 2nd-order IIR filter coefficients in the form [b0,b1,b2,a1,a2]. a0 is set to -1.
-    pub fn lowpass(f: f64, q: f64, k: f64) -> IIRState {
+    pub fn lowpass(f: f32, q: f32, k: f32) -> IIRState {
         // 3rd order Taylor approximation of sin and cos.
         let f = f * 2. * PI;
         let fsin = f - f * f * f / 6.;
         let fcos = 1. - f * f / 2.;
         let alpha = fsin / (2. * q);
         // IIR uses Q2.30 fixed point
-        let a0 = (1. + alpha) / (1 << IIR::SHIFT) as f64;
+        let a0 = (1. + alpha) / (1 << IIR::SHIFT) as f32;
         let b0 = (k / 2. * (1. - fcos) / a0) as _;
         let a1 = (2. * fcos / a0) as _;
         let a2 = ((alpha - 1.) / a0) as _;
@@ -96,7 +96,7 @@ mod test {
 
     #[test]
     fn lowpass_gen() {
-        let ba = IIRState::lowpass(1e-3, 1. / 2f64.sqrt(), 2.);
+        let ba = IIRState::lowpass(1e-3, 1. / 2f32.sqrt(), 2.);
         println!("{:?}", ba.0);
     }
 }
