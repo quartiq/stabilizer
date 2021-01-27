@@ -18,12 +18,14 @@ impl RPLL {
     ///
     /// Args:
     /// * dt2: inverse update() rate. 1 << dt2 is the counter rate to update() rate ratio.
+    /// * t: Counter time. Counter value at the first update() call. Typically 0.
     ///
     /// Returns:
     /// Initialized RPLL instance.
-    pub fn new(dt2: u8) -> RPLL {
+    pub fn new(dt2: u8, t: i32) -> RPLL {
         RPLL {
             dt2,
+            t,
             ..Default::default()
         }
     }
@@ -67,19 +69,7 @@ impl RPLL {
             // Update frequency lock
             self.ff = self.ff.wrapping_add(p_ref.wrapping_sub(p_sig));
             // Time in counter cycles between timestamp and "now"
-            let mut dt = self.t.wrapping_sub(x);
-
-            if dt < 0 {
-                // Timestamp is in the future
-                // Advance phase and time until we are just past the most recent
-                // timestamp.
-                let mut dt_ceil = dt >> self.dt2;
-                self.y = self.y.wrapping_sub(self.f.wrapping_mul(dt_ceil));
-                dt_ceil <<= self.dt2;
-                self.t = self.t.wrapping_sub(dt_ceil);
-                dt = dt.wrapping_sub(dt_ceil);
-            }
-
+            let dt = self.t.wrapping_sub(x);
             // Reference phase estimate "now"
             let y_ref = (self.f >> self.dt2).wrapping_mul(dt);
             // Phase error
