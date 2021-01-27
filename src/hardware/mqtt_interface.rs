@@ -50,7 +50,7 @@ where
         match self.client.borrow_mut().poll(|client, topic, message, properties| {
             let mut split = topic.split('/');
             // TODO: Verify topic ID against our ID.
-            let id = split.next().unwrap();
+            let _id = split.next().unwrap();
 
             // Process the command
             let command = split.next().unwrap();

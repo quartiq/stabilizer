@@ -344,6 +344,7 @@ dependencies = [
 [[package]]
 name = "derive_stringset"
 version = "0.1.0"
+source = "git+https://github.com/vertigo-designs/miniconf.git?branch=rs/cleanup#396a759356ae977d718ef6d30cfa6481f0d40b2f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -581,6 +582,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.1.0"
+source = "git+https://github.com/vertigo-designs/miniconf.git?branch=rs/cleanup#396a759356ae977d718ef6d30cfa6481f0d40b2f"
 dependencies = [
  "derive_stringset",
  "serde",
@@ -909,7 +911,6 @@ dependencies = [
  "panic-semihosting",
  "paste",
  "serde",
- "serde-json-core 0.1.0",
  "smoltcp",
  "stm32h7xx-hal",
 ]

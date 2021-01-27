@@ -36,7 +36,6 @@ panic-semihosting = { version = "0.5", optional = true }
 panic-halt = "0.2"
 serde = { version = "1.0", features = ["derive"], default-features = false }
 heapless = { version = "0.5", features = ["serde"] }
-serde-json-core = "0.1"
 cortex-m-rtic = "0.5.5"
 embedded-hal = "0.2.4"
 nb = "1.0.0"
@@ -48,9 +47,8 @@ ad9959 = { path = "ad9959" }
 minimq = { git = "https://github.com/quartiq/minimq.git" }
 
 [dependencies.miniconf]
-# git = "https://github.com/vertigo-designs/miniconf.git"
-# branch = "james/derive_stringset"
-path = "../../vertigo-designs/miniconf"
+git = "https://github.com/vertigo-designs/miniconf.git"
+branch = "rs/cleanup"
 
 [dependencies.mcp23017]
 git = "https://github.com/mrd0ll4r/mcp23017.git"

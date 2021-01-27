@@ -3,29 +3,36 @@
 #![no_main]
 #![cfg_attr(feature = "nightly", feature(core_intrinsics))]
 
-use miniconf::StringSet;
-
 use stm32h7xx_hal as hal;
 
 use rtic::cyccnt::{Instant, U32Ext};
 
 use stabilizer::hardware;
 
+use miniconf::StringSet;
+use serde::Deserialize;
+
 use dsp::iir;
 use hardware::{Adc0Input, Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1, MqttAction};
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
 
-const TCP_RX_BUFFER_SIZE: usize = 8192;
-const TCP_TX_BUFFER_SIZE: usize = 8192;
-
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
 
-#[derive(Default, StringSet)]
-struct Settings {
-    pub afe_gain: [hardware::AfeGain; 2],
-    //iir: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+#[derive(Debug, Deserialize, StringSet)]
+pub struct Settings {
+    test: u32,
+    iir: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+}
+
+impl Settings {
+    pub fn new() -> Self {
+        Self {
+            test: 5,
+            iir: [[iir::IIR::default(); IIR_CASCADE_LENGTH]; 2],
+        }
+    }
 }
 
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
@@ -58,7 +65,7 @@ const APP: () = {
         stabilizer.adc_dac_timer.start();
 
         init::LateResources {
-            mqtt_interface: hardware::MqttInterface::new(stabilizer.net.stack, Settings::default()),
+            mqtt_interface: hardware::MqttInterface::new(stabilizer.net.stack, Settings::new()),
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
@@ -135,11 +142,9 @@ const APP: () = {
     }
 
     #[task(priority = 1, resources=[mqtt_interface, afes, iir_ch])]
-    fn settings_update(c: settings_update::Context) {
+    fn settings_update(mut c: settings_update::Context) {
         let settings = c.resources.mqtt_interface.settings.borrow();
-        //c.resources.iir_ch.lock(|iir_ch| *iir_ch = settings.iir);
-        c.resources.afes.0.set_gain(settings.afe_gain[0]);
-        c.resources.afes.1.set_gain(settings.afe_gain[1]);
+        c.resources.iir_ch.lock(|iir| *iir = settings.iir);
     }
 
     #[task(binds = ETH, priority = 1)]

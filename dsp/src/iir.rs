@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use super::{abs, copysign, macc, max, min};
 use core::f32;
 
+use miniconf::StringSet;
+
 /// IIR state and coefficients type.
 ///
 /// To represent the IIR state (input and output memory) during the filter update
@@ -38,7 +40,7 @@ pub type IIRState = [f32; 5];
 ///   Therefore it can trivially implement bump-less transfer.
 /// * Cascading multiple IIR filters allows stable and robust
 ///   implementation of transfer functions beyond bequadratic terms.
-#[derive(Copy, Clone, Deserialize, Serialize)]
+#[derive(Copy, Clone, Debug, Default, Deserialize, Serialize, StringSet)]
 pub struct IIR {
     pub ba: IIRState,
     pub y_offset: f32,

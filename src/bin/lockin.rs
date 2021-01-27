@@ -5,15 +5,10 @@
 
 use stm32h7xx_hal as hal;
 
-#[macro_use]
-extern crate log;
-
 use rtic::cyccnt::{Instant, U32Ext};
 
-use heapless::{consts::*, String};
-
 use stabilizer::{
-    hardware, server, ADC_SAMPLE_TICKS_LOG2, SAMPLE_BUFFER_SIZE_LOG2,
+    hardware, ADC_SAMPLE_TICKS_LOG2, SAMPLE_BUFFER_SIZE_LOG2,
 };
 
 use dsp::{iir, iir_int, lockin::Lockin, reciprocal_pll::TimestampHandler};
@@ -22,9 +17,6 @@ use hardware::{
 };
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
-
-const TCP_RX_BUFFER_SIZE: usize = 8192;
-const TCP_TX_BUFFER_SIZE: usize = 8192;
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
@@ -35,7 +27,7 @@ const APP: () = {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        net_interface: hardware::Ethernet,
+        stack: hardware::NetworkStack,
 
         // Format: iir_state[ch][cascade-no][coeff]
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
@@ -80,7 +72,7 @@ const APP: () = {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            net_interface: stabilizer.net.interface,
+            stack: stabilizer.net.stack,
             timestamper: stabilizer.timestamper,
 
             pll,
@@ -165,26 +157,8 @@ const APP: () = {
         }
     }
 
-    #[idle(resources=[net_interface, iir_state, iir_ch, afes])]
-    fn idle(mut c: idle::Context) -> ! {
-        let mut socket_set_entries: [_; 8] = Default::default();
-        let mut sockets =
-            smoltcp::socket::SocketSet::new(&mut socket_set_entries[..]);
-
-        let mut rx_storage = [0; TCP_RX_BUFFER_SIZE];
-        let mut tx_storage = [0; TCP_TX_BUFFER_SIZE];
-        let tcp_handle = {
-            let tcp_rx_buffer =
-                smoltcp::socket::TcpSocketBuffer::new(&mut rx_storage[..]);
-            let tcp_tx_buffer =
-                smoltcp::socket::TcpSocketBuffer::new(&mut tx_storage[..]);
-            let tcp_socket =
-                smoltcp::socket::TcpSocket::new(tcp_rx_buffer, tcp_tx_buffer);
-            sockets.add(tcp_socket)
-        };
-
-        let mut server = server::Server::new();
-
+    #[idle(resources=[stack, iir_state, iir_ch, afes])]
+    fn idle(c: idle::Context) -> ! {
         let mut time = 0u32;
         let mut next_ms = Instant::now();
 
@@ -199,118 +173,7 @@ const APP: () = {
                 time += 1;
             }
 
-            {
-                let socket =
-                    &mut *sockets.get::<smoltcp::socket::TcpSocket>(tcp_handle);
-                if socket.state() == smoltcp::socket::TcpState::CloseWait {
-                    socket.close();
-                } else if !(socket.is_open() || socket.is_listening()) {
-                    socket
-                        .listen(1235)
-                        .unwrap_or_else(|e| warn!("TCP listen error: {:?}", e));
-                } else {
-                    server.poll(socket, |req| {
-                        info!("Got request: {:?}", req);
-                        stabilizer::route_request!(req,
-                            readable_attributes: [
-                                "stabilizer/iir/state": (|| {
-                                    let state = c.resources.iir_state.lock(|iir_state|
-                                        server::Status {
-                                            t: time,
-                                            x0: iir_state[0][0][0],
-                                            y0: iir_state[0][0][2],
-                                            x1: iir_state[1][0][0],
-                                            y1: iir_state[1][0][2],
-                                    });
-
-                                    Ok::<server::Status, ()>(state)
-                                }),
-                                // "_b" means cascades 2nd IIR
-                                "stabilizer/iir_b/state": (|| { let state = c.resources.iir_state.lock(|iir_state|
-                                        server::Status {
-                                            t: time,
-                                            x0: iir_state[0][IIR_CASCADE_LENGTH-1][0],
-                                            y0: iir_state[0][IIR_CASCADE_LENGTH-1][2],
-                                            x1: iir_state[1][IIR_CASCADE_LENGTH-1][0],
-                                            y1: iir_state[1][IIR_CASCADE_LENGTH-1][2],
-                                    });
-
-                                    Ok::<server::Status, ()>(state)
-                                }),
-                                "stabilizer/afe0/gain": (|| c.resources.afes.0.get_gain()),
-                                "stabilizer/afe1/gain": (|| c.resources.afes.1.get_gain())
-                            ],
-
-                            modifiable_attributes: [
-                                "stabilizer/iir0/state": server::IirRequest, (|req: server::IirRequest| {
-                                    c.resources.iir_ch.lock(|iir_ch| {
-                                        if req.channel > 1 {
-                                            return Err(());
-                                        }
-
-                                        iir_ch[req.channel as usize][0] = req.iir;
-
-                                        Ok::<server::IirRequest, ()>(req)
-                                    })
-                                }),
-                                "stabilizer/iir1/state": server::IirRequest, (|req: server::IirRequest| {
-                                    c.resources.iir_ch.lock(|iir_ch| {
-                                        if req.channel > 1 {
-                                            return Err(());
-                                        }
-
-                                        iir_ch[req.channel as usize][0] = req.iir;
-
-                                        Ok::<server::IirRequest, ()>(req)
-                                    })
-                                }),
-                                "stabilizer/iir_b0/state": server::IirRequest, (|req: server::IirRequest| {
-                                    c.resources.iir_ch.lock(|iir_ch| {
-                                        if req.channel > 1 {
-                                            return Err(());
-                                        }
-
-                                        iir_ch[req.channel as usize][IIR_CASCADE_LENGTH-1] = req.iir;
-
-                                        Ok::<server::IirRequest, ()>(req)
-                                    })
-                                }),
-                                "stabilizer/iir_b1/state": server::IirRequest,(|req: server::IirRequest| {
-                                    c.resources.iir_ch.lock(|iir_ch| {
-                                        if req.channel > 1 {
-                                            return Err(());
-                                        }
-
-                                        iir_ch[req.channel as usize][IIR_CASCADE_LENGTH-1] = req.iir;
-
-                                        Ok::<server::IirRequest, ()>(req)
-                                    })
-                                }),
-                                "stabilizer/afe0/gain": hardware::AfeGain, (|gain| {
-                                    c.resources.afes.0.set_gain(gain);
-                                    Ok::<(), ()>(())
-                                }),
-                                "stabilizer/afe1/gain": hardware::AfeGain, (|gain| {
-                                    c.resources.afes.1.set_gain(gain);
-                                    Ok::<(), ()>(())
-                                })
-                            ]
-                        )
-                    });
-                }
-            }
-
-            let sleep = match c.resources.net_interface.poll(
-                &mut sockets,
-                smoltcp::time::Instant::from_millis(time as i64),
-            ) {
-                Ok(changed) => !changed,
-                Err(smoltcp::Error::Unrecognized) => true,
-                Err(e) => {
-                    info!("iface poll error: {:?}", e);
-                    true
-                }
-            };
+            let sleep = c.resources.stack.update(time);
 
             if sleep {
                 cortex_m::asm::wfi();
