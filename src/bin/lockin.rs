@@ -127,8 +127,9 @@ const APP: () = {
         let harmonic: i32 = -1;
         // Demodulation LO phase offset
         let phase_offset: i32 = 0;
-        let sample_frequency =
-            (pll_frequency >> SAMPLE_BUFFER_SIZE_LOG2).wrapping_mul(harmonic);
+        let sample_frequency = ((pll_frequency >> SAMPLE_BUFFER_SIZE_LOG2)
+            as i32)
+            .wrapping_mul(harmonic);  // TODO: maybe rounding bias
         let mut sample_phase =
             phase_offset.wrapping_add(pll_phase.wrapping_mul(harmonic));
 
