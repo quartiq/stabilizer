@@ -9,9 +9,11 @@ const DAC_SEQUENCE: [f32; 8] =
 
 use dsp::{iir, iir_int, lockin::Lockin};
 use hardware::{Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
-use stabilizer::hardware;
+use stabilizer::{ADC_SAMPLE_TICKS, hardware};
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
+
+const PHASE_SCALING: f32 = 1e12;
 
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
@@ -34,8 +36,18 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
+        // The desired corner frequency is always
+        let desired_corner_frequency = 10e3;
+        let gain = 1000.0;
+
+        // Calculate the IIR corner freuqency parameter as a function of the sample rate.
+        let corner_frequency = {
+            let sample_rate = 1.0 / (10e-9 * ADC_SAMPLE_TICKS as f32);
+            desired_corner_frequency / sample_rate
+        };
+
         let lockin = Lockin::new(
-            &iir_int::IIRState::lowpass(1e-3, 0.707, 2.), // TODO: expose
+            &iir_int::IIRState::lowpass(corner_frequency, 0.707, gain), // TODO: expose
         );
 
         // Enable ADC/DAC events
@@ -82,7 +94,8 @@ const APP: () = {
 
         // DAC0 always generates a fixed sinusoidal output.
         for (i, value) in DAC_SEQUENCE.iter().enumerate() {
-            let y = value * i16::MAX as f32;
+            // Full-scale gives a +/- 12V amplitude waveform. Scale it down to give +/- 100mV.
+            let y = value * i16::MAX as f32 / 120.0;
             // Note(unsafe): The DAC_SEQUENCE values are guaranteed to be normalized.
             let y = unsafe { y.to_int_unchecked::<i16>() };
 
@@ -90,7 +103,6 @@ const APP: () = {
             dac_samples[0][i] = y as u16 ^ 0x8000;
         }
 
-        // TODO: Verify that the DAC code is always generated at T=0
         let pll_phase = 0i32;
         let pll_frequency = 1i32 << (32 - 3); // 1/8 of the sample rate
 
@@ -120,7 +132,7 @@ const APP: () = {
         }
 
         // Filter phase through an IIR.
-        phase = c.resources.iir.update(&mut c.resources.iir_state, phase);
+        phase = c.resources.iir.update(&mut c.resources.iir_state, phase) * PHASE_SCALING;
 
         for value in dac_samples[1].iter_mut() {
             *value = phase as u16 ^ 0x8000
