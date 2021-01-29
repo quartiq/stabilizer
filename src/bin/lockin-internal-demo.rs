@@ -9,7 +9,7 @@ const DAC_SEQUENCE: [f32; 8] =
 
 use dsp::{iir, iir_int, lockin::Lockin};
 use hardware::{Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
-use stabilizer::{ADC_SAMPLE_TICKS, hardware};
+use stabilizer::{hardware, ADC_SAMPLE_TICKS};
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
 
@@ -132,7 +132,8 @@ const APP: () = {
         }
 
         // Filter phase through an IIR.
-        phase = c.resources.iir.update(&mut c.resources.iir_state, phase) * PHASE_SCALING;
+        phase = c.resources.iir.update(&mut c.resources.iir_state, phase)
+            * PHASE_SCALING;
 
         for value in dac_samples[1].iter_mut() {
             *value = phase as u16 ^ 0x8000
