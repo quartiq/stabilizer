@@ -7,13 +7,9 @@
 const DAC_SEQUENCE: [f32; 8] =
     [0.0, 0.707, 1.0, 0.707, 0.0, -0.707, -1.0, -0.707];
 
-use dsp::{iir, iir_int, lockin::Lockin};
+use dsp::{iir_int, lockin::Lockin};
 use hardware::{Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
-use stabilizer::{hardware, ADC_SAMPLE_TICKS};
-
-const SCALE: f32 = ((1 << 15) - 1) as f32;
-
-const PHASE_SCALING: f32 = 1e12;
+use stabilizer::hardware;
 
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
@@ -21,12 +17,6 @@ const APP: () = {
         afes: (AFE0, AFE1),
         adc1: Adc1Input,
         dacs: (Dac0Output, Dac1Output),
-
-        #[init([0.; 5])]
-        iir_state: iir::IIRState,
-
-        #[init(iir::IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE })]
-        iir: iir::IIR,
 
         lockin: Lockin,
     }
@@ -36,18 +26,8 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        // The desired corner frequency is always
-        let desired_corner_frequency = 10e3;
-        let gain = 1000.0;
-
-        // Calculate the IIR corner freuqency parameter as a function of the sample rate.
-        let corner_frequency = {
-            let sample_rate = 1.0 / (10e-9 * ADC_SAMPLE_TICKS as f32);
-            desired_corner_frequency / sample_rate
-        };
-
         let lockin = Lockin::new(
-            &iir_int::IIRState::lowpass(corner_frequency, 0.707, gain), // TODO: expose
+            &iir_int::IIRState::lowpass(1e-3, 0.707, 2.), // TODO: expose
         );
 
         // Enable ADC/DAC events
@@ -84,8 +64,8 @@ const APP: () = {
     /// the same time bounds, meeting one also means the other is also met.
     ///
     /// TODO: Document
-    #[task(binds=DMA1_STR4, resources=[adc1, dacs, iir_state, iir, lockin], priority=2)]
-    fn process(mut c: process::Context) {
+    #[task(binds=DMA1_STR4, resources=[adc1, dacs, lockin], priority=2)]
+    fn process(c: process::Context) {
         let adc_samples = c.resources.adc1.acquire_buffer();
         let dac_samples = [
             c.resources.dacs.0.acquire_buffer(),
@@ -103,19 +83,19 @@ const APP: () = {
             dac_samples[0][i] = y as u16 ^ 0x8000;
         }
 
-        let pll_phase = 0i32;
+        let pll_phase = 0;
         let pll_frequency = 1i32 << (32 - 3); // 1/8 of the sample rate
 
         // Harmonic index of the LO: -1 to _de_modulate the fundamental
         let harmonic: i32 = -1;
 
         // Demodulation LO phase offset
-        let phase_offset: i32 = 0;
+        let phase_offset: i32 = (0.7495 * i32::MAX as f32) as i32;
         let sample_frequency = (pll_frequency as i32).wrapping_mul(harmonic);
         let mut sample_phase = phase_offset
             .wrapping_add((pll_phase as i32).wrapping_mul(harmonic));
 
-        let mut phase = 0f32;
+        let mut phase = 0i16;
 
         for sample in adc_samples.iter() {
             // Convert to signed, MSB align the ADC sample.
@@ -127,20 +107,17 @@ const APP: () = {
             // Advance the sample phase.
             sample_phase = sample_phase.wrapping_add(sample_frequency);
 
-            // Convert from IQ to phase.
-            phase = output.phase() as _;
+            // Convert from IQ to phase. Scale the phase so that it fits in the DAC range. We do
+            // this by shifting it down into the 16-bit range.
+            phase = (output.phase() >> 16) as i16;
         }
-
-        // Filter phase through an IIR.
-        phase = c.resources.iir.update(&mut c.resources.iir_state, phase)
-            * PHASE_SCALING;
 
         for value in dac_samples[1].iter_mut() {
             *value = phase as u16 ^ 0x8000
         }
     }
 
-    #[idle(resources=[iir_state, iir, afes])]
+    #[idle(resources=[afes])]
     fn idle(_: idle::Context) -> ! {
         loop {
             // TODO: Implement network interface.
