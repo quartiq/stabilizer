@@ -16,7 +16,7 @@ use stabilizer::{
     hardware, server, ADC_SAMPLE_TICKS_LOG2, SAMPLE_BUFFER_SIZE_LOG2,
 };
 
-use dsp::{iir, iir_int, lockin::Lockin, reciprocal_pll::TimestampHandler};
+use dsp::{iir, iir_int, lockin::Lockin, rpll::RPLL};
 use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
 };
@@ -44,7 +44,7 @@ const APP: () = {
         iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
 
         timestamper: InputStamper,
-        pll: TimestampHandler,
+        pll: RPLL,
         lockin: Lockin,
     }
 
@@ -53,15 +53,10 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let pll = TimestampHandler::new(
-            4, // relative PLL frequency bandwidth: 2**-4, TODO: expose
-            3, // relative PLL phase bandwidth: 2**-3, TODO: expose
-            ADC_SAMPLE_TICKS_LOG2 as usize,
-            SAMPLE_BUFFER_SIZE_LOG2,
-        );
+        let pll = RPLL::new(ADC_SAMPLE_TICKS_LOG2 + SAMPLE_BUFFER_SIZE_LOG2, 0);
 
         let lockin = Lockin::new(
-            &iir_int::IIRState::default(), // TODO: lowpass, expose
+            &iir_int::IIRState::lowpass(1e-3, 0.707, 2.), // TODO: expose
         );
 
         // Enable ADC/DAC events
@@ -122,18 +117,20 @@ const APP: () = {
         let iir_state = c.resources.iir_state;
         let lockin = c.resources.lockin;
 
-        let (pll_phase, pll_frequency) = c
-            .resources
-            .pll
-            .update(c.resources.timestamper.latest_timestamp());
+        let (pll_phase, pll_frequency) = c.resources.pll.update(
+            c.resources.timestamper.latest_timestamp().map(|t| t as i32),
+            22, // relative PLL frequency bandwidth: 2**-22, TODO: expose
+            22, // relative PLL phase bandwidth: 2**-22, TODO: expose
+        );
 
         // Harmonic index of the LO: -1 to _de_modulate the fundamental
         let harmonic: i32 = -1;
         // Demodulation LO phase offset
         let phase_offset: i32 = 0;
-        let sample_frequency = (pll_frequency as i32).wrapping_mul(harmonic);
-        let mut sample_phase = phase_offset
-            .wrapping_add((pll_phase as i32).wrapping_mul(harmonic));
+        let sample_frequency =
+            (pll_frequency >> SAMPLE_BUFFER_SIZE_LOG2).wrapping_mul(harmonic);
+        let mut sample_phase =
+            phase_offset.wrapping_add(pll_phase.wrapping_mul(harmonic));
 
         for i in 0..adc_samples[0].len() {
             // Convert to signed, MSB align the ADC sample.
