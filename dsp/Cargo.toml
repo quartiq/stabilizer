@@ -10,6 +10,9 @@ serde = { version = "1.0", features = ["derive"], default-features = false }
 
 [dev-dependencies]
 criterion = "0.3"
+rand = "0.8"
+ndarray = "0.14"
+ndarray-stats = "0.4"
 
 [[bench]]
 name = "trig"

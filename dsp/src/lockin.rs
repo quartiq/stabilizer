@@ -57,7 +57,6 @@ impl Lockin {
 #[cfg(test)]
 mod test {
     use crate::{
-        atan2,
         iir_int::IIRState,
         lockin::Lockin,
         rpll::RPLL,

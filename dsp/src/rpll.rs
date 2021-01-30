@@ -51,7 +51,7 @@ impl RPLL {
         shift_phase: u8,
     ) -> (i32, u32) {
         debug_assert!(shift_frequency > self.dt2);
-        debug_assert!(shift_phase > self.dt2);
+        debug_assert!(shift_phase >= self.dt2);
         // Advance phase
         self.y = self.y.wrapping_add(self.f as i32);
         if let Some(x) = input {
@@ -82,5 +82,133 @@ impl RPLL {
         // Advance time
         self.t = self.t.wrapping_add(1 << self.dt2);
         (self.y, self.f)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::RPLL;
+    use ndarray::prelude::*;
+    use ndarray_stats::QuantileExt;
+    use rand::{prelude::*, rngs::StdRng};
+    use std::vec::Vec;
+
+    #[test]
+    fn make() {
+        let _ = RPLL::new(8, 0);
+    }
+
+    struct Harness {
+        rpll: RPLL,
+        dt2: u8,
+        shift_frequency: u8,
+        shift_phase: u8,
+        noise: i32,
+        period: i32,
+        next: i32,
+        time: i32,
+        rng: StdRng,
+    }
+
+    impl Harness {
+        fn default() -> Self {
+            Harness {
+                rpll: RPLL::new(8, 0),
+                dt2: 8,
+                shift_frequency: 9,
+                shift_phase: 8,
+                noise: 0,
+                period: 333,
+                next: 111,
+                time: 0,
+                rng: StdRng::seed_from_u64(42),
+            }
+        }
+
+        fn run(&mut self, n: i32) -> (Vec<i64>, Vec<i64>) {
+            let mut y = Vec::<i64>::new();
+            let mut f = Vec::<i64>::new();
+            for _ in 0..n {
+                let timestamp = if self.time - self.next >= 0 {
+                    let p_noise = self.rng.gen_range(-self.noise..=self.noise);
+                    let timestamp = self.next.wrapping_add(p_noise);
+                    self.next = self.next.wrapping_add(self.period);
+                    Some(timestamp)
+                } else {
+                    None
+                };
+                let (yi, fi) = self.rpll.update(
+                    timestamp,
+                    self.shift_frequency,
+                    self.shift_phase,
+                );
+                let y_ref = (self.time.wrapping_sub(self.next) as i64
+                    * (1i64 << 32)
+                    / self.period as i64) as i32;
+                y.push((yi as i64).wrapping_sub(y_ref as i64)); // phase error
+                let p_ref = 1 << 32 + self.dt2;
+                let p_sig = fi as i64 * self.period as i64;
+                f.push(p_sig.wrapping_sub(p_ref)); // relative frequency error
+                                                   // advance time
+                self.time = self.time.wrapping_add(1 << self.dt2);
+            }
+            (y, f)
+        }
+    }
+
+    #[test]
+    fn default() {
+        let mut h = Harness::default();
+        h.run(1 << 10); // settle
+
+        let (y, f) = h.run(1 << 10);
+        let y = Array::from(y);
+        let f = Array::from(f);
+
+        println!(
+            "f: {}+-{}",
+            f.mean().unwrap(),
+            *f.mapv(i64::abs).max().unwrap()
+        );
+        println!(
+            "y: {}+-{}",
+            y.mean().unwrap(),
+            *y.mapv(i64::abs).max().unwrap()
+        );
+
+        assert!(f.mean().unwrap().abs() < 20);
+        assert!(*f.mapv(i64::abs).max().unwrap() < 1 << 16);
+        assert!(y.mean().unwrap().abs() < 1 << 6);
+        assert!(*y.mapv(i64::abs).max().unwrap() < 1 << 8);
+    }
+
+    #[test]
+    fn noise() {
+        let mut h = Harness::default();
+        h.noise = 10;
+        h.shift_frequency = 23;
+        h.shift_phase = 22;
+
+        h.run(1 << 20); // settle
+
+        let (y, f) = h.run(1 << 10);
+        let y = Array::from(y);
+        let f = Array::from(f);
+
+        println!(
+            "f: {}+-{}",
+            f.mean().unwrap(),
+            *f.mapv(i64::abs).max().unwrap()
+        );
+        println!(
+            "y: {}+-{}",
+            y.mean().unwrap(),
+            *y.mapv(i64::abs).max().unwrap()
+        );
+
+        assert!(f.mean().unwrap().abs() < 1 << 14);
+        assert!(*f.mapv(i64::abs).max().unwrap() < 1 << 22);
+        assert!(y.mean().unwrap().abs() < 1 << 19);
+        assert!(*y.mapv(i64::abs).max().unwrap() < 1 << 19);
     }
 }
