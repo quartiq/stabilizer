@@ -1,7 +1,7 @@
 use core::cell::RefCell;
 ///! Network abstraction layer for smoltcp.
 use heapless::{consts, Vec};
-use minimq::embedded_nal::{self as nal, nb};
+use miniconf::embedded_nal::{self as nal, nb};
 
 use super::Ethernet;
 

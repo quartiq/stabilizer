@@ -11,7 +11,7 @@ serde-json-core = "0.1"
 
 [dependencies.miniconf]
 git = "https://github.com/vertigo-designs/miniconf.git"
-branch = "rs/cleanup"
+branch = "feature/mqtt-interface"
 
 [dev-dependencies]
 criterion = "0.3"

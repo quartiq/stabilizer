@@ -44,11 +44,10 @@ enum-iterator = "0.6.0"
 paste = "1"
 dsp = { path = "dsp" }
 ad9959 = { path = "ad9959" }
-minimq = { git = "https://github.com/quartiq/minimq.git" }
 
 [dependencies.miniconf]
 git = "https://github.com/vertigo-designs/miniconf.git"
-branch = "rs/cleanup"
+branch = "feature/mqtt-interface"
 
 [dependencies.mcp23017]
 git = "https://github.com/mrd0ll4r/mcp23017.git"

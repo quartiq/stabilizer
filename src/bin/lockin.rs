@@ -7,9 +7,7 @@ use stm32h7xx_hal as hal;
 
 use rtic::cyccnt::{Instant, U32Ext};
 
-use stabilizer::{
-    hardware, ADC_SAMPLE_TICKS_LOG2, SAMPLE_BUFFER_SIZE_LOG2,
-};
+use stabilizer::{hardware, ADC_SAMPLE_TICKS_LOG2, SAMPLE_BUFFER_SIZE_LOG2};
 
 use dsp::{iir, iir_int, lockin::Lockin, rpll::RPLL};
 use hardware::{

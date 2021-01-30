@@ -10,10 +10,16 @@ use rtic::cyccnt::{Instant, U32Ext};
 use stabilizer::hardware;
 
 use miniconf::StringSet;
+use miniconf::{
+    embedded_nal::{IpAddr, Ipv4Addr},
+    MqttInterface,
+};
 use serde::Deserialize;
 
 use dsp::iir;
-use hardware::{Adc0Input, Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1, MqttAction};
+use hardware::{
+    Adc0Input, Adc1Input, Dac0Output, Dac1Output, NetworkStack, AFE0, AFE1,
+};
 
 const SCALE: f32 = ((1 << 15) - 1) as f32;
 
@@ -22,7 +28,6 @@ const IIR_CASCADE_LENGTH: usize = 1;
 
 #[derive(Debug, Deserialize, StringSet)]
 pub struct Settings {
-    test: u32,
     iir: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
 }
 
@@ -41,7 +46,7 @@ const APP: () = {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        mqtt_interface: hardware::MqttInterface<Settings>,
+        mqtt_interface: MqttInterface<Settings, NetworkStack>,
 
         // Format: iir_state[ch][cascade-no][coeff]
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
@@ -64,8 +69,16 @@ const APP: () = {
         // Start sampling ADCs.
         stabilizer.adc_dac_timer.start();
 
+        let broker = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2));
+
         init::LateResources {
-            mqtt_interface: hardware::MqttInterface::new(stabilizer.net.stack, Settings::new()),
+            mqtt_interface: MqttInterface::new(
+                stabilizer.net.stack,
+                "stabilizer",
+                broker,
+                Settings::new(),
+            )
+            .unwrap(),
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
@@ -133,18 +146,33 @@ const APP: () = {
                 time += 1;
             }
 
-            match c.resources.mqtt_interface.lock(|interface| interface.update(time).unwrap()) {
-                MqttAction::Sleep => cortex_m::asm::wfi(),
-                MqttAction::Continue => {},
-                MqttAction::CommitSettings => c.spawn.settings_update().unwrap(),
+            let sleep = c
+                .resources
+                .mqtt_interface
+                .lock(|interface| interface.network_stack().update(time));
+
+            match c
+                .resources
+                .mqtt_interface
+                .lock(|interface| interface.update().unwrap())
+            {
+                miniconf::Action::Continue => {
+                    if sleep {
+                        cortex_m::asm::wfi();
+                    }
+                }
+                miniconf::Action::CommitSettings => {
+                    c.spawn.settings_update().unwrap()
+                }
             }
         }
     }
 
     #[task(priority = 1, resources=[mqtt_interface, afes, iir_ch])]
     fn settings_update(mut c: settings_update::Context) {
-        let settings = c.resources.mqtt_interface.settings.borrow();
+        let settings = &c.resources.mqtt_interface.settings;
         c.resources.iir_ch.lock(|iir| *iir = settings.iir);
+        // TODO: Update AFEs
     }
 
     #[task(binds = ETH, priority = 1)]

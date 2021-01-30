@@ -17,14 +17,12 @@ mod eeprom;
 mod pounder;
 mod smoltcp_nal;
 mod timers;
-mod mqtt_interface;
 
 pub use adc::{Adc0Input, Adc1Input};
 pub use afe::Gain as AfeGain;
 pub use dac::{Dac0Output, Dac1Output};
 pub use digital_input_stamper::InputStamper;
 pub use pounder::DdsOutput;
-pub use mqtt_interface::{MqttInterface, Action as MqttAction};
 
 // Type alias for the analog front-end (AFE) for ADC0.
 pub type AFE0 = afe::ProgrammableGainAmplifier<
