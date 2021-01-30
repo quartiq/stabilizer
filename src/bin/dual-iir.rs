@@ -9,10 +9,9 @@ use rtic::cyccnt::{Instant, U32Ext};
 
 use stabilizer::hardware;
 
-use miniconf::StringSet;
 use miniconf::{
     embedded_nal::{IpAddr, Ipv4Addr},
-    MqttInterface,
+    MqttInterface, StringSet,
 };
 use serde::Deserialize;
 
@@ -59,6 +58,15 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
+        let broker = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2));
+        let mqtt_interface = MqttInterface::new(
+            stabilizer.net.stack,
+            "stabilizer/iir/dual",
+            broker,
+            Settings::new(),
+        )
+        .unwrap();
+
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();
         stabilizer.adcs.1.start();
@@ -68,16 +76,8 @@ const APP: () = {
         // Start sampling ADCs.
         stabilizer.adc_dac_timer.start();
 
-        let broker = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2));
-
         init::LateResources {
-            mqtt_interface: MqttInterface::new(
-                stabilizer.net.stack,
-                "stabilizer",
-                broker,
-                Settings::new(),
-            )
-            .unwrap(),
+            mqtt_interface,
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,

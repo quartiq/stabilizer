@@ -9,6 +9,12 @@ use rtic::cyccnt::{Instant, U32Ext};
 
 use stabilizer::{hardware, ADC_SAMPLE_TICKS_LOG2, SAMPLE_BUFFER_SIZE_LOG2};
 
+use miniconf::{
+    embedded_nal::{IpAddr, Ipv4Addr},
+    MqttInterface, StringSet,
+};
+use serde::Deserialize;
+
 use dsp::{iir, iir_int, lockin::Lockin, rpll::RPLL};
 use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
@@ -19,13 +25,26 @@ const SCALE: f32 = ((1 << 15) - 1) as f32;
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
 
+#[derive(Debug, Deserialize, StringSet)]
+pub struct Settings {
+    iir: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+}
+
+impl Settings {
+    pub fn new() -> Self {
+        Self {
+            iir: [[iir::IIR::default(); IIR_CASCADE_LENGTH]; 2],
+        }
+    }
+}
+
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        stack: hardware::NetworkStack,
+        mqtt_interface: MqttInterface<Settings, hardware::NetworkStack>,
 
         // Format: iir_state[ch][cascade-no][coeff]
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
@@ -42,6 +61,15 @@ const APP: () = {
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
+
+        let broker = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2));
+        let mqtt_interface = MqttInterface::new(
+            stabilizer.net.stack,
+            "stabilizer/lockin",
+            broker,
+            Settings::new(),
+        )
+        .unwrap();
 
         let pll = RPLL::new(ADC_SAMPLE_TICKS_LOG2 + SAMPLE_BUFFER_SIZE_LOG2, 0);
 
@@ -62,10 +90,10 @@ const APP: () = {
         stabilizer.adc_dac_timer.start();
 
         init::LateResources {
+            mqtt_interface,
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            stack: stabilizer.net.stack,
             timestamper: stabilizer.timestamper,
 
             pll,
@@ -152,8 +180,8 @@ const APP: () = {
         }
     }
 
-    #[idle(resources=[stack, iir_state, iir_ch, afes])]
-    fn idle(c: idle::Context) -> ! {
+    #[idle(resources=[mqtt_interface], spawn=[settings_update])]
+    fn idle(mut c: idle::Context) -> ! {
         let mut time = 0u32;
         let mut next_ms = Instant::now();
 
@@ -168,12 +196,33 @@ const APP: () = {
                 time += 1;
             }
 
-            let sleep = !c.resources.stack.poll(time);
+            let sleep = c
+                .resources
+                .mqtt_interface
+                .lock(|interface| !interface.network_stack().poll(time));
 
-            if sleep {
-                cortex_m::asm::wfi();
+            match c
+                .resources
+                .mqtt_interface
+                .lock(|interface| interface.update().unwrap())
+            {
+                miniconf::Action::Continue => {
+                    if sleep {
+                        cortex_m::asm::wfi();
+                    }
+                }
+                miniconf::Action::CommitSettings => {
+                    c.spawn.settings_update().unwrap()
+                }
             }
         }
+    }
+
+    #[task(priority = 1, resources=[mqtt_interface, afes, iir_ch])]
+    fn settings_update(mut c: settings_update::Context) {
+        let settings = &c.resources.mqtt_interface.settings;
+        c.resources.iir_ch.lock(|iir| *iir = settings.iir);
+        // TODO: Update AFEs
     }
 
     #[task(binds = ETH, priority = 1)]
