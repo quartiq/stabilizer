@@ -34,7 +34,6 @@ pub struct Settings {
 impl Settings {
     pub fn new() -> Self {
         Self {
-            test: 5,
             iir: [[iir::IIR::default(); IIR_CASCADE_LENGTH]; 2],
         }
     }
