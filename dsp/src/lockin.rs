@@ -1,4 +1,4 @@
-use super::{cossin, iir_int, Complex};
+use super::{iir_int, Complex};
 use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, Default, Deserialize, Serialize)]
@@ -19,7 +19,7 @@ impl Lockin {
 
     pub fn update(&mut self, signal: i32, phase: i32) -> Complex<i32> {
         // Get the LO signal for demodulation.
-        let m = cossin(phase);
+        let m = Complex::from_angle(phase);
 
         // Mix with the LO signal, filter with the IIR lowpass,
         // return IQ (in-phase and quadrature) data.
@@ -34,6 +34,23 @@ impl Lockin {
                 ((signal as i64 * m.1 as i64) >> 32) as _,
             ),
         )
+    }
+
+    pub fn feed<I: IntoIterator<Item = i32>>(
+        &mut self,
+        signal: I,
+        phase: i32,
+        frequency: i32,
+    ) -> Option<Complex<i32>> {
+        let mut phase = phase;
+
+        signal
+            .into_iter()
+            .map(|s| {
+                phase = phase.wrapping_add(frequency);
+                self.update(s, phase)
+            })
+            .last()
     }
 }
 

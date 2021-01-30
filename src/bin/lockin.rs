@@ -123,27 +123,26 @@ const APP: () = {
             22, // relative PLL phase bandwidth: 2**-22, TODO: expose
         );
 
-        // Harmonic index of the LO: -1 to _de_modulate the fundamental
+        // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
         let harmonic: i32 = -1;
         // Demodulation LO phase offset
         let phase_offset: i32 = 0;
         let sample_frequency = ((pll_frequency >> SAMPLE_BUFFER_SIZE_LOG2)
             as i32)
             .wrapping_mul(harmonic); // TODO: maybe rounding bias
-        let mut sample_phase =
+        let sample_phase =
             phase_offset.wrapping_add(pll_phase.wrapping_mul(harmonic));
 
-        for i in 0..adc_samples[0].len() {
-            // Convert to signed, MSB align the ADC sample.
-            let input = (adc_samples[0][i] as i16 as i32) << 16;
-            // Obtain demodulated, filtered IQ sample.
-            let output = lockin.update(input, sample_phase);
-            // Advance the sample phase.
-            sample_phase = sample_phase.wrapping_add(sample_frequency);
-
+        if let Some(output) = lockin.feed(
+            adc_samples[0].iter().map(|&i|
+                // Convert to signed, MSB align the ADC sample.
+                (i as i16 as i32) << 16),
+            sample_phase,
+            sample_frequency,
+        ) {
             // Convert from IQ to power and phase.
-            let mut power = output.power() as _;
-            let mut phase = output.phase() as _;
+            let mut power = output.abs_sqr() as _;
+            let mut phase = output.arg() as _;
 
             // Filter power and phase through IIR filters.
             // Note: Normalization to be done in filters. Phase will wrap happily.
@@ -152,13 +151,17 @@ const APP: () = {
                 phase = iir_ch[1][j].update(&mut iir_state[1][j], phase);
             }
 
+            // TODO: IIR filter DC gain needs to be 1/(1 << 16)
+
             // Note(unsafe): range clipping to i16 is ensured by IIR filters above.
             // Convert to DAC data.
-            unsafe {
-                dac_samples[0][i] =
-                    power.to_int_unchecked::<i16>() as u16 ^ 0x8000;
-                dac_samples[1][i] =
-                    phase.to_int_unchecked::<i16>() as u16 ^ 0x8000;
+            for i in 0..dac_samples[0].len() {
+                unsafe {
+                    dac_samples[0][i] =
+                        power.to_int_unchecked::<i16>() as u16 ^ 0x8000;
+                    dac_samples[1][i] =
+                        phase.to_int_unchecked::<i16>() as u16 ^ 0x8000;
+                }
             }
         }
     }
