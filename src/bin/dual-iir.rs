@@ -148,7 +148,7 @@ const APP: () = {
             let sleep = c
                 .resources
                 .mqtt_interface
-                .lock(|interface| interface.network_stack().update(time));
+                .lock(|interface| !interface.network_stack().poll(time));
 
             match c
                 .resources

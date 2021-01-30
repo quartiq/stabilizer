@@ -15,7 +15,6 @@ mod design_parameters;
 mod digital_input_stamper;
 mod eeprom;
 mod pounder;
-mod smoltcp_nal;
 mod timers;
 
 pub use adc::{Adc0Input, Adc1Input};
@@ -36,15 +35,11 @@ pub type AFE1 = afe::ProgrammableGainAmplifier<
     hal::gpio::gpiod::PD15<hal::gpio::Output<hal::gpio::PushPull>>,
 >;
 
-// Type alias for the ethernet interface on Stabilizer.
-pub type Ethernet = smoltcp::iface::EthernetInterface<
-    'static,
+pub type NetworkStack = smoltcp_nal::NetworkStack<
     'static,
     'static,
     hal::ethernet::EthernetDMA<'static>,
 >;
-
-pub type NetworkStack = smoltcp_nal::NetworkStack<'static, 'static, 'static>;
 
 pub use configuration::{setup, PounderDevices, StabilizerDevices};
 

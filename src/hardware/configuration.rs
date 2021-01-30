@@ -9,20 +9,31 @@ use crate::SAMPLE_BUFFER_SIZE;
 #[cfg(feature = "pounder_v1_1")]
 use core::convert::TryInto;
 
-use smoltcp::{iface::Routes, wire::Ipv4Address};
-
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
     prelude::*,
 };
 
+use smoltcp_nal::smoltcp;
+
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use super::{
     adc, afe, dac, design_parameters, digital_input_stamper, eeprom, pounder,
-    smoltcp_nal::NetStorage, timers, DdsOutput, NetworkStack, AFE0, AFE1,
+    timers, DdsOutput, NetworkStack, AFE0, AFE1,
 };
+
+pub struct NetStorage {
+    pub ip_addrs: [smoltcp::wire::IpCidr; 1],
+    pub sockets: [Option<smoltcp::socket::SocketSetItem<'static>>; 1],
+    pub neighbor_cache:
+        [Option<(smoltcp::wire::IpAddress, smoltcp::iface::Neighbor)>; 8],
+    pub routes_cache:
+        [Option<(smoltcp::wire::IpCidr, smoltcp::iface::Route)>; 8],
+    pub tx_storage: [u8; 4096],
+    pub rx_storage: [u8; 4096],
+}
 
 /// The available networking devices on Stabilizer.
 pub struct NetworkDevices {
@@ -510,8 +521,9 @@ pub fn setup(
             24,
         );
 
-        let default_v4_gw = Ipv4Address::new(10, 0, 16, 1);
-        let mut routes = Routes::new(&mut store.routes_cache[..]);
+        let default_v4_gw = smoltcp::wire::Ipv4Address::new(10, 0, 16, 1);
+        let mut routes =
+            smoltcp::iface::Routes::new(&mut store.routes_cache[..]);
         routes.add_default_ipv4_route(default_v4_gw).unwrap();
 
         let neighbor_cache =
@@ -553,7 +565,7 @@ pub fn setup(
         };
 
         NetworkDevices {
-            stack: NetworkStack::new(interface, sockets),
+            stack: smoltcp_nal::NetworkStack::new(interface, sockets),
             phy: lan8742a,
         }
     };

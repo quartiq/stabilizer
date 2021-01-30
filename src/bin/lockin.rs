@@ -168,7 +168,7 @@ const APP: () = {
                 time += 1;
             }
 
-            let sleep = c.resources.stack.update(time);
+            let sleep = !c.resources.stack.poll(time);
 
             if sleep {
                 cortex_m::asm::wfi();
