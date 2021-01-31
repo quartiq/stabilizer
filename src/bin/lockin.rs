@@ -119,7 +119,7 @@ const APP: () = {
 
         let (pll_phase, pll_frequency) = c.resources.pll.update(
             c.resources.timestamper.latest_timestamp().map(|t| t as i32),
-            22, // relative PLL frequency bandwidth: 2**-22, TODO: expose
+            23, // relative PLL frequency bandwidth: 2**-23, TODO: expose
             22, // relative PLL phase bandwidth: 2**-22, TODO: expose
         );
 
@@ -128,8 +128,8 @@ const APP: () = {
         // Demodulation LO phase offset
         let phase_offset: i32 = 0;
         let sample_frequency = ((pll_frequency >> SAMPLE_BUFFER_SIZE_LOG2)
-            as i32)
-            .wrapping_mul(harmonic); // TODO: maybe rounding bias
+            as i32) // TODO: maybe rounding bias
+            .wrapping_mul(harmonic);
         let sample_phase =
             phase_offset.wrapping_add(pll_phase.wrapping_mul(harmonic));
 

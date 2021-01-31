@@ -57,24 +57,22 @@ impl RPLL {
             // Store timestamp for next time.
             self.x = x;
             // Phase using the current frequency estimate
-            let p_sig_64 = (self.ff as u64).wrapping_mul(dx as u64);
+            let p_sig_64 = self.ff as u64 * dx as u64;
             // Add half-up rounding bias and apply gain/attenuation
-            let p_sig = (p_sig_64.wrapping_add(1u64 << (shift_frequency - 1))
-                >> shift_frequency) as i32;
+            let p_sig = ((p_sig_64 + (1u32 << (shift_frequency - 1)) as u64)
+                >> shift_frequency) as u32;
             // Reference phase (1 << dt2 full turns) with gain/attenuation applied
-            let p_ref = 1i32 << (32 + self.dt2 - shift_frequency);
+            let p_ref = 1u32 << (32 + self.dt2 - shift_frequency);
             // Update frequency lock
             self.ff = self.ff.wrapping_add(p_ref.wrapping_sub(p_sig) as u32);
             // Time in counter cycles between timestamp and "now"
-            let dt = x.wrapping_neg() & ((1 << self.dt2) - 1);
+            let dt = (x.wrapping_neg() & ((1 << self.dt2) - 1)) as u32;
             // Reference phase estimate "now"
-            let y_ref = ((self.f >> self.dt2) as i32).wrapping_mul(dt);
-            // Phase error
-            let dy = y_ref.wrapping_sub(self.y);
+            let y_ref = (self.f >> self.dt2).wrapping_mul(dt) as i32;
+            // Phase error with gain
+            let dy = y_ref.wrapping_sub(self.y) >> (shift_phase - self.dt2);
             // Current frequency estimate from frequency lock and phase error
-            self.f = self
-                .ff
-                .wrapping_add((dy >> (shift_phase - self.dt2)) as u32);
+            self.f = self.ff.wrapping_add(dy as u32);
         }
         (self.y, self.f)
     }
@@ -128,8 +126,8 @@ mod test {
             for _ in 0..n {
                 let timestamp = if self.time - self.next_noisy >= 0 {
                     assert!(self.time - self.next_noisy < 1 << self.dt2);
-                    let timestamp = self.next_noisy;
                     self.next = self.next.wrapping_add(self.period);
+                    let timestamp = self.next_noisy;
                     let p_noise = self.rng.gen_range(-self.noise..=self.noise);
                     self.next_noisy = self.next.wrapping_add(p_noise);
                     Some(timestamp)
@@ -141,15 +139,21 @@ mod test {
                     self.shift_frequency,
                     self.shift_phase,
                 );
+
                 let y_ref = (self.time.wrapping_sub(self.next) as i64
                     * (1i64 << 32)
                     / self.period as i64) as i32;
                 // phase error
                 y.push(yi.wrapping_sub(y_ref) as f32 / 2f32.powi(32));
+
                 let p_ref = 1 << 32 + self.dt2;
-                let p_sig = fi as i64 * self.period as i64;
+                let p_sig = fi as u64 * self.period as u64;
                 // relative frequency error
-                f.push(p_sig.wrapping_sub(p_ref) as f32 / 2f32.powi(32));
+                f.push(
+                    p_sig.wrapping_sub(p_ref) as i64 as f32
+                        / 2f32.powi(32 + self.dt2 as i32),
+                );
+
                 // advance time
                 self.time = self.time.wrapping_add(1 << self.dt2);
             }
@@ -157,6 +161,10 @@ mod test {
         }
 
         fn measure(&mut self, n: usize) -> (f32, f32, f32, f32) {
+            assert!(self.period >= 1 << self.dt2);
+            assert!(self.dt2 <= self.shift_frequency);
+            assert!(self.period < 1 << self.shift_frequency);
+            assert!(self.period < 1 << self.shift_frequency + 1);
             let t_settle = (1 << self.shift_frequency - self.dt2 + 4)
                 + (1 << self.shift_phase - self.dt2 + 4);
             self.run(t_settle);
@@ -164,6 +172,7 @@ mod test {
             let (y, f) = self.run(n);
             let y = Array::from(y);
             let f = Array::from(f);
+            // println!("{:?} {:?}", f, y);
 
             let fm = f.mean().unwrap();
             let fs = f.std_axis(Axis(0), 0.).into_scalar();
@@ -180,8 +189,8 @@ mod test {
         let mut h = Harness::default();
 
         let (fm, fs, ym, ys) = h.measure(1 << 16);
-        assert!(fm.abs() < 1e-9);
-        assert!(fs.abs() < 8e-6);
+        assert!(fm.abs() < 1e-11);
+        assert!(fs.abs() < 4e-8);
         assert!(ym.abs() < 2e-8);
         assert!(ys.abs() < 2e-8);
     }
@@ -194,8 +203,8 @@ mod test {
         h.shift_phase = 22;
 
         let (fm, fs, ym, ys) = h.measure(1 << 16);
-        assert!(fm.abs() < 1e-6);
-        assert!(fs.abs() < 6e-4);
+        assert!(fm.abs() < 3e-9);
+        assert!(fs.abs() < 3e-6);
         assert!(ym.abs() < 4e-4);
         assert!(ys.abs() < 2e-4);
     }
@@ -204,31 +213,67 @@ mod test {
     fn narrow_fast() {
         let mut h = Harness::default();
         h.period = 990;
+        h.next = 351;
+        h.next_noisy = h.next;
         h.noise = 5;
         h.shift_frequency = 23;
         h.shift_phase = 22;
 
         let (fm, fs, ym, ys) = h.measure(1 << 16);
-        assert!(fm.abs() < 7e-6);
-        assert!(fs.abs() < 6e-4);
+        assert!(fm.abs() < 2e-9);
+        assert!(fs.abs() < 2e-6);
         assert!(ym.abs() < 1e-3);
         assert!(ys.abs() < 1e-4);
     }
 
-    /*
     #[test]
     fn narrow_slow() {
         let mut h = Harness::default();
         h.period = 1818181;
-        h.noise = 1800;
+        h.next = 35281;
+        h.next_noisy = h.next;
+        h.noise = 1000;
         h.shift_frequency = 23;
         h.shift_phase = 22;
 
         let (fm, fs, ym, ys) = h.measure(1 << 16);
-        assert!(fm.abs() < 1e-8);
+        assert!(fm.abs() < 2e-5);
         assert!(fs.abs() < 6e-4);
         assert!(ym.abs() < 2e-4);
         assert!(ys.abs() < 2e-4);
     }
-    */
+
+    #[test]
+    fn wide_fast() {
+        let mut h = Harness::default();
+        h.period = 990;
+        h.next = 351;
+        h.next_noisy = h.next;
+        h.noise = 5;
+        h.shift_frequency = 10;
+        h.shift_phase = 9;
+
+        let (fm, fs, ym, ys) = h.measure(1 << 16);
+        assert!(fm.abs() < 1e-3);
+        assert!(fs.abs() < 1e-1);
+        assert!(ym.abs() < 1e-4);
+        assert!(ys.abs() < 3e-2);
+    }
+
+    #[test]
+    fn wide_slow() {
+        let mut h = Harness::default();
+        h.period = 1818181;
+        h.next = 35281;
+        h.next_noisy = h.next;
+        h.noise = 1000;
+        h.shift_frequency = 21;
+        h.shift_phase = 20;
+
+        let (fm, fs, ym, ys) = h.measure(1 << 16);
+        assert!(fm.abs() < 2e-4);
+        assert!(fs.abs() < 6e-3);
+        assert!(ym.abs() < 2e-4);
+        assert!(ys.abs() < 2e-3);
+    }
 }
