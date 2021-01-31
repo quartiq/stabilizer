@@ -34,9 +34,9 @@ const APP: () = {
         net_interface: hardware::Ethernet,
 
         // Format: iir_state[ch][cascade-no][coeff]
-        #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
+        #[init([[iir::IIRState([0.; 5]); IIR_CASCADE_LENGTH]; 2])]
         iir_state: [[iir::IIRState; IIR_CASCADE_LENGTH]; 2],
-        #[init([[iir::IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; IIR_CASCADE_LENGTH]; 2])]
+        #[init([[iir::IIR { ba: iir::IIRState([1., 0., 0., 0., 0.]), y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; IIR_CASCADE_LENGTH]; 2])]
         iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
     }
 
@@ -159,10 +159,10 @@ const APP: () = {
                                     let state = c.resources.iir_state.lock(|iir_state|
                                         server::Status {
                                             t: time,
-                                            x0: iir_state[0][0][0],
-                                            y0: iir_state[0][0][2],
-                                            x1: iir_state[1][0][0],
-                                            y1: iir_state[1][0][2],
+                                            x0: iir_state[0][0].0[0],
+                                            y0: iir_state[0][0].0[2],
+                                            x1: iir_state[1][0].0[0],
+                                            y1: iir_state[1][0].0[2],
                                     });
 
                                     Ok::<server::Status, ()>(state)
@@ -171,10 +171,10 @@ const APP: () = {
                                 "stabilizer/iir_b/state": (|| { let state = c.resources.iir_state.lock(|iir_state|
                                         server::Status {
                                             t: time,
-                                            x0: iir_state[0][IIR_CASCADE_LENGTH-1][0],
-                                            y0: iir_state[0][IIR_CASCADE_LENGTH-1][2],
-                                            x1: iir_state[1][IIR_CASCADE_LENGTH-1][0],
-                                            y1: iir_state[1][IIR_CASCADE_LENGTH-1][2],
+                                            x0: iir_state[0][IIR_CASCADE_LENGTH-1].0[0],
+                                            y0: iir_state[0][IIR_CASCADE_LENGTH-1].0[2],
+                                            x1: iir_state[1][IIR_CASCADE_LENGTH-1].0[0],
+                                            y1: iir_state[1][IIR_CASCADE_LENGTH-1].0[2],
                                     });
 
                                     Ok::<server::Status, ()>(state)
