@@ -151,16 +151,14 @@ const APP: () = {
                 phase = iir_ch[1][j].update(&mut iir_state[1][j], phase);
             }
 
-            // TODO: IIR filter DC gain needs to be 1/(1 << 16)
-
             // Note(unsafe): range clipping to i16 is ensured by IIR filters above.
             // Convert to DAC data.
             for i in 0..dac_samples[0].len() {
                 unsafe {
                     dac_samples[0][i] =
-                        power.to_int_unchecked::<i16>() as u16 ^ 0x8000;
+                        (power.to_int_unchecked::<i32>() >> 16) as u16 ^ 0x8000;
                     dac_samples[1][i] =
-                        phase.to_int_unchecked::<i16>() as u16 ^ 0x8000;
+                        (phase.to_int_unchecked::<i32>() >> 16) as u16 ^ 0x8000;
                 }
             }
         }
