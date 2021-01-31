@@ -1,6 +1,8 @@
 use core::f32::consts::PI;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use dsp::{atan2, cossin, pll::PLL, rpll::RPLL};
+use dsp::{atan2, cossin};
+use dsp::{iir, iir_int};
+use dsp::{pll::PLL, rpll::RPLL};
 
 fn atan2_bench(c: &mut Criterion) {
     let xi = (10 << 16) as i32;
@@ -46,6 +48,23 @@ fn pll_bench(c: &mut Criterion) {
     });
 }
 
+fn iir_int_bench(c: &mut Criterion) {
+    let dut = iir_int::IIR::default();
+    let mut xy = iir_int::IIRState::default();
+    c.bench_function("int_iir::IIR::update(s, x)", |b| {
+        b.iter(|| dut.update(&mut xy, black_box(0x2832)))
+    });
+}
+
+fn iir_bench(c: &mut Criterion) {
+    let dut = iir::IIR::default();
+    let mut xy = iir::IIRState::default();
+    c.bench_function("int::IIR::update(s, x)", |b| {
+        b.iter(|| dut.update(&mut xy, black_box(0.32241)))
+    });
+}
+
 criterion_group!(trig, atan2_bench, cossin_bench);
 criterion_group!(pll, rpll_bench, pll_bench);
-criterion_main!(trig, pll);
+criterion_group!(iir, iir_int_bench, iir_bench);
+criterion_main!(trig, pll, iir);

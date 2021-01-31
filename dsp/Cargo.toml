@@ -15,7 +15,7 @@ ndarray = "0.14"
 ndarray-stats = "0.4"
 
 [[bench]]
-name = "trig"
+name = "micro"
 harness = false
 
 [features]
