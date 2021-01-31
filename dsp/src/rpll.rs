@@ -6,7 +6,6 @@
 #[derive(Copy, Clone, Default)]
 pub struct RPLL {
     dt2: u8, // 1 << dt2 is the counter rate to update() rate ratio
-    t: i32,  // current counter time
     x: i32,  // previous timestamp
     ff: u32, // current frequency estimate from frequency loop
     f: u32,  // current frequency estimate from both frequency and phase loop
@@ -18,14 +17,12 @@ impl RPLL {
     ///
     /// Args:
     /// * dt2: inverse update() rate. 1 << dt2 is the counter rate to update() rate ratio.
-    /// * t: Counter time. Counter value at the first update() call. Typically 0.
     ///
     /// Returns:
     /// Initialized RPLL instance.
-    pub fn new(dt2: u8, t: i32) -> RPLL {
+    pub fn new(dt2: u8) -> RPLL {
         RPLL {
             dt2,
-            t,
             ..Default::default()
         }
     }
@@ -69,7 +66,7 @@ impl RPLL {
             // Update frequency lock
             self.ff = self.ff.wrapping_add(p_ref.wrapping_sub(p_sig) as u32);
             // Time in counter cycles between timestamp and "now"
-            let dt = self.t.wrapping_sub(x);
+            let dt = x.wrapping_neg() & ((1 << self.dt2) - 1);
             // Reference phase estimate "now"
             let y_ref = ((self.f >> self.dt2) as i32).wrapping_mul(dt);
             // Phase error
@@ -79,8 +76,6 @@ impl RPLL {
                 .ff
                 .wrapping_add((dy >> (shift_phase - self.dt2)) as u32);
         }
-        // Advance time
-        self.t = self.t.wrapping_add(1 << self.dt2);
         (self.y, self.f)
     }
 }
@@ -95,7 +90,7 @@ mod test {
 
     #[test]
     fn make() {
-        let _ = RPLL::new(8, 0);
+        let _ = RPLL::new(8);
     }
 
     struct Harness {
@@ -106,6 +101,7 @@ mod test {
         noise: i32,
         period: i32,
         next: i32,
+        next_noisy: i32,
         time: i32,
         rng: StdRng,
     }
@@ -113,13 +109,14 @@ mod test {
     impl Harness {
         fn default() -> Self {
             Harness {
-                rpll: RPLL::new(8, 0),
+                rpll: RPLL::new(8),
                 dt2: 8,
                 shift_frequency: 9,
                 shift_phase: 8,
                 noise: 0,
                 period: 333,
                 next: 111,
+                next_noisy: 111,
                 time: 0,
                 rng: StdRng::seed_from_u64(42),
             }
@@ -129,10 +126,12 @@ mod test {
             let mut y = Vec::<f32>::new();
             let mut f = Vec::<f32>::new();
             for _ in 0..n {
-                let timestamp = if self.time - self.next >= 0 {
-                    let p_noise = self.rng.gen_range(-self.noise..=self.noise);
-                    let timestamp = self.next.wrapping_add(p_noise);
+                let timestamp = if self.time - self.next_noisy >= 0 {
+                    assert!(self.time - self.next_noisy < 1 << self.dt2);
+                    let timestamp = self.next_noisy;
                     self.next = self.next.wrapping_add(self.period);
+                    let p_noise = self.rng.gen_range(-self.noise..=self.noise);
+                    self.next_noisy = self.next.wrapping_add(p_noise);
                     Some(timestamp)
                 } else {
                     None
@@ -197,7 +196,7 @@ mod test {
         let (fm, fs, ym, ys) = h.measure(1 << 16);
         assert!(fm.abs() < 1e-6);
         assert!(fs.abs() < 6e-4);
-        assert!(ym.abs() < 2e-4);
+        assert!(ym.abs() < 4e-4);
         assert!(ys.abs() < 2e-4);
     }
 
@@ -216,7 +215,8 @@ mod test {
         assert!(ys.abs() < 1e-4);
     }
 
-    /*#[test]
+    /*
+    #[test]
     fn narrow_slow() {
         let mut h = Harness::default();
         h.period = 1818181;
