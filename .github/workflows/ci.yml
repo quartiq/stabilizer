@@ -41,13 +41,19 @@ jobs:
       matrix:
         toolchain:
           - stable
-          - beta
         bin:
           - dual-iir
-          - lockin
+          - lockin-internal
+          - lockin-external
         features:
           - ''
-          - pounder_v1_1
+        include:
+          - toolchain: beta
+            bin: dual-iir
+            features: ''
+          - toolchain: stable
+            bin: lockin-internal
+            features: pounder_v1_1
     steps:
       - uses: actions/checkout@v2
       - name: Install Rust ${{ matrix.toolchain }}
