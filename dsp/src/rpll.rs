@@ -125,9 +125,9 @@ mod test {
             }
         }
 
-        fn run(&mut self, n: i32) -> (Vec<i64>, Vec<i64>) {
-            let mut y = Vec::<i64>::new();
-            let mut f = Vec::<i64>::new();
+        fn run(&mut self, n: usize) -> (Vec<f32>, Vec<f32>) {
+            let mut y = Vec::<f32>::new();
+            let mut f = Vec::<f32>::new();
             for _ in 0..n {
                 let timestamp = if self.time - self.next >= 0 {
                     let p_noise = self.rng.gen_range(-self.noise..=self.noise);
@@ -145,70 +145,90 @@ mod test {
                 let y_ref = (self.time.wrapping_sub(self.next) as i64
                     * (1i64 << 32)
                     / self.period as i64) as i32;
-                y.push((yi as i64).wrapping_sub(y_ref as i64)); // phase error
+                // phase error
+                y.push(yi.wrapping_sub(y_ref) as f32 / 2f32.powi(32));
                 let p_ref = 1 << 32 + self.dt2;
                 let p_sig = fi as i64 * self.period as i64;
-                f.push(p_sig.wrapping_sub(p_ref)); // relative frequency error
-                                                   // advance time
+                // relative frequency error
+                f.push(p_sig.wrapping_sub(p_ref) as f32 / 2f32.powi(32));
+                // advance time
                 self.time = self.time.wrapping_add(1 << self.dt2);
             }
             (y, f)
+        }
+
+        fn measure(&mut self, n: usize) -> (f32, f32, f32, f32) {
+            let t_settle = (1 << self.shift_frequency - self.dt2 + 4)
+                + (1 << self.shift_phase - self.dt2 + 4);
+            self.run(t_settle);
+
+            let (y, f) = self.run(n);
+            let y = Array::from(y);
+            let f = Array::from(f);
+
+            let fm = f.mean().unwrap();
+            let fs = f.std_axis(Axis(0), 0.).into_scalar();
+            let ym = y.mean().unwrap();
+            let ys = y.std_axis(Axis(0), 0.).into_scalar();
+
+            println!("f: {:.2e}±{:.2e}; y: {:.2e}±{:.2e}", fm, fs, ym, ys);
+            (fm, fs, ym, ys)
         }
     }
 
     #[test]
     fn default() {
         let mut h = Harness::default();
-        h.run(1 << 10); // settle
 
-        let (y, f) = h.run(1 << 10);
-        let y = Array::from(y);
-        let f = Array::from(f);
-
-        println!(
-            "f: {}+-{}",
-            f.mean().unwrap(),
-            *f.mapv(i64::abs).max().unwrap()
-        );
-        println!(
-            "y: {}+-{}",
-            y.mean().unwrap(),
-            *y.mapv(i64::abs).max().unwrap()
-        );
-
-        assert!(f.mean().unwrap().abs() < 20);
-        assert!(*f.mapv(i64::abs).max().unwrap() < 1 << 16);
-        assert!(y.mean().unwrap().abs() < 1 << 6);
-        assert!(*y.mapv(i64::abs).max().unwrap() < 1 << 8);
+        let (fm, fs, ym, ys) = h.measure(1 << 16);
+        assert!(fm.abs() < 1e-9);
+        assert!(fs.abs() < 8e-6);
+        assert!(ym.abs() < 2e-8);
+        assert!(ys.abs() < 2e-8);
     }
 
     #[test]
-    fn noise() {
+    fn noisy() {
         let mut h = Harness::default();
         h.noise = 10;
         h.shift_frequency = 23;
         h.shift_phase = 22;
 
-        h.run(1 << 20); // settle
-
-        let (y, f) = h.run(1 << 10);
-        let y = Array::from(y);
-        let f = Array::from(f);
-
-        println!(
-            "f: {}+-{}",
-            f.mean().unwrap(),
-            *f.mapv(i64::abs).max().unwrap()
-        );
-        println!(
-            "y: {}+-{}",
-            y.mean().unwrap(),
-            *y.mapv(i64::abs).max().unwrap()
-        );
-
-        assert!(f.mean().unwrap().abs() < 1 << 14);
-        assert!(*f.mapv(i64::abs).max().unwrap() < 1 << 22);
-        assert!(y.mean().unwrap().abs() < 1 << 19);
-        assert!(*y.mapv(i64::abs).max().unwrap() < 1 << 19);
+        let (fm, fs, ym, ys) = h.measure(1 << 16);
+        assert!(fm.abs() < 1e-6);
+        assert!(fs.abs() < 6e-4);
+        assert!(ym.abs() < 2e-4);
+        assert!(ys.abs() < 2e-4);
     }
+
+    #[test]
+    fn narrow_fast() {
+        let mut h = Harness::default();
+        h.period = 990;
+        h.noise = 5;
+        h.shift_frequency = 23;
+        h.shift_phase = 22;
+
+        let (fm, fs, ym, ys) = h.measure(1 << 16);
+        assert!(fm.abs() < 7e-6);
+        assert!(fs.abs() < 6e-4);
+        assert!(ym.abs() < 1e-3);
+        assert!(ys.abs() < 1e-4);
+    }
+
+    /*#[test]
+    fn narrow_slow() {
+        let mut h = Harness::default();
+        h.period = 1818181;
+        h.noise = 1800;
+        h.shift_frequency = 23;
+        h.shift_phase = 22;
+
+        let (fm, fs, ym, ys) = h.measure(1 << 16);
+        assert!(fm.abs() < 1e-8);
+        assert!(fs.abs() < 6e-4);
+        assert!(ym.abs() < 2e-4);
+        assert!(ys.abs() < 2e-4);
+    }
+    */
 }
