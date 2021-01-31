@@ -84,7 +84,6 @@ impl RPLL {
 mod test {
     use super::RPLL;
     use ndarray::prelude::*;
-    use ndarray_stats::QuantileExt;
     use rand::{prelude::*, rngs::StdRng};
     use std::vec::Vec;
 
@@ -254,7 +253,7 @@ mod test {
         h.shift_frequency = 10;
         h.shift_phase = 9;
 
-        h.measure(1 << 16, [5e-7, 3e-2, 3e-2, 2e-2]);
+        h.measure(1 << 16, [5e-7, 3e-2, 2e-5, 2e-2]);
     }
 
     #[test]
