@@ -74,8 +74,8 @@ const APP: () = {
 
         // DAC0 always generates a fixed sinusoidal output.
         for (i, value) in DAC_SEQUENCE.iter().enumerate() {
-            // Full-scale gives a +/- 12V amplitude waveform. Scale it down to give +/- 100mV.
-            let y = value * i16::MAX as f32 / 120.0;
+            // Full-scale gives a +/- 10V amplitude waveform. Scale it down to give +/- 1V.
+            let y = value * (0.1 * i16::MAX as f32);
             // Note(unsafe): The DAC_SEQUENCE values are guaranteed to be normalized.
             let y = unsafe { y.to_int_unchecked::<i16>() };
 
@@ -84,7 +84,8 @@ const APP: () = {
         }
 
         let pll_phase = 0;
-        let pll_frequency = 1i32 << (32 - 3); // 1/8 of the sample rate
+        // 1/8 of the sample rate: log2(DAC_SEQUENCE.len()) == 3
+        let pll_frequency = 1i32 << (32 - 3);
 
         // Harmonic index of the LO: -1 to _de_modulate the fundamental
         let harmonic: i32 = -1;
@@ -92,28 +93,23 @@ const APP: () = {
         // Demodulation LO phase offset
         let phase_offset: i32 = (0.7495 * i32::MAX as f32) as i32;
         let sample_frequency = (pll_frequency as i32).wrapping_mul(harmonic);
-        let mut sample_phase = phase_offset
+        let sample_phase = phase_offset
             .wrapping_add((pll_phase as i32).wrapping_mul(harmonic));
 
-        let mut phase = 0i16;
+        if let Some(output) = c.resources.lockin.feed(
+            adc_samples.iter().map(|&i|
+                // Convert to signed, MSB align the ADC sample.
+                (i as i16 as i32) << 16),
+            sample_phase,
+            sample_frequency,
+        ) {
+            // Convert from IQ to power and phase.
+            let _power = output.abs_sqr();
+            let phase = output.arg() >> 16;
 
-        for sample in adc_samples.iter() {
-            // Convert to signed, MSB align the ADC sample.
-            let input = (*sample as i16 as i32) << 16;
-
-            // Obtain demodulated, filtered IQ sample.
-            let output = c.resources.lockin.update(input, sample_phase);
-
-            // Advance the sample phase.
-            sample_phase = sample_phase.wrapping_add(sample_frequency);
-
-            // Convert from IQ to phase. Scale the phase so that it fits in the DAC range. We do
-            // this by shifting it down into the 16-bit range.
-            phase = (output.phase() >> 16) as i16;
-        }
-
-        for value in dac_samples[1].iter_mut() {
-            *value = phase as u16 ^ 0x8000
+            for value in dac_samples[1].iter_mut() {
+                *value = phase as u16 ^ 0x8000;
+            }
         }
     }
 
