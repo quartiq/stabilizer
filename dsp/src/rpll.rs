@@ -160,7 +160,7 @@ mod test {
             (y, f)
         }
 
-        fn measure(&mut self, n: usize) -> (f32, f32, f32, f32) {
+        fn measure(&mut self, n: usize, limits: [f32; 4]) {
             assert!(self.period >= 1 << self.dt2);
             assert!(self.dt2 <= self.shift_frequency);
             assert!(self.period < 1 << self.shift_frequency);
@@ -180,7 +180,22 @@ mod test {
             let ys = y.std_axis(Axis(0), 0.).into_scalar();
 
             println!("f: {:.2e}±{:.2e}; y: {:.2e}±{:.2e}", fm, fs, ym, ys);
-            (fm, fs, ym, ys)
+
+            let m = [fm, fs, ym, ys];
+
+            print!("relative: ");
+            for i in 0..m.len() {
+                let rel = m[i].abs() / limits[i].abs();
+                print!("{:.2e} ", rel);
+                assert!(
+                    rel <= 1.,
+                    "idx {}, have |{}| > want {}",
+                    i,
+                    m[i],
+                    limits[i]
+                );
+            }
+            println!("");
         }
     }
 
@@ -188,11 +203,7 @@ mod test {
     fn default() {
         let mut h = Harness::default();
 
-        let (fm, fs, ym, ys) = h.measure(1 << 16);
-        assert!(fm.abs() < 1e-11);
-        assert!(fs.abs() < 4e-8);
-        assert!(ym.abs() < 2e-8);
-        assert!(ys.abs() < 2e-8);
+        h.measure(1 << 16, [1e-11, 4e-8, 2e-8, 2e-8]);
     }
 
     #[test]
@@ -202,11 +213,7 @@ mod test {
         h.shift_frequency = 23;
         h.shift_phase = 22;
 
-        let (fm, fs, ym, ys) = h.measure(1 << 16);
-        assert!(fm.abs() < 3e-9);
-        assert!(fs.abs() < 3e-6);
-        assert!(ym.abs() < 4e-4);
-        assert!(ys.abs() < 2e-4);
+        h.measure(1 << 16, [3e-9, 3e-6, 4e-4, 2e-4]);
     }
 
     #[test]
@@ -219,11 +226,7 @@ mod test {
         h.shift_frequency = 23;
         h.shift_phase = 22;
 
-        let (fm, fs, ym, ys) = h.measure(1 << 16);
-        assert!(fm.abs() < 2e-9);
-        assert!(fs.abs() < 2e-6);
-        assert!(ym.abs() < 1e-3);
-        assert!(ys.abs() < 1e-4);
+        h.measure(1 << 16, [2e-9, 2e-6, 1e-3, 1e-4]);
     }
 
     #[test]
@@ -236,11 +239,7 @@ mod test {
         h.shift_frequency = 23;
         h.shift_phase = 22;
 
-        let (fm, fs, ym, ys) = h.measure(1 << 16);
-        assert!(fm.abs() < 2e-5);
-        assert!(fs.abs() < 6e-4);
-        assert!(ym.abs() < 2e-4);
-        assert!(ys.abs() < 2e-4);
+        h.measure(1 << 16, [2e-5, 6e-4, 2e-4, 2e-4]);
     }
 
     #[test]
@@ -253,11 +252,7 @@ mod test {
         h.shift_frequency = 10;
         h.shift_phase = 9;
 
-        let (fm, fs, ym, ys) = h.measure(1 << 16);
-        assert!(fm.abs() < 1e-3);
-        assert!(fs.abs() < 1e-1);
-        assert!(ym.abs() < 1e-4);
-        assert!(ys.abs() < 3e-2);
+        h.measure(1 << 16, [5e-7, 3e-2, 3e-2, 2e-2]);
     }
 
     #[test]
@@ -270,10 +265,6 @@ mod test {
         h.shift_frequency = 21;
         h.shift_phase = 20;
 
-        let (fm, fs, ym, ys) = h.measure(1 << 16);
-        assert!(fm.abs() < 2e-4);
-        assert!(fs.abs() < 6e-3);
-        assert!(ym.abs() < 2e-4);
-        assert!(ys.abs() < 2e-3);
+        h.measure(1 << 16, [2e-4, 6e-3, 2e-4, 2e-3]);
     }
 }
