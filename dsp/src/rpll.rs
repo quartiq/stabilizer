@@ -3,6 +3,8 @@
 /// Consumes noisy, quantized timestamps of a reference signal and reconstructs
 /// the phase and frequency of the update() invocations with respect to (and in units of
 /// 1 << 32 of) that reference.
+/// In other words, `update()` rate ralative to reference frequency,
+/// `u32::MAX` corresponding to both being equal.
 #[derive(Copy, Clone, Default)]
 pub struct RPLL {
     dt2: u8, // 1 << dt2 is the counter rate to update() rate ratio
@@ -40,7 +42,7 @@ impl RPLL {
     ///
     /// Returns:
     /// A tuple containing the current phase (wrapping at the i32 boundary, pi) and
-    /// frequency (wrapping at the i32 boundary, Nyquist) estimate.
+    /// frequency.
     pub fn update(
         &mut self,
         input: Option<i32>,
@@ -195,7 +197,7 @@ mod test {
                     limits[i]
                 );
             }
-            println!("");
+            println!();
         }
     }
 
