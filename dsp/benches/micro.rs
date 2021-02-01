@@ -50,7 +50,7 @@ fn pll_bench(c: &mut Criterion) {
 
 fn iir_int_bench(c: &mut Criterion) {
     let dut = iir_int::IIR::default();
-    let mut xy = iir_int::IIRState::default();
+    let mut xy = iir_int::Vec5::default();
     c.bench_function("int_iir::IIR::update(s, x)", |b| {
         b.iter(|| dut.update(&mut xy, black_box(0x2832)))
     });
@@ -58,7 +58,7 @@ fn iir_int_bench(c: &mut Criterion) {
 
 fn iir_bench(c: &mut Criterion) {
     let dut = iir::IIR::default();
-    let mut xy = iir::IIRState::default();
+    let mut xy = iir::Vec5::default();
     c.bench_function("int::IIR::update(s, x)", |b| {
         b.iter(|| dut.update(&mut xy, black_box(0.32241)))
     });
