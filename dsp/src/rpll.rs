@@ -66,7 +66,7 @@ impl RPLL {
             // Reference phase (1 << dt2 full turns) with gain/attenuation applied
             let p_ref = 1u32 << (32 + self.dt2 - shift_frequency);
             // Update frequency lock
-            self.ff = self.ff.wrapping_add(p_ref.wrapping_sub(p_sig) as u32);
+            self.ff = self.ff.wrapping_add(p_ref.wrapping_sub(p_sig));
             // Time in counter cycles between timestamp and "now"
             let dt = (x.wrapping_neg() & ((1 << self.dt2) - 1)) as u32;
             // Reference phase estimate "now"

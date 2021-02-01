@@ -14,9 +14,7 @@ impl Lockin {
     /// Create a new Lockin with given IIR coefficients.
     pub fn new(ba: Vec5) -> Self {
         Self {
-            iir: IIR {
-                ba,
-            },
+            iir: IIR { ba },
             state: [Vec5::default(); 2],
         }
     }
