@@ -5,8 +5,8 @@ pub struct Accu {
 }
 
 impl Accu {
-    pub fn new(state: i32, step: i32) -> Accu {
-        Accu { state, step }
+    pub fn new(state: i32, step: i32) -> Self {
+        Self { state, step }
     }
 }
 

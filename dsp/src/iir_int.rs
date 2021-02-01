@@ -19,7 +19,7 @@ impl Vec5 {
     ///
     /// # Returns
     /// 2nd-order IIR filter coefficients in the form [b0,b1,b2,a1,a2]. a0 is set to -1.
-    pub fn lowpass(f: f32, q: f32, k: f32) -> Vec5 {
+    pub fn lowpass(f: f32, q: f32, k: f32) -> Self {
         // 3rd order Taylor approximation of sin and cos.
         let f = f * 2. * PI;
         let fsin = f - f * f * f / 6.;
@@ -31,7 +31,7 @@ impl Vec5 {
         let a1 = (2. * fcos / a0) as _;
         let a2 = ((alpha - 1.) / a0) as _;
 
-        Vec5([b0, 2 * b0, b0, a1, a2])
+        Self([b0, 2 * b0, b0, a1, a2])
     }
 }
 

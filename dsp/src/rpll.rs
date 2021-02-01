@@ -22,8 +22,8 @@ impl RPLL {
     ///
     /// Returns:
     /// Initialized RPLL instance.
-    pub fn new(dt2: u8) -> RPLL {
-        RPLL {
+    pub fn new(dt2: u8) -> Self {
+        Self {
             dt2,
             ..Default::default()
         }
@@ -107,7 +107,7 @@ mod test {
 
     impl Harness {
         fn default() -> Self {
-            Harness {
+            Self {
                 rpll: RPLL::new(8),
                 dt2: 8,
                 shift_frequency: 9,

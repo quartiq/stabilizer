@@ -1,4 +1,7 @@
-use super::{iir_int::{IIR, Vec5}, Accu, Complex};
+use super::{
+    iir_int::{Vec5, IIR},
+    Accu, Complex,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, Default, Deserialize, Serialize)]
@@ -10,10 +13,8 @@ pub struct Lockin {
 impl Lockin {
     /// Create a new Lockin with given IIR coefficients.
     pub fn new(ba: Vec5) -> Self {
-        let mut iir = IIR::default();
-        iir.ba = ba;
-        Lockin {
-            iir,
+        Self {
+            iir: IIR { ba, ..Default::default() },
             state: [Vec5::default(); 2],
         }
     }
