@@ -510,11 +510,11 @@ pub fn setup(
         let store = unsafe { &mut NET_STORE };
 
         store.ip_addrs[0] = smoltcp::wire::IpCidr::new(
-            smoltcp::wire::IpAddress::v4(10, 0, 16, 99),
+            smoltcp::wire::IpAddress::v4(10, 34, 16, 103),
             24,
         );
 
-        let default_v4_gw = Ipv4Address::new(10, 0, 16, 1);
+        let default_v4_gw = Ipv4Address::new(10, 34, 16, 1);
         let mut routes = Routes::new(&mut store.routes_storage[..]);
         routes.add_default_ipv4_route(default_v4_gw).unwrap();
 
