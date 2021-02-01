@@ -7,7 +7,7 @@
 const DAC_SEQUENCE: [f32; 8] =
     [0.0, 0.707, 1.0, 0.707, 0.0, -0.707, -1.0, -0.707];
 
-use dsp::{iir_int, lockin::Lockin};
+use dsp::{iir_int, lockin::Lockin, Accu};
 use hardware::{Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
 use stabilizer::hardware;
 
@@ -27,7 +27,7 @@ const APP: () = {
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
         let lockin = Lockin::new(
-            &iir_int::IIRState::lowpass(1e-3, 0.707, 2.), // TODO: expose
+            iir_int::Vec5::lowpass(1e-3, 0.707, 2.), // TODO: expose
         );
 
         // Enable ADC/DAC events
@@ -66,6 +66,7 @@ const APP: () = {
     /// TODO: Document
     #[task(binds=DMA1_STR4, resources=[adc1, dacs, lockin], priority=2)]
     fn process(c: process::Context) {
+        let lockin = c.resources.lockin;
         let adc_samples = c.resources.adc1.acquire_buffer();
         let dac_samples = [
             c.resources.dacs.0.acquire_buffer(),
@@ -96,13 +97,15 @@ const APP: () = {
         let sample_phase = phase_offset
             .wrapping_add((pll_phase as i32).wrapping_mul(harmonic));
 
-        if let Some(output) = c.resources.lockin.feed(
-            adc_samples.iter().map(|&i|
-                // Convert to signed, MSB align the ADC sample.
-                (i as i16 as i32) << 16),
-            sample_phase,
-            sample_frequency,
-        ) {
+        if let Some(output) = adc_samples
+            .iter()
+            .zip(Accu::new(sample_phase, sample_frequency))
+            // Convert to signed, MSB align the ADC sample.
+            .map(|(&sample, phase)| {
+                lockin.update((sample as i16 as i32) << 16, phase)
+            })
+            .last()
+        {
             // Convert from IQ to power and phase.
             let _power = output.abs_sqr();
             let phase = output.arg() >> 16;

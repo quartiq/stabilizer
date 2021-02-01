@@ -12,7 +12,7 @@ use core::f32;
 /// coefficients (b0, b1, b2) followd by the negated feed-back coefficients
 /// (-a1, -a2), all five normalized such that a0 = 1.
 #[derive(Copy, Clone, Default, Deserialize, Serialize)]
-pub struct IIRState(pub [f32; 5]);
+pub struct Vec5(pub [f32; 5]);
 
 /// IIR configuration.
 ///
@@ -41,7 +41,7 @@ pub struct IIRState(pub [f32; 5]);
 ///   implementation of transfer functions beyond bequadratic terms.
 #[derive(Copy, Clone, Default, Deserialize, Serialize)]
 pub struct IIR {
-    pub ba: IIRState,
+    pub ba: Vec5,
     pub y_offset: f32,
     pub y_min: f32,
     pub y_max: f32,
@@ -108,7 +108,7 @@ impl IIR {
     /// # Arguments
     /// * `xy` - Current filter state.
     /// * `x0` - New input.
-    pub fn update(&self, xy: &mut IIRState, x0: f32) -> f32 {
+    pub fn update(&self, xy: &mut Vec5, x0: f32) -> f32 {
         let n = self.ba.0.len();
         debug_assert!(xy.0.len() == n);
         // `xy` contains       x0 x1 y0 y1 y2

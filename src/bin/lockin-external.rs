@@ -16,7 +16,7 @@ use stabilizer::{
     hardware, server, ADC_SAMPLE_TICKS_LOG2, SAMPLE_BUFFER_SIZE_LOG2,
 };
 
-use dsp::{iir, iir_int, lockin::Lockin, rpll::RPLL};
+use dsp::{iir, iir_int, lockin::Lockin, rpll::RPLL, Accu};
 use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
 };
@@ -38,9 +38,9 @@ const APP: () = {
         net_interface: hardware::Ethernet,
 
         // Format: iir_state[ch][cascade-no][coeff]
-        #[init([[iir::IIRState([0.; 5]); IIR_CASCADE_LENGTH]; 2])]
-        iir_state: [[iir::IIRState; IIR_CASCADE_LENGTH]; 2],
-        #[init([[iir::IIR { ba: iir::IIRState([1., 0., 0., 0., 0.]), y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; IIR_CASCADE_LENGTH]; 2])]
+        #[init([[iir::Vec5([0.; 5]); IIR_CASCADE_LENGTH]; 2])]
+        iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
+        #[init([[iir::IIR { ba: iir::Vec5([1., 0., 0., 0., 0.]), y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; IIR_CASCADE_LENGTH]; 2])]
         iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
 
         timestamper: InputStamper,
@@ -56,7 +56,7 @@ const APP: () = {
         let pll = RPLL::new(ADC_SAMPLE_TICKS_LOG2 + SAMPLE_BUFFER_SIZE_LOG2);
 
         let lockin = Lockin::new(
-            &iir_int::IIRState::lowpass(1e-3, 0.707, 2.), // TODO: expose
+            iir_int::Vec5::lowpass(1e-3, 0.707, 2.), // TODO: expose
         );
 
         // Enable ADC/DAC events
@@ -133,13 +133,15 @@ const APP: () = {
         let sample_phase =
             phase_offset.wrapping_add(pll_phase.wrapping_mul(harmonic));
 
-        if let Some(output) = lockin.feed(
-            adc_samples[0].iter().map(|&i|
-                // Convert to signed, MSB align the ADC sample.
-                (i as i16 as i32) << 16),
-            sample_phase,
-            sample_frequency,
-        ) {
+        if let Some(output) = adc_samples[0]
+            .iter()
+            .zip(Accu::new(sample_phase, sample_frequency))
+            // Convert to signed, MSB align the ADC sample.
+            .map(|(&sample, phase)| {
+                lockin.update((sample as i16 as i32) << 16, phase)
+            })
+            .last()
+        {
             // Convert from IQ to power and phase.
             let mut power = output.abs_sqr() as _;
             let mut phase = output.arg() as _;

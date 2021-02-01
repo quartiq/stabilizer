@@ -1,7 +1,6 @@
 use super::{atan2, cossin};
-use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, Default, PartialEq, Debug, Deserialize, Serialize)]
+#[derive(Copy, Clone, Default, PartialEq, Debug)]
 pub struct Complex<T>(pub T, pub T);
 
 impl Complex<i32> {
@@ -16,8 +15,9 @@ impl Complex<i32> {
     /// Complex::<i32>::from_angle(-1 << 30);  // -pi/2
     /// ```
     #[inline(always)]
-    pub fn from_angle(angle: i32) -> Complex<i32> {
-        cossin(angle)
+    pub fn from_angle(angle: i32) -> Self {
+        let (c, s) = cossin(angle);
+        Self(c, s)
     }
 
     /// Return the absolute square (the squared magnitude).
