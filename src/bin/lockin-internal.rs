@@ -107,12 +107,18 @@ const APP: () = {
             .last()
             .unwrap();
 
-        // Convert from IQ to power and phase.
-        let _power = output.abs_sqr();
-        let phase = output.arg() >> 16;
+        // convert i/q to power/phase,
+        let power_phase = true; // TODO: expose
+
+        let output = if power_phase {
+            // Convert from IQ to power and phase.
+            [output.abs_sqr(), output.arg()]
+        } else {
+            [output.0, output.1]
+        };
 
         for value in dac_samples[1].iter_mut() {
-            *value = phase as u16 ^ 0x8000;
+            *value = (output[1] >> 16) as u16 ^ 0x8000;
         }
     }
 
