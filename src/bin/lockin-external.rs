@@ -21,7 +21,7 @@ use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
 };
 
-const SCALE: f32 = i16::MAX as f32;
+const SCALE: f32 = i16::MAX as _;
 
 const TCP_RX_BUFFER_SIZE: usize = 8192;
 const TCP_TX_BUFFER_SIZE: usize = 8192;
@@ -40,7 +40,7 @@ const APP: () = {
         // Format: iir_state[ch][cascade-no][coeff]
         #[init([[iir::Vec5([0.; 5]); IIR_CASCADE_LENGTH]; 2])]
         iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
-        #[init([[iir::IIR { ba: iir::Vec5([1., 0., 0., 0., 0.]), y_offset: 0., y_min: -SCALE, y_max: SCALE }; IIR_CASCADE_LENGTH]; 2])]
+        #[init([[iir::IIR::new(1./(1 << 16) as f32, -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2])]
         iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
 
         timestamper: InputStamper,

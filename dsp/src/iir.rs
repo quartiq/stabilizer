@@ -48,6 +48,15 @@ pub struct IIR {
 }
 
 impl IIR {
+    pub const fn new(gain: f32, y_min: f32, y_max: f32) -> Self {
+        Self {
+            ba: Vec5([gain, 0., 0., 0., 0.]),
+            y_offset: 0.,
+            y_min: y_min,
+            y_max: y_max,
+        }
+    }
+
     /// Configures IIR filter coefficients for proportional-integral behavior
     /// with gain limit.
     ///
