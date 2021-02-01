@@ -21,7 +21,7 @@ use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
 };
 
-const SCALE: f32 = ((1 << 15) - 1) as f32;
+const SCALE: f32 = i16::MAX as f32;
 
 const TCP_RX_BUFFER_SIZE: usize = 8192;
 const TCP_TX_BUFFER_SIZE: usize = 8192;
@@ -40,7 +40,7 @@ const APP: () = {
         // Format: iir_state[ch][cascade-no][coeff]
         #[init([[iir::Vec5([0.; 5]); IIR_CASCADE_LENGTH]; 2])]
         iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
-        #[init([[iir::IIR { ba: iir::Vec5([1., 0., 0., 0., 0.]), y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; IIR_CASCADE_LENGTH]; 2])]
+        #[init([[iir::IIR { ba: iir::Vec5([1., 0., 0., 0., 0.]), y_offset: 0., y_min: -SCALE, y_max: SCALE }; IIR_CASCADE_LENGTH]; 2])]
         iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
 
         timestamper: InputStamper,
@@ -158,9 +158,9 @@ const APP: () = {
             for i in 0..dac_samples[0].len() {
                 unsafe {
                     dac_samples[0][i] =
-                        (power.to_int_unchecked::<i32>() >> 16) as u16 ^ 0x8000;
+                        power.to_int_unchecked::<i16>() as u16 ^ 0x8000;
                     dac_samples[1][i] =
-                        (phase.to_int_unchecked::<i32>() >> 16) as u16 ^ 0x8000;
+                        phase.to_int_unchecked::<i16>() as u16 ^ 0x8000;
                 }
             }
         }
