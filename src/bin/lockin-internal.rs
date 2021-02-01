@@ -12,7 +12,7 @@ use stabilizer::{hardware, SAMPLE_BUFFER_SIZE, SAMPLE_BUFFER_SIZE_LOG2};
 const ONE: i16 = (0.1 * u16::MAX as f32) as _;
 const SQRT2: i16 = (ONE as f32 * 0.707) as _;
 const DAC_SEQUENCE: [i16; SAMPLE_BUFFER_SIZE] =
-    [0, SQRT2, ONE, SQRT2, 0, -SQRT2, -ONE, -SQRT2]; // TODO: rotate by -2 samples to start with ONE
+    [ONE, SQRT2, 0, -SQRT2, -ONE, -SQRT2, 0, SQRT2];
 
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
@@ -90,7 +90,7 @@ const APP: () = {
         let harmonic: i32 = -1;
 
         // Demodulation LO phase offset
-        let phase_offset: i32 = (0.7495 * i32::MAX as f32) as i32; // TODO: adapt to sequence rotation above
+        let phase_offset: i32 = (0.25 * i32::MAX as f32) as i32;
         let sample_frequency = (pll_frequency as i32).wrapping_mul(harmonic);
         let sample_phase = phase_offset
             .wrapping_add((pll_phase as i32).wrapping_mul(harmonic));
