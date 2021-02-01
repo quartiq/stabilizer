@@ -30,7 +30,7 @@ members = ["ad9959", "dsp"]
 [dependencies]
 cortex-m = { version = "0.6", features = ["const-fn"] }
 cortex-m-rt = { version = "0.6", features = ["device"] }
-cortex-m-log = { version = "0.6", features = ["log-integration"] }
+cortex-m-log = { version = "0.7", features = ["log-integration"] }
 log = "0.4"
 panic-semihosting = { version = "0.5", optional = true }
 panic-halt = "0.2"
