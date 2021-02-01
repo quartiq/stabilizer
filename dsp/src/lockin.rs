@@ -1,6 +1,6 @@
 use super::{
     iir_int::{Vec5, IIR},
-    Accu, Complex,
+    Complex,
 };
 use serde::{Deserialize, Serialize};
 
@@ -40,21 +40,5 @@ impl Lockin {
                 ((sample as i64 * lo.1 as i64) >> 32) as _,
             ),
         )
-    }
-
-    /// Feed an iterator into the Lockin and return the latest I/Q data.
-    /// Initial stample phase and frequency (phase increment between samples)
-    /// are supplied.
-    pub fn feed<I: IntoIterator<Item = i32>>(
-        &mut self,
-        signal: I,
-        phase: i32,
-        frequency: i32,
-    ) -> Option<Complex<i32>> {
-        signal
-            .into_iter()
-            .zip(Accu::new(phase, frequency))
-            .map(|(sample, phase)| self.update(sample, phase))
-            .last()
     }
 }

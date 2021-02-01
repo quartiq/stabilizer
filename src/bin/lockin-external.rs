@@ -16,7 +16,7 @@ use stabilizer::{
     hardware, server, ADC_SAMPLE_TICKS_LOG2, SAMPLE_BUFFER_SIZE_LOG2,
 };
 
-use dsp::{iir, iir_int, lockin::Lockin, rpll::RPLL};
+use dsp::{iir, iir_int, lockin::Lockin, rpll::RPLL, Accu};
 use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
 };
@@ -133,13 +133,15 @@ const APP: () = {
         let sample_phase =
             phase_offset.wrapping_add(pll_phase.wrapping_mul(harmonic));
 
-        if let Some(output) = lockin.feed(
-            adc_samples[0].iter().map(|&i|
-                // Convert to signed, MSB align the ADC sample.
-                (i as i16 as i32) << 16),
-            sample_phase,
-            sample_frequency,
-        ) {
+        if let Some(output) = adc_samples[0]
+            .iter()
+            .zip(Accu::new(sample_phase, sample_frequency))
+            // Convert to signed, MSB align the ADC sample.
+            .map(|(&sample, phase)| {
+                lockin.update((sample as i16 as i32) << 16, phase)
+            })
+            .last()
+        {
             // Convert from IQ to power and phase.
             let mut power = output.abs_sqr() as _;
             let mut phase = output.arg() as _;
