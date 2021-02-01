@@ -49,7 +49,7 @@ impl RPLL {
         shift_frequency: u8,
         shift_phase: u8,
     ) -> (i32, u32) {
-        debug_assert!(shift_frequency > self.dt2);
+        debug_assert!(shift_frequency >= self.dt2);
         debug_assert!(shift_phase >= self.dt2);
         // Advance phase
         self.y = self.y.wrapping_add(self.f as i32);
@@ -66,7 +66,7 @@ impl RPLL {
             // Reference phase (1 << dt2 full turns) with gain/attenuation applied
             let p_ref = 1u32 << (32 + self.dt2 - shift_frequency);
             // Update frequency lock
-            self.ff = self.ff.wrapping_add(p_ref.wrapping_sub(p_sig) as u32);
+            self.ff = self.ff.wrapping_add(p_ref.wrapping_sub(p_sig));
             // Time in counter cycles between timestamp and "now"
             let dt = (x.wrapping_neg() & ((1 << self.dt2) - 1)) as u32;
             // Reference phase estimate "now"
@@ -122,6 +122,10 @@ mod test {
         }
 
         fn run(&mut self, n: usize) -> (Vec<f32>, Vec<f32>) {
+            assert!(self.period >= 1 << self.dt2);
+            assert!(self.period < 1 << self.shift_frequency);
+            assert!(self.period < 1 << self.shift_phase + 1);
+
             let mut y = Vec::<f32>::new();
             let mut f = Vec::<f32>::new();
             for _ in 0..n {
@@ -162,10 +166,6 @@ mod test {
         }
 
         fn measure(&mut self, n: usize, limits: [f32; 4]) {
-            assert!(self.period >= 1 << self.dt2);
-            assert!(self.dt2 <= self.shift_frequency);
-            assert!(self.period < 1 << self.shift_frequency);
-            assert!(self.period < 1 << self.shift_frequency + 1);
             let t_settle = (1 << self.shift_frequency - self.dt2 + 4)
                 + (1 << self.shift_phase - self.dt2 + 4);
             self.run(t_settle);
@@ -190,7 +190,7 @@ mod test {
                 print!("{:.2e} ", rel);
                 assert!(
                     rel <= 1.,
-                    "idx {}, have |{}| > want {}",
+                    "idx {}, have |{:.2e}| > limit {:.2e}",
                     i,
                     m[i],
                     limits[i]

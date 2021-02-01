@@ -3,13 +3,16 @@
 #![no_main]
 #![cfg_attr(feature = "nightly", feature(core_intrinsics))]
 
-// A constant sinusoid to send on the DAC output.
-const DAC_SEQUENCE: [f32; 8] =
-    [0.0, 0.707, 1.0, 0.707, 0.0, -0.707, -1.0, -0.707];
-
 use dsp::{iir_int, lockin::Lockin, Accu};
 use hardware::{Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
-use stabilizer::hardware;
+use stabilizer::{hardware, SAMPLE_BUFFER_SIZE, SAMPLE_BUFFER_SIZE_LOG2};
+
+// A constant sinusoid to send on the DAC output.
+// Full-scale gives a +/- 10V amplitude waveform. Scale it down to give +/- 1V.
+const ONE: i16 = (0.1 * u16::MAX as f32) as _;
+const SQRT2: i16 = (ONE as f32 * 0.707) as _;
+const DAC_SEQUENCE: [i16; SAMPLE_BUFFER_SIZE] =
+    [0, SQRT2, ONE, SQRT2, 0, -SQRT2, -ONE, -SQRT2]; // TODO: rotate by -2 samples to start with ONE
 
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
@@ -74,45 +77,48 @@ const APP: () = {
         ];
 
         // DAC0 always generates a fixed sinusoidal output.
-        for (i, value) in DAC_SEQUENCE.iter().enumerate() {
-            // Full-scale gives a +/- 10V amplitude waveform. Scale it down to give +/- 1V.
-            let y = value * (0.1 * i16::MAX as f32);
-            // Note(unsafe): The DAC_SEQUENCE values are guaranteed to be normalized.
-            let y = unsafe { y.to_int_unchecked::<i16>() };
+        dac_samples[0]
+            .iter_mut()
+            .zip(DAC_SEQUENCE.iter())
+            .for_each(|(d, s)| *d = *s as u16 ^ 0x8000);
 
-            // Convert to DAC code
-            dac_samples[0][i] = y as u16 ^ 0x8000;
-        }
-
+        // Reference phase and frequency are known.
         let pll_phase = 0;
-        // 1/8 of the sample rate: log2(DAC_SEQUENCE.len()) == 3
-        let pll_frequency = 1i32 << (32 - 3);
+        let pll_frequency = 1i32 << (32 - SAMPLE_BUFFER_SIZE_LOG2);
 
         // Harmonic index of the LO: -1 to _de_modulate the fundamental
         let harmonic: i32 = -1;
 
         // Demodulation LO phase offset
-        let phase_offset: i32 = (0.7495 * i32::MAX as f32) as i32;
+        let phase_offset: i32 = (0.7495 * i32::MAX as f32) as i32; // TODO: adapt to sequence rotation above
         let sample_frequency = (pll_frequency as i32).wrapping_mul(harmonic);
         let sample_phase = phase_offset
             .wrapping_add((pll_phase as i32).wrapping_mul(harmonic));
 
-        if let Some(output) = adc_samples
+        let output = adc_samples
             .iter()
+            // Zip in the LO phase.
             .zip(Accu::new(sample_phase, sample_frequency))
-            // Convert to signed, MSB align the ADC sample.
+            // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
             .map(|(&sample, phase)| {
                 lockin.update((sample as i16 as i32) << 16, phase)
             })
+            // Decimate
             .last()
-        {
-            // Convert from IQ to power and phase.
-            let _power = output.abs_sqr();
-            let phase = output.arg() >> 16;
+            .unwrap();
 
-            for value in dac_samples[1].iter_mut() {
-                *value = phase as u16 ^ 0x8000;
-            }
+        // convert i/q to power/phase,
+        let power_phase = true; // TODO: expose
+
+        let output = if power_phase {
+            // Convert from IQ to power and phase.
+            [output.abs_sqr(), output.arg()]
+        } else {
+            [output.0, output.1]
+        };
+
+        for value in dac_samples[1].iter_mut() {
+            *value = (output[1] >> 16) as u16 ^ 0x8000;
         }
     }
 

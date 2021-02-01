@@ -14,7 +14,6 @@ impl Complex<i32> {
     /// Complex::<i32>::from_angle(1 << 30);  // pi/2
     /// Complex::<i32>::from_angle(-1 << 30);  // -pi/2
     /// ```
-    #[inline(always)]
     pub fn from_angle(angle: i32) -> Self {
         let (c, s) = cossin(angle);
         Self(c, s)
