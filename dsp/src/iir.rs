@@ -52,8 +52,8 @@ impl IIR {
         Self {
             ba: Vec5([gain, 0., 0., 0., 0.]),
             y_offset: 0.,
-            y_min: y_min,
-            y_max: y_max,
+            y_min,
+            y_max,
         }
     }
 

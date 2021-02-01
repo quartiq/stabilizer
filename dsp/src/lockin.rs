@@ -16,7 +16,6 @@ impl Lockin {
         Self {
             iir: IIR {
                 ba,
-                ..Default::default()
             },
             state: [Vec5::default(); 2],
         }
