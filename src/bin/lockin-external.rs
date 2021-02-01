@@ -119,21 +119,23 @@ const APP: () = {
 
         let (pll_phase, pll_frequency) = c.resources.pll.update(
             c.resources.timestamper.latest_timestamp().map(|t| t as i32),
-            23, // relative PLL frequency bandwidth: 2**-23, TODO: expose
-            22, // relative PLL phase bandwidth: 2**-22, TODO: expose
+            22, // frequency settling time (log2 counter cycles), TODO: expose
+            22, // phase settling time, TODO: expose
         );
 
         // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
-        let harmonic: i32 = -1;
-        // Demodulation LO phase offset
-        let phase_offset: i32 = 0;
-        let sample_frequency = ((pll_frequency >> SAMPLE_BUFFER_SIZE_LOG2)
-            as i32) // TODO: maybe rounding bias
+        let harmonic: i32 = -1; // TODO: expose
+                                // Demodulation LO phase offset
+        let phase_offset: i32 = 0; // TODO: expose
+
+        let sample_frequency = ((pll_frequency
+            // .wrapping_add(1 << SAMPLE_BUFFER_SIZE_LOG2 - 1)  // half-up rounding bias
+            >> SAMPLE_BUFFER_SIZE_LOG2) as i32)
             .wrapping_mul(harmonic);
         let sample_phase =
             phase_offset.wrapping_add(pll_phase.wrapping_mul(harmonic));
 
-        if let Some(output) = adc_samples[0]
+        let output = adc_samples[0]
             .iter()
             .zip(Accu::new(sample_phase, sample_frequency))
             // Convert to signed, MSB align the ADC sample.
@@ -141,27 +143,35 @@ const APP: () = {
                 lockin.update((sample as i16 as i32) << 16, phase)
             })
             .last()
-        {
+            .unwrap();
+
+        // convert i/q to power/phase,
+        let power_phase = true; // TODO: expose
+
+        let mut output = if power_phase {
             // Convert from IQ to power and phase.
-            let mut power = output.abs_sqr() as _;
-            let mut phase = output.arg() as _;
+            [output.abs_sqr() as _, output.arg() as _]
+        } else {
+            [output.0 as _, output.1 as _]
+        };
 
-            // Filter power and phase through IIR filters.
-            // Note: Normalization to be done in filters. Phase will wrap happily.
-            for j in 0..iir_state[0].len() {
-                power = iir_ch[0][j].update(&mut iir_state[0][j], power);
-                phase = iir_ch[1][j].update(&mut iir_state[1][j], phase);
+        // Filter power and phase through IIR filters.
+        // Note: Normalization to be done in filters. Phase will wrap happily.
+        for j in 0..iir_state[0].len() {
+            for k in 0..output.len() {
+                output[k] =
+                    iir_ch[k][j].update(&mut iir_state[k][j], output[k]);
             }
+        }
 
-            // Note(unsafe): range clipping to i16 is ensured by IIR filters above.
-            // Convert to DAC data.
-            for i in 0..dac_samples[0].len() {
-                unsafe {
-                    dac_samples[0][i] =
-                        power.to_int_unchecked::<i16>() as u16 ^ 0x8000;
-                    dac_samples[1][i] =
-                        phase.to_int_unchecked::<i16>() as u16 ^ 0x8000;
-                }
+        // Note(unsafe): range clipping to i16 is ensured by IIR filters above.
+        // Convert to DAC data.
+        for i in 0..dac_samples[0].len() {
+            unsafe {
+                dac_samples[0][i] =
+                    output[0].to_int_unchecked::<i16>() as u16 ^ 0x8000;
+                dac_samples[1][i] =
+                    output[1].to_int_unchecked::<i16>() as u16 ^ 0x8000;
             }
         }
     }

@@ -95,7 +95,7 @@ const APP: () = {
         let sample_phase = phase_offset
             .wrapping_add((pll_phase as i32).wrapping_mul(harmonic));
 
-        if let Some(output) = adc_samples
+        let output = adc_samples
             .iter()
             // Zip in the LO phase.
             .zip(Accu::new(sample_phase, sample_frequency))
@@ -105,14 +105,14 @@ const APP: () = {
             })
             // Decimate
             .last()
-        {
-            // Convert from IQ to power and phase.
-            let _power = output.abs_sqr();
-            let phase = output.arg() >> 16;
+            .unwrap();
 
-            for value in dac_samples[1].iter_mut() {
-                *value = phase as u16 ^ 0x8000;
-            }
+        // Convert from IQ to power and phase.
+        let _power = output.abs_sqr();
+        let phase = output.arg() >> 16;
+
+        for value in dac_samples[1].iter_mut() {
+            *value = phase as u16 ^ 0x8000;
         }
     }
 
