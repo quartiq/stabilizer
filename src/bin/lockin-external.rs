@@ -38,9 +38,9 @@ const APP: () = {
         net_interface: hardware::Ethernet,
 
         // Format: iir_state[ch][cascade-no][coeff]
-        #[init([[iir::IIRState([0.; 5]); IIR_CASCADE_LENGTH]; 2])]
-        iir_state: [[iir::IIRState; IIR_CASCADE_LENGTH]; 2],
-        #[init([[iir::IIR { ba: iir::IIRState([1., 0., 0., 0., 0.]), y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; IIR_CASCADE_LENGTH]; 2])]
+        #[init([[iir::Vec5([0.; 5]); IIR_CASCADE_LENGTH]; 2])]
+        iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
+        #[init([[iir::IIR { ba: iir::Vec5([1., 0., 0., 0., 0.]), y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; IIR_CASCADE_LENGTH]; 2])]
         iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
 
         timestamper: InputStamper,
@@ -56,7 +56,7 @@ const APP: () = {
         let pll = RPLL::new(ADC_SAMPLE_TICKS_LOG2 + SAMPLE_BUFFER_SIZE_LOG2);
 
         let lockin = Lockin::new(
-            &iir_int::IIRState::lowpass(1e-3, 0.707, 2.), // TODO: expose
+            iir_int::Vec5::lowpass(1e-3, 0.707, 2.), // TODO: expose
         );
 
         // Enable ADC/DAC events

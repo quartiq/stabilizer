@@ -27,7 +27,7 @@ const APP: () = {
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
         let lockin = Lockin::new(
-            &iir_int::IIRState::lowpass(1e-3, 0.707, 2.), // TODO: expose
+            iir_int::Vec5::lowpass(1e-3, 0.707, 2.), // TODO: expose
         );
 
         // Enable ADC/DAC events

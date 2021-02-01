@@ -112,6 +112,7 @@ where
         .fold(y0, |y, xa| y + xa)
 }
 
+pub mod accu;
 mod atan2;
 mod complex;
 mod cossin;
@@ -122,6 +123,7 @@ pub mod pll;
 pub mod rpll;
 pub mod unwrap;
 
+pub use accu::Accu;
 pub use atan2::atan2;
 pub use complex::Complex;
 pub use cossin::cossin;

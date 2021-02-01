@@ -1,20 +1,20 @@
-use super::{iir_int, Complex};
+use super::{iir_int::{IIR, Vec5}, Accu, Complex};
 use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, Default, Deserialize, Serialize)]
 pub struct Lockin {
-    iir: iir_int::IIR,
-    iir_state: [iir_int::IIRState; 2],
+    iir: IIR,
+    state: [Vec5; 2],
 }
 
 impl Lockin {
     /// Create a new Lockin with given IIR coefficients.
-    pub fn new(ba: &iir_int::IIRState) -> Self {
-        let mut iir = iir_int::IIR::default();
-        iir.ba.0.copy_from_slice(&ba.0);
+    pub fn new(ba: Vec5) -> Self {
+        let mut iir = IIR::default();
+        iir.ba = ba;
         Lockin {
             iir,
-            iir_state: [iir_int::IIRState::default(); 2],
+            state: [Vec5::default(); 2],
         }
     }
 
@@ -28,11 +28,11 @@ impl Lockin {
         // Note: 32x32 -> 64 bit multiplications are pretty much free.
         Complex(
             self.iir.update(
-                &mut self.iir_state[0],
+                &mut self.state[0],
                 ((sample as i64 * lo.0 as i64) >> 32) as _,
             ),
             self.iir.update(
-                &mut self.iir_state[1],
+                &mut self.state[1],
                 ((sample as i64 * lo.1 as i64) >> 32) as _,
             ),
         )
@@ -47,14 +47,10 @@ impl Lockin {
         phase: i32,
         frequency: i32,
     ) -> Option<Complex<i32>> {
-        let mut phase = phase;
-
         signal
             .into_iter()
-            .map(|sample| {
-                phase = phase.wrapping_add(frequency);
-                self.update(sample, phase)
-            })
+            .zip(Accu::new(phase, frequency))
+            .map(|(sample, phase)| self.update(sample, phase))
             .last()
     }
 }
