@@ -22,8 +22,9 @@ impl Vec5 {
     pub fn lowpass(f: f32, q: f32, k: f32) -> Self {
         // 3rd order Taylor approximation of sin and cos.
         let f = f * 2. * PI;
-        let fsin = f - f * f * f / 6.;
-        let fcos = 1. - f * f / 2.;
+        let f2 = f * f * 0.5;
+        let fcos = 1. - f2;
+        let fsin = f * (1. - f2 / 3.);
         let alpha = fsin / (2. * q);
         // IIR uses Q2.30 fixed point
         let a0 = (1. + alpha) / (1 << IIR::SHIFT) as f32;
