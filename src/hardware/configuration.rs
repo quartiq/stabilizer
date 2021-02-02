@@ -154,7 +154,6 @@ pub fn setup(
         // Configure the timer to count at the designed tick rate. We will manually set the
         // period below.
         timer2.pause();
-        timer2.reset_counter();
         timer2.set_tick_freq(design_parameters::TIMER_FREQUENCY);
 
         let mut sampling_timer = timers::SamplingTimer::new(timer2);
