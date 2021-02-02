@@ -218,8 +218,7 @@ pub fn setup(
         // timer, but use a period that is longer.
         let mut timer = timers::TimestampTimer::new(timer5);
 
-        let period = digital_input_stamper::calculate_timestamp_timer_period();
-        timer.set_period_ticks(period);
+        timer.set_period_ticks(u32::MAX);
 
         timer
     };
