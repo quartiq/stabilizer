@@ -211,12 +211,11 @@ pub fn setup(
         // Configure the timer to count at the designed tick rate. We will manually set the
         // period below.
         timer5.pause();
-        timer5.reset_counter();
         timer5.set_tick_freq(design_parameters::TIMER_FREQUENCY);
 
-        // The timestamp timer must run at exactly a multiple of the sample timer based on the
-        // batch size. To accomodate this, we manually set the prescaler identical to the sample
-        // timer, but use a period that is longer.
+        // The timestamp timer runs at the counter cycle period as the sampling timers.
+        // To accomodate this, we manually set the prescaler identical to the sample
+        // timer, but use maximum overflow period.
         let mut timer = timers::TimestampTimer::new(timer5);
 
         timer.set_period_ticks(u32::MAX);
