@@ -40,6 +40,11 @@ See https://github.com/sinara-hw/Stabilizer
 * `cargo build --release`
 * Do not try the debug (default) mode. It is guaranteed to panic.
 
+### Using Cargo-embed
+
+* Install `cargo-embed`: `cargo install cargo-embed`
+* Program the device: `cargo embed --bin dual-iir --release`
+
 ### Using GDB/OpenOCD
 
 * Get a recent openocd, a JTAG adapter ("st-link" or some clone) and
