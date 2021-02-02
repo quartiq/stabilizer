@@ -83,24 +83,13 @@ const APP: () = {
         }
     }
 
-    /// Main DSP processing routine for Stabilizer.
+    /// Main DSP processing routine.
     ///
-    /// # Note
-    /// Processing time for the DSP application code is bounded by the following constraints:
+    /// See `dual-iir` for general notes on processing time and timing.
     ///
-    /// DSP application code starts after the ADC has generated a batch of samples and must be
-    /// completed by the time the next batch of ADC samples has been acquired (plus the FIFO buffer
-    /// time). If this constraint is not met, firmware will panic due to an ADC input overrun.
-    ///
-    /// The DSP application code must also fill out the next DAC output buffer in time such that the
-    /// DAC can switch to it when it has completed the current buffer. If this constraint is not met
-    /// it's possible that old DAC codes will be generated on the output and the output samples will
-    /// be delayed by 1 batch.
-    ///
-    /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
-    /// the same time bounds, meeting one also means the other is also met.
-    ///
-    /// TODO: document lockin
+    /// This is an implementation of a externally (DI0) referenced PLL lockin on the ADC0 signal.
+    /// It outputs either I/Q or power/phase on DAC0/DAC1. Data is normalized to full scale.
+    /// PLL bandwidth, filter bandwidth, slope, and x/y or power/phase post-filters are available.
     #[task(binds=DMA1_STR4, resources=[adcs, dacs, iir_state, iir_ch, lockin, timestamper, pll], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
