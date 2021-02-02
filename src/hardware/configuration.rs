@@ -211,6 +211,7 @@ pub fn setup(
         // Configure the timer to count at the designed tick rate. We will manually set the
         // period below.
         timer5.pause();
+        timer5.reset_counter();
         timer5.set_tick_freq(design_parameters::TIMER_FREQUENCY);
 
         // The timestamp timer must run at exactly a multiple of the sample timer based on the
