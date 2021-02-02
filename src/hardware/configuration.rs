@@ -217,6 +217,9 @@ pub fn setup(
         // timer, but use maximum overflow period.
         let mut timer = timers::TimestampTimer::new(timer5);
 
+        // TODO: Check hardware synchronization of timestamping and the sampling timers
+        // for phase shift determinism.
+
         timer.set_period_ticks(u32::MAX);
 
         timer
