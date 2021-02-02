@@ -62,15 +62,12 @@ impl InputStamper {
     /// Get the latest timestamp that has occurred.
     ///
     /// # Note
-    /// This function must be called sufficiently often. If an over-capture event occurs, this
-    /// function will panic, as this indicates a timestamp was inadvertently dropped.
-    ///
-    /// To prevent timestamp loss, the batch size and sampling rate must be adjusted such that at
-    /// most one timestamp will occur in each data processing cycle.
+    /// This function must be called at least as often as timestamps arrive.
+    /// If an over-capture event occurs, this function will clear the overflow,
+    /// and return a new timestamp of unknown recency an `Err()`.
+    /// Note that this indicates at least one timestamp was inadvertently dropped.
     #[allow(dead_code)]
-    pub fn latest_timestamp(&mut self) -> Option<u32> {
-        self.capture_channel
-            .latest_capture()
-            .expect("DI0 timestamp overrun")
+    pub fn latest_timestamp(&mut self) -> Result<Option<u32>, Option<u32>> {
+        self.capture_channel.latest_capture()
     }
 }

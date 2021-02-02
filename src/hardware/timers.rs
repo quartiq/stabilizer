@@ -281,28 +281,26 @@ macro_rules! timer_channels {
             impl [< Channel $index InputCapture >] {
                 /// Get the latest capture from the channel.
                 #[allow(dead_code)]
-                pub fn latest_capture(&mut self) -> Result<Option<$size>, ()> {
+                pub fn latest_capture(&mut self) -> Result<Option<$size>, Option<$size>> {
                     // Note(unsafe): This channel owns all access to the specific timer channel.
                     // Only atomic operations on completed on the timer registers.
                     let regs = unsafe { &*<$TY>::ptr() };
-                    let sr = regs.sr.read();
 
-                    let result = if sr.[< cc $index if >]().bit_is_set() {
+                    let result = if regs.sr.read().[< cc $index if >]().bit_is_set() {
                         // Read the capture value. Reading the captured value clears the flag in the
                         // status register automatically.
-                        let ccx = regs.[< ccr $index >].read();
-                        Some(ccx.ccr().bits())
+                        Some(regs.[< ccr $index >].read().ccr().bits())
                     } else {
                         None
                     };
 
                     // Read SR again to check for a potential over-capture. If there is an
                     // overcapture, return an error.
-                    if regs.sr.read().[< cc $index of >]().bit_is_clear() {
-                        Ok(result)
-                    } else {
+                    if regs.sr.read().[< cc $index of >]().bit_is_set() {
                         regs.sr.modify(|_, w| w.[< cc $index of >]().clear_bit());
-                        Err(())
+                        Err(result)
+                    } else {
+                        Ok(result)
                     }
                 }
 

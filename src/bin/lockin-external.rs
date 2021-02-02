@@ -117,8 +117,14 @@ const APP: () = {
         let iir_state = c.resources.iir_state;
         let lockin = c.resources.lockin;
 
+        let t = c
+            .resources
+            .timestamper
+            .latest_timestamp()
+            .unwrap_or_else(|t| t) // Ignore timer capture overflows.
+            .map(|t| t as i32);
         let (pll_phase, pll_frequency) = c.resources.pll.update(
-            c.resources.timestamper.latest_timestamp().map(|t| t as i32),
+            t,
             22, // frequency settling time (log2 counter cycles), TODO: expose
             22, // phase settling time, TODO: expose
         );
