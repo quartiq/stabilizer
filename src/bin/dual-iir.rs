@@ -38,8 +38,6 @@ impl Settings {
     }
 }
 
-const ID: &str = "test";
-
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
@@ -63,7 +61,7 @@ const APP: () = {
         let broker = IpAddr::V4(Ipv4Addr::new(10, 34, 16, 1));
         let mqtt_interface = MqttInterface::new(
             stabilizer.net.stack,
-            ID,
+            "stabilizer",
             broker,
             Settings::new(),
         )

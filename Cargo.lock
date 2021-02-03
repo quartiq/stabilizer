@@ -358,22 +358,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive_stringset"
-version = "0.1.0"
-source = "git+https://github.com/vertigo-designs/miniconf.git?branch=feature/mqtt-interface#38379f7fa72e675c348a4f532811795cc95766df"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "dsp"
 version = "0.1.0"
 dependencies = [
  "criterion",
  "libm",
- "miniconf 0.1.0 (git+https://github.com/vertigo-designs/miniconf.git?branch=feature/mqtt-interface)",
  "ndarray",
  "rand",
  "serde",
@@ -630,19 +619,7 @@ dependencies = [
 name = "miniconf"
 version = "0.1.0"
 dependencies = [
- "derive_stringset 0.1.0",
- "heapless",
- "minimq",
- "serde",
- "serde-json-core 0.2.0",
-]
-
-[[package]]
-name = "miniconf"
-version = "0.1.0"
-source = "git+https://github.com/vertigo-designs/miniconf.git?branch=feature/mqtt-interface#38379f7fa72e675c348a4f532811795cc95766df"
-dependencies = [
- "derive_stringset 0.1.0 (git+https://github.com/vertigo-designs/miniconf.git?branch=feature/mqtt-interface)",
+ "derive_stringset",
  "heapless",
  "minimq",
  "serde",
@@ -1074,7 +1051,7 @@ dependencies = [
  "heapless",
  "log",
  "mcp23017",
- "miniconf 0.1.0",
+ "miniconf",
  "nb 1.0.0",
  "panic-halt",
  "panic-semihosting",
