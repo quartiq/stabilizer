@@ -43,8 +43,11 @@ jobs:
         optional: [false]
         include:
           - toolchain: beta
+            features: ''
+            optional: false
           - toolchain: stable
             features: pounder_v1_1
+            optional: false
           - toolchain: nightly
             features: nightly
             optional: true
