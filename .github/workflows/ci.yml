@@ -62,12 +62,6 @@ jobs:
         with:
           command: build
           args: --release --features "${{ matrix.features }}"
-      - uses: actions/upload-artifact@v2
-        if: ${{ matrix.toolchain == 'stable' && matrix.features == '' }}
-        with:
-          name: stabilizer
-          path: |
-            target/*/release/dual-iir
 
   test:
     runs-on: ubuntu-latest
