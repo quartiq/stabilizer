@@ -235,8 +235,6 @@ macro_rules! timer_channels {
             pub struct [< Channel $index InputCapture>] {}
 
             impl [< Channel $index >] {
-
-
                 /// Construct a new timer channel.
                 ///
                 /// Note(unsafe): This function must only be called once. Once constructed, the
@@ -276,7 +274,6 @@ macro_rules! timer_channels {
                     let regs = unsafe { &*<$TY>::ptr() };
 
                     regs.[< $ccmrx _input >]().modify(|_, w| w.[< cc $index s>]().variant(input));
-
 
                     [< Channel $index InputCapture >] {}
                 }
