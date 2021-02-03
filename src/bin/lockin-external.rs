@@ -25,15 +25,13 @@ const SCALE: f32 = i16::MAX as _;
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
 
-#[derive(Debug, Deserialize, StringSet)]
+#[derive(Deserialize, StringSet)]
 pub struct Settings {
-    iir: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
 }
 
 impl Settings {
     pub fn new() -> Self {
         Self {
-            iir: [[iir::IIR::default(); IIR_CASCADE_LENGTH]; 2],
         }
     }
 }
@@ -228,9 +226,9 @@ const APP: () = {
     }
 
     #[task(priority = 1, resources=[mqtt_interface, afes, iir_ch])]
-    fn settings_update(mut c: settings_update::Context) {
-        let settings = &c.resources.mqtt_interface.settings;
-        c.resources.iir_ch.lock(|iir| *iir = settings.iir);
+    fn settings_update(c: settings_update::Context) {
+        let _settings = &c.resources.mqtt_interface.settings;
+        //c.resources.iir_ch.lock(|iir| *iir = settings.iir);
         // TODO: Update AFEs
     }
 

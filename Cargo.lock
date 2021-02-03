@@ -1029,6 +1029,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "smoltcp-nal"
+version = "0.1.0"
+source = "git+https://github.com/vertigo-designs/smoltcp-nal.git?branch=main#6a656dd78c5f7543475e95c0eaf81def95fc5a10"
+dependencies = [
+ "embedded-nal",
+ "heapless",
+ "smoltcp",
+]
+
+[[package]]
 name = "stabilizer"
 version = "0.4.1"
 dependencies = [
@@ -1050,7 +1060,7 @@ dependencies = [
  "panic-semihosting",
  "paste",
  "serde",
- "smoltcp",
+ "smoltcp-nal",
  "stm32h7xx-hal",
 ]
 
@@ -1075,7 +1085,7 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.8.0"
-source = "git+https://github.com/quartiq/stm32h7xx-hal?branch=rs/smoltcp-update#87a650664beab422b33f1e3d842f8d585ab5fdab"
+source = "git+https://github.com/stm32-rs/stm32h7xx-hal?branch=dma#2b8a04caac566a8560f400ddd6503508f78bea77"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",
