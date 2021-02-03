@@ -1,7 +1,6 @@
 #![deny(warnings)]
 #![no_std]
 #![no_main]
-#![cfg_attr(feature = "nightly", feature(core_intrinsics))]
 
 use stm32h7xx_hal as hal;
 
