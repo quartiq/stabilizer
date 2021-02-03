@@ -85,7 +85,7 @@ impl Timestamper {
 
         // The capture channel should capture whenever the trigger input occurs.
         let input_capture = capture_channel
-            .into_input_capture(timers::CaptureTrigger::TriggerInput);
+            .into_input_capture(timers::tim8::CaptureSource1::TRC);
         input_capture.listen_dma();
 
         // The data transfer is always a transfer of data from the peripheral to a RAM buffer.
