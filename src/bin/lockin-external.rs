@@ -71,6 +71,9 @@ const APP: () = {
         // Start sampling ADCs.
         stabilizer.adc_dac_timer.start();
 
+        // Enable the timestamper.
+        stabilizer.timestamper.start();
+
         init::LateResources {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
