@@ -60,7 +60,7 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let broker = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2));
+        let broker = IpAddr::V4(Ipv4Addr::new(10, 34, 16, 1));
         let mqtt_interface = MqttInterface::new(
             stabilizer.net.stack,
             "stabilizer/lockin",

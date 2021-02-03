@@ -46,8 +46,9 @@ dsp = { path = "dsp" }
 ad9959 = { path = "ad9959" }
 
 [dependencies.miniconf]
-git = "https://github.com/vertigo-designs/miniconf.git"
-branch = "feature/mqtt-interface"
+# git = "https://github.com/vertigo-designs/miniconf.git"
+# branch = "feature/mqtt-interface"
+path = "../../vertigo-designs/miniconf"
 
 [dependencies.mcp23017]
 git = "https://github.com/mrd0ll4r/mcp23017.git"
@@ -70,7 +71,7 @@ pounder_v1_1 = [ ]
 [profile.dev]
 codegen-units = 1
 incremental = false
-opt-level = 3
+opt-level = 1
 
 [profile.release]
 opt-level = 3

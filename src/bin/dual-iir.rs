@@ -27,14 +27,18 @@ const IIR_CASCADE_LENGTH: usize = 1;
 
 #[derive(Debug, Deserialize, StringSet)]
 pub struct Settings {
+    test: u32,
 }
 
 impl Settings {
     pub fn new() -> Self {
         Self {
+            test: 0,
         }
     }
 }
+
+const ID: &str = "test";
 
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
@@ -56,10 +60,10 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let broker = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2));
+        let broker = IpAddr::V4(Ipv4Addr::new(10, 34, 16, 1));
         let mqtt_interface = MqttInterface::new(
             stabilizer.net.stack,
-            "stabilizer/iir/dual",
+            ID,
             broker,
             Settings::new(),
         )
