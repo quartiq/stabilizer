@@ -22,7 +22,7 @@
 ## Limitations/TODOs
 
 * Fixed AFE gains
-* The IP and MAC address are [hardcoded](src/main.rs)
+* The IP and MAC address are [hardcoded](src/hardware/configuration.rs)
 * Expose configurable limits
 * 100Base-T only
 * Digital IO, GPIO header, AFE header, EEM header are not handled
@@ -39,6 +39,11 @@ See https://github.com/sinara-hw/Stabilizer
 * `rustup target add thumbv7em-none-eabihf`
 * `cargo build --release`
 * Do not try the debug (default) mode. It is guaranteed to panic.
+
+### Using Cargo-embed
+
+* Install `cargo-embed`: `cargo install cargo-embed`
+* Program the device: `cargo embed --bin dual-iir --release`
 
 ### Using GDB/OpenOCD
 
@@ -64,14 +69,14 @@ See https://github.com/sinara-hw/Stabilizer
 * Install the DFU USB tool (`dfu-util`)
 * Connect to the Micro USB connector below the RJ45
 * Short JC2/BOOT
-* `cargo objcopy --release --bin stabilizer -- -O binary stabilizer.bin` or `arm-none-eabi-objcopy -O binary target/thumbv7em-none-eabihf/release/stabilizer stabilizer.bin`
-* `dfu-util -a 0 -s 0x08000000:leave -D stabilizer.bin`
+* `cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin` or `arm-none-eabi-objcopy -O binary target/thumbv7em-none-eabihf/release/dual-iir dual-iir.bin`
+* `dfu-util -a 0 -s 0x08000000:leave -D dual-iir.bin`
 
 ### Using ST-Link virtual mass storage
 
-* `cargo objcopy --release --bin stabilizer -- -O binary stabilizer.bin` or `arm-none-eabi-objcopy -O binary target/thumbv7em-none-eabihf/release/stabilizer stabilizer.bin`
+* `cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin` or `arm-none-eabi-objcopy -O binary target/thumbv7em-none-eabihf/release/dual-iir dual-iir.bin`
 * Connect the ST-Link debugger
-* copy `stabilizer.bin` to the `NODE_H743ZI` USB disk
+* copy `dual-iir.bin` to the `NODE_H743ZI` USB disk
 
 ## Protocol
 

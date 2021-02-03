@@ -25,42 +25,6 @@
 ///! This module only supports DI0 for timestamping due to trigger constraints on the DIx pins. If
 ///! timestamping is desired in DI1, a separate timer + capture channel will be necessary.
 use super::{hal, timers};
-use crate::{ADC_SAMPLE_TICKS, SAMPLE_BUFFER_SIZE};
-
-/// Calculate the period of the digital input timestamp timer.
-///
-/// # Note
-/// The period returned will be 1 less than the required period in timer ticks. The value returned
-/// can be immediately programmed into a hardware timer period register.
-///
-/// The period is calculated to be some power-of-two multiple of the batch size, such that N batches
-/// will occur between each timestamp timer overflow.
-///
-/// # Returns
-/// A 32-bit value that can be programmed into a hardware timer period register.
-pub fn calculate_timestamp_timer_period() -> u32 {
-    // Calculate how long a single batch requires in timer ticks.
-    let batch_duration_ticks: u64 =
-        SAMPLE_BUFFER_SIZE as u64 * ADC_SAMPLE_TICKS as u64;
-
-    // Calculate the largest power-of-two that is less than or equal to
-    // `batches_per_overflow`.  This is completed by eliminating the least significant
-    // bits of the value until only the msb remains, which is always a power of two.
-    let batches_per_overflow: u64 =
-        (1u64 + u32::MAX as u64) / batch_duration_ticks;
-    let mut j = batches_per_overflow;
-    while (j & (j - 1)) != 0 {
-        j = j & (j - 1);
-    }
-
-    // Once the number of batches per timestamp overflow is calculated, we can figure out the final
-    // period of the timestamp timer. The period is always 1 larger than the value configured in the
-    // register.
-    let period: u64 = batch_duration_ticks * j - 1u64;
-    assert!(period <= u32::MAX as u64);
-
-    period as u32
-}
 
 /// The timestamper for DI0 reference clock inputs.
 pub struct InputStamper {
@@ -98,15 +62,12 @@ impl InputStamper {
     /// Get the latest timestamp that has occurred.
     ///
     /// # Note
-    /// This function must be called sufficiently often. If an over-capture event occurs, this
-    /// function will panic, as this indicates a timestamp was inadvertently dropped.
-    ///
-    /// To prevent timestamp loss, the batch size and sampling rate must be adjusted such that at
-    /// most one timestamp will occur in each data processing cycle.
+    /// This function must be called at least as often as timestamps arrive.
+    /// If an over-capture event occurs, this function will clear the overflow,
+    /// and return a new timestamp of unknown recency an `Err()`.
+    /// Note that this indicates at least one timestamp was inadvertently dropped.
     #[allow(dead_code)]
-    pub fn latest_timestamp(&mut self) -> Option<u32> {
-        self.capture_channel
-            .latest_capture()
-            .expect("DI0 timestamp overrun")
+    pub fn latest_timestamp(&mut self) -> Result<Option<u32>, Option<u32>> {
+        self.capture_channel.latest_capture()
     }
 }

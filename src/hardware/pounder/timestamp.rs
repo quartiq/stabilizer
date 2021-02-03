@@ -43,6 +43,7 @@ pub struct Timestamper {
         timers::tim8::Channel1InputCapture,
         PeripheralToMemory,
         &'static mut [u16; SAMPLE_BUFFER_SIZE],
+        hal::dma::DBTransfer,
     >,
 }
 
@@ -89,7 +90,7 @@ impl Timestamper {
         input_capture.listen_dma();
 
         // The data transfer is always a transfer of data from the peripheral to a RAM buffer.
-        let data_transfer: Transfer<_, _, PeripheralToMemory, _> =
+        let data_transfer: Transfer<_, _, PeripheralToMemory, _, _> =
             Transfer::init(
                 stream,
                 input_capture,

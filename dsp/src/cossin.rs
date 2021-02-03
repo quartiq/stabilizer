@@ -1,4 +1,3 @@
-use super::Complex;
 use core::f64::consts::PI;
 
 include!(concat!(env!("OUT_DIR"), "/cossin_table.rs"));
@@ -11,10 +10,10 @@ include!(concat!(env!("OUT_DIR"), "/cossin_table.rs"));
 /// * `phase` - 32-bit phase.
 ///
 /// # Returns
-/// The cos and sin values of the provided phase as a `Complex<i32>`
-/// value. With a 7-bit deep LUT there is 1e-5 max and 6e-8 RMS error
+/// The cos and sin values of the provided phase as a `(i32, i32)`
+/// tuple. With a 7-bit deep LUT there is 1e-5 max and 6e-8 RMS error
 /// in each quadrature over 20 bit phase.
-pub fn cossin(phase: i32) -> Complex<i32> {
+pub fn cossin(phase: i32) -> (i32, i32) {
     // Phase bits excluding the three highes MSB
     const OCTANT_BITS: usize = 32 - 3;
 
@@ -69,12 +68,13 @@ pub fn cossin(phase: i32) -> Complex<i32> {
         sin *= -1;
     }
 
-    Complex(cos, sin)
+    (cos, sin)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Complex;
     use core::f64::consts::PI;
 
     #[test]

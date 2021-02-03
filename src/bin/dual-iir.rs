@@ -20,7 +20,7 @@ use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, NetworkStack, AFE0, AFE1,
 };
 
-const SCALE: f32 = ((1 << 15) - 1) as f32;
+const SCALE: f32 = i16::MAX as _;
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
@@ -47,9 +47,9 @@ const APP: () = {
         mqtt_interface: MqttInterface<Settings, NetworkStack>,
 
         // Format: iir_state[ch][cascade-no][coeff]
-        #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
-        iir_state: [[iir::IIRState; IIR_CASCADE_LENGTH]; 2],
-        #[init([[iir::IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; IIR_CASCADE_LENGTH]; 2])]
+        #[init([[iir::Vec5([0.; 5]); IIR_CASCADE_LENGTH]; 2])]
+        iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
+        #[init([[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2])]
         iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
     }
 

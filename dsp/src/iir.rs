@@ -3,8 +3,6 @@ use serde::{Deserialize, Serialize};
 use super::{abs, copysign, macc, max, min};
 use core::f32;
 
-use miniconf::StringSet;
-
 /// IIR state and coefficients type.
 ///
 /// To represent the IIR state (input and output memory) during the filter update
@@ -13,7 +11,8 @@ use miniconf::StringSet;
 /// To represent the IIR coefficients, this contains the feed-forward
 /// coefficients (b0, b1, b2) followd by the negated feed-back coefficients
 /// (-a1, -a2), all five normalized such that a0 = 1.
-pub type IIRState = [f32; 5];
+#[derive(Copy, Clone, Default, Deserialize, Serialize)]
+pub struct Vec5(pub [f32; 5]);
 
 /// IIR configuration.
 ///
@@ -40,15 +39,24 @@ pub type IIRState = [f32; 5];
 ///   Therefore it can trivially implement bump-less transfer.
 /// * Cascading multiple IIR filters allows stable and robust
 ///   implementation of transfer functions beyond bequadratic terms.
-#[derive(Copy, Clone, Debug, Default, Deserialize, Serialize, StringSet)]
+#[derive(Copy, Clone, Default, Deserialize, Serialize)]
 pub struct IIR {
-    pub ba: IIRState,
+    pub ba: Vec5,
     pub y_offset: f32,
     pub y_min: f32,
     pub y_max: f32,
 }
 
 impl IIR {
+    pub const fn new(gain: f32, y_min: f32, y_max: f32) -> Self {
+        Self {
+            ba: Vec5([gain, 0., 0., 0., 0.]),
+            y_offset: 0.,
+            y_min,
+            y_max,
+        }
+    }
+
     /// Configures IIR filter coefficients for proportional-integral behavior
     /// with gain limit.
     ///
@@ -76,13 +84,13 @@ impl IIR {
             }
             (a1, b0, b1)
         };
-        self.ba.copy_from_slice(&[b0, b1, 0., a1, 0.]);
+        self.ba.0.copy_from_slice(&[b0, b1, 0., a1, 0.]);
         Ok(())
     }
 
     /// Compute the overall (DC feed-forward) gain.
     pub fn get_k(&self) -> f32 {
-        self.ba[..3].iter().sum()
+        self.ba.0[..3].iter().sum()
     }
 
     /// Compute input-referred (`x`) offset from output (`y`) offset.
@@ -109,22 +117,22 @@ impl IIR {
     /// # Arguments
     /// * `xy` - Current filter state.
     /// * `x0` - New input.
-    pub fn update(&self, xy: &mut IIRState, x0: f32) -> f32 {
-        let n = self.ba.len();
-        debug_assert!(xy.len() == n);
+    pub fn update(&self, xy: &mut Vec5, x0: f32) -> f32 {
+        let n = self.ba.0.len();
+        debug_assert!(xy.0.len() == n);
         // `xy` contains       x0 x1 y0 y1 y2
         // Increment time      x1 x2 y1 y2 y3
         // Shift               x1 x1 x2 y1 y2
         // This unrolls better than xy.rotate_right(1)
-        xy.copy_within(0..n - 1, 1);
+        xy.0.copy_within(0..n - 1, 1);
         // Store x0            x0 x1 x2 y1 y2
-        xy[0] = x0;
+        xy.0[0] = x0;
         // Compute y0 by multiply-accumulate
-        let y0 = macc(self.y_offset, xy, &self.ba);
+        let y0 = macc(self.y_offset, &xy.0, &self.ba.0);
         // Limit y0
         let y0 = max(self.y_min, min(self.y_max, y0));
         // Store y0            x0 x1 y0 y1 y2
-        xy[n / 2] = y0;
+        xy.0[n / 2] = y0;
         y0
     }
 }

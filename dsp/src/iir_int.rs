@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 /// This struct is used to hold the x/y input/output data vector or the b/a coefficient
 /// vector.
 #[derive(Copy, Clone, Default, Deserialize, Serialize)]
-pub struct IIRState(pub [i32; 5]);
+pub struct Vec5(pub [i32; 5]);
 
-impl IIRState {
+impl Vec5 {
     /// Lowpass biquad filter using cutoff and sampling frequencies.  Taken from:
     /// https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
     ///
@@ -19,11 +19,12 @@ impl IIRState {
     ///
     /// # Returns
     /// 2nd-order IIR filter coefficients in the form [b0,b1,b2,a1,a2]. a0 is set to -1.
-    pub fn lowpass(f: f32, q: f32, k: f32) -> IIRState {
+    pub fn lowpass(f: f32, q: f32, k: f32) -> Self {
         // 3rd order Taylor approximation of sin and cos.
         let f = f * 2. * PI;
-        let fsin = f - f * f * f / 6.;
-        let fcos = 1. - f * f / 2.;
+        let f2 = f * f * 0.5;
+        let fcos = 1. - f2;
+        let fsin = f * (1. - f2 / 3.);
         let alpha = fsin / (2. * q);
         // IIR uses Q2.30 fixed point
         let a0 = (1. + alpha) / (1 << IIR::SHIFT) as f32;
@@ -31,7 +32,7 @@ impl IIRState {
         let a1 = (2. * fcos / a0) as _;
         let a2 = ((alpha - 1.) / a0) as _;
 
-        IIRState([b0, 2 * b0, b0, a1, a2])
+        Self([b0, 2 * b0, b0, a1, a2])
     }
 }
 
@@ -53,7 +54,7 @@ fn macc(y0: i32, x: &[i32], a: &[i32], shift: u32) -> i32 {
 /// Coefficient scaling fixed and optimized.
 #[derive(Copy, Clone, Default, Deserialize, Serialize)]
 pub struct IIR {
-    pub ba: IIRState,
+    pub ba: Vec5,
     // pub y_offset: i32,
     // pub y_min: i32,
     // pub y_max: i32,
@@ -70,7 +71,7 @@ impl IIR {
     /// # Arguments
     /// * `xy` - Current filter state.
     /// * `x0` - New input.
-    pub fn update(&self, xy: &mut IIRState, x0: i32) -> i32 {
+    pub fn update(&self, xy: &mut Vec5, x0: i32) -> i32 {
         let n = self.ba.0.len();
         debug_assert!(xy.0.len() == n);
         // `xy` contains       x0 x1 y0 y1 y2
@@ -92,11 +93,11 @@ impl IIR {
 
 #[cfg(test)]
 mod test {
-    use super::IIRState;
+    use super::Vec5;
 
     #[test]
     fn lowpass_gen() {
-        let ba = IIRState::lowpass(1e-3, 1. / 2f32.sqrt(), 2.);
+        let ba = Vec5::lowpass(1e-3, 1. / 2f32.sqrt(), 2.);
         println!("{:?}", ba.0);
     }
 }

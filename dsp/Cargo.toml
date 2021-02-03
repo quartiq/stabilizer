@@ -15,9 +15,11 @@ branch = "feature/mqtt-interface"
 
 [dev-dependencies]
 criterion = "0.3"
+rand = "0.8"
+ndarray = "0.14"
 
 [[bench]]
-name = "trig"
+name = "micro"
 harness = false
 
 [features]

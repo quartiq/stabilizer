@@ -161,7 +161,6 @@ pub fn setup(
         // Configure the timer to count at the designed tick rate. We will manually set the
         // period below.
         timer2.pause();
-        timer2.reset_counter();
         timer2.set_tick_freq(design_parameters::TIMER_FREQUENCY);
 
         let mut sampling_timer = timers::SamplingTimer::new(timer2);
@@ -220,13 +219,15 @@ pub fn setup(
         timer5.pause();
         timer5.set_tick_freq(design_parameters::TIMER_FREQUENCY);
 
-        // The timestamp timer must run at exactly a multiple of the sample timer based on the
-        // batch size. To accomodate this, we manually set the prescaler identical to the sample
-        // timer, but use a period that is longer.
+        // The timestamp timer runs at the counter cycle period as the sampling timers.
+        // To accomodate this, we manually set the prescaler identical to the sample
+        // timer, but use maximum overflow period.
         let mut timer = timers::TimestampTimer::new(timer5);
 
-        let period = digital_input_stamper::calculate_timestamp_timer_period();
-        timer.set_period_ticks(period);
+        // TODO: Check hardware synchronization of timestamping and the sampling timers
+        // for phase shift determinism.
+
+        timer.set_period_ticks(u32::MAX);
 
         timer
     };
@@ -517,11 +518,11 @@ pub fn setup(
         let store = unsafe { &mut NET_STORE };
 
         store.ip_addrs[0] = smoltcp::wire::IpCidr::new(
-            smoltcp::wire::IpAddress::v4(10, 0, 16, 99),
+            smoltcp::wire::IpAddress::v4(10, 34, 16, 103),
             24,
         );
 
-        let default_v4_gw = smoltcp::wire::Ipv4Address::new(10, 0, 16, 1);
+        let default_v4_gw = smoltcp::wire::Ipv4Address::new(10, 34, 16, 1);
         let mut routes =
             smoltcp::iface::Routes::new(&mut store.routes_cache[..]);
         routes.add_default_ipv4_route(default_v4_gw).unwrap();

@@ -3,38 +3,6 @@
 
 use core::ops::{Add, Mul, Neg};
 
-/// Bit shift, round up half.
-///
-/// # Arguments
-///
-/// `x` - Value to shift and round.
-/// `shift` - Number of bits to right shift `x`.
-///
-/// # Returns
-///
-/// Shifted and rounded value.
-#[inline(always)]
-pub fn shift_round(x: i32, shift: usize) -> i32 {
-    (x + (1 << (shift - 1))) >> shift
-}
-
-/// Integer division, round up half.
-///
-/// # Arguments
-///
-/// `dividend` - Value to divide.
-/// `divisor` - Value that divides the
-/// dividend. `dividend`+`divisor`-1 must be inside [i64::MIN,
-/// i64::MAX].
-///
-/// # Returns
-///
-/// Divided and rounded value.
-#[inline(always)]
-pub fn divide_round(dividend: i64, divisor: i64) -> i64 {
-    (dividend + (divisor - 1)) / divisor
-}
-
 fn abs<T>(x: T) -> T
 where
     T: PartialOrd + Default + Neg<Output = T>,
@@ -112,6 +80,7 @@ where
         .fold(y0, |y, xa| y + xa)
 }
 
+pub mod accu;
 mod atan2;
 mod complex;
 mod cossin;
@@ -122,6 +91,7 @@ pub mod pll;
 pub mod rpll;
 pub mod unwrap;
 
+pub use accu::Accu;
 pub use atan2::atan2;
 pub use complex::Complex;
 pub use cossin::cossin;

@@ -15,12 +15,12 @@ use miniconf::{
 };
 use serde::Deserialize;
 
-use dsp::{iir, iir_int, lockin::Lockin, rpll::RPLL};
+use dsp::{iir, iir_int, lockin::Lockin, rpll::RPLL, Accu};
 use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
 };
 
-const SCALE: f32 = ((1 << 15) - 1) as f32;
+const SCALE: f32 = i16::MAX as _;
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
@@ -47,9 +47,9 @@ const APP: () = {
         mqtt_interface: MqttInterface<Settings, hardware::NetworkStack>,
 
         // Format: iir_state[ch][cascade-no][coeff]
-        #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
-        iir_state: [[iir::IIRState; IIR_CASCADE_LENGTH]; 2],
-        #[init([[iir::IIR { ba: [1., 0., 0., 0., 0.], y_offset: 0., y_min: -SCALE - 1., y_max: SCALE }; IIR_CASCADE_LENGTH]; 2])]
+        #[init([[iir::Vec5([0.; 5]); IIR_CASCADE_LENGTH]; 2])]
+        iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
+        #[init([[iir::IIR::new(1./(1 << 16) as f32, -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2])]
         iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
 
         timestamper: InputStamper,
@@ -71,10 +71,10 @@ const APP: () = {
         )
         .unwrap();
 
-        let pll = RPLL::new(ADC_SAMPLE_TICKS_LOG2 + SAMPLE_BUFFER_SIZE_LOG2, 0);
+        let pll = RPLL::new(ADC_SAMPLE_TICKS_LOG2 + SAMPLE_BUFFER_SIZE_LOG2);
 
         let lockin = Lockin::new(
-            &iir_int::IIRState::lowpass(1e-3, 0.707, 2.), // TODO: expose
+            iir_int::Vec5::lowpass(1e-3, 0.707, 2.), // TODO: expose
         );
 
         // Enable ADC/DAC events
@@ -101,24 +101,13 @@ const APP: () = {
         }
     }
 
-    /// Main DSP processing routine for Stabilizer.
+    /// Main DSP processing routine.
     ///
-    /// # Note
-    /// Processing time for the DSP application code is bounded by the following constraints:
+    /// See `dual-iir` for general notes on processing time and timing.
     ///
-    /// DSP application code starts after the ADC has generated a batch of samples and must be
-    /// completed by the time the next batch of ADC samples has been acquired (plus the FIFO buffer
-    /// time). If this constraint is not met, firmware will panic due to an ADC input overrun.
-    ///
-    /// The DSP application code must also fill out the next DAC output buffer in time such that the
-    /// DAC can switch to it when it has completed the current buffer. If this constraint is not met
-    /// it's possible that old DAC codes will be generated on the output and the output samples will
-    /// be delayed by 1 batch.
-    ///
-    /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
-    /// the same time bounds, meeting one also means the other is also met.
-    ///
-    /// TODO: document lockin
+    /// This is an implementation of a externally (DI0) referenced PLL lockin on the ADC0 signal.
+    /// It outputs either I/Q or power/phase on DAC0/DAC1. Data is normalized to full scale.
+    /// PLL bandwidth, filter bandwidth, slope, and x/y or power/phase post-filters are available.
     #[task(binds=DMA1_STR4, resources=[adcs, dacs, iir_state, iir_ch, lockin, timestamper, pll], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
@@ -135,47 +124,67 @@ const APP: () = {
         let iir_state = c.resources.iir_state;
         let lockin = c.resources.lockin;
 
+        let timestamp = c
+            .resources
+            .timestamper
+            .latest_timestamp()
+            .unwrap_or_else(|t| t) // Ignore timer capture overflows.
+            .map(|t| t as i32);
         let (pll_phase, pll_frequency) = c.resources.pll.update(
-            c.resources.timestamper.latest_timestamp().map(|t| t as i32),
-            22, // relative PLL frequency bandwidth: 2**-22, TODO: expose
-            22, // relative PLL phase bandwidth: 2**-22, TODO: expose
+            timestamp,
+            22, // frequency settling time (log2 counter cycles), TODO: expose
+            22, // phase settling time, TODO: expose
         );
 
-        // Harmonic index of the LO: -1 to _de_modulate the fundamental
-        let harmonic: i32 = -1;
-        // Demodulation LO phase offset
-        let phase_offset: i32 = 0;
-        let sample_frequency =
-            (pll_frequency >> SAMPLE_BUFFER_SIZE_LOG2).wrapping_mul(harmonic);
-        let mut sample_phase =
+        // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
+        let harmonic: i32 = -1; // TODO: expose
+                                // Demodulation LO phase offset
+        let phase_offset: i32 = 0; // TODO: expose
+
+        let sample_frequency = ((pll_frequency
+            // .wrapping_add(1 << SAMPLE_BUFFER_SIZE_LOG2 - 1)  // half-up rounding bias
+            >> SAMPLE_BUFFER_SIZE_LOG2) as i32)
+            .wrapping_mul(harmonic);
+        let sample_phase =
             phase_offset.wrapping_add(pll_phase.wrapping_mul(harmonic));
 
-        for i in 0..adc_samples[0].len() {
+        let output = adc_samples[0]
+            .iter()
+            .zip(Accu::new(sample_phase, sample_frequency))
             // Convert to signed, MSB align the ADC sample.
-            let input = (adc_samples[0][i] as i16 as i32) << 16;
-            // Obtain demodulated, filtered IQ sample.
-            let output = lockin.update(input, sample_phase);
-            // Advance the sample phase.
-            sample_phase = sample_phase.wrapping_add(sample_frequency);
+            .map(|(&sample, phase)| {
+                lockin.update((sample as i16 as i32) << 16, phase)
+            })
+            .last()
+            .unwrap();
 
+        // convert i/q to power/phase,
+        let power_phase = true; // TODO: expose
+
+        let mut output = if power_phase {
             // Convert from IQ to power and phase.
-            let mut power = output.power() as _;
-            let mut phase = output.phase() as _;
+            [output.abs_sqr() as _, output.arg() as _]
+        } else {
+            [output.0 as _, output.1 as _]
+        };
 
-            // Filter power and phase through IIR filters.
-            // Note: Normalization to be done in filters. Phase will wrap happily.
-            for j in 0..iir_state[0].len() {
-                power = iir_ch[0][j].update(&mut iir_state[0][j], power);
-                phase = iir_ch[1][j].update(&mut iir_state[1][j], phase);
+        // Filter power and phase through IIR filters.
+        // Note: Normalization to be done in filters. Phase will wrap happily.
+        for j in 0..iir_state[0].len() {
+            for k in 0..output.len() {
+                output[k] =
+                    iir_ch[k][j].update(&mut iir_state[k][j], output[k]);
             }
+        }
 
-            // Note(unsafe): range clipping to i16 is ensured by IIR filters above.
-            // Convert to DAC data.
+        // Note(unsafe): range clipping to i16 is ensured by IIR filters above.
+        // Convert to DAC data.
+        for i in 0..dac_samples[0].len() {
             unsafe {
                 dac_samples[0][i] =
-                    power.to_int_unchecked::<i16>() as u16 ^ 0x8000;
+                    output[0].to_int_unchecked::<i16>() as u16 ^ 0x8000;
                 dac_samples[1][i] =
-                    phase.to_int_unchecked::<i16>() as u16 ^ 0x8000;
+                    output[1].to_int_unchecked::<i16>() as u16 ^ 0x8000;
             }
         }
     }

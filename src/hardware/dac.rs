@@ -122,6 +122,7 @@ macro_rules! dac_output {
                 $spi,
                 MemoryToPeripheral,
                 &'static mut [u16; SAMPLE_BUFFER_SIZE],
+                hal::dma::DBTransfer,
             >,
         }
 
@@ -164,7 +165,7 @@ macro_rules! dac_output {
                 }
 
                 // Construct the trigger stream to write from memory to the peripheral.
-                let transfer: Transfer<_, _, MemoryToPeripheral, _> =
+                let transfer: Transfer<_, _, MemoryToPeripheral, _, _> =
                     Transfer::init(
                         stream,
                         $spi::new(trigger_channel, spi),
