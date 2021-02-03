@@ -180,18 +180,21 @@ macro_rules! adc_input {
                     hal::spi::Spi<hal::stm32::$spi, hal::spi::Disabled, u16>,
                     PeripheralToMemory,
                     &'static mut [u16; SAMPLE_BUFFER_SIZE],
+                    hal::dma::DBTransfer,
                 >,
                 trigger_transfer: Transfer<
                     hal::dma::dma::$trigger_stream<hal::stm32::DMA1>,
                     [< $spi CR >],
                     MemoryToPeripheral,
                     &'static mut [u32; 1],
+                    hal::dma::DBTransfer,
                 >,
                 clear_transfer: Transfer<
                     hal::dma::dma::$clear_stream<hal::stm32::DMA1>,
                     [< $spi IFCR >],
                     MemoryToPeripheral,
                     &'static mut [u32; 1],
+                    hal::dma::DBTransfer,
                 >,
             }
 
@@ -239,6 +242,7 @@ macro_rules! adc_input {
                         _,
                         MemoryToPeripheral,
                         _,
+                        _,
                     > = Transfer::init(
                         clear_stream,
                         [< $spi IFCR >]::new(clear_channel),
@@ -276,6 +280,7 @@ macro_rules! adc_input {
                         _,
                         MemoryToPeripheral,
                         _,
+                        _,
                     > = Transfer::init(
                         trigger_stream,
                         [< $spi CR >]::new(trigger_channel),
@@ -306,7 +311,7 @@ macro_rules! adc_input {
 
                     // The data transfer is always a transfer of data from the peripheral to a RAM
                     // buffer.
-                    let data_transfer: Transfer<_, _, PeripheralToMemory, _> =
+                    let data_transfer: Transfer<_, _, PeripheralToMemory, _, _> =
                         Transfer::init(
                             data_stream,
                             spi,
