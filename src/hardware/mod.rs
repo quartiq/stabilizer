@@ -38,8 +38,6 @@ pub type AFE1 = afe::ProgrammableGainAmplifier<
 // Type alias for the ethernet interface on Stabilizer.
 pub type Ethernet = smoltcp::iface::EthernetInterface<
     'static,
-    'static,
-    'static,
     hal::ethernet::EthernetDMA<'static>,
 >;
 
