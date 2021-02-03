@@ -2,6 +2,6 @@ block_labels = [ "S-blocked" ]
 delete_merged_branches = true
 status = [
   "style",
-  "test",
+  "test (stable)",
   "compile (stable, false)",
 ]
