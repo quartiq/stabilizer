@@ -1,7 +1,6 @@
 #![deny(warnings)]
 #![no_std]
 #![no_main]
-#![cfg_attr(feature = "nightly", feature(core_intrinsics))]
 
 use dsp::{iir_int, lockin::Lockin, Accu};
 use hardware::{Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
