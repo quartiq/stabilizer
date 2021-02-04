@@ -1,9 +1,6 @@
 ///! Stabilizer hardware configuration
 ///!
 ///! This file contains all of the hardware-specific configuration of Stabilizer.
-#[cfg(feature = "pounder_v1_1")]
-use core::convert::TryInto;
-
 use smoltcp::{iface::Routes, wire::Ipv4Address};
 
 use stm32h7xx_hal::{
@@ -763,9 +760,9 @@ pub fn setup(
             timestamp_timer.set_external_clock(timers::Prescaler::Div4);
             timestamp_timer.start();
 
-            // Set the timer to wrap at the u32 boundary to meet the PLL periodicity.
+            // Set the timer to wrap at the u16 boundary to meet the PLL periodicity.
             // Scale and wrap before or after the PLL.
-            timestamp_timer.set_period_ticks(u32::MAX);
+            timestamp_timer.set_period_ticks(u16::MAX);
             let tim8_channels = timestamp_timer.channels();
 
             pounder::timestamp::Timestamper::new(
