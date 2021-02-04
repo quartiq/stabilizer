@@ -113,7 +113,7 @@ const APP: () = {
             .resources
             .timestamper
             .latest_timestamp()
-            .unwrap_or_else(|t| t) // Ignore timer capture overflows.
+            .unwrap_or(None) // Ignore data from timer capture overflows.
             .map(|t| t as i32);
         let (pll_phase, pll_frequency) = c.resources.pll.update(
             timestamp,
