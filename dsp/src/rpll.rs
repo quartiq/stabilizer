@@ -94,7 +94,6 @@ mod test {
 
     struct Harness {
         rpll: RPLL,
-        dt2: u8,
         shift_frequency: u8,
         shift_phase: u8,
         noise: i32,
@@ -109,7 +108,6 @@ mod test {
         fn default() -> Self {
             Self {
                 rpll: RPLL::new(8),
-                dt2: 8,
                 shift_frequency: 9,
                 shift_phase: 8,
                 noise: 0,
@@ -122,7 +120,7 @@ mod test {
         }
 
         fn run(&mut self, n: usize) -> (Vec<f32>, Vec<f32>) {
-            assert!(self.period >= 1 << self.dt2);
+            assert!(self.period >= 1 << self.rpll.dt2);
             assert!(self.period < 1 << self.shift_frequency);
             assert!(self.period < 1 << self.shift_phase + 1);
 
@@ -130,7 +128,7 @@ mod test {
             let mut f = Vec::<f32>::new();
             for _ in 0..n {
                 let timestamp = if self.time - self.next_noisy >= 0 {
-                    assert!(self.time - self.next_noisy < 1 << self.dt2);
+                    assert!(self.time - self.next_noisy < 1 << self.rpll.dt2);
                     self.next = self.next.wrapping_add(self.period);
                     let timestamp = self.next_noisy;
                     let p_noise = self.rng.gen_range(-self.noise..=self.noise);
@@ -151,23 +149,23 @@ mod test {
                 // phase error
                 y.push(yi.wrapping_sub(y_ref) as f32 / 2f32.powi(32));
 
-                let p_ref = 1 << 32 + self.dt2;
+                let p_ref = 1 << 32 + self.rpll.dt2;
                 let p_sig = fi as u64 * self.period as u64;
                 // relative frequency error
                 f.push(
                     p_sig.wrapping_sub(p_ref) as i64 as f32
-                        / 2f32.powi(32 + self.dt2 as i32),
+                        / 2f32.powi(32 + self.rpll.dt2 as i32),
                 );
 
                 // advance time
-                self.time = self.time.wrapping_add(1 << self.dt2);
+                self.time = self.time.wrapping_add(1 << self.rpll.dt2);
             }
             (y, f)
         }
 
         fn measure(&mut self, n: usize, limits: [f32; 4]) {
-            let t_settle = (1 << self.shift_frequency - self.dt2 + 4)
-                + (1 << self.shift_phase - self.dt2 + 4);
+            let t_settle = (1 << self.shift_frequency - self.rpll.dt2 + 4)
+                + (1 << self.shift_phase - self.rpll.dt2 + 4);
             self.run(t_settle);
 
             let (y, f) = self.run(n);
@@ -267,5 +265,19 @@ mod test {
         h.shift_phase = 20;
 
         h.measure(1 << 16, [2e-4, 6e-3, 2e-4, 2e-3]);
+    }
+
+    #[test]
+    fn batch_fast_narrow() {
+        let mut h = Harness::default();
+        h.rpll.dt2 = 8 + 3;
+        h.period = 2431;
+        h.next = 35281;
+        h.next_noisy = h.next;
+        h.noise = 100;
+        h.shift_frequency = 23;
+        h.shift_phase = 23;
+
+        h.measure(1 << 16, [1e-8, 2e-5, 6e-4, 6e-4]);
     }
 }
