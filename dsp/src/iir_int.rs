@@ -1,4 +1,4 @@
-use core::f32::consts::PI;
+use core::f64::consts::PI;
 use serde::{Deserialize, Serialize};
 
 /// Generic vector for integer IIR filter.
@@ -19,7 +19,7 @@ impl Vec5 {
     ///
     /// # Returns
     /// 2nd-order IIR filter coefficients in the form [b0,b1,b2,a1,a2]. a0 is set to -1.
-    pub fn lowpass(f: f32, q: f32, k: f32) -> Self {
+    pub fn lowpass(f: f64, q: f64, k: f64) -> Self {
         // 3rd order Taylor approximation of sin and cos.
         let f = f * 2. * PI;
         let f2 = f * f * 0.5;
@@ -27,7 +27,7 @@ impl Vec5 {
         let fsin = f * (1. - f2 / 3.);
         let alpha = fsin / (2. * q);
         // IIR uses Q2.30 fixed point
-        let a0 = (1. + alpha) / (1 << IIR::SHIFT) as f32;
+        let a0 = (1. + alpha) / (1 << IIR::SHIFT) as f64;
         let b0 = (k / 2. * (1. - fcos) / a0) as _;
         let a1 = (2. * fcos / a0) as _;
         let a2 = ((alpha - 1.) / a0) as _;
@@ -97,7 +97,7 @@ mod test {
 
     #[test]
     fn lowpass_gen() {
-        let ba = Vec5::lowpass(1e-3, 1. / 2f32.sqrt(), 2.);
+        let ba = Vec5::lowpass(1e-5, 1. / 2f64.sqrt(), 2e5);
         println!("{:?}", ba.0);
     }
 }
