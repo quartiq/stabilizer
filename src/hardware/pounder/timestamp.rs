@@ -26,7 +26,7 @@ use stm32h7xx_hal as hal;
 
 use hal::dma::{dma::DmaConfig, PeripheralToMemory, Transfer};
 
-use crate::{hardware::timers, SAMPLE_BUFFER_SIZE};
+use crate::hardware::{design_parameters::SAMPLE_BUFFER_SIZE, timers};
 
 // Three buffers are required for double buffered mode - 2 are owned by the DMA stream and 1 is the
 // working data provided to the application. These buffers must exist in a DMA-accessible memory
