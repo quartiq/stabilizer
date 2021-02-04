@@ -11,7 +11,7 @@ mod adc;
 mod afe;
 mod configuration;
 mod dac;
-mod design_parameters;
+pub mod design_parameters;
 mod digital_input_stamper;
 mod eeprom;
 mod pounder;

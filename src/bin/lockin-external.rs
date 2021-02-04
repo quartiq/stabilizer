@@ -11,9 +11,7 @@ use rtic::cyccnt::{Instant, U32Ext};
 
 use heapless::{consts::*, String};
 
-use stabilizer::{
-    hardware, server, ADC_SAMPLE_TICKS_LOG2, SAMPLE_BUFFER_SIZE_LOG2,
-};
+use stabilizer::{hardware, hardware::design_parameters, server};
 
 use dsp::{iir, iir_int, lockin::Lockin, rpll::RPLL, Accu};
 use hardware::{
@@ -52,7 +50,10 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let pll = RPLL::new(ADC_SAMPLE_TICKS_LOG2 + SAMPLE_BUFFER_SIZE_LOG2);
+        let pll = RPLL::new(
+            design_parameters::ADC_SAMPLE_TICKS_LOG2
+                + design_parameters::SAMPLE_BUFFER_SIZE_LOG2,
+        );
 
         let lockin = Lockin::new(
             iir_int::Vec5::lowpass(1e-3, 0.707, 2.), // TODO: expose
@@ -126,8 +127,9 @@ const APP: () = {
         let phase_offset: i32 = 0; // TODO: expose
 
         let sample_frequency = ((pll_frequency
-            // .wrapping_add(1 << SAMPLE_BUFFER_SIZE_LOG2 - 1)  // half-up rounding bias
-            >> SAMPLE_BUFFER_SIZE_LOG2) as i32)
+            // .wrapping_add(1 << design_parameters::SAMPLE_BUFFER_SIZE_LOG2 - 1)  // half-up rounding bias
+            >> design_parameters::SAMPLE_BUFFER_SIZE_LOG2)
+            as i32)
             .wrapping_mul(harmonic);
         let sample_phase =
             phase_offset.wrapping_add(pll_phase.wrapping_mul(harmonic));

@@ -74,9 +74,9 @@
 ///! double-buffered mode offers less overhead due to the DMA disable/enable procedure).
 use stm32h7xx_hal as hal;
 
-use crate::SAMPLE_BUFFER_SIZE;
-
+use super::design_parameters::SAMPLE_BUFFER_SIZE;
 use super::timers;
+
 use hal::dma::{
     config::Priority,
     dma::{DMAReq, DmaConfig},

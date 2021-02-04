@@ -1,11 +1,6 @@
 ///! Stabilizer hardware configuration
 ///!
 ///! This file contains all of the hardware-specific configuration of Stabilizer.
-use crate::ADC_SAMPLE_TICKS;
-
-#[cfg(feature = "pounder_v1_1")]
-use crate::SAMPLE_BUFFER_SIZE;
-
 #[cfg(feature = "pounder_v1_1")]
 use core::convert::TryInto;
 
@@ -157,7 +152,8 @@ pub fn setup(
         timer2.set_tick_freq(design_parameters::TIMER_FREQUENCY);
 
         let mut sampling_timer = timers::SamplingTimer::new(timer2);
-        sampling_timer.set_period_ticks((ADC_SAMPLE_TICKS - 1) as u32);
+        sampling_timer
+            .set_period_ticks((design_parameters::ADC_SAMPLE_TICKS - 1) as u32);
 
         // The sampling timer is used as the master timer for the shadow-sampling timer. Thus,
         // it generates a trigger whenever it is enabled.
@@ -181,7 +177,8 @@ pub fn setup(
 
         let mut shadow_sampling_timer =
             timers::ShadowSamplingTimer::new(timer3);
-        shadow_sampling_timer.set_period_ticks(ADC_SAMPLE_TICKS - 1);
+        shadow_sampling_timer
+            .set_period_ticks(design_parameters::ADC_SAMPLE_TICKS - 1);
 
         // The shadow sampling timer is a slave-mode timer to the sampling timer. It should
         // always be in-sync - thus, we configure it to operate in slave mode using "Trigger
@@ -726,7 +723,8 @@ pub fn setup(
                 let sample_frequency = {
                     let timer_frequency: hal::time::Hertz =
                         design_parameters::TIMER_FREQUENCY.into();
-                    timer_frequency.0 as f32 / ADC_SAMPLE_TICKS as f32
+                    timer_frequency.0 as f32
+                        / design_parameters::ADC_SAMPLE_TICKS as f32
                 };
 
                 let sample_period = 1.0 / sample_frequency;
@@ -773,8 +771,9 @@ pub fn setup(
             };
 
             let period = (tick_ratio
-                * ADC_SAMPLE_TICKS as f32
-                * SAMPLE_BUFFER_SIZE as f32) as u32
+                * design_parameters::ADC_SAMPLE_TICKS as f32
+                * design_parameters::SAMPLE_BUFFER_SIZE as f32)
+                as u32
                 / 4;
             timestamp_timer.set_period_ticks((period - 1).try_into().unwrap());
             let tim8_channels = timestamp_timer.channels();
