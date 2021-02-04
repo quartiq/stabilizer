@@ -47,6 +47,10 @@ impl InputStamper {
         let input_capture =
             timer_channel.into_input_capture(timers::tim5::CaptureSource4::TI4);
 
+        // FIXME: hack in de-glitching filter
+        let regs = unsafe { &*hal::stm32::TIM5::ptr() };
+        regs.ccmr2_input().modify(|_, w| w.ic4f().bits(0b0011));
+
         Self {
             capture_channel: input_capture,
             _di0_trigger: trigger,
