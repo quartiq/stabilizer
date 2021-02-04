@@ -759,23 +759,13 @@ pub fn setup(
             // Pounder is configured to generate a 500MHz reference clock, so a 125MHz sync-clock is
             // output. As a result, dividing the 125MHz sync-clk provides a 31.25MHz tick rate for
             // the timestamp timer. 31.25MHz corresponds with a 32ns tick rate.
+            // This is less than fCK_INT/3 of the timer as required for oversampling the trigger.
             timestamp_timer.set_external_clock(timers::Prescaler::Div4);
             timestamp_timer.start();
 
-            // We want the pounder timestamp timer to overflow once per batch.
-            let tick_ratio = {
-                let sync_clk_mhz: f32 = design_parameters::DDS_SYSTEM_CLK.0
-                    as f32
-                    / design_parameters::DDS_SYNC_CLK_DIV as f32;
-                sync_clk_mhz / design_parameters::TIMER_FREQUENCY.0 as f32
-            };
-
-            let period = (tick_ratio
-                * design_parameters::ADC_SAMPLE_TICKS as f32
-                * design_parameters::SAMPLE_BUFFER_SIZE as f32)
-                as u32
-                / 4;
-            timestamp_timer.set_period_ticks((period - 1).try_into().unwrap());
+            // Set the timer to wrap at the u32 boundary to meet the PLL periodicity.
+            // Scale and wrap before or after the PLL.
+            timestamp_timer.set_period_ticks(u32::MAX);
             let tim8_channels = timestamp_timer.channels();
 
             pounder::timestamp::Timestamper::new(
