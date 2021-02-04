@@ -35,22 +35,18 @@ jobs:
 
   compile:
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.optional }}
+    continue-on-error: ${{ matrix.toolchain == 'nightly' }}
     strategy:
       matrix:
         toolchain: [stable]
         features: ['']
-        optional: [false]
         include:
           - toolchain: beta
             features: ''
-            optional: false
           - toolchain: stable
             features: pounder_v1_1
-            optional: false
           - toolchain: nightly
             features: nightly
-            optional: true
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
