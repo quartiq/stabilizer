@@ -100,7 +100,8 @@ const APP: () = {
 
         // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
         let harmonic: i32 = -1; // TODO: expose
-                                // Demodulation LO phase offset
+
+        // Demodulation LO phase offset
         let phase_offset: i32 = 0; // TODO: expose
 
         let sample_frequency = ((pll_frequency
