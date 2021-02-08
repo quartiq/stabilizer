@@ -597,7 +597,7 @@ pub fn setup(
             let ref_clk: hal::time::Hertz =
                 design_parameters::DDS_REF_CLK.into();
 
-            let ad9959 = ad9959::Ad9959::new(
+            let mut ad9959 = ad9959::Ad9959::new(
                 qspi_interface,
                 reset_pin,
                 &mut io_update,
@@ -607,6 +607,8 @@ pub fn setup(
                 design_parameters::DDS_MULTIPLIER,
             )
             .unwrap();
+
+            ad9959.self_test().unwrap();
 
             // Return IO_Update
             gpiog.pg7 = io_update.into_analog();
