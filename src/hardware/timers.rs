@@ -48,6 +48,13 @@ pub enum SlaveMode {
     Trigger = 0b0110,
 }
 
+/// Optional input capture preconditioning filter configurations.
+#[allow(dead_code)]
+pub enum InputFilter {
+    Div1N1 = 0b0000,
+    Div1N8 = 0b0011,
+}
+
 macro_rules! timer_channels {
     ($name:ident, $TY:ident, $size:ty) => {
         paste::paste! {
@@ -333,6 +340,18 @@ macro_rules! timer_channels {
                     // Only atomic operations on completed on the timer registers.
                     let regs = unsafe { &*<$TY>::ptr() };
                     regs.sr.read().[< cc $index of >]().bit_is_set()
+                }
+
+                /// Configure the input capture input pre-filter.
+                ///
+                /// # Args
+                /// * `filter` - The desired input filter stage configuration. Defaults to disabled.
+                #[allow(dead_code)]
+                pub fn configure_filter(&mut self, filter: super::InputFilter) {
+                    // Note(unsafe): This channel owns all access to the specific timer channel.
+                    // Only atomic operations on completed on the timer registers.
+                    let regs = unsafe { &*<$TY>::ptr() };
+                    regs.[< $ccmrx _input >]().modify(|_, w| w.[< ic $index f >]().bits(filter as u8));
                 }
             }
 
