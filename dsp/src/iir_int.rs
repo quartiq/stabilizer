@@ -28,9 +28,9 @@ impl Vec5 {
         let alpha = fsin / (2. * q);
         // IIR uses Q2.30 fixed point
         let a0 = (1. + alpha) / (1 << IIR::SHIFT) as f64;
-        let b0 = (k / 2. * (1. - fcos) / a0) as _;
-        let a1 = (2. * fcos / a0) as _;
-        let a2 = ((alpha - 1.) / a0) as _;
+        let b0 = (k / 2. * (1. - fcos) / a0 + 0.5) as _;
+        let a1 = (2. * fcos / a0 + 0.5) as _;
+        let a2 = ((alpha - 1.) / a0 + 0.5) as _;
 
         Self([b0, 2 * b0, b0, a1, a2])
     }
@@ -97,7 +97,7 @@ mod test {
 
     #[test]
     fn lowpass_gen() {
-        let ba = Vec5::lowpass(1e-5, 1. / 2f64.sqrt(), 2e5);
+        let ba = Vec5::lowpass(1e-5, 1. / 2f64.sqrt(), 2.);
         println!("{:?}", ba.0);
     }
 }
