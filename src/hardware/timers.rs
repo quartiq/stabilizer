@@ -348,6 +348,8 @@ macro_rules! timer_channels {
                 /// * `filter` - The desired input filter stage configuration. Defaults to disabled.
                 #[allow(dead_code)]
                 pub fn configure_filter(&mut self, filter: super::InputFilter) {
+                    // Note(unsafe): This channel owns all access to the specific timer channel.
+                    // Only atomic operations on completed on the timer registers.
                     let regs = unsafe { &*<$TY>::ptr() };
                     regs.[< $ccmrx _input >]().modify(|_, w| w.[< ic $index f >]().bits(filter as u8));
                 }
