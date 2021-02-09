@@ -4,13 +4,13 @@
 
 use dsp::{iir_int, lockin::Lockin, Accu};
 use hardware::{Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
-use stabilizer::{hardware, SAMPLE_BUFFER_SIZE, SAMPLE_BUFFER_SIZE_LOG2};
+use stabilizer::{hardware, hardware::design_parameters};
 
 // A constant sinusoid to send on the DAC output.
 // Full-scale gives a +/- 10V amplitude waveform. Scale it down to give +/- 1V.
 const ONE: i16 = (0.1 * u16::MAX as f32) as _;
 const SQRT2: i16 = (ONE as f32 * 0.707) as _;
-const DAC_SEQUENCE: [i16; SAMPLE_BUFFER_SIZE] =
+const DAC_SEQUENCE: [i16; design_parameters::SAMPLE_BUFFER_SIZE] =
     [ONE, SQRT2, 0, -SQRT2, -ONE, -SQRT2, 0, SQRT2];
 
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
@@ -83,7 +83,8 @@ const APP: () = {
 
         // Reference phase and frequency are known.
         let pll_phase = 0;
-        let pll_frequency = 1i32 << (32 - SAMPLE_BUFFER_SIZE_LOG2);
+        let pll_frequency =
+            1i32 << (32 - design_parameters::SAMPLE_BUFFER_SIZE_LOG2);
 
         // Harmonic index of the LO: -1 to _de_modulate the fundamental
         let harmonic: i32 = -1;
