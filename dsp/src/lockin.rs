@@ -1,21 +1,19 @@
-use super::{
-    iir_int::{Vec5, IIR},
-    Complex,
-};
-use serde::{Deserialize, Serialize};
+use super::{lowpass::Lowpass, Complex};
+use generic_array::typenum::U3;
 
-#[derive(Copy, Clone, Default, Deserialize, Serialize)]
+#[derive(Clone, Default)]
 pub struct Lockin {
-    iir: IIR,
-    state: [Vec5; 2],
+    state: [Lowpass<U3>; 2],
+    k: u32,
 }
 
 impl Lockin {
     /// Create a new Lockin with given IIR coefficients.
-    pub fn new(ba: Vec5) -> Self {
+    pub fn new(k: u32) -> Self {
+        let lp = Lowpass::default();
         Self {
-            iir: IIR { ba },
-            state: [Vec5::default(); 2],
+            state: [lp.clone(), lp.clone()],
+            k,
         }
     }
 
@@ -28,14 +26,10 @@ impl Lockin {
         // return IQ (in-phase and quadrature) data.
         // Note: 32x32 -> 64 bit multiplications are pretty much free.
         Complex(
-            self.iir.update(
-                &mut self.state[0],
-                ((sample as i64 * lo.0 as i64) >> 32) as _,
-            ),
-            self.iir.update(
-                &mut self.state[1],
-                ((sample as i64 * lo.1 as i64) >> 32) as _,
-            ),
+            self.state[0]
+                .update(((sample as i64 * lo.0 as i64) >> 32) as _, self.k),
+            self.state[1]
+                .update(((sample as i64 * lo.1 as i64) >> 32) as _, self.k),
         )
     }
 }
