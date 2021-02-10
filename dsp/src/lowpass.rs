@@ -15,19 +15,20 @@ impl<N: ArrayLength<i32>> Lowpass<N> {
     ///
     /// # Args
     /// * `x`: Input data
-    /// * `k`: Log2 time constant
+    /// * `k`: Log2 time constant, 1..32
     ///
     /// # Return
     /// Filtered output y
     pub fn update(&mut self, x: i32, k: u8) -> i32 {
+        debug_assert!((1..32).contains(&k));
         // This is an unrolled and optimized first-order IIR loop
         // that works for all possible time constants.
-        // Note the zero(s) at Nyquist and the benign overflow (DF-I).
+        // Note the zero(s) at Nyquist.
         let mut x0 = x;
         let mut x1 = self.xy[0];
         self.xy[0] = x0;
         for y1 in self.xy[1..].iter_mut() {
-            x0 = *y1 + (((x0 >> 1) + (x1 >> 1) - *y1 + (1 << (k - 1))) >> k);
+            x0 = *y1 + (((x0 >> 2) + (x1 >> 2) - (*y1 >> 1) + (1 << (k - 1))) >> k);
             x1 = *y1;
             *y1 = x0;
         }
