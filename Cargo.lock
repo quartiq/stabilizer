@@ -353,6 +353,7 @@ name = "dsp"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "generic-array 0.14.4",
  "libm",
  "ndarray",
  "rand",

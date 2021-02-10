@@ -2,7 +2,7 @@
 #![no_std]
 #![no_main]
 
-use dsp::{iir_int, lockin::Lockin, Accu};
+use dsp::{lockin::Lockin, Accu};
 use hardware::{Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
 use stabilizer::{hardware, hardware::design_parameters};
 
@@ -17,7 +17,7 @@ const DAC_SEQUENCE: [i16; design_parameters::SAMPLE_BUFFER_SIZE] =
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
-        adc1: Adc1Input,
+        adc: Adc1Input,
         dacs: (Dac0Output, Dac1Output),
 
         lockin: Lockin,
@@ -28,9 +28,7 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let lockin = Lockin::new(
-            iir_int::Vec5::lowpass(1e-3, 0.707, 2.), // TODO: expose
-        );
+        let lockin = Lockin::new(10); // TODO: expose
 
         // Enable ADC/DAC events
         stabilizer.adcs.1.start();
@@ -43,7 +41,7 @@ const APP: () = {
         init::LateResources {
             lockin,
             afes: stabilizer.afes,
-            adc1: stabilizer.adcs.1,
+            adc: stabilizer.adcs.1,
             dacs: stabilizer.dacs,
         }
     }
@@ -66,10 +64,10 @@ const APP: () = {
     /// the same time bounds, meeting one also means the other is also met.
     ///
     /// TODO: Document
-    #[task(binds=DMA1_STR4, resources=[adc1, dacs, lockin], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adc, dacs, lockin], priority=2)]
     fn process(c: process::Context) {
         let lockin = c.resources.lockin;
-        let adc_samples = c.resources.adc1.acquire_buffer();
+        let adc_samples = c.resources.adc.acquire_buffer();
         let dac_samples = [
             c.resources.dacs.0.acquire_buffer(),
             c.resources.dacs.1.acquire_buffer(),

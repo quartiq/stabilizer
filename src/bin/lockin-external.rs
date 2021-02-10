@@ -6,7 +6,7 @@ use stm32h7xx_hal as hal;
 
 use stabilizer::{hardware, hardware::design_parameters};
 
-use dsp::{iir_int, lockin::Lockin, rpll::RPLL, Accu};
+use dsp::{lockin::Lockin, rpll::RPLL, Accu};
 use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
 };
@@ -34,9 +34,7 @@ const APP: () = {
                 + design_parameters::SAMPLE_BUFFER_SIZE_LOG2,
         );
 
-        let lockin = Lockin::new(
-            iir_int::Vec5::lowpass(1e-3, 0.707, 2.), // TODO: expose
-        );
+        let lockin = Lockin::new(10);
 
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();
