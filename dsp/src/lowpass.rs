@@ -25,7 +25,7 @@ impl<N: ArrayLength<i32>> Lowpass<N> {
         // Note the zero(s) at Nyquist and the benign overflow (DF-I).
         let mut x0 = x;
         let mut x1 = self.xy[0];
-        self.xy[0] = x;
+        self.xy[0] = x0;
         for y1 in self.xy[1..].iter_mut() {
             x0 = *y1 + (((x0 >> 1) + (x1 >> 1) - *y1 + (1 << (k - 1))) >> k);
             x1 = *y1;
