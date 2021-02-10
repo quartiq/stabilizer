@@ -28,7 +28,7 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let lockin = Lockin::new(1 << 22); // TODO: expose
+        let lockin = Lockin::new(10); // TODO: expose
 
         // Enable ADC/DAC events
         stabilizer.adcs.1.start();

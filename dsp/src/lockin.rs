@@ -4,12 +4,12 @@ use generic_array::typenum::U3;
 #[derive(Clone, Default)]
 pub struct Lockin {
     state: [Lowpass<U3>; 2],
-    k: u32,
+    k: u8,
 }
 
 impl Lockin {
     /// Create a new Lockin with given IIR coefficients.
-    pub fn new(k: u32) -> Self {
+    pub fn new(k: u8) -> Self {
         let lp = Lowpass::default();
         Self {
             state: [lp.clone(), lp.clone()],
