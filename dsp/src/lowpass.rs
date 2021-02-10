@@ -27,7 +27,7 @@ impl<N: ArrayLength<i32>> Lowpass<N> {
         let mut x1 = self.xy[0];
         self.xy[0] = x;
         for y1 in self.xy[1..].iter_mut() {
-            x0 = *y1 + (((x0 >> 1) + (x1 >> 1) - *y1 + (1 << k - 1)) >> k);
+            x0 = *y1 + (((x0 >> 1) + (x1 >> 1) - *y1 + (1 << (k - 1))) >> k);
             x1 = *y1;
             *y1 = x0;
         }

@@ -12,7 +12,7 @@ impl Lockin {
     pub fn new(k: u8) -> Self {
         let lp = Lowpass::default();
         Self {
-            state: [lp.clone(), lp.clone()],
+            state: [lp.clone(), lp],
             k,
         }
     }
