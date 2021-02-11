@@ -34,7 +34,7 @@ const APP: () = {
                 + design_parameters::SAMPLE_BUFFER_SIZE_LOG2,
         );
 
-        let lockin = Lockin::new(10);
+        let lockin = Lockin::new();
 
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();
@@ -102,6 +102,9 @@ const APP: () = {
         // Demodulation LO phase offset
         let phase_offset: i32 = 0; // TODO: expose
 
+        // Log2 lowpass time constant
+        let time_constant: u8 = 8; // TODO: expose
+
         let sample_frequency = ((pll_frequency
             // .wrapping_add(1 << design_parameters::SAMPLE_BUFFER_SIZE_LOG2 - 1)  // half-up rounding bias
             >> design_parameters::SAMPLE_BUFFER_SIZE_LOG2)
@@ -115,7 +118,7 @@ const APP: () = {
             .zip(Accu::new(sample_phase, sample_frequency))
             // Convert to signed, MSB align the ADC sample.
             .map(|(&sample, phase)| {
-                lockin.update((sample as i16 as i32) << 16, phase)
+                lockin.update(sample as i16, phase, time_constant)
             })
             .last()
             .unwrap();
@@ -125,7 +128,7 @@ const APP: () = {
             // Convert from IQ to power and phase.
             "power_phase" => [output.abs_sqr(), output.arg()],
             "frequency_discriminator" => [pll_frequency as i32, output.arg()],
-            _ => [output.0, output.1],
+            _ => [output.0 << 16, output.1 << 16],
         };
 
         // Convert to DAC data.
