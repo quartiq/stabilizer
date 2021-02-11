@@ -1,9 +1,9 @@
 use super::{lowpass::Lowpass, Complex};
-use generic_array::typenum::U4;
+use generic_array::typenum::U2;
 
 #[derive(Clone, Default)]
 pub struct Lockin {
-    state: [Lowpass<U4>; 2],
+    state: [Lowpass<U2>; 2],
 }
 
 impl Lockin {

@@ -126,7 +126,7 @@ const APP: () = {
         let conf = "frequency_discriminator";
         let output = match conf {
             // Convert from IQ to power and phase.
-            "power_phase" => [(output.log2() << 10) as _, output.arg()],
+            "power_phase" => [(output.log2() << 24) as _, output.arg()],
             "frequency_discriminator" => [pll_frequency as _, output.arg()],
             _ => [output.0 << 16, output.1 << 16],
         };
