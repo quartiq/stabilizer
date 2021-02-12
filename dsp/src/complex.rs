@@ -1,7 +1,19 @@
+use core::convert::From;
+use core::ops::Mul;
+
 use super::{atan2, cossin};
 
 #[derive(Copy, Clone, Default, PartialEq, Debug)]
 pub struct Complex<T>(pub T, pub T);
+
+impl<T: Copy> Complex<T> {
+    pub fn map<F>(&self, func: F) -> Self
+    where
+        F: Fn(T) -> T,
+    {
+        Complex(func(self.0), func(self.1))
+    }
+}
 
 impl Complex<i32> {
     /// Return a Complex on the unit circle given an angle.
@@ -77,5 +89,42 @@ impl Complex<i32> {
     /// ```
     pub fn arg(&self) -> i32 {
         atan2(self.1, self.0)
+    }
+}
+
+impl Mul for Complex<i32> {
+    type Output = Self;
+
+    fn mul(self, other: Self) -> Self {
+        let a = self.0 as i64;
+        let b = self.1 as i64;
+        let c = other.0 as i64;
+        let d = other.1 as i64;
+        Complex(
+            ((a * c - b * d + (1 << 31)) >> 32) as i32,
+            ((b * c + a * d + (1 << 31)) >> 32) as i32,
+        )
+    }
+}
+
+impl Mul<i32> for Complex<i32> {
+    type Output = Self;
+
+    fn mul(self, other: i32) -> Self {
+        Complex(
+            ((other as i64 * self.0 as i64 + (1 << 31)) >> 32) as i32,
+            ((other as i64 * self.1 as i64 + (1 << 31)) >> 32) as i32,
+        )
+    }
+}
+
+impl Mul<i16> for Complex<i32> {
+    type Output = Self;
+
+    fn mul(self, other: i16) -> Self {
+        Complex(
+            (other as i32 * (self.0 >> 16) + (1 << 15)) >> 16,
+            (other as i32 * (self.1 >> 16) + (1 << 15)) >> 16,
+        )
     }
 }

@@ -21,13 +21,14 @@ impl Lockin {
         // Get the LO signal for demodulation.
         let lo = Complex::from_angle(phase);
 
-        // Mix with the LO signal, filter with the IIR lowpass,
+        // Mix with the LO signal
+        let mix = lo * sample;
+
+        // Filter with the IIR lowpass,
         // return IQ (in-phase and quadrature) data.
         Complex(
-            self.state[0]
-                .update((sample as i32 * (lo.0 >> 16) + (1 << 15)) >> 16, k),
-            self.state[1]
-                .update((sample as i32 * (lo.1 >> 16) + (1 << 15)) >> 16, k),
+            self.state[0].update(mix.0, k),
+            self.state[1].update(mix.1, k),
         )
     }
 }
