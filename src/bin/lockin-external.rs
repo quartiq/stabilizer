@@ -103,7 +103,7 @@ const APP: () = {
         let phase_offset: i32 = 0; // TODO: expose
 
         // Log2 lowpass time constant
-        let time_constant: u8 = 8; // TODO: expose
+        let time_constant: u8 = 6; // TODO: expose
 
         let sample_frequency = ((pll_frequency
             // .wrapping_add(1 << design_parameters::SAMPLE_BUFFER_SIZE_LOG2 - 1)  // half-up rounding bias
@@ -128,7 +128,7 @@ const APP: () = {
             // Convert from IQ to power and phase.
             "power_phase" => [(output.log2() << 24) as _, output.arg()],
             "frequency_discriminator" => [pll_frequency as _, output.arg()],
-            _ => [output.0 << 16, output.1 << 16],
+            _ => [output.0, output.1],
         };
 
         // Convert to DAC data.
