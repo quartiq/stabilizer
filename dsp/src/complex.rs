@@ -1,4 +1,3 @@
-use core::convert::From;
 use core::ops::Mul;
 
 use super::{atan2, cossin};
