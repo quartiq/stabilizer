@@ -16,6 +16,7 @@ impl Lockin {
     }
 
     /// Update the lockin with a sample taken at a given phase.
+    /// The lowpass has a gain of `1 << k`.
     pub fn update(&mut self, sample: i16, phase: i32, k: u8) -> Complex<i32> {
         // Get the LO signal for demodulation.
         let lo = Complex::from_angle(phase);
@@ -23,8 +24,10 @@ impl Lockin {
         // Mix with the LO signal, filter with the IIR lowpass,
         // return IQ (in-phase and quadrature) data.
         Complex(
-            self.state[0].update((sample as i32 * (lo.0 >> 16)) >> 16, k),
-            self.state[1].update((sample as i32 * (lo.1 >> 16)) >> 16, k),
+            self.state[0]
+                .update((sample as i32 * (lo.0 >> 16) + (1 << 15)) >> 16, k),
+            self.state[1]
+                .update((sample as i32 * (lo.1 >> 16) + (1 << 15)) >> 16, k),
         )
     }
 }
