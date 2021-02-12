@@ -28,7 +28,7 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let lockin = Lockin::new(10); // TODO: expose
+        let lockin = Lockin::new();
 
         // Enable ADC/DAC events
         stabilizer.adcs.1.start();
@@ -85,10 +85,14 @@ const APP: () = {
             1i32 << (32 - design_parameters::SAMPLE_BUFFER_SIZE_LOG2);
 
         // Harmonic index of the LO: -1 to _de_modulate the fundamental
-        let harmonic: i32 = -1;
+        let harmonic: i32 = -1; // TODO: expose
 
         // Demodulation LO phase offset
-        let phase_offset: i32 = (0.25 * i32::MAX as f32) as i32;
+        let phase_offset: i32 = (0.25 * i32::MAX as f32) as i32; // TODO: expose
+
+        // Log2 lowpass time constant.
+        let time_constant: u8 = 8;
+
         let sample_frequency = (pll_frequency as i32).wrapping_mul(harmonic);
         let sample_phase = phase_offset
             .wrapping_add((pll_phase as i32).wrapping_mul(harmonic));
@@ -99,24 +103,14 @@ const APP: () = {
             .zip(Accu::new(sample_phase, sample_frequency))
             // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
             .map(|(&sample, phase)| {
-                lockin.update((sample as i16 as i32) << 16, phase)
+                lockin.update(sample as i16, phase, time_constant)
             })
             // Decimate
             .last()
             .unwrap();
 
-        // convert i/q to power/phase,
-        let power_phase = true; // TODO: expose
-
-        let output = if power_phase {
-            // Convert from IQ to power and phase.
-            [output.abs_sqr(), output.arg()]
-        } else {
-            [output.0, output.1]
-        };
-
         for value in dac_samples[1].iter_mut() {
-            *value = (output[1] >> 16) as u16 ^ 0x8000;
+            *value = (output.arg() >> 16) as u16 ^ 0x8000;
         }
     }
 
