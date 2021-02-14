@@ -34,8 +34,6 @@ const APP: () = {
                 + design_parameters::SAMPLE_BUFFER_SIZE_LOG2,
         );
 
-        let lockin = Lockin::new();
-
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();
         stabilizer.adcs.1.start();
@@ -59,7 +57,7 @@ const APP: () = {
             timestamper: stabilizer.timestamper,
 
             pll,
-            lockin,
+            lockin: Lockin::default(),
         }
     }
 
