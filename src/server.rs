@@ -40,7 +40,7 @@ macro_rules! route_request {
                 $(
                     $write_attribute => {
                         let new_value = match serde_json_core::from_str::<$TYPE>(&$request.value) {
-                            Ok(data) => data,
+                            Ok((data, _)) => data,
                             Err(_) => return server::Response::error($request.attribute,
                                     "Failed to decode value"),
                         };
@@ -253,7 +253,7 @@ impl Server {
                         &self.data[..self.data.len() - 1],
                     );
                     match r {
-                        Ok(mut res) => {
+                        Ok((mut res, _)) => {
                             // Note that serde_json_core doesn't escape quotations within a string.
                             // To account for this, we manually translate all single quotes to
                             // double quotes. This occurs because we doubly-serialize this field in
