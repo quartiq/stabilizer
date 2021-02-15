@@ -28,8 +28,6 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let lockin = Lockin::new();
-
         // Enable ADC/DAC events
         stabilizer.adcs.1.start();
         stabilizer.dacs.0.start();
@@ -39,7 +37,7 @@ const APP: () = {
         stabilizer.adc_dac_timer.start();
 
         init::LateResources {
-            lockin,
+            lockin: Lockin::default(),
             afes: stabilizer.afes,
             adc: stabilizer.adcs.1,
             dacs: stabilizer.dacs,
