@@ -104,7 +104,8 @@ const APP: () = {
         let time_constant: u8 = 6; // TODO: expose
 
         let sample_frequency = ((pll_frequency
-            // .wrapping_add(1 << design_parameters::SAMPLE_BUFFER_SIZE_LOG2 - 1)  // half-up rounding bias
+            // half-up rounding bias
+            // .wrapping_add(1 << design_parameters::SAMPLE_BUFFER_SIZE_LOG2 - 1)
             >> design_parameters::SAMPLE_BUFFER_SIZE_LOG2)
             as i32)
             .wrapping_mul(harmonic);
