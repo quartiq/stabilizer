@@ -36,7 +36,7 @@ panic-semihosting = { version = "0.5", optional = true }
 panic-halt = "0.2"
 serde = { version = "1.0", features = ["derive"], default-features = false }
 heapless = { version = "0.5", features = ["serde"] }
-serde-json-core = "0.1"
+serde-json-core = "0.2"
 cortex-m-rtic = "0.5.5"
 embedded-hal = "0.2.4"
 nb = "1.0.0"
