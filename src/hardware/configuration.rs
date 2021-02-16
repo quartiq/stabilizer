@@ -134,6 +134,7 @@ pub fn setup(
     let dma_streams =
         hal::dma::dma::StreamsTuple::new(device.DMA1, ccdr.peripheral.DMA1);
 
+    // Early, before the DMA1 peripherals (#272)
     #[cfg(feature = "pounder_v1_1")]
     let dma2_streams =
         hal::dma::dma::StreamsTuple::new(device.DMA2, ccdr.peripheral.DMA2);
