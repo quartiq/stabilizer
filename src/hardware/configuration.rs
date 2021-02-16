@@ -134,6 +134,11 @@ pub fn setup(
     let dma_streams =
         hal::dma::dma::StreamsTuple::new(device.DMA1, ccdr.peripheral.DMA1);
 
+    // Early, before the DMA1 peripherals (#272)
+    #[cfg(feature = "pounder_v1_1")]
+    let dma2_streams =
+        hal::dma::dma::StreamsTuple::new(device.DMA2, ccdr.peripheral.DMA2);
+
     // Configure timer 2 to trigger conversions for the ADC
     let mut sampling_timer = {
         // The timer frequency is manually adjusted below, so the 1KHz setting here is a
@@ -740,11 +745,6 @@ pub fn setup(
 
         #[cfg(feature = "pounder_v1_1")]
         let pounder_stamper = {
-            let dma2_streams = hal::dma::dma::StreamsTuple::new(
-                device.DMA2,
-                ccdr.peripheral.DMA2,
-            );
-
             let etr_pin = gpioa.pa0.into_alternate_af3();
 
             // The frequency in the constructor is dont-care, as we will modify the period + clock
