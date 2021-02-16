@@ -135,10 +135,8 @@ pub fn setup(
         hal::dma::dma::StreamsTuple::new(device.DMA1, ccdr.peripheral.DMA1);
 
     #[cfg(feature = "pounder_v1_1")]
-    let dma2_streams = hal::dma::dma::StreamsTuple::new(
-        device.DMA2,
-        ccdr.peripheral.DMA2,
-    );
+    let dma2_streams =
+        hal::dma::dma::StreamsTuple::new(device.DMA2, ccdr.peripheral.DMA2);
 
     // Configure timer 2 to trigger conversions for the ADC
     let mut sampling_timer = {
