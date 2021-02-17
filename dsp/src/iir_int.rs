@@ -96,7 +96,7 @@ impl IIR {
 
 #[cfg(test)]
 mod test {
-    use super::{Vec5, Coeff};
+    use super::{Coeff, Vec5};
 
     #[test]
     fn lowpass_gen() {
