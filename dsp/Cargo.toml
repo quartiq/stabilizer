@@ -14,13 +14,18 @@ git = "https://github.com/quartiq/miniconf.git"
 branch = "rs/issue-21/terminal-array-elements"
 
 [dev-dependencies]
-criterion = "0.3"
+# criterion = "0.3"
 rand = "0.8"
 ndarray = "0.14"
 
 [[bench]]
 name = "micro"
 harness = false
+
+# Note: Due to a dependency injection bug, criterion enables std-features for serde, which breaks
+# testing. Patch serde to not use std dependencies.
+[patch.crates-io]
+serde = { version = "1.0", features = ["derive"], default-features = false }
 
 [features]
 nightly = []
