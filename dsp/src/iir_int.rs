@@ -4,10 +4,9 @@ use serde::{Deserialize, Serialize};
 /// Generic vector for integer IIR filter.
 /// This struct is used to hold the x/y input/output data vector or the b/a coefficient
 /// vector.
-#[derive(Copy, Clone, Default, Deserialize, Serialize)]
-pub struct Vec5(pub [i32; 5]);
+pub type Vec5 = [i32; 5];
 
-impl Vec5 {
+trait Coeff {
     /// Lowpass biquad filter using cutoff and sampling frequencies.  Taken from:
     /// https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html
     ///
@@ -19,7 +18,11 @@ impl Vec5 {
     ///
     /// # Returns
     /// 2nd-order IIR filter coefficients in the form [b0,b1,b2,a1,a2]. a0 is set to -1.
-    pub fn lowpass(f: f64, q: f64, k: f64) -> Self {
+    fn lowpass(f: f64, q: f64, k: f64) -> Self;
+}
+
+impl Coeff for Vec5 {
+    fn lowpass(f: f64, q: f64, k: f64) -> Self {
         // 3rd order Taylor approximation of sin and cos.
         let f = f * 2. * PI;
         let f2 = f * f * 0.5;
@@ -32,7 +35,7 @@ impl Vec5 {
         let a1 = (2. * fcos / a0 + 0.5) as _;
         let a2 = ((alpha - 1.) / a0 + 0.5) as _;
 
-        Self([b0, 2 * b0, b0, a1, a2])
+        [b0, 2 * b0, b0, a1, a2]
     }
 }
 
@@ -72,21 +75,21 @@ impl IIR {
     /// * `xy` - Current filter state.
     /// * `x0` - New input.
     pub fn update(&self, xy: &mut Vec5, x0: i32) -> i32 {
-        let n = self.ba.0.len();
-        debug_assert!(xy.0.len() == n);
+        let n = self.ba.len();
+        debug_assert!(xy.len() == n);
         // `xy` contains       x0 x1 y0 y1 y2
         // Increment time      x1 x2 y1 y2 y3
         // Shift               x1 x1 x2 y1 y2
         // This unrolls better than xy.rotate_right(1)
-        xy.0.copy_within(0..n - 1, 1);
+        xy.copy_within(0..n - 1, 1);
         // Store x0            x0 x1 x2 y1 y2
-        xy.0[0] = x0;
+        xy[0] = x0;
         // Compute y0 by multiply-accumulate
-        let y0 = macc(0, &xy.0, &self.ba.0, IIR::SHIFT);
+        let y0 = macc(0, xy, &self.ba, IIR::SHIFT);
         // Limit y0
         // let y0 = y0.max(self.y_min).min(self.y_max);
         // Store y0            x0 x1 y0 y1 y2
-        xy.0[n / 2] = y0;
+        xy[n / 2] = y0;
         y0
     }
 }
@@ -98,6 +101,6 @@ mod test {
     #[test]
     fn lowpass_gen() {
         let ba = Vec5::lowpass(1e-5, 1. / 2f64.sqrt(), 2.);
-        println!("{:?}", ba.0);
+        println!("{:?}", ba);
     }
 }
