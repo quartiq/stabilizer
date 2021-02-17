@@ -4,12 +4,9 @@
 
 use stm32h7xx_hal as hal;
 
-use rtic::cyccnt::{Instant, U32Ext};
-
 use miniconf::{
     embedded_nal::{IpAddr, Ipv4Addr},
-    minimq,
-    MqttInterface, StringSet,
+    minimq, MqttInterface, StringSet,
 };
 
 use serde::Deserialize;
@@ -23,12 +20,12 @@ use hardware::{
 
 #[derive(Deserialize, StringSet)]
 pub struct Settings {
+    data: u32,
 }
 
 impl Settings {
     pub fn new() -> Self {
-        Self {
-        }
+        Self { data: 5 }
     }
 }
 
@@ -38,7 +35,12 @@ const APP: () = {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        mqtt_interface: MqttInterface<Settings, hardware::NetworkStack, minimq::consts::U256>,
+        clock: hardware::CycleCounter,
+        mqtt_interface: MqttInterface<
+            Settings,
+            hardware::NetworkStack,
+            minimq::consts::U256,
+        >,
 
         timestamper: InputStamper,
         pll: RPLL,
@@ -53,15 +55,16 @@ const APP: () = {
         let mqtt_interface = {
             let mqtt_client = {
                 let broker = IpAddr::V4(Ipv4Addr::new(10, 34, 16, 1));
-                minimq::MqttClient::new(broker, "stabilizer", stabilizer.net.stack).unwrap()
+                minimq::MqttClient::new(
+                    broker,
+                    "stabilizer",
+                    stabilizer.net.stack,
+                )
+                .unwrap()
             };
 
-            MqttInterface::new(
-                mqtt_client,
-                "stabilizer",
-                Settings::new(),
-            )
-            .unwrap()
+            MqttInterface::new(mqtt_client, "stabilizer", Settings::new())
+                .unwrap()
         };
 
         let pll = RPLL::new(
@@ -90,6 +93,7 @@ const APP: () = {
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
             timestamper: stabilizer.timestamper,
+            clock: stabilizer.cycle_counter,
 
             pll,
             lockin: Lockin::default(),
@@ -172,26 +176,13 @@ const APP: () = {
         }
     }
 
-    #[idle(resources=[mqtt_interface], spawn=[settings_update])]
+    #[idle(resources=[mqtt_interface, clock], spawn=[settings_update])]
     fn idle(mut c: idle::Context) -> ! {
-        let mut time = 0u32;
-        let mut next_ms = Instant::now();
-
-        // TODO: Replace with reference to CPU clock from CCDR.
-        next_ms += 400_000.cycles();
-
+        let clock = c.resources.clock;
         loop {
-            let tick = Instant::now() > next_ms;
-
-            if tick {
-                next_ms += 400_000.cycles();
-                time += 1;
-            }
-
-            let sleep = c
-                .resources
-                .mqtt_interface
-                .lock(|interface| !interface.network_stack().poll(time));
+            let sleep = c.resources.mqtt_interface.lock(|interface| {
+                !interface.network_stack().poll(clock.current_ms())
+            });
 
             match c
                 .resources

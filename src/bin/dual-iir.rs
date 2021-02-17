@@ -4,20 +4,18 @@
 
 use stm32h7xx_hal as hal;
 
-use rtic::cyccnt::{Instant, U32Ext};
-
 use stabilizer::hardware;
 
 use miniconf::{
     embedded_nal::{IpAddr, Ipv4Addr},
-    minimq,
-    MqttInterface, StringSet,
+    minimq, MqttInterface, StringSet,
 };
 use serde::Deserialize;
 
 use dsp::iir;
 use hardware::{
-    Adc0Input, Adc1Input, Dac0Output, Dac1Output, NetworkStack, AFE0, AFE1,
+    Adc0Input, Adc1Input, CycleCounter, Dac0Output, Dac1Output, NetworkStack,
+    AFE0, AFE1,
 };
 
 const SCALE: f32 = i16::MAX as _;
@@ -32,9 +30,7 @@ pub struct Settings {
 
 impl Settings {
     pub fn new() -> Self {
-        Self {
-            test: 0,
-        }
+        Self { test: 0 }
     }
 }
 
@@ -44,7 +40,9 @@ const APP: () = {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        mqtt_interface: MqttInterface<Settings, NetworkStack, minimq::consts::U256>,
+        mqtt_interface:
+            MqttInterface<Settings, NetworkStack, minimq::consts::U256>,
+        clock: CycleCounter,
 
         // Format: iir_state[ch][cascade-no][coeff]
         #[init([[iir::Vec5([0.; 5]); IIR_CASCADE_LENGTH]; 2])]
@@ -61,15 +59,16 @@ const APP: () = {
         let mqtt_interface = {
             let mqtt_client = {
                 let broker = IpAddr::V4(Ipv4Addr::new(10, 34, 16, 1));
-                minimq::MqttClient::new(broker, "stabilizer", stabilizer.net.stack).unwrap()
+                minimq::MqttClient::new(
+                    broker,
+                    "stabilizer",
+                    stabilizer.net.stack,
+                )
+                .unwrap()
             };
 
-            MqttInterface::new(
-                mqtt_client,
-                "stabilizer",
-                Settings::new(),
-            )
-            .unwrap()
+            MqttInterface::new(mqtt_client, "stabilizer", Settings::new())
+                .unwrap()
         };
 
         // Enable ADC/DAC events
@@ -86,6 +85,7 @@ const APP: () = {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
+            clock: stabilizer.cycle_counter,
         }
     }
 
@@ -134,26 +134,14 @@ const APP: () = {
         }
     }
 
-    #[idle(resources=[mqtt_interface], spawn=[settings_update])]
+    #[idle(resources=[mqtt_interface, clock], spawn=[settings_update])]
     fn idle(mut c: idle::Context) -> ! {
-        let mut time = 0u32;
-        let mut next_ms = Instant::now();
-
-        // TODO: Replace with reference to CPU clock from CCDR.
-        next_ms += 400_000.cycles();
+        let clock = c.resources.clock;
 
         loop {
-            let tick = Instant::now() > next_ms;
-
-            if tick {
-                next_ms += 400_000.cycles();
-                time += 1;
-            }
-
-            let sleep = c
-                .resources
-                .mqtt_interface
-                .lock(|interface| !interface.network_stack().poll(time));
+            let sleep = c.resources.mqtt_interface.lock(|interface| {
+                !interface.network_stack().poll(clock.current_ms())
+            });
 
             match c
                 .resources

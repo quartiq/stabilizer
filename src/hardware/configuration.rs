@@ -12,8 +12,9 @@ use smoltcp_nal::smoltcp;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use super::{
-    adc, afe, dac, design_parameters, digital_input_stamper, eeprom, pounder,
-    timers, DdsOutput, NetworkStack, AFE0, AFE1,
+    adc, afe, cycle_counter::CycleCounter, dac, design_parameters,
+    digital_input_stamper, eeprom, pounder, timers, DdsOutput, NetworkStack,
+    AFE0, AFE1,
 };
 
 pub struct NetStorage {
@@ -42,6 +43,7 @@ pub struct StabilizerDevices {
     pub adc_dac_timer: timers::SamplingTimer,
     pub timestamp_timer: timers::TimestampTimer,
     pub net: NetworkDevices,
+    pub cycle_counter: CycleCounter,
 }
 
 /// The available Pounder-specific hardware interfaces.
@@ -831,6 +833,7 @@ pub fn setup(
         net: network_devices,
         adc_dac_timer: sampling_timer,
         timestamp_timer,
+        cycle_counter: CycleCounter::new(core.DWT, ccdr.clocks.c_ck()),
     };
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
@@ -839,9 +842,6 @@ pub fn setup(
 
     // Enable the instruction cache.
     core.SCB.enable_icache();
-
-    // Utilize the cycle counter for RTIC scheduling.
-    core.DWT.enable_cycle_counter();
 
     (stabilizer, pounder)
 }
