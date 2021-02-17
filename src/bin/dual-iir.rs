@@ -14,8 +14,8 @@ use serde::Deserialize;
 
 use dsp::iir;
 use hardware::{
-    Adc0Input, Adc1Input, CycleCounter, Dac0Output, Dac1Output, NetworkStack,
-    AFE0, AFE1, AfeGain,
+    Adc0Input, Adc1Input, AfeGain, CycleCounter, Dac0Output, Dac1Output,
+    NetworkStack, AFE0, AFE1,
 };
 
 const SCALE: f32 = i16::MAX as _;

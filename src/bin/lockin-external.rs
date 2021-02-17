@@ -15,17 +15,52 @@ use stabilizer::{hardware, hardware::design_parameters};
 use dsp::{lockin::Lockin, rpll::RPLL, Accu};
 
 use hardware::{
-    Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
+    Adc0Input, Adc1Input, AfeGain, Dac0Output, Dac1Output, InputStamper, AFE0,
+    AFE1,
 };
 
-#[derive(Deserialize, StringSet)]
-pub struct Settings {
-    data: u32,
+#[derive(Debug, Clone, Copy, Deserialize, StringSet)]
+pub struct DspData {
+    // frequency settling time (log2 counter cycles)
+    frequency_settling_time: u8,
+
+    // phase settling time
+    phase_settling_time: u8,
+
+    // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
+    harmonic: i32,
+
+    // Demodulation LO phase offset
+    phase_offset: i32,
+
+    // Log2 lowpass time constant
+    time_constant: u8,
 }
 
-impl Settings {
-    pub fn new() -> Self {
-        Self { data: 5 }
+impl Default for DspData {
+    fn default() -> Self {
+        Self {
+            frequency_settling_time: 21,
+            phase_settling_time: 21,
+            harmonic: -1,
+            phase_offset: 0,
+            time_constant: 6,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, StringSet)]
+pub struct Settings {
+    afe: [AfeGain; 2],
+    dsp: DspData,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            afe: [AfeGain::G1, AfeGain::G1],
+            dsp: DspData::default(),
+        }
     }
 }
 
@@ -44,7 +79,9 @@ const APP: () = {
 
         timestamper: InputStamper,
         pll: RPLL,
+
         lockin: Lockin,
+        parameters: DspData,
     }
 
     #[init]
@@ -63,7 +100,7 @@ const APP: () = {
                 .unwrap()
             };
 
-            MqttInterface::new(mqtt_client, "stabilizer", Settings::new())
+            MqttInterface::new(mqtt_client, "stabilizer", Settings::default())
                 .unwrap()
         };
 
@@ -94,9 +131,9 @@ const APP: () = {
             dacs: stabilizer.dacs,
             timestamper: stabilizer.timestamper,
             clock: stabilizer.cycle_counter,
-
             pll,
             lockin: Lockin::default(),
+            parameters: DspData::default(),
         }
     }
 
@@ -107,7 +144,7 @@ const APP: () = {
     /// This is an implementation of a externally (DI0) referenced PLL lockin on the ADC0 signal.
     /// It outputs either I/Q or power/phase on DAC0/DAC1. Data is normalized to full scale.
     /// PLL bandwidth, filter bandwidth, slope, and x/y or power/phase post-filters are available.
-    #[task(binds=DMA1_STR4, resources=[adcs, dacs, lockin, timestamper, pll], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, dacs, lockin, timestamper, pll, parameters], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -120,6 +157,7 @@ const APP: () = {
         ];
 
         let lockin = c.resources.lockin;
+        let params = c.resources.parameters;
 
         let timestamp = c
             .resources
@@ -129,34 +167,27 @@ const APP: () = {
             .map(|t| t as i32);
         let (pll_phase, pll_frequency) = c.resources.pll.update(
             timestamp,
-            21, // frequency settling time (log2 counter cycles), TODO: expose
-            21, // phase settling time, TODO: expose
+            params.frequency_settling_time,
+            params.phase_settling_time,
         );
-
-        // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
-        let harmonic: i32 = -1; // TODO: expose
-
-        // Demodulation LO phase offset
-        let phase_offset: i32 = 0; // TODO: expose
-
-        // Log2 lowpass time constant
-        let time_constant: u8 = 6; // TODO: expose
 
         let sample_frequency = ((pll_frequency
             // half-up rounding bias
             // .wrapping_add(1 << design_parameters::SAMPLE_BUFFER_SIZE_LOG2 - 1)
             >> design_parameters::SAMPLE_BUFFER_SIZE_LOG2)
             as i32)
-            .wrapping_mul(harmonic);
-        let sample_phase =
-            phase_offset.wrapping_add(pll_phase.wrapping_mul(harmonic));
+            // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
+            .wrapping_mul(params.harmonic);
+        let sample_phase = params
+            .phase_offset
+            .wrapping_add(pll_phase.wrapping_mul(params.harmonic));
 
         let output = adc_samples[0]
             .iter()
             .zip(Accu::new(sample_phase, sample_frequency))
             // Convert to signed, MSB align the ADC sample.
             .map(|(&sample, phase)| {
-                lockin.update(sample as i16, phase, time_constant)
+                lockin.update(sample as i16, phase, params.time_constant)
             })
             .last()
             .unwrap();
@@ -201,11 +232,16 @@ const APP: () = {
         }
     }
 
-    #[task(priority = 1, resources=[mqtt_interface, afes])]
-    fn settings_update(c: settings_update::Context) {
-        let _settings = &c.resources.mqtt_interface.settings;
-        //c.resources.iir_ch.lock(|iir| *iir = settings.iir);
-        // TODO: Update AFEs
+    #[task(priority = 1, resources=[mqtt_interface, afes, parameters])]
+    fn settings_update(mut c: settings_update::Context) {
+        let settings = &c.resources.mqtt_interface.settings;
+
+        // Update AFEs
+        c.resources.afes.0.set_gain(settings.afe[0]);
+        c.resources.afes.1.set_gain(settings.afe[1]);
+
+        // Update DSP parameters.
+        c.resources.parameters.lock(|params| *params = settings.dsp);
     }
 
     #[task(binds = ETH, priority = 1)]

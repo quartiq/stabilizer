@@ -1,5 +1,5 @@
-use serde::Deserialize;
 use miniconf::StringSet;
+use serde::Deserialize;
 
 use super::{abs, copysign, macc, max, min};
 use core::f32;
