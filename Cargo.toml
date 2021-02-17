@@ -45,8 +45,9 @@ paste = "1"
 dsp = { path = "dsp" }
 ad9959 = { path = "ad9959" }
 smoltcp-nal = "0.1.0"
+miniconf = "0.1"
 
-[dependencies.miniconf]
+[patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf.git"
 branch = "rs/issue-21/terminal-array-elements"
 

@@ -8,10 +8,7 @@ edition = "2018"
 libm = "0.2.1"
 serde = { version = "1.0", features = ["derive"], default-features = false }
 generic-array = "0.14"
-
-[dependencies.miniconf]
-git = "https://github.com/quartiq/miniconf.git"
-branch = "rs/issue-21/terminal-array-elements"
+miniconf = "0.1"
 
 [dev-dependencies]
 easybench = "1.0"
