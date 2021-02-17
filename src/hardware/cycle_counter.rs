@@ -4,7 +4,6 @@ use stm32h7xx_hal::time::Hertz;
 
 /// A simple clock for counting elapsed milliseconds.
 pub struct CycleCounter {
-
     // The time of the next millisecond in the system.
     next_tick: Option<Instant>,
 
@@ -16,7 +15,6 @@ pub struct CycleCounter {
 }
 
 impl CycleCounter {
-
     /// Construct the cycle counting clock.
     ///
     /// # Args
