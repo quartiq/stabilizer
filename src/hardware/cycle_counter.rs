@@ -3,7 +3,7 @@ use rtic::cyccnt::{Duration, Instant, U32Ext};
 use stm32h7xx_hal::time::Hertz;
 
 pub struct CycleCounter {
-    next_tick: Instant,
+    next_tick: Option<Instant>,
     ticks: u32,
     increment: Duration,
 }
@@ -20,14 +20,18 @@ impl CycleCounter {
         Self {
             increment,
             ticks: 0,
-            next_tick: Instant::now() + increment,
+            next_tick: None,
         }
     }
 
     pub fn current_ms(&mut self) -> u32 {
+        if self.next_tick.is_none() {
+            self.next_tick = Some(Instant::now() + self.increment);
+        }
+
         let now = Instant::now();
-        while now > self.next_tick {
-            self.next_tick += self.increment;
+        while now > self.next_tick.unwrap() {
+            *self.next_tick.as_mut().unwrap() += self.increment;
             self.ticks += 1;
         }
 

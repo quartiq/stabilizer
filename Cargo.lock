@@ -351,7 +351,6 @@ dependencies = [
 [[package]]
 name = "derive_stringset"
 version = "0.1.0"
-source = "git+https://github.com/vertigo-designs/miniconf.git?branch=develop#256098cafc6db93b456b5014c8ef1b835b5e239d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -365,10 +364,10 @@ dependencies = [
  "criterion",
  "generic-array 0.14.4",
  "libm",
+ "miniconf",
  "ndarray",
  "rand",
  "serde",
- "serde-json-core 0.1.0",
 ]
 
 [[package]]
@@ -620,13 +619,12 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.1.0"
-source = "git+https://github.com/vertigo-designs/miniconf.git?branch=develop#256098cafc6db93b456b5014c8ef1b835b5e239d"
 dependencies = [
  "derive_stringset",
  "heapless",
  "minimq",
  "serde",
- "serde-json-core 0.2.0",
+ "serde-json-core",
 ]
 
 [[package]]
@@ -964,16 +962,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92d5161132722baa40d802cc70b15262b98258453e85e5d1d365c757c73869ae"
 dependencies = [
  "serde_derive",
-]
-
-[[package]]
-name = "serde-json-core"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbf406405ada9ef326ca78677324ac66994ff348fc48a16030be08caeed29825"
-dependencies = [
- "heapless",
- "serde",
 ]
 
 [[package]]

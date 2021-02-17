@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
+use miniconf::StringSet;
 
 use core::convert::TryFrom;
 use enum_iterator::IntoEnumIterator;
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, IntoEnumIterator)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, IntoEnumIterator, StringSet)]
 pub enum Gain {
     G1 = 0b00,
     G2 = 0b01,

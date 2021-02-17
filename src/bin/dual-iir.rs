@@ -15,7 +15,7 @@ use serde::Deserialize;
 use dsp::iir;
 use hardware::{
     Adc0Input, Adc1Input, CycleCounter, Dac0Output, Dac1Output, NetworkStack,
-    AFE0, AFE1,
+    AFE0, AFE1, AfeGain,
 };
 
 const SCALE: f32 = i16::MAX as _;
@@ -25,12 +25,18 @@ const IIR_CASCADE_LENGTH: usize = 1;
 
 #[derive(Debug, Deserialize, StringSet)]
 pub struct Settings {
-    test: u32,
+    afe: [AfeGain; 2],
+    iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
+    iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
 }
 
-impl Settings {
-    pub fn new() -> Self {
-        Self { test: 0 }
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            afe: [AfeGain::G1, AfeGain::G1],
+            iir_state: [[[0.; 5]; IIR_CASCADE_LENGTH]; 2],
+            iir_ch: [[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2],
+        }
     }
 }
 
@@ -45,7 +51,7 @@ const APP: () = {
         clock: CycleCounter,
 
         // Format: iir_state[ch][cascade-no][coeff]
-        #[init([[iir::Vec5([0.; 5]); IIR_CASCADE_LENGTH]; 2])]
+        #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
         iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
         #[init([[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2])]
         iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
@@ -67,7 +73,7 @@ const APP: () = {
                 .unwrap()
             };
 
-            MqttInterface::new(mqtt_client, "stabilizer", Settings::new())
+            MqttInterface::new(mqtt_client, "stabilizer", Settings::default())
                 .unwrap()
         };
 
@@ -160,11 +166,19 @@ const APP: () = {
         }
     }
 
-    #[task(priority = 1, resources=[mqtt_interface, afes, iir_ch])]
-    fn settings_update(c: settings_update::Context) {
-        let _settings = &c.resources.mqtt_interface.settings;
-        //c.resources.iir_ch.lock(|iir| *iir = settings.iir);
-        // TODO: Update AFEs
+    #[task(priority = 1, resources=[mqtt_interface, afes, iir_ch, iir_state])]
+    fn settings_update(mut c: settings_update::Context) {
+        let settings = &c.resources.mqtt_interface.settings;
+
+        // Update the IIR channels.
+        c.resources.iir_ch.lock(|iir| *iir = settings.iir_ch);
+
+        // Update the IIR states.
+        c.resources.iir_state.lock(|iir| *iir = settings.iir_state);
+
+        // Update AFEs
+        c.resources.afes.0.set_gain(settings.afe[0]);
+        c.resources.afes.1.set_gain(settings.afe[1]);
     }
 
     #[task(binds = ETH, priority = 1)]
