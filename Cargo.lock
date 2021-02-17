@@ -351,6 +351,7 @@ dependencies = [
 [[package]]
 name = "derive_stringset"
 version = "0.1.0"
+source = "git+https://github.com/quartiq/miniconf.git?branch=rs/issue-21/terminal-array-elements#b93924e81ad860efd9dcda8df2ea901a579958e2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -619,6 +620,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.1.0"
+source = "git+https://github.com/quartiq/miniconf.git?branch=rs/issue-21/terminal-array-elements#b93924e81ad860efd9dcda8df2ea901a579958e2"
 dependencies = [
  "derive_stringset",
  "heapless",
@@ -1020,7 +1022,8 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.1.0"
-source = "git+https://github.com/vertigo-designs/smoltcp-nal.git?branch=main#6a656dd78c5f7543475e95c0eaf81def95fc5a10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4e5aeb4818706fd74c35917692008d29a5314483c8180300a582253718ce57a"
 dependencies = [
  "embedded-nal",
  "heapless",

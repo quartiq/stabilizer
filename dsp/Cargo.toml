@@ -9,6 +9,10 @@ libm = "0.2.1"
 serde = { version = "1.0", features = ["derive"], default-features = false }
 generic-array = "0.14"
 
+[dependencies.miniconf]
+git = "https://github.com/quartiq/miniconf.git"
+branch = "rs/issue-21/terminal-array-elements"
+
 [dev-dependencies]
 criterion = "0.3"
 rand = "0.8"
