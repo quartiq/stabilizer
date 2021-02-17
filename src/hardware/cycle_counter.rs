@@ -2,13 +2,29 @@ use rtic::cyccnt::{Duration, Instant, U32Ext};
 
 use stm32h7xx_hal::time::Hertz;
 
+/// A simple clock for counting elapsed milliseconds.
 pub struct CycleCounter {
+
+    // The time of the next millisecond in the system.
     next_tick: Option<Instant>,
+
+    // The number of elapsed milliseconds recorded.
     ticks: u32,
+
+    // The increment amount of clock cycles for each elapsed millisecond.
     increment: Duration,
 }
 
 impl CycleCounter {
+
+    /// Construct the cycle counting clock.
+    ///
+    /// # Args
+    /// * `dwt` - The debug watch and trace unit of the CPU core.
+    /// * `cpu_frequency` - The frequency that the cycle counter counts at.
+    ///
+    /// # Returns
+    /// A clock that can be used for measuring elapsed milliseconds.
     pub fn new(
         mut dwt: cortex_m::peripheral::DWT,
         cpu_frequency: impl Into<Hertz>,
@@ -24,6 +40,18 @@ impl CycleCounter {
         }
     }
 
+    /// Get the current number of milliseconds elapsed in the system.
+    ///
+    /// # Note
+    /// This function must be called more often than once per 10 seconds to prevent internal
+    /// wrapping of the cycle counter.
+    ///
+    /// The internal millisecond accumulator will overflow just shy of every 50 days.
+    ///
+    /// This function does not start counting milliseconds until the very first invocation.
+    ///
+    /// # Returns
+    /// The number of elapsed milliseconds since the system started.
     pub fn current_ms(&mut self) -> u32 {
         if self.next_tick.is_none() {
             self.next_tick = Some(Instant::now() + self.increment);
