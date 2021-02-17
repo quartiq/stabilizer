@@ -1,24 +1,23 @@
 #![deny(warnings)]
 #![no_std]
 #![no_main]
-#![cfg_attr(feature = "nightly", feature(core_intrinsics))]
 
-use dsp::{iir_int, lockin::Lockin, Accu};
+use dsp::{lockin::Lockin, Accu};
 use hardware::{Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
-use stabilizer::{hardware, SAMPLE_BUFFER_SIZE, SAMPLE_BUFFER_SIZE_LOG2};
+use stabilizer::{hardware, hardware::design_parameters};
 
 // A constant sinusoid to send on the DAC output.
 // Full-scale gives a +/- 10V amplitude waveform. Scale it down to give +/- 1V.
 const ONE: i16 = (0.1 * u16::MAX as f32) as _;
 const SQRT2: i16 = (ONE as f32 * 0.707) as _;
-const DAC_SEQUENCE: [i16; SAMPLE_BUFFER_SIZE] =
+const DAC_SEQUENCE: [i16; design_parameters::SAMPLE_BUFFER_SIZE] =
     [ONE, SQRT2, 0, -SQRT2, -ONE, -SQRT2, 0, SQRT2];
 
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
-        adc1: Adc1Input,
+        adc: Adc1Input,
         dacs: (Dac0Output, Dac1Output),
 
         lockin: Lockin,
@@ -29,10 +28,6 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let lockin = Lockin::new(
-            iir_int::Vec5::lowpass(1e-3, 0.707, 2.), // TODO: expose
-        );
-
         // Enable ADC/DAC events
         stabilizer.adcs.1.start();
         stabilizer.dacs.0.start();
@@ -42,9 +37,9 @@ const APP: () = {
         stabilizer.adc_dac_timer.start();
 
         init::LateResources {
-            lockin,
+            lockin: Lockin::default(),
             afes: stabilizer.afes,
-            adc1: stabilizer.adcs.1,
+            adc: stabilizer.adcs.1,
             dacs: stabilizer.dacs,
         }
     }
@@ -67,10 +62,10 @@ const APP: () = {
     /// the same time bounds, meeting one also means the other is also met.
     ///
     /// TODO: Document
-    #[task(binds=DMA1_STR4, resources=[adc1, dacs, lockin], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adc, dacs, lockin], priority=2)]
     fn process(c: process::Context) {
         let lockin = c.resources.lockin;
-        let adc_samples = c.resources.adc1.acquire_buffer();
+        let adc_samples = c.resources.adc.acquire_buffer();
         let dac_samples = [
             c.resources.dacs.0.acquire_buffer(),
             c.resources.dacs.1.acquire_buffer(),
@@ -84,13 +79,18 @@ const APP: () = {
 
         // Reference phase and frequency are known.
         let pll_phase = 0;
-        let pll_frequency = 1i32 << (32 - SAMPLE_BUFFER_SIZE_LOG2);
+        let pll_frequency =
+            1i32 << (32 - design_parameters::SAMPLE_BUFFER_SIZE_LOG2);
 
         // Harmonic index of the LO: -1 to _de_modulate the fundamental
-        let harmonic: i32 = -1;
+        let harmonic: i32 = -1; // TODO: expose
 
         // Demodulation LO phase offset
-        let phase_offset: i32 = (0.25 * i32::MAX as f32) as i32;
+        let phase_offset: i32 = (0.25 * i32::MAX as f32) as i32; // TODO: expose
+
+        // Log2 lowpass time constant.
+        let time_constant: u8 = 8;
+
         let sample_frequency = (pll_frequency as i32).wrapping_mul(harmonic);
         let sample_phase = phase_offset
             .wrapping_add((pll_phase as i32).wrapping_mul(harmonic));
@@ -101,24 +101,14 @@ const APP: () = {
             .zip(Accu::new(sample_phase, sample_frequency))
             // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
             .map(|(&sample, phase)| {
-                lockin.update((sample as i16 as i32) << 16, phase)
+                lockin.update(sample as i16, phase, time_constant)
             })
             // Decimate
             .last()
             .unwrap();
 
-        // convert i/q to power/phase,
-        let power_phase = true; // TODO: expose
-
-        let output = if power_phase {
-            // Convert from IQ to power and phase.
-            [output.abs_sqr(), output.arg()]
-        } else {
-            [output.0, output.1]
-        };
-
         for value in dac_samples[1].iter_mut() {
-            *value = (output[1] >> 16) as u16 ^ 0x8000;
+            *value = (output.arg() >> 16) as u16 ^ 0x8000;
         }
     }
 

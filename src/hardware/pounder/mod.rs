@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-mod attenuators;
+pub mod attenuators;
 mod dds_output;
 pub mod hrtimer;
 mod rf_power;

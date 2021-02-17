@@ -1,41 +1,26 @@
-use super::{
-    iir_int::{Vec5, IIR},
-    Complex,
-};
-use serde::{Deserialize, Serialize};
+use super::{lowpass::Lowpass, Complex};
+use generic_array::typenum::U2;
 
-#[derive(Copy, Clone, Default, Deserialize, Serialize)]
+#[derive(Clone, Default)]
 pub struct Lockin {
-    iir: IIR,
-    state: [Vec5; 2],
+    state: [Lowpass<U2>; 2],
 }
 
 impl Lockin {
-    /// Create a new Lockin with given IIR coefficients.
-    pub fn new(ba: Vec5) -> Self {
-        Self {
-            iir: IIR { ba },
-            state: [Vec5::default(); 2],
-        }
-    }
-
     /// Update the lockin with a sample taken at a given phase.
-    pub fn update(&mut self, sample: i32, phase: i32) -> Complex<i32> {
+    /// The lowpass has a gain of `1 << k`.
+    pub fn update(&mut self, sample: i16, phase: i32, k: u8) -> Complex<i32> {
         // Get the LO signal for demodulation.
         let lo = Complex::from_angle(phase);
 
-        // Mix with the LO signal, filter with the IIR lowpass,
+        // Mix with the LO signal
+        let mix = lo * sample;
+
+        // Filter with the IIR lowpass,
         // return IQ (in-phase and quadrature) data.
-        // Note: 32x32 -> 64 bit multiplications are pretty much free.
         Complex(
-            self.iir.update(
-                &mut self.state[0],
-                ((sample as i64 * lo.0 as i64) >> 32) as _,
-            ),
-            self.iir.update(
-                &mut self.state[1],
-                ((sample as i64 * lo.1 as i64) >> 32) as _,
-            ),
+            self.state[0].update(mix.0, k),
+            self.state[1].update(mix.1, k),
         )
     }
 }

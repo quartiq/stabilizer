@@ -1,29 +1,25 @@
 #![deny(warnings)]
 #![no_std]
 #![no_main]
-#![cfg_attr(feature = "nightly", feature(core_intrinsics))]
 
 use stm32h7xx_hal as hal;
 
 use rtic::cyccnt::{Instant, U32Ext};
 
-use stabilizer::{hardware, ADC_SAMPLE_TICKS_LOG2, SAMPLE_BUFFER_SIZE_LOG2};
-
 use miniconf::{
     embedded_nal::{IpAddr, Ipv4Addr},
+    minimq,
     MqttInterface, StringSet,
 };
-use serde::Deserialize;
 
-use dsp::{iir, iir_int, lockin::Lockin, rpll::RPLL, Accu};
+use serde::Deserialize;
+use stabilizer::{hardware, hardware::design_parameters};
+
+use dsp::{lockin::Lockin, rpll::RPLL, Accu};
+
 use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
 };
-
-const SCALE: f32 = i16::MAX as _;
-
-// The number of cascaded IIR biquads per channel. Select 1 or 2!
-const IIR_CASCADE_LENGTH: usize = 1;
 
 #[derive(Deserialize, StringSet)]
 pub struct Settings {
@@ -42,13 +38,7 @@ const APP: () = {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        mqtt_interface: MqttInterface<Settings, hardware::NetworkStack>,
-
-        // Format: iir_state[ch][cascade-no][coeff]
-        #[init([[iir::Vec5([0.; 5]); IIR_CASCADE_LENGTH]; 2])]
-        iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
-        #[init([[iir::IIR::new(1./(1 << 16) as f32, -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2])]
-        iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+        mqtt_interface: MqttInterface<Settings, hardware::NetworkStack, minimq::consts::U256>,
 
         timestamper: InputStamper,
         pll: RPLL,
@@ -60,19 +50,23 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let broker = IpAddr::V4(Ipv4Addr::new(10, 34, 16, 1));
-        let mqtt_interface = MqttInterface::new(
-            stabilizer.net.stack,
-            "stabilizer/lockin",
-            broker,
-            Settings::new(),
-        )
-        .unwrap();
+        let mqtt_interface = {
+            let mqtt_client = {
+                let broker = IpAddr::V4(Ipv4Addr::new(10, 34, 16, 1));
+                minimq::MqttClient::new(broker, "stabilizer", stabilizer.net.stack).unwrap()
+            };
 
-        let pll = RPLL::new(ADC_SAMPLE_TICKS_LOG2 + SAMPLE_BUFFER_SIZE_LOG2);
+            MqttInterface::new(
+                mqtt_client,
+                "stabilizer",
+                Settings::new(),
+            )
+            .unwrap()
+        };
 
-        let lockin = Lockin::new(
-            iir_int::Vec5::lowpass(1e-3, 0.707, 2.), // TODO: expose
+        let pll = RPLL::new(
+            design_parameters::ADC_SAMPLE_TICKS_LOG2
+                + design_parameters::SAMPLE_BUFFER_SIZE_LOG2,
         );
 
         // Enable ADC/DAC events
@@ -87,6 +81,9 @@ const APP: () = {
         // Start sampling ADCs.
         stabilizer.adc_dac_timer.start();
 
+        // Enable the timestamper.
+        stabilizer.timestamper.start();
+
         init::LateResources {
             mqtt_interface,
             afes: stabilizer.afes,
@@ -95,7 +92,7 @@ const APP: () = {
             timestamper: stabilizer.timestamper,
 
             pll,
-            lockin,
+            lockin: Lockin::default(),
         }
     }
 
@@ -106,7 +103,7 @@ const APP: () = {
     /// This is an implementation of a externally (DI0) referenced PLL lockin on the ADC0 signal.
     /// It outputs either I/Q or power/phase on DAC0/DAC1. Data is normalized to full scale.
     /// PLL bandwidth, filter bandwidth, slope, and x/y or power/phase post-filters are available.
-    #[task(binds=DMA1_STR4, resources=[adcs, dacs, iir_state, iir_ch, lockin, timestamper, pll], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, dacs, lockin, timestamper, pll], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -118,30 +115,34 @@ const APP: () = {
             c.resources.dacs.1.acquire_buffer(),
         ];
 
-        let iir_ch = c.resources.iir_ch;
-        let iir_state = c.resources.iir_state;
         let lockin = c.resources.lockin;
 
         let timestamp = c
             .resources
             .timestamper
             .latest_timestamp()
-            .unwrap_or_else(|t| t) // Ignore timer capture overflows.
+            .unwrap_or(None) // Ignore data from timer capture overflows.
             .map(|t| t as i32);
         let (pll_phase, pll_frequency) = c.resources.pll.update(
             timestamp,
-            22, // frequency settling time (log2 counter cycles), TODO: expose
-            22, // phase settling time, TODO: expose
+            21, // frequency settling time (log2 counter cycles), TODO: expose
+            21, // phase settling time, TODO: expose
         );
 
         // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
         let harmonic: i32 = -1; // TODO: expose
-                                // Demodulation LO phase offset
+
+        // Demodulation LO phase offset
         let phase_offset: i32 = 0; // TODO: expose
 
+        // Log2 lowpass time constant
+        let time_constant: u8 = 6; // TODO: expose
+
         let sample_frequency = ((pll_frequency
-            // .wrapping_add(1 << SAMPLE_BUFFER_SIZE_LOG2 - 1)  // half-up rounding bias
-            >> SAMPLE_BUFFER_SIZE_LOG2) as i32)
+            // half-up rounding bias
+            // .wrapping_add(1 << design_parameters::SAMPLE_BUFFER_SIZE_LOG2 - 1)
+            >> design_parameters::SAMPLE_BUFFER_SIZE_LOG2)
+            as i32)
             .wrapping_mul(harmonic);
         let sample_phase =
             phase_offset.wrapping_add(pll_phase.wrapping_mul(harmonic));
@@ -151,39 +152,23 @@ const APP: () = {
             .zip(Accu::new(sample_phase, sample_frequency))
             // Convert to signed, MSB align the ADC sample.
             .map(|(&sample, phase)| {
-                lockin.update((sample as i16 as i32) << 16, phase)
+                lockin.update(sample as i16, phase, time_constant)
             })
             .last()
             .unwrap();
 
-        // convert i/q to power/phase,
-        let power_phase = true; // TODO: expose
-
-        let mut output = if power_phase {
+        let conf = "frequency_discriminator";
+        let output = match conf {
             // Convert from IQ to power and phase.
-            [output.abs_sqr() as _, output.arg() as _]
-        } else {
-            [output.0 as _, output.1 as _]
+            "power_phase" => [(output.log2() << 24) as _, output.arg()],
+            "frequency_discriminator" => [pll_frequency as _, output.arg()],
+            _ => [output.0, output.1],
         };
 
-        // Filter power and phase through IIR filters.
-        // Note: Normalization to be done in filters. Phase will wrap happily.
-        for j in 0..iir_state[0].len() {
-            for k in 0..output.len() {
-                output[k] =
-                    iir_ch[k][j].update(&mut iir_state[k][j], output[k]);
-            }
-        }
-
-        // Note(unsafe): range clipping to i16 is ensured by IIR filters above.
         // Convert to DAC data.
         for i in 0..dac_samples[0].len() {
-            unsafe {
-                dac_samples[0][i] =
-                    output[0].to_int_unchecked::<i16>() as u16 ^ 0x8000;
-                dac_samples[1][i] =
-                    output[1].to_int_unchecked::<i16>() as u16 ^ 0x8000;
-            }
+            dac_samples[0][i] = (output[0] >> 16) as u16 ^ 0x8000;
+            dac_samples[1][i] = (output[1] >> 16) as u16 ^ 0x8000;
         }
     }
 
@@ -225,7 +210,7 @@ const APP: () = {
         }
     }
 
-    #[task(priority = 1, resources=[mqtt_interface, afes, iir_ch])]
+    #[task(priority = 1, resources=[mqtt_interface, afes])]
     fn settings_update(c: settings_update::Context) {
         let _settings = &c.resources.mqtt_interface.settings;
         //c.resources.iir_ch.lock(|iir| *iir = settings.iir);

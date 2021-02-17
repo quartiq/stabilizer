@@ -1,7 +1,6 @@
 #![deny(warnings)]
 #![no_std]
 #![no_main]
-#![cfg_attr(feature = "nightly", feature(core_intrinsics))]
 
 use stm32h7xx_hal as hal;
 
@@ -11,6 +10,7 @@ use stabilizer::hardware;
 
 use miniconf::{
     embedded_nal::{IpAddr, Ipv4Addr},
+    minimq,
     MqttInterface, StringSet,
 };
 use serde::Deserialize;
@@ -44,7 +44,7 @@ const APP: () = {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        mqtt_interface: MqttInterface<Settings, NetworkStack>,
+        mqtt_interface: MqttInterface<Settings, NetworkStack, minimq::consts::U256>,
 
         // Format: iir_state[ch][cascade-no][coeff]
         #[init([[iir::Vec5([0.; 5]); IIR_CASCADE_LENGTH]; 2])]
@@ -58,14 +58,19 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let broker = IpAddr::V4(Ipv4Addr::new(10, 34, 16, 1));
-        let mqtt_interface = MqttInterface::new(
-            stabilizer.net.stack,
-            "stabilizer",
-            broker,
-            Settings::new(),
-        )
-        .unwrap();
+        let mqtt_interface = {
+            let mqtt_client = {
+                let broker = IpAddr::V4(Ipv4Addr::new(10, 34, 16, 1));
+                minimq::MqttClient::new(broker, "stabilizer", stabilizer.net.stack).unwrap()
+            };
+
+            MqttInterface::new(
+                mqtt_client,
+                "stabilizer",
+                Settings::new(),
+            )
+            .unwrap()
+        };
 
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();

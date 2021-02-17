@@ -1,0 +1,45 @@
+name: Release binaries
+
+on:
+  push:
+    tags: ['v*']
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: thumbv7em-none-eabihf
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --features ""
+      - run: >
+          zip bin.zip
+          target/*/release/dual-iir
+          target/*/release/lockin-external
+          target/*/release/lockin-internal
+      - id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+          draft: false
+          prerelease: false
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./bin.zip
+          asset_name: stabilizer-${{ github.ref }}.zip
+          asset_content_type: application/zip

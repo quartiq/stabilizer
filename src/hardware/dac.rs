@@ -52,9 +52,9 @@
 ///! served promptly after the transfer completes.
 use stm32h7xx_hal as hal;
 
-use crate::SAMPLE_BUFFER_SIZE;
-
+use super::design_parameters::SAMPLE_BUFFER_SIZE;
 use super::timers;
+
 use hal::dma::{
     dma::{DMAReq, DmaConfig},
     traits::TargetAddress,

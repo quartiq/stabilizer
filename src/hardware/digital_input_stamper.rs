@@ -44,8 +44,12 @@ impl InputStamper {
     ) -> Self {
         // Utilize the TIM5 CH4 as an input capture channel - use TI4 (the DI0 input trigger) as the
         // capture source.
-        let input_capture =
-            timer_channel.into_input_capture(timers::CaptureTrigger::Input24);
+        let mut input_capture =
+            timer_channel.into_input_capture(timers::tim5::CaptureSource4::TI4);
+
+        // Do not prescale the input capture signal - require 8 consecutive samples to record an
+        // incoming event - this prevents spurious glitches from triggering captures.
+        input_capture.configure_filter(timers::InputFilter::Div1N8);
 
         Self {
             capture_channel: input_capture,

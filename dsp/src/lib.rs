@@ -87,6 +87,7 @@ mod cossin;
 pub mod iir;
 pub mod iir_int;
 pub mod lockin;
+pub mod lowpass;
 pub mod pll;
 pub mod rpll;
 pub mod unwrap;

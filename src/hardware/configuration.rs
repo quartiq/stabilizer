@@ -1,14 +1,6 @@
 ///! Stabilizer hardware configuration
 ///!
 ///! This file contains all of the hardware-specific configuration of Stabilizer.
-use crate::ADC_SAMPLE_TICKS;
-
-#[cfg(feature = "pounder_v1_1")]
-use crate::SAMPLE_BUFFER_SIZE;
-
-#[cfg(feature = "pounder_v1_1")]
-use core::convert::TryInto;
-
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
@@ -149,6 +141,11 @@ pub fn setup(
     let dma_streams =
         hal::dma::dma::StreamsTuple::new(device.DMA1, ccdr.peripheral.DMA1);
 
+    // Early, before the DMA1 peripherals (#272)
+    #[cfg(feature = "pounder_v1_1")]
+    let dma2_streams =
+        hal::dma::dma::StreamsTuple::new(device.DMA2, ccdr.peripheral.DMA2);
+
     // Configure timer 2 to trigger conversions for the ADC
     let mut sampling_timer = {
         // The timer frequency is manually adjusted below, so the 1KHz setting here is a
@@ -164,7 +161,8 @@ pub fn setup(
         timer2.set_tick_freq(design_parameters::TIMER_FREQUENCY);
 
         let mut sampling_timer = timers::SamplingTimer::new(timer2);
-        sampling_timer.set_period_ticks((ADC_SAMPLE_TICKS - 1) as u32);
+        sampling_timer
+            .set_period_ticks((design_parameters::ADC_SAMPLE_TICKS - 1) as u32);
 
         // The sampling timer is used as the master timer for the shadow-sampling timer. Thus,
         // it generates a trigger whenever it is enabled.
@@ -188,7 +186,8 @@ pub fn setup(
 
         let mut shadow_sampling_timer =
             timers::ShadowSamplingTimer::new(timer3);
-        shadow_sampling_timer.set_period_ticks(ADC_SAMPLE_TICKS - 1);
+        shadow_sampling_timer
+            .set_period_ticks(design_parameters::ADC_SAMPLE_TICKS - 1);
 
         // The shadow sampling timer is a slave-mode timer to the sampling timer. It should
         // always be in-sync - thus, we configure it to operate in slave mode using "Trigger
@@ -639,7 +638,7 @@ pub fn setup(
             let ref_clk: hal::time::Hertz =
                 design_parameters::DDS_REF_CLK.into();
 
-            let ad9959 = ad9959::Ad9959::new(
+            let mut ad9959 = ad9959::Ad9959::new(
                 qspi_interface,
                 reset_pin,
                 &mut io_update,
@@ -649,6 +648,8 @@ pub fn setup(
                 design_parameters::DDS_MULTIPLIER,
             )
             .unwrap();
+
+            ad9959.self_test().unwrap();
 
             // Return IO_Update
             gpiog.pg7 = io_update.into_analog();
@@ -762,7 +763,8 @@ pub fn setup(
                 let sample_frequency = {
                     let timer_frequency: hal::time::Hertz =
                         design_parameters::TIMER_FREQUENCY.into();
-                    timer_frequency.0 as f32 / ADC_SAMPLE_TICKS as f32
+                    timer_frequency.0 as f32
+                        / design_parameters::ADC_SAMPLE_TICKS as f32
                 };
 
                 let sample_period = 1.0 / sample_frequency;
@@ -779,11 +781,6 @@ pub fn setup(
 
         #[cfg(feature = "pounder_v1_1")]
         let pounder_stamper = {
-            let dma2_streams = hal::dma::dma::StreamsTuple::new(
-                device.DMA2,
-                ccdr.peripheral.DMA2,
-            );
-
             let etr_pin = gpioa.pa0.into_alternate_af3();
 
             // The frequency in the constructor is dont-care, as we will modify the period + clock
@@ -797,22 +794,13 @@ pub fn setup(
             // Pounder is configured to generate a 500MHz reference clock, so a 125MHz sync-clock is
             // output. As a result, dividing the 125MHz sync-clk provides a 31.25MHz tick rate for
             // the timestamp timer. 31.25MHz corresponds with a 32ns tick rate.
+            // This is less than fCK_INT/3 of the timer as required for oversampling the trigger.
             timestamp_timer.set_external_clock(timers::Prescaler::Div4);
             timestamp_timer.start();
 
-            // We want the pounder timestamp timer to overflow once per batch.
-            let tick_ratio = {
-                let sync_clk_mhz: f32 = design_parameters::DDS_SYSTEM_CLK.0
-                    as f32
-                    / design_parameters::DDS_SYNC_CLK_DIV as f32;
-                sync_clk_mhz / design_parameters::TIMER_FREQUENCY.0 as f32
-            };
-
-            let period = (tick_ratio
-                * ADC_SAMPLE_TICKS as f32
-                * SAMPLE_BUFFER_SIZE as f32) as u32
-                / 4;
-            timestamp_timer.set_period_ticks((period - 1).try_into().unwrap());
+            // Set the timer to wrap at the u16 boundary to meet the PLL periodicity.
+            // Scale and wrap before or after the PLL.
+            timestamp_timer.set_period_ticks(u16::MAX);
             let tim8_channels = timestamp_timer.channels();
 
             pounder::timestamp::Timestamper::new(

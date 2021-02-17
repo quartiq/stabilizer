@@ -1,13 +1,14 @@
 ///! The sampling timer is used for managing ADC sampling and external reference timestamping.
 use super::hal;
 
-/// The source of an input capture trigger.
-#[allow(dead_code)]
-pub enum CaptureTrigger {
-    Input13 = 0b01,
-    Input24 = 0b10,
-    TriggerInput = 0b11,
-}
+use hal::stm32::{
+    // TIM1 and TIM8 have identical registers.
+    tim1 as __tim8,
+    tim2 as __tim2,
+    // TIM2 and TIM5 have identical registers.
+    tim2 as __tim5,
+    tim3 as __tim3,
+};
 
 /// The event that should generate an external trigger from the peripheral.
 #[allow(dead_code)]
@@ -45,6 +46,13 @@ pub enum Prescaler {
 pub enum SlaveMode {
     Disabled = 0,
     Trigger = 0b0110,
+}
+
+/// Optional input capture preconditioning filter configurations.
+#[allow(dead_code)]
+pub enum InputFilter {
+    Div1N1 = 0b0000,
+    Div1N8 = 0b0011,
 }
 
 macro_rules! timer_channels {
@@ -225,6 +233,8 @@ macro_rules! timer_channels {
 
     ($index:expr, $TY:ty, $ccmrx:expr, $size:ty) => {
         paste::paste! {
+            pub use super::[< __ $TY:lower >]::[< $ccmrx _input >]::[< CC $index S_A>] as [< CaptureSource $index >];
+
             /// A capture/compare channel of the timer.
             pub struct [< Channel $index >] {}
 
@@ -267,12 +277,10 @@ macro_rules! timer_channels {
                 /// # Args
                 /// * `input` - The input source for the input capture event.
                 #[allow(dead_code)]
-                pub fn into_input_capture(self, input: super::CaptureTrigger) -> [< Channel $index InputCapture >]{
+                pub fn into_input_capture(self, input: [< CaptureSource $index >]) -> [< Channel $index InputCapture >]{
                     let regs = unsafe { &*<$TY>::ptr() };
 
-                    // Note(unsafe): The bit configuration is guaranteed to be valid by the
-                    // CaptureTrigger enum definition.
-                    regs.[< $ccmrx _input >]().modify(|_, w| unsafe { w.[< cc $index s>]().bits(input as u8) });
+                    regs.[< $ccmrx _input >]().modify(|_, w| w.[< cc $index s>]().variant(input));
 
                     [< Channel $index InputCapture >] {}
                 }
@@ -316,6 +324,9 @@ macro_rules! timer_channels {
                 /// Enable the input capture to begin capturing timer values.
                 #[allow(dead_code)]
                 pub fn enable(&mut self) {
+                    // Read the latest input capture to clear any pending data in the register.
+                    let _ = self.latest_capture();
+
                     // Note(unsafe): This channel owns all access to the specific timer channel.
                     // Only atomic operations on completed on the timer registers.
                     let regs = unsafe { &*<$TY>::ptr() };
@@ -329,6 +340,18 @@ macro_rules! timer_channels {
                     // Only atomic operations on completed on the timer registers.
                     let regs = unsafe { &*<$TY>::ptr() };
                     regs.sr.read().[< cc $index of >]().bit_is_set()
+                }
+
+                /// Configure the input capture input pre-filter.
+                ///
+                /// # Args
+                /// * `filter` - The desired input filter stage configuration. Defaults to disabled.
+                #[allow(dead_code)]
+                pub fn configure_filter(&mut self, filter: super::InputFilter) {
+                    // Note(unsafe): This channel owns all access to the specific timer channel.
+                    // Only atomic operations on completed on the timer registers.
+                    let regs = unsafe { &*<$TY>::ptr() };
+                    regs.[< $ccmrx _input >]().modify(|_, w| w.[< ic $index f >]().bits(filter as u8));
                 }
             }
 
