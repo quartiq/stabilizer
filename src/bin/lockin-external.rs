@@ -125,12 +125,19 @@ const APP: () = {
             .last()
             .unwrap();
 
-        let conf = "frequency_discriminator";
+        #[allow(dead_code)]
+        enum Conf {
+            PowerPhase,
+            FrequencyDiscriminator,
+            Quadrature,
+        }
+
+        let conf = Conf::FrequencyDiscriminator; // TODO: expose
         let output = match conf {
             // Convert from IQ to power and phase.
-            "power_phase" => [(output.log2() << 24) as _, output.arg()],
-            "frequency_discriminator" => [pll_frequency as _, output.arg()],
-            _ => [output.re, output.im],
+            Conf::PowerPhase => [(output.log2() << 24) as _, output.arg()],
+            Conf::FrequencyDiscriminator => [pll_frequency as _, output.arg()],
+            Conf::Quadrature => [output.re, output.im],
         };
 
         // Convert to DAC data.
