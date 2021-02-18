@@ -80,22 +80,26 @@ where
         .fold(y0, |y, xa| y + xa)
 }
 
-pub mod accu;
 mod atan2;
+pub use atan2::*;
+mod accu;
+pub use accu::*;
 mod complex;
+pub use complex::*;
 mod cossin;
+pub use cossin::*;
 pub mod iir;
 pub mod iir_int;
-pub mod lockin;
-pub mod lowpass;
-pub mod pll;
-pub mod rpll;
-pub mod unwrap;
-
-pub use accu::Accu;
-pub use atan2::atan2;
-pub use complex::Complex;
-pub use cossin::cossin;
+mod lockin;
+pub use lockin::*;
+mod lowpass;
+pub use lowpass::*;
+mod pll;
+pub use pll::*;
+mod rpll;
+pub use rpll::*;
+mod unwrap;
+pub use unwrap::*;
 
 #[cfg(test)]
 pub mod testing;

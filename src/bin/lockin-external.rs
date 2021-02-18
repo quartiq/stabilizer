@@ -6,7 +6,7 @@ use stm32h7xx_hal as hal;
 
 use stabilizer::{hardware, hardware::design_parameters};
 
-use dsp::{lockin::Lockin, rpll::RPLL, Accu};
+use dsp::{Accu, FastInt, Lockin, RPLL};
 use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
 };
@@ -127,7 +127,7 @@ const APP: () = {
             // Convert from IQ to power and phase.
             "power_phase" => [(output.log2() << 24) as _, output.arg()],
             "frequency_discriminator" => [pll_frequency as _, output.arg()],
-            _ => [output.0, output.1],
+            _ => [output.re, output.im],
         };
 
         // Convert to DAC data.

@@ -31,7 +31,7 @@ pub fn complex_isclose(
     rtol: f32,
     atol: f32,
 ) -> bool {
-    isclosef(a.0, b.0, rtol, atol) && isclosef(a.1, b.1, rtol, atol)
+    isclosef(a.re, b.re, rtol, atol) && isclosef(a.im, b.im, rtol, atol)
 }
 
 pub fn complex_allclose(
