@@ -80,6 +80,23 @@ where
         .fold(y0, |y, xa| y + xa)
 }
 
+/// Combine high and low i32 into a single downscaled i32, saturating the type.
+pub fn saturating_scale(lo: i32, hi: i32, shift: u32) -> i32 {
+    debug_assert!(shift & 31 == shift);
+
+    let shift_hi = 31 - shift;
+    debug_assert!(shift_hi & 31 == shift_hi);
+
+    let over = hi >> shift;
+    if over < -1 {
+        i32::MIN
+    } else if over > 0 {
+        i32::MAX
+    } else {
+        (lo >> shift) + (hi << shift_hi)
+    }
+}
+
 mod atan2;
 pub use atan2::*;
 mod accu;
