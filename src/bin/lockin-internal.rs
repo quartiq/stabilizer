@@ -101,12 +101,13 @@ const APP: () = {
             .zip(Accu::new(sample_phase, sample_frequency))
             // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
             .map(|(&sample, phase)| {
-                let s = (sample as i16 as i32) << (15 + 1);
+                let s = (sample as i16 as i32) << 16;
                 lockin.update(s, phase, time_constant)
             })
             // Decimate
             .last()
-            .unwrap();
+            .unwrap()
+            * 2; // Full scale assuming the 2f component is gone.
 
         for value in dac_samples[1].iter_mut() {
             *value = (output.arg() >> 16) as u16 ^ 0x8000;
