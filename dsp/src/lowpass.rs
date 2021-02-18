@@ -14,17 +14,17 @@ impl<N: ArrayLength<i32>> Lowpass<N> {
     /// Update the filter with a new sample.
     ///
     /// # Args
-    /// * `x`: Input data, needs `k` bits headroom.
-    /// * `k`: Log2 time constant, 0..31.
+    /// * `x`: Input data. Needs 1 bit headroom.
+    /// * `k`: Log2 time constant, 0..=31.
     ///
     /// # Return
-    /// Filtered output y, with gain of `1 << k`.
+    /// Filtered output y.
     pub fn update(&mut self, x: i32, k: u8) -> i32 {
         debug_assert!(k & 31 == k);
         // This is an unrolled and optimized first-order IIR loop
         // that works for all possible time constants.
-        // Note DF-II and the zeros at Nyquist.
-        let mut x = x << k;
+        // Note T-DF-I and the zeros at Nyquist.
+        let mut x = x;
         for y in self.y.iter_mut() {
             let dy = (x - *y + (1 << (k - 1))) >> k;
             *y += dy;

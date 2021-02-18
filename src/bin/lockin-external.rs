@@ -6,7 +6,7 @@ use stm32h7xx_hal as hal;
 
 use stabilizer::{hardware, hardware::design_parameters};
 
-use dsp::{Accu, FastInt, Lockin, RPLL};
+use dsp::{Accu, Complex, FastInt, Lockin, RPLL};
 use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
 };
@@ -112,15 +112,18 @@ const APP: () = {
         let sample_phase =
             phase_offset.wrapping_add(pll_phase.wrapping_mul(harmonic));
 
-        let output = adc_samples[0]
+        let output: Complex<i32> = adc_samples[0]
             .iter()
+            // Zip in the LO phase.
             .zip(Accu::new(sample_phase, sample_frequency))
-            // Convert to signed, MSB align the ADC sample.
+            // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
             .map(|(&sample, phase)| {
-                lockin.update(sample as i16, phase, time_constant)
+                let s = (sample as i16 as i32)
+                    << (15 - design_parameters::SAMPLE_BUFFER_SIZE_LOG2 + 1);
+                lockin.update(s, phase, time_constant)
             })
-            .last()
-            .unwrap();
+            // Decimate
+            .sum();
 
         let conf = "frequency_discriminator";
         let output = match conf {
