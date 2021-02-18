@@ -118,12 +118,12 @@ const APP: () = {
             .zip(Accu::new(sample_phase, sample_frequency))
             // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
             .map(|(&sample, phase)| {
-                let s = (sample as i16 as i32)
-                    << (15 - design_parameters::SAMPLE_BUFFER_SIZE_LOG2 + 1);
+                let s = (sample as i16 as i32) << (15 + 1);
                 lockin.update(s, phase, time_constant)
             })
             // Decimate
-            .sum();
+            .last()
+            .unwrap();
 
         let conf = "frequency_discriminator";
         let output = match conf {
