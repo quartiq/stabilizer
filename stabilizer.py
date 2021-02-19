@@ -121,9 +121,8 @@ async def configure_settings(args):
         for pair in args.values:
             key, value = pair.split('=')
             request[str(key)] = parse_value(value)
-        response = json.dumps(request)
 
-    response = await interface.set_setting(args.setting, request)
+    response = await interface.set_setting(args.setting, json.dumps(request))
     print(f'+ {response}')
 
     if args.commit:
