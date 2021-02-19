@@ -9,6 +9,7 @@ libm = "0.2.1"
 serde = { version = "1.0", features = ["derive"], default-features = false }
 generic-array = "0.14"
 num = { version = "0.3.1", default-features = false }
+miniconf = "0.1"
 
 [dev-dependencies]
 criterion = "0.3"

@@ -49,7 +49,11 @@ miniconf = "0.1"
 
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf.git"
-branch = "rs/issue-21/terminal-array-elements"
+branch = "develop"
+
+[patch.crates-io.serde-json-core]
+git = "https://github.com/rust-embedded-community/serde-json-core.git"
+branch = "master"
 
 [dependencies.mcp23017]
 git = "https://github.com/mrd0ll4r/mcp23017.git"

@@ -349,12 +349,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_stringset"
+version = "0.1.0"
+source = "git+https://github.com/quartiq/miniconf.git?branch=develop#97ace3d8268075235cb67a2a8740d200bea1fe30"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "dsp"
 version = "0.1.0"
 dependencies = [
  "criterion",
  "generic-array 0.14.4",
  "libm",
+ "miniconf",
  "ndarray",
  "num",
  "rand",
@@ -384,6 +395,17 @@ checksum = "fa998ce59ec9765d15216393af37a58961ddcefb14c753b4816ba2191d865fcb"
 dependencies = [
  "nb 0.1.3",
  "void",
+]
+
+[[package]]
+name = "embedded-nal"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae46eb1b02de5a76d9d0ea21d657ff5b0ad2cc47f3a7723608227b1dd1b3eb18"
+dependencies = [
+ "heapless",
+ "nb 1.0.0",
+ "no-std-net",
 ]
 
 [[package]]
@@ -597,6 +619,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "miniconf"
+version = "0.1.0"
+source = "git+https://github.com/quartiq/miniconf.git?branch=develop#97ace3d8268075235cb67a2a8740d200bea1fe30"
+dependencies = [
+ "derive_stringset",
+ "heapless",
+ "minimq",
+ "serde",
+ "serde-json-core",
+]
+
+[[package]]
+name = "minimq"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c5e626690b6f62e15710cf9815e5ca25ee54084899298c100a14b2504c80a46"
+dependencies = [
+ "bit_field",
+ "embedded-nal",
+ "enum-iterator",
+ "generic-array 0.14.4",
+ "heapless",
+]
+
+[[package]]
 name = "nb"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -623,6 +670,12 @@ dependencies = [
  "num-traits",
  "rawpointer",
 ]
+
+[[package]]
+name = "no-std-net"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2178127478ae4ee9be7180bc9c3bffb6354dd7238400db567102f98c413a9f35"
 
 [[package]]
 name = "num"
@@ -952,8 +1005,7 @@ dependencies = [
 [[package]]
 name = "serde-json-core"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89fd6016a00149b485f66da701f76d909210d319040c97b6eff300f6e2ba2153"
+source = "git+https://github.com/rust-embedded-community/serde-json-core.git?branch=master#ee06ac91bc43b72450a92198a00d9e5c5b9946d2"
 dependencies = [
  "heapless",
  "serde",
@@ -1003,6 +1055,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "smoltcp-nal"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4e5aeb4818706fd74c35917692008d29a5314483c8180300a582253718ce57a"
+dependencies = [
+ "embedded-nal",
+ "heapless",
+ "smoltcp",
+]
+
+[[package]]
 name = "stabilizer"
 version = "0.4.1"
 dependencies = [
@@ -1018,13 +1081,13 @@ dependencies = [
  "heapless",
  "log",
  "mcp23017",
+ "miniconf",
  "nb 1.0.0",
  "panic-halt",
  "panic-semihosting",
  "paste",
  "serde",
- "serde-json-core",
- "smoltcp",
+ "smoltcp-nal",
  "stm32h7xx-hal",
 ]
 
