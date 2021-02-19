@@ -7,25 +7,9 @@ Description: Provides an API for controlling Stabilizer over Miniconf (MQTT).
 import argparse
 import asyncio
 import json
+import logging
 
 from gmqtt  import Client as MqttClient
-
-
-def parse_value(value):
-    """ Parse a command-line value into the most appropriate associated python datatype. """
-    # If the value is an array, construct it as such and recurse for individual elements.
-    if value.startswith('[') and value.endswith(']'):
-        all_values = []
-        for data in value[1:][:-1].split(','):
-            all_values.append(parse_value(data))
-        return all_values
-
-    if value.isnumeric():
-        return int(value)
-    try:
-        return float(value)
-    except ValueError:
-        return value
 
 
 class MiniconfApi:
@@ -52,6 +36,7 @@ class MiniconfApi:
         self.command_complete = asyncio.Event()
         self.client.on_message = self._handle_response
         self.response = None
+        self.logger = logging.getLogger('stabilizer.miniconf')
 
         self.client.subscribe(self.response_topic)
 
@@ -83,6 +68,7 @@ class MiniconfApi:
             The received response to the command.
         """
         self.command_complete.clear()
+        self.logger.debug('Sending "%s" to "%s"', message, topic)
         self.client.publish(topic, payload=message, qos=0, retain=False,
                             response_topic=self.response_topic)
         await self.command_complete.wait()
@@ -105,6 +91,7 @@ class MiniconfApi:
 
 async def configure_settings(args):
     """ Configure an RF channel. """
+    logger = logging.getLogger('stabilizer')
 
     # Establish a communication interface with stabilizer.
     interface = await MiniconfApi.create(args.stabilizer, args.broker)
@@ -114,20 +101,21 @@ async def configure_settings(args):
     # In the exceptional case that this is a terminal value, there is no key available and only a
     # single value.
     if len(args.values) == 1 and '=' not in args.values[0]:
-        request = parse_value(args.values[0])
+        request = json.loads(args.values[0])
     else:
         # Convert all of the values into a key-value list.
         request = dict()
         for pair in args.values:
             key, value = pair.split('=')
-            request[str(key)] = parse_value(value)
+            request[str(key)] = json.loads(value)
+    logger.debug('Parsed request: %s', request)
 
     response = await interface.set_setting(args.setting, json.dumps(request))
-    print(f'+ {response}')
+    logger.info(response)
 
     if args.commit:
         response = await interface.commit()
-        print(f'+ {response}')
+        logger.info(response)
 
 
 def main():
@@ -141,9 +129,19 @@ def main():
                         help='The value of settings. key=value list or a single value is accepted.')
     parser.add_argument('--commit', action='store_true',
                         help='Specified true to commit after updating settings.')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose logging')
+
+    args = parser.parse_args()
+
+    logger = logging.getLogger('stabilizer')
+    logger.setLevel(logging.INFO)
+
+    if args.verbose:
+        logger.setLevel(logging.DEBUG)
+        logging.basicConfig(level=logging.DEBUG)
 
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(configure_settings(parser.parse_args()))
+    loop.run_until_complete(configure_settings(args))
 
 
 if __name__ == '__main__':
