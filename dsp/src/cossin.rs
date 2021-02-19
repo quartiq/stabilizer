@@ -74,7 +74,6 @@ pub fn cossin(phase: i32) -> (i32, i32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Complex;
     use core::f64::consts::PI;
 
     #[test]
@@ -82,11 +81,11 @@ mod tests {
         // Constant amplitude error due to LUT data range.
         const AMPLITUDE: f64 = ((1i64 << 31) - (1i64 << 15)) as _;
         const MAX_PHASE: f64 = (1i64 << 32) as _;
-        let mut rms_err = Complex(0f64, 0f64);
-        let mut sum_err = Complex(0f64, 0f64);
-        let mut max_err = Complex(0f64, 0f64);
-        let mut sum = Complex(0f64, 0f64);
-        let mut demod = Complex(0f64, 0f64);
+        let mut rms_err = (0f64, 0f64);
+        let mut sum_err = (0f64, 0f64);
+        let mut max_err = (0f64, 0f64);
+        let mut sum = (0f64, 0f64);
+        let mut demod = (0f64, 0f64);
 
         // use std::{fs::File, io::{BufWriter, prelude::*}, path::Path};
         // let mut file = BufWriter::new(File::create(Path::new("data.bin")).unwrap());

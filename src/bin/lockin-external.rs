@@ -6,7 +6,7 @@ use stm32h7xx_hal as hal;
 
 use stabilizer::{hardware, hardware::design_parameters};
 
-use dsp::{lockin::Lockin, rpll::RPLL, Accu};
+use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
 use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
 };
@@ -110,22 +110,33 @@ const APP: () = {
         let sample_phase =
             phase_offset.wrapping_add(pll_phase.wrapping_mul(harmonic));
 
-        let output = adc_samples[0]
+        let output: Complex<i32> = adc_samples[0]
             .iter()
+            // Zip in the LO phase.
             .zip(Accu::new(sample_phase, sample_frequency))
-            // Convert to signed, MSB align the ADC sample.
+            // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
             .map(|(&sample, phase)| {
-                lockin.update(sample as i16, phase, time_constant)
+                let s = (sample as i16 as i32) << 16;
+                lockin.update(s, phase, time_constant)
             })
+            // Decimate
             .last()
-            .unwrap();
+            .unwrap()
+            * 2; // Full scale assuming the 2f component is gone.
 
-        let conf = "frequency_discriminator";
+        #[allow(dead_code)]
+        enum Conf {
+            PowerPhase,
+            FrequencyDiscriminator,
+            Quadrature,
+        }
+
+        let conf = Conf::FrequencyDiscriminator; // TODO: expose
         let output = match conf {
             // Convert from IQ to power and phase.
-            "power_phase" => [(output.log2() << 24) as _, output.arg()],
-            "frequency_discriminator" => [pll_frequency as _, output.arg()],
-            _ => [output.0, output.1],
+            Conf::PowerPhase => [(output.log2() << 24) as _, output.arg()],
+            Conf::FrequencyDiscriminator => [pll_frequency as _, output.arg()],
+            Conf::Quadrature => [output.re, output.im],
         };
 
         // Convert to DAC data.
