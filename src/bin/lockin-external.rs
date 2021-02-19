@@ -6,7 +6,7 @@ use stm32h7xx_hal as hal;
 
 use stabilizer::{hardware, hardware::design_parameters};
 
-use dsp::{Accu, Complex, FastInt, Lockin, RPLL};
+use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
 use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
 };

@@ -2,33 +2,21 @@ pub use num::Complex;
 
 use super::{atan2, cossin};
 
-pub trait Map<F> {
-    fn map(&self, func: F) -> Self;
-}
-
-impl<F: Fn(T) -> T, T: Copy> Map<F> for Complex<T> {
-    fn map(&self, func: F) -> Self {
-        Complex {
-            re: func(self.re),
-            im: func(self.im),
-        }
-    }
-}
-
-pub trait FastInt<T, U> {
+/// Complex extension trait offering DSP (fast, good accuracy) functionality.
+pub trait ComplexExt<T, U> {
     fn from_angle(angle: T) -> Self;
     fn abs_sqr(&self) -> U;
     fn log2(&self) -> T;
     fn arg(&self) -> T;
 }
 
-impl FastInt<i32, u32> for Complex<i32> {
+impl ComplexExt<i32, u32> for Complex<i32> {
     /// Return a Complex on the unit circle given an angle.
     ///
     /// Example:
     ///
     /// ```
-    /// use dsp::{Complex, FastInt};
+    /// use dsp::{Complex, ComplexExt};
     /// Complex::<i32>::from_angle(0);
     /// Complex::<i32>::from_angle(1 << 30);  // pi/2
     /// Complex::<i32>::from_angle(-1 << 30);  // -pi/2
@@ -47,7 +35,7 @@ impl FastInt<i32, u32> for Complex<i32> {
     /// Example:
     ///
     /// ```
-    /// use dsp::{Complex, FastInt};
+    /// use dsp::{Complex, ComplexExt};
     /// assert_eq!(Complex::new(i32::MIN, 0).abs_sqr(), 1 << 31);
     /// assert_eq!(Complex::new(i32::MAX, i32::MAX).abs_sqr(), u32::MAX - 3);
     /// ```
@@ -67,7 +55,7 @@ impl FastInt<i32, u32> for Complex<i32> {
     /// Example:
     ///
     /// ```
-    /// use dsp::{Complex, FastInt};
+    /// use dsp::{Complex, ComplexExt};
     /// assert_eq!(Complex::new(i32::MAX, i32::MAX).log2(), -1);
     /// assert_eq!(Complex::new(i32::MAX, 0).log2(), -2);
     /// assert_eq!(Complex::new(1, 0).log2(), -63);
@@ -86,7 +74,7 @@ impl FastInt<i32, u32> for Complex<i32> {
     /// Example:
     ///
     /// ```
-    /// use dsp::{Complex, FastInt};
+    /// use dsp::{Complex, ComplexExt};
     /// assert_eq!(Complex::new(1, 0).arg(), 0);
     /// assert_eq!(Complex::new(-i32::MAX, 1).arg(), i32::MAX);
     /// assert_eq!(Complex::new(-i32::MAX, -1).arg(), -i32::MAX);
@@ -99,6 +87,7 @@ impl FastInt<i32, u32> for Complex<i32> {
     }
 }
 
+/// Full scale fixed point multiplication.
 pub trait MulScaled<T> {
     fn mul_scaled(self, other: T) -> Self;
 }
@@ -110,8 +99,8 @@ impl MulScaled<Complex<i32>> for Complex<i32> {
         let c = other.re as i64;
         let d = other.im as i64;
         Complex {
-            re: ((a * c - b * d + (1 << 31)) >> 32) as i32,
-            im: ((b * c + a * d + (1 << 31)) >> 32) as i32,
+            re: ((a * c - b * d + (1 << 30)) >> 31) as i32,
+            im: ((b * c + a * d + (1 << 30)) >> 31) as i32,
         }
     }
 }
@@ -119,8 +108,8 @@ impl MulScaled<Complex<i32>> for Complex<i32> {
 impl MulScaled<i32> for Complex<i32> {
     fn mul_scaled(self, other: i32) -> Self {
         Complex {
-            re: ((other as i64 * self.re as i64 + (1 << 31)) >> 32) as i32,
-            im: ((other as i64 * self.im as i64 + (1 << 31)) >> 32) as i32,
+            re: ((other as i64 * self.re as i64 + (1 << 30)) >> 31) as i32,
+            im: ((other as i64 * self.im as i64 + (1 << 30)) >> 31) as i32,
         }
     }
 }
@@ -128,8 +117,8 @@ impl MulScaled<i32> for Complex<i32> {
 impl MulScaled<i16> for Complex<i32> {
     fn mul_scaled(self, other: i16) -> Self {
         Complex {
-            re: (other as i32 * (self.re >> 16) + (1 << 15)) >> 16,
-            im: (other as i32 * (self.im >> 16) + (1 << 15)) >> 16,
+            re: (other as i32 * (self.re >> 16) + (1 << 14)) >> 15,
+            im: (other as i32 * (self.im >> 16) + (1 << 14)) >> 15,
         }
     }
 }

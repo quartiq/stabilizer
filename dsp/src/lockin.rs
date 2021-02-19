@@ -1,4 +1,4 @@
-use super::{Complex, FastInt, Lowpass, MulScaled};
+use super::{Complex, ComplexExt, Lowpass, MulScaled};
 use generic_array::typenum::U2;
 
 #[derive(Clone, Default)]

@@ -2,7 +2,7 @@
 #![no_std]
 #![no_main]
 
-use dsp::{Accu, Complex, FastInt, Lockin};
+use dsp::{Accu, Complex, ComplexExt, Lockin};
 use hardware::{Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
 use stabilizer::{hardware, hardware::design_parameters};
 
