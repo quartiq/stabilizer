@@ -13,6 +13,13 @@ from gmqtt  import Client as MqttClient
 
 def parse_value(value):
     """ Parse a command-line value into the most appropriate associated python datatype. """
+    # If the value is an array, construct it as such and recurse for individual elements.
+    if value.startswith('[') and value.endswith(']'):
+        all_values = []
+        for data in value[1:][:-1].split(','):
+            all_values.append(parse_value(data))
+        return all_values
+
     if value.isnumeric():
         return int(value)
     try:
