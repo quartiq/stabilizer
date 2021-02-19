@@ -1,8 +1,6 @@
 use core::f32::consts::PI;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use dsp::{atan2, cossin};
-use dsp::{iir, iir_int};
-use dsp::{pll::PLL, rpll::RPLL};
+use dsp::{atan2, cossin, iir, iir_int, PLL, RPLL};
 
 fn atan2_bench(c: &mut Criterion) {
     let xi = (10 << 16) as i32;

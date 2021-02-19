@@ -2,7 +2,7 @@
 #![no_std]
 #![no_main]
 
-use dsp::{lockin::Lockin, Accu};
+use dsp::{Accu, Complex, ComplexExt, Lockin};
 use hardware::{Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
 use stabilizer::{hardware, hardware::design_parameters};
 
@@ -95,17 +95,19 @@ const APP: () = {
         let sample_phase = phase_offset
             .wrapping_add((pll_phase as i32).wrapping_mul(harmonic));
 
-        let output = adc_samples
+        let output: Complex<i32> = adc_samples
             .iter()
             // Zip in the LO phase.
             .zip(Accu::new(sample_phase, sample_frequency))
             // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
             .map(|(&sample, phase)| {
-                lockin.update(sample as i16, phase, time_constant)
+                let s = (sample as i16 as i32) << 16;
+                lockin.update(s, phase, time_constant)
             })
             // Decimate
             .last()
-            .unwrap();
+            .unwrap()
+            * 2; // Full scale assuming the 2f component is gone.
 
         for value in dac_samples[1].iter_mut() {
             *value = (output.arg() >> 16) as u16 ^ 0x8000;
