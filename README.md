@@ -80,6 +80,5 @@ See https://github.com/sinara-hw/Stabilizer
 
 ## Protocol
 
-Stabilizer can be configured via newline-delimited JSON over TCP.
-It listens on port 1235. [stabilizer.py](stabilizer.py) contains a reference
-implementation of the protocol.
+Stabilizer can be configured via MQTT under the topic `stabilizer/settings/<setting>`. Refer to
+[`miniconf`](https://github.com/quartiq/miniconf) for more information about topics.
