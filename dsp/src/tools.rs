@@ -1,5 +1,3 @@
-#![cfg_attr(feature = "nightly", feature(asm, core_intrinsics))]
-
 use core::ops::{Add, Mul, Neg};
 
 pub fn abs<T>(x: T) -> T
