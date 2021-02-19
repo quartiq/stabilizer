@@ -1,7 +1,7 @@
 use core::f32::consts::PI;
 use dsp::{atan2, cossin};
 use dsp::{iir, iir_int};
-use dsp::{pll::PLL, rpll::RPLL};
+use dsp::{PLL, RPLL};
 use easybench::bench_env;
 
 fn atan2_bench() {
