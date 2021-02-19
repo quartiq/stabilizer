@@ -2,7 +2,7 @@
 """
 Author: Vertigo Designs, Ryan Summers
 
-Description: Provides an API for controlling Booster NGFW over MQTT.
+Description: Provides an API for controlling Stabilizer over Miniconf (MQTT).
 """
 import argparse
 import asyncio
@@ -26,7 +26,7 @@ class MiniconfApi:
 
     @classmethod
     async def create(cls, identifier, broker):
-        """ Create a connection to MQTT for communication with booster. """
+        """ Create a connection to MQTT for communication with the device. """
         client = MqttClient(client_id='')
         await client.connect(broker)
         return cls(client, identifier)
@@ -66,7 +66,7 @@ class MiniconfApi:
 
 
     async def _command(self, topic, message):
-        """ Send a command to a booster control topic.
+        """ Send a command to a topic.
 
         Args:
             topic: The topic to send the message to.
@@ -99,7 +99,7 @@ class MiniconfApi:
 async def configure_settings(args):
     """ Configure an RF channel. """
 
-    # Establish a communication interface with Booster.
+    # Establish a communication interface with stabilizer.
     interface = await MiniconfApi.create(args.stabilizer, args.broker)
 
     request = None
@@ -116,7 +116,6 @@ async def configure_settings(args):
             request[str(key)] = parse_value(value)
         response = json.dumps(request)
 
-    # TODO: Should we escape quotes in the dumped request?
     response = await interface.set_setting(args.setting, request)
     print(f'+ {response}')
 
@@ -127,9 +126,7 @@ async def configure_settings(args):
 
 def main():
     """ Main program entry point. """
-    parser = argparse.ArgumentParser(
-        formatter_class=argparse.RawTextHelpFormatter,
-        description='Modify booster RF channel configuration')
+    parser = argparse.ArgumentParser(description='Stabilizer settings modification utility')
     parser.add_argument('--stabilizer', type=str, default='stabilizer',
                         help='The identifier of the stabilizer to configure')
     parser.add_argument('--setting', required=True, type=str, help='The setting path to configure')
