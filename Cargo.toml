@@ -36,7 +36,6 @@ panic-semihosting = { version = "0.5", optional = true }
 panic-halt = "0.2"
 serde = { version = "1.0", features = ["derive"], default-features = false }
 heapless = { version = "0.5", features = ["serde"] }
-serde-json-core = "0.2"
 cortex-m-rtic = "0.5.5"
 embedded-hal = "0.2.4"
 nb = "1.0.0"
@@ -45,14 +44,19 @@ enum-iterator = "0.6.0"
 paste = "1"
 dsp = { path = "dsp" }
 ad9959 = { path = "ad9959" }
+smoltcp-nal = "0.1.0"
+miniconf = "0.1"
+
+[patch.crates-io.miniconf]
+git = "https://github.com/quartiq/miniconf.git"
+branch = "develop"
+
+[patch.crates-io.serde-json-core]
+git = "https://github.com/rust-embedded-community/serde-json-core.git"
+branch = "master"
 
 [dependencies.mcp23017]
 git = "https://github.com/mrd0ll4r/mcp23017.git"
-
-[dependencies.smoltcp]
-version = "0.7"
-features = ["ethernet", "proto-ipv4", "socket-tcp", "proto-ipv6"]
-default-features = false
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]

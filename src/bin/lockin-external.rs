@@ -17,7 +17,6 @@ const APP: () = {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        net_interface: hardware::Ethernet,
 
         timestamper: InputStamper,
         pll: RPLL,
@@ -53,7 +52,6 @@ const APP: () = {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            net_interface: stabilizer.net.interface,
             timestamper: stabilizer.timestamper,
 
             pll,

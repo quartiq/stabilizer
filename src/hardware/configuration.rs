@@ -1,32 +1,36 @@
 ///! Stabilizer hardware configuration
 ///!
 ///! This file contains all of the hardware-specific configuration of Stabilizer.
-use smoltcp::{iface::Routes, wire::Ipv4Address};
-
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
     prelude::*,
 };
 
+use smoltcp_nal::smoltcp;
+
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use super::{
-    adc, afe, dac, design_parameters, digital_input_stamper, eeprom, pounder,
-    timers, DdsOutput, Ethernet, AFE0, AFE1,
+    adc, afe, cycle_counter::CycleCounter, dac, design_parameters,
+    digital_input_stamper, eeprom, pounder, timers, DdsOutput, NetworkStack,
+    AFE0, AFE1,
 };
 
-// Network storage definition for the ethernet interface.
-struct NetStorage {
-    ip_addrs: [smoltcp::wire::IpCidr; 1],
-    neighbor_cache:
+pub struct NetStorage {
+    pub ip_addrs: [smoltcp::wire::IpCidr; 1],
+    pub sockets: [Option<smoltcp::socket::SocketSetItem<'static>>; 1],
+    pub neighbor_cache:
         [Option<(smoltcp::wire::IpAddress, smoltcp::iface::Neighbor)>; 8],
-    routes_storage: [Option<(smoltcp::wire::IpCidr, smoltcp::iface::Route)>; 1],
+    pub routes_cache:
+        [Option<(smoltcp::wire::IpCidr, smoltcp::iface::Route)>; 8],
+    pub tx_storage: [u8; 4096],
+    pub rx_storage: [u8; 4096],
 }
 
 /// The available networking devices on Stabilizer.
 pub struct NetworkDevices {
-    pub interface: Ethernet,
+    pub stack: NetworkStack,
     pub phy: ethernet::phy::LAN8742A<ethernet::EthernetMAC>,
 }
 
@@ -39,6 +43,7 @@ pub struct StabilizerDevices {
     pub adc_dac_timer: timers::SamplingTimer,
     pub timestamp_timer: timers::TimestampTimer,
     pub net: NetworkDevices,
+    pub cycle_counter: CycleCounter,
 }
 
 /// The available Pounder-specific hardware interfaces.
@@ -63,7 +68,11 @@ static mut NET_STORE: NetStorage = NetStorage {
         smoltcp::wire::Ipv6Cidr::SOLICITED_NODE_PREFIX,
     )],
     neighbor_cache: [None; 8],
-    routes_storage: [None; 1],
+    routes_cache: [None; 8],
+    sockets: [None; 1],
+
+    tx_storage: [0; 4096],
+    rx_storage: [0; 4096],
 };
 
 /// Configure the stabilizer hardware for operation.
@@ -514,8 +523,9 @@ pub fn setup(
             24,
         );
 
-        let default_v4_gw = Ipv4Address::new(10, 34, 16, 1);
-        let mut routes = Routes::new(&mut store.routes_storage[..]);
+        let default_v4_gw = smoltcp::wire::Ipv4Address::new(10, 34, 16, 1);
+        let mut routes =
+            smoltcp::iface::Routes::new(&mut store.routes_cache[..]);
         routes.add_default_ipv4_route(default_v4_gw).unwrap();
 
         let neighbor_cache =
@@ -528,8 +538,36 @@ pub fn setup(
             .routes(routes)
             .finalize();
 
+        let sockets = {
+            // Note(unsafe): Configuration is only called once, so we only access the global
+            // storage a single time.
+            let socket_storage = unsafe { &mut NET_STORE.sockets[..] };
+            let mut sockets = smoltcp::socket::SocketSet::new(socket_storage);
+
+            let tcp_socket = {
+                let rx_buffer = {
+                    // Note(unsafe): Configuration is only called once, so we only access the global
+                    // storage a single time.
+                    let storage = unsafe { &mut NET_STORE.rx_storage[..] };
+                    smoltcp::socket::TcpSocketBuffer::new(storage)
+                };
+
+                let tx_buffer = {
+                    // Note(unsafe): Configuration is only called once, so we only access the global
+                    // storage a single time.
+                    let storage = unsafe { &mut NET_STORE.tx_storage[..] };
+                    smoltcp::socket::TcpSocketBuffer::new(storage)
+                };
+
+                smoltcp::socket::TcpSocket::new(rx_buffer, tx_buffer)
+            };
+
+            sockets.add(tcp_socket);
+            sockets
+        };
+
         NetworkDevices {
-            interface,
+            stack: smoltcp_nal::NetworkStack::new(interface, sockets),
             phy: lan8742a,
         }
     };
@@ -795,6 +833,7 @@ pub fn setup(
         net: network_devices,
         adc_dac_timer: sampling_timer,
         timestamp_timer,
+        cycle_counter: CycleCounter::new(core.DWT, ccdr.clocks.c_ck()),
     };
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
@@ -803,9 +842,6 @@ pub fn setup(
 
     // Enable the instruction cache.
     core.SCB.enable_icache();
-
-    // Utilize the cycle counter for RTIC scheduling.
-    core.DWT.enable_cycle_counter();
 
     (stabilizer, pounder)
 }

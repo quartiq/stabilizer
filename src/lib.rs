@@ -5,4 +5,3 @@
 extern crate log;
 
 pub mod hardware;
-pub mod server;
