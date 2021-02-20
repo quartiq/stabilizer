@@ -1,5 +1,6 @@
 use core::f64::consts::PI;
-use serde::{Deserialize, Serialize};
+use miniconf::StringSet;
+use serde::Deserialize;
 
 /// Generic vector for integer IIR filter.
 /// This struct is used to hold the x/y input/output data vector or the b/a coefficient
@@ -55,7 +56,7 @@ fn macc(y0: i32, x: &[i32], a: &[i32], shift: u32) -> i32 {
 /// See `dsp::iir::IIR` for general implementation details.
 /// Offset and limiting disabled to suit lowpass applications.
 /// Coefficient scaling fixed and optimized.
-#[derive(Copy, Clone, Default, Deserialize, Serialize)]
+#[derive(Copy, Clone, Default, Debug, StringSet, Deserialize)]
 pub struct IIR {
     pub ba: Vec5,
     // pub y_offset: i32,
