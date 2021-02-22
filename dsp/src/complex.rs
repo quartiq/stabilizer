@@ -89,13 +89,18 @@ impl ComplexExt<i32, u32> for Complex<i32> {
     }
 
     fn saturating_add(&self, other: Self) -> Self {
-        Self::new(self.re.saturating_add(other.re), self.im.saturating_add(other.im))
+        Self::new(
+            self.re.saturating_add(other.re),
+            self.im.saturating_add(other.im),
+        )
     }
 
     fn saturating_sub(&self, other: Self) -> Self {
-        Self::new(self.re.saturating_sub(other.re), self.im.saturating_sub(other.im))
+        Self::new(
+            self.re.saturating_sub(other.re),
+            self.im.saturating_sub(other.im),
+        )
     }
-
 }
 
 /// Full scale fixed point multiplication.
