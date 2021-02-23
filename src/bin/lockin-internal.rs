@@ -2,6 +2,7 @@
 #![no_std]
 #![no_main]
 
+use generic_array::typenum::U2;
 use dsp::{Accu, Complex, ComplexExt, Lockin};
 use hardware::{Adc1Input, Dac0Output, Dac1Output, AFE0, AFE1};
 use stabilizer::{hardware, hardware::design_parameters};
@@ -20,7 +21,7 @@ const APP: () = {
         adc: Adc1Input,
         dacs: (Dac0Output, Dac1Output),
 
-        lockin: Lockin,
+        lockin: Lockin<U2>,
     }
 
     #[init]

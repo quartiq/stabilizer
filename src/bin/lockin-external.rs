@@ -2,10 +2,8 @@
 #![no_std]
 #![no_main]
 
-use stm32h7xx_hal as hal;
-
+use generic_array::typenum::U4;
 use stabilizer::{hardware, hardware::design_parameters};
-
 use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
 use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
@@ -20,7 +18,7 @@ const APP: () = {
 
         timestamper: InputStamper,
         pll: RPLL,
-        lockin: Lockin,
+        lockin: Lockin<U4>,
     }
 
     #[init]
@@ -156,7 +154,7 @@ const APP: () = {
 
     #[task(binds = ETH, priority = 1)]
     fn eth(_: eth::Context) {
-        unsafe { hal::ethernet::interrupt_handler() }
+        unsafe { stm32h7xx_hal::ethernet::interrupt_handler() }
     }
 
     #[task(binds = SPI2, priority = 3)]
