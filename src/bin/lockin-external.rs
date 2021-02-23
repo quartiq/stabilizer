@@ -2,12 +2,12 @@
 #![no_std]
 #![no_main]
 
-use generic_array::typenum::U4;
-use stabilizer::{hardware, hardware::design_parameters};
 use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
+use generic_array::typenum::U4;
 use hardware::{
     Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
 };
+use stabilizer::{hardware, hardware::design_parameters};
 
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
@@ -86,22 +86,20 @@ const APP: () = {
             .map(|t| t as i32);
         let (pll_phase, pll_frequency) = c.resources.pll.update(
             timestamp,
-            21, // frequency settling time (log2 counter cycles), TODO: expose
-            21, // phase settling time, TODO: expose
+            21, // frequency settling time (log2 counter cycles),
+            21, // phase settling time
         );
 
         // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
-        let harmonic: i32 = -1; // TODO: expose
+        let harmonic: i32 = -1;
 
         // Demodulation LO phase offset
-        let phase_offset: i32 = 0; // TODO: expose
+        let phase_offset: i32 = 0;
 
         // Log2 lowpass time constant
-        let time_constant: u8 = 6; // TODO: expose
+        let time_constant: u8 = 6;
 
         let sample_frequency = ((pll_frequency
-            // half-up rounding bias
-            // .wrapping_add(1 << design_parameters::SAMPLE_BUFFER_SIZE_LOG2 - 1)
             >> design_parameters::SAMPLE_BUFFER_SIZE_LOG2)
             as i32)
             .wrapping_mul(harmonic);
@@ -129,7 +127,7 @@ const APP: () = {
             Quadrature,
         }
 
-        let conf = Conf::FrequencyDiscriminator; // TODO: expose
+        let conf = Conf::FrequencyDiscriminator;
         let output = match conf {
             // Convert from IQ to power and phase.
             Conf::PowerPhase => [(output.log2() << 24) as _, output.arg()],
@@ -147,7 +145,6 @@ const APP: () = {
     #[idle(resources=[afes])]
     fn idle(_: idle::Context) -> ! {
         loop {
-            // TODO: Implement network interface.
             cortex_m::asm::wfi();
         }
     }
@@ -164,7 +161,7 @@ const APP: () = {
 
     #[task(binds = SPI3, priority = 3)]
     fn spi3(_: spi3::Context) {
-        panic!("ADC0 input overrun");
+        panic!("ADC1 input overrun");
     }
 
     #[task(binds = SPI4, priority = 3)]
