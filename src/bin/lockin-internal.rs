@@ -94,7 +94,7 @@ const APP: () = {
             * 2; // Full scale assuming the 2f component is gone.
 
         // Convert to DAC data.
-        for i in 0..dac_samples[0].len() {
+        for i in 0..dac_samples[1].len() {
             // DAC0 always generates a fixed sinusoidal output.
             dac_samples[0][i] = DAC_SEQUENCE[i] as u16 ^ 0x8000;
             dac_samples[1][i] = (output.arg() >> 16) as u16 ^ 0x8000;
