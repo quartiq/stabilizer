@@ -172,7 +172,7 @@ dependencies = [
  "cortex-m 0.6.7",
  "cortex-m-rt",
  "cortex-m-rtic-macros",
- "heapless",
+ "heapless 0.5.6",
  "rtic-core",
  "version_check",
 ]
@@ -253,7 +253,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae46eb1b02de5a76d9d0ea21d657ff5b0ad2cc47f3a7723608227b1dd1b3eb18"
 dependencies = [
- "heapless",
+ "heapless 0.5.6",
  "nb 1.0.0",
  "no-std-net",
 ]
@@ -341,6 +341,18 @@ dependencies = [
  "as-slice",
  "generic-array 0.13.2",
  "hash32",
+ "stable_deref_trait",
+]
+
+[[package]]
+name = "heapless"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "efb22866f8416bc2b65389ebcb8b48e1be541650c44063ea1288d04bcf903808"
+dependencies = [
+ "as-slice",
+ "generic-array 0.14.4",
+ "hash32",
  "serde",
  "stable_deref_trait",
 ]
@@ -405,7 +417,7 @@ version = "0.1.0"
 source = "git+https://github.com/quartiq/miniconf.git?branch=develop#97ace3d8268075235cb67a2a8740d200bea1fe30"
 dependencies = [
  "derive_stringset",
- "heapless",
+ "heapless 0.5.6",
  "minimq",
  "serde",
  "serde-json-core",
@@ -421,7 +433,7 @@ dependencies = [
  "embedded-nal",
  "enum-iterator",
  "generic-array 0.14.4",
- "heapless",
+ "heapless 0.5.6",
 ]
 
 [[package]]
@@ -674,7 +686,7 @@ name = "serde-json-core"
 version = "0.2.0"
 source = "git+https://github.com/rust-embedded-community/serde-json-core.git?branch=master#ee06ac91bc43b72450a92198a00d9e5c5b9946d2"
 dependencies = [
- "heapless",
+ "heapless 0.5.6",
  "serde",
 ]
 
@@ -707,7 +719,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4e5aeb4818706fd74c35917692008d29a5314483c8180300a582253718ce57a"
 dependencies = [
  "embedded-nal",
- "heapless",
+ "heapless 0.5.6",
  "smoltcp",
 ]
 
@@ -725,7 +737,7 @@ dependencies = [
  "embedded-hal",
  "enum-iterator",
  "generic-array 0.14.4",
- "heapless",
+ "heapless 0.6.0",
  "log",
  "mcp23017",
  "miniconf",
