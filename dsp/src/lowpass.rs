@@ -27,10 +27,10 @@ impl<N: ArrayLength<i32>> Lowpass<N> {
         // Note T-DF-I and the zeros at Nyquist.
         let mut x = x;
         for y in self.y.iter_mut() {
-            let dy = x.saturating_sub(*y).saturating_add(1 << (k - 1)) >> k;
+            let dy = x.saturating_sub(*y) >> k;
             *y += dy;
             x = *y - (dy >> 1);
         }
-        x
+        x.saturating_add((self.y.len() as i32) << (k - 1))
     }
 }
