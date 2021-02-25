@@ -77,6 +77,17 @@ where
         .fold(y0, |y, xa| y + xa)
 }
 
+pub fn macc_i32(y0: i32, x: &[i32], a: &[i32], shift: u32) -> i32 {
+    // Rounding bias, half up
+    let y0 = ((y0 as i64) << shift) + (1 << (shift - 1));
+    let y = x
+        .iter()
+        .zip(a)
+        .map(|(x, a)| *x as i64 * *a as i64)
+        .fold(y0, |y, xa| y + xa);
+    (y >> shift) as i32
+}
+
 /// Combine high and low i32 into a single downscaled i32, saturating the type.
 pub fn saturating_scale(lo: i32, hi: i32, shift: u32) -> i32 {
     debug_assert!(shift & 31 == shift);
