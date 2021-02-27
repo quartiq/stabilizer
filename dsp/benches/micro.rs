@@ -3,7 +3,7 @@ use core::f32::consts::PI;
 use easybench::bench_env;
 use generic_array::typenum::U4;
 
-use dsp::{Lowpass, atan2, cossin, iir, iir_int, PLL, RPLL};
+use dsp::{atan2, cossin, iir, iir_int, Lowpass, PLL, RPLL};
 
 fn atan2_bench() {
     let xi = (10 << 16) as i32;
