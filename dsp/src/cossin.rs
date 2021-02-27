@@ -11,7 +11,7 @@ include!(concat!(env!("OUT_DIR"), "/cossin_table.rs"));
 ///
 /// # Returns
 /// The cos and sin values of the provided phase as a `(i32, i32)`
-/// tuple. With a 7-bit deep LUT there is 1e-5 max and 6e-8 RMS error
+/// tuple. With a 7-bit deep LUT there is 9e-6 max and 6e-8 RMS error
 /// in each quadrature over 20 bit phase.
 pub fn cossin(phase: i32) -> (i32, i32) {
     // Phase bits excluding the three highest MSB
@@ -81,7 +81,7 @@ mod tests {
     #[test]
     fn cossin_error_max_rms_all_phase() {
         // Constant amplitude error due to LUT data range.
-        const AMPLITUDE: f64 = ((1i64 << 31) - (1i64 << 15)) as _;
+        const AMPLITUDE: f64 = (1i64 << 31) as f64 - 0.85 * (1i64 << 15) as f64;
         const MAX_PHASE: f64 = (1i64 << 32) as _;
         let mut rms_err = (0f64, 0f64);
         let mut sum_err = (0f64, 0f64);
@@ -144,7 +144,7 @@ mod tests {
         assert!(rms_err.0.sqrt() < 6e-8);
         assert!(rms_err.1.sqrt() < 6e-8);
 
-        assert!(max_err.0 < 1.1e-5);
-        assert!(max_err.1 < 1.1e-5);
+        assert!(max_err.0 < 9e-6);
+        assert!(max_err.1 < 9e-6);
     }
 }
