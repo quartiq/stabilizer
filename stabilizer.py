@@ -30,63 +30,55 @@ class MiniconfApi:
             client: A connected MQTT5 client.
             identifier: The ID of the device to control.
         """
-        self.response_topic = f'{identifier}/feedback'
         self.client = client
         self.identifier = identifier
-        self.command_complete = asyncio.Event()
         self.client.on_message = self._handle_response
-        self.response = None
+        self.inflight_settings = dict()
         self.logger = logging.getLogger('stabilizer.miniconf')
 
-        self.client.subscribe(self.response_topic)
+        self.client.subscribe(f'{identifier}/feedback/#')
 
 
-    def _handle_response(self, client, topic, payload, *_args, **_kwargs):
+    def _handle_response(self, _client, topic, payload, *_args, **_kwargs):
         """ Callback function for when messages are received over MQTT.
 
         Args:
-            client: The MQTT client.
+            _client: The MQTT client.
             topic: The topic that the message was received on.
             payload: The payload of the message.
         """
-        if topic != self.response_topic:
-            raise Exception(f'Unknown topic: {topic}')
+        if topic not in self.inflight_settings:
+            self.logger.warning('Unknown response topic: %s', topic)
+            return
 
-        # Indicate a response was received.
-        self.response = payload.decode('ascii')
-        self.command_complete.set()
+        # Indicate a response was received for the provided topic.
+        self.inflight_settings[topic].set_result(payload.decode('ascii'))
 
 
-    async def _command(self, topic, message):
-        """ Send a command to a topic.
+    async def set_setting(self, setting, value):
+        """ Change the provided setting with the provided data.
 
         Args:
-            topic: The topic to send the message to.
-            message: The message to send to the provided topic.
+            setting: The setting to update
+            value: The value to configure the setting to (in JSON-serialized format).
 
         Returns:
             The received response to the command.
         """
-        self.command_complete.clear()
-        self.logger.debug('Sending "%s" to "%s"', message, topic)
-        self.client.publish(topic, payload=message, qos=0, retain=False,
-                            response_topic=self.response_topic)
-        await self.command_complete.wait()
+        setting_topic = f'{self.identifier}/settings/{setting}'
+        response_topic = f'{self.identifier}/feedback/{setting}'
+        assert response_topic not in self.inflight_settings, \
+            'Only one in-flight setting is supported'
 
-        response = self.response
-        self.response = None
+        self.logger.debug('Sending %s to "%s"', value, setting_topic)
+        self.inflight_settings[response_topic] = asyncio.get_running_loop().create_future()
+        self.client.publish(setting_topic, payload=value, qos=0, retain=False,
+                            response_topic=response_topic)
+
+        response = await self.inflight_settings[response_topic]
+        del self.inflight_settings[response_topic]
 
         return response
-
-
-    async def set_setting(self, setting, message):
-        """ Change the provided setting with the provided data. """
-        return await self._command(f'{self.identifier}/settings/{setting}', message)
-
-
-    async def commit(self):
-        """ Commit staged settings to become active. """
-        return await self._command(f'{self.identifier}/commit', 'commit')
 
 
 async def configure_settings(args):
@@ -101,7 +93,10 @@ async def configure_settings(args):
     # In the exceptional case that this is a terminal value, there is no key available and only a
     # single value.
     if len(args.values) == 1 and '=' not in args.values[0]:
-        request = json.loads(args.values[0])
+        if args.values[0][0].isalpha():
+            request = args.values[0]
+        else:
+            request = json.loads(args.values[0])
     else:
         # Convert all of the values into a key-value list.
         request = dict()
@@ -113,10 +108,6 @@ async def configure_settings(args):
     response = await interface.set_setting(args.setting, json.dumps(request))
     logger.info(response)
 
-    if args.commit:
-        response = await interface.commit()
-        logger.info(response)
-
 
 def main():
     """ Main program entry point. """
@@ -127,8 +118,6 @@ def main():
     parser.add_argument('--broker', default='10.34.16.1', type=str, help='The MQTT broker address')
     parser.add_argument('values', nargs='+', type=str,
                         help='The value of settings. key=value list or a single value is accepted.')
-    parser.add_argument('--commit', action='store_true',
-                        help='Specified true to commit after updating settings.')
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose logging')
 
     args = parser.parse_args()
@@ -138,7 +127,8 @@ def main():
 
     if args.verbose:
         logger.setLevel(logging.DEBUG)
-        logging.basicConfig(level=logging.DEBUG)
+
+    logging.basicConfig()
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(configure_settings(args))
