@@ -55,20 +55,20 @@ class MiniconfApi:
         self.inflight_settings[topic].set_result(payload.decode('ascii'))
 
 
-    async def set_setting(self, setting, value):
-        """ Change the provided setting with the provided data.
+    async def command(self, path, value):
+        """ Write the provided data to the specified path.
 
         Args:
-            setting: The setting to update
-            value: The value to configure the setting to (in JSON-serialized format).
+            setting: The path to write the message to.
+            value: The value to write to the path.
 
         Returns:
             The received response to the command.
         """
-        setting_topic = f'{self.identifier}/settings/{setting}'
-        response_topic = f'{self.identifier}/feedback/{setting}'
+        setting_topic = f'{self.identifier}/{path}'
+        response_topic = f'{self.identifier}/feedback/{path}'
         assert response_topic not in self.inflight_settings, \
-            'Only one in-flight setting is supported'
+            'Only one in-flight message per topic is supported'
 
         self.logger.debug('Sending %s to "%s"', value, setting_topic)
         self.inflight_settings[response_topic] = asyncio.get_running_loop().create_future()
@@ -105,8 +105,12 @@ async def configure_settings(args):
             request[str(key)] = json.loads(value)
     logger.debug('Parsed request: %s', request)
 
-    response = await interface.set_setting(args.setting, json.dumps(request))
+    response = await interface.command(f'settings/{args.setting}', json.dumps(request))
     logger.info(response)
+
+    if args.commit:
+        response = await interface.command('commit', 'commit')
+        logger.info(response)
 
 
 def main():
@@ -118,6 +122,8 @@ def main():
     parser.add_argument('--broker', default='10.34.16.1', type=str, help='The MQTT broker address')
     parser.add_argument('values', nargs='+', type=str,
                         help='The value of settings. key=value list or a single value is accepted.')
+    parser.add_argument('--commit', action='store_true',
+                        help='Specified true to commit after updating settings.')
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose logging')
 
     args = parser.parse_args()
@@ -128,7 +134,7 @@ def main():
     if args.verbose:
         logger.setLevel(logging.DEBUG)
 
-    logging.basicConfig()
+    logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s')
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(configure_settings(args))
