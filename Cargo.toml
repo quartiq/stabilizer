@@ -46,6 +46,7 @@ dsp = { path = "dsp" }
 ad9959 = { path = "ad9959" }
 smoltcp-nal = "0.1.0"
 miniconf = "0.1"
+generic-array = "0.14"
 
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf.git"

@@ -724,6 +724,7 @@ dependencies = [
  "dsp",
  "embedded-hal",
  "enum-iterator",
+ "generic-array 0.14.4",
  "heapless",
  "log",
  "mcp23017",
