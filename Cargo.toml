@@ -49,8 +49,7 @@ miniconf = "0.1"
 generic-array = "0.14"
 
 [patch.crates-io.miniconf]
-git = "https://github.com/quartiq/miniconf.git"
-branch = "develop"
+path = "../miniconf/"
 
 [patch.crates-io.serde-json-core]
 git = "https://github.com/rust-embedded-community/serde-json-core.git"

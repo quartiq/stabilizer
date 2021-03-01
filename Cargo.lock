@@ -199,9 +199,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive_stringset"
+name = "derive_miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?branch=develop#97ace3d8268075235cb67a2a8740d200bea1fe30"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -402,9 +401,8 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?branch=develop#97ace3d8268075235cb67a2a8740d200bea1fe30"
 dependencies = [
- "derive_stringset",
+ "derive_miniconf",
  "heapless",
  "minimq",
  "serde",
