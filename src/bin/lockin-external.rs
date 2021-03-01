@@ -2,12 +2,56 @@
 #![no_std]
 #![no_main]
 
-use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
 use generic_array::typenum::U4;
-use hardware::{
-    Adc0Input, Adc1Input, Dac0Output, Dac1Output, InputStamper, AFE0, AFE1,
+
+use miniconf::{
+    embedded_nal::{IpAddr, Ipv4Addr},
+    minimq, MqttInterface, StringSet,
 };
-use stabilizer::{hardware, hardware::design_parameters};
+use serde::Deserialize;
+
+use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
+
+use stabilizer::hardware::{
+    design_parameters, setup, Adc0Input, Adc1Input, AfeGain, CycleCounter,
+    Dac0Output, Dac1Output, InputStamper, NetworkStack, AFE0, AFE1,
+};
+
+#[derive(Copy, Clone, Debug, Deserialize, StringSet)]
+enum Conf {
+    PowerPhase,
+    FrequencyDiscriminator,
+    Quadrature,
+}
+
+#[derive(Copy, Clone, Debug, Deserialize, StringSet)]
+pub struct Settings {
+    afe: [AfeGain; 2],
+
+    pll_tc: [u8; 2],
+
+    lockin_tc: u8,
+    lockin_harmonic: i32,
+    lockin_phase: i32,
+
+    output_conf: Conf,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            afe: [AfeGain::G1, AfeGain::G1],
+
+            pll_tc: [21, 21], // frequency and phase settling time (log2 counter cycles)
+
+            lockin_tc: 6,        // lockin lowpass time constant
+            lockin_harmonic: -1, // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
+            lockin_phase: 0,     // Demodulation LO phase offset
+
+            output_conf: Conf::Quadrature,
+        }
+    }
+}
 
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
@@ -15,21 +59,43 @@ const APP: () = {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
+        clock: CycleCounter,
+
+        mqtt_interface:
+            MqttInterface<Settings, NetworkStack, minimq::consts::U256>,
+
+        settings: Settings,
 
         timestamper: InputStamper,
         pll: RPLL,
         lockin: Lockin<U4>,
     }
 
-    #[init]
+    #[init(spawn=[settings_update])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
+        let (mut stabilizer, _pounder) = setup(c.core, c.device);
+
+        let mqtt_interface = {
+            let mqtt_client = {
+                let broker = IpAddr::V4(Ipv4Addr::new(10, 34, 16, 10));
+                minimq::MqttClient::new(broker, "lockin", stabilizer.net.stack)
+                    .unwrap()
+            };
+
+            MqttInterface::new(mqtt_client, "lockin", Settings::default())
+                .unwrap()
+        };
+
+        let settings = Settings::default();
 
         let pll = RPLL::new(
             design_parameters::ADC_SAMPLE_TICKS_LOG2
                 + design_parameters::SAMPLE_BUFFER_SIZE_LOG2,
         );
+
+        // Spawn a settings update for default settings.
+        c.spawn.settings_update().unwrap();
 
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();
@@ -51,6 +117,11 @@ const APP: () = {
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
             timestamper: stabilizer.timestamper,
+            clock: stabilizer.cycle_counter,
+
+            mqtt_interface,
+
+            settings,
 
             pll,
             lockin: Lockin::default(),
@@ -64,7 +135,7 @@ const APP: () = {
     /// This is an implementation of a externally (DI0) referenced PLL lockin on the ADC0 signal.
     /// It outputs either I/Q or power/phase on DAC0/DAC1. Data is normalized to full scale.
     /// PLL bandwidth, filter bandwidth, slope, and x/y or power/phase post-filters are available.
-    #[task(binds=DMA1_STR4, resources=[adcs, dacs, lockin, timestamper, pll], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, dacs, lockin, timestamper, pll, settings], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -77,6 +148,7 @@ const APP: () = {
         ];
 
         let lockin = c.resources.lockin;
+        let settings = c.resources.settings;
 
         let timestamp = c
             .resources
@@ -86,25 +158,17 @@ const APP: () = {
             .map(|t| t as i32);
         let (pll_phase, pll_frequency) = c.resources.pll.update(
             timestamp,
-            21, // frequency settling time (log2 counter cycles),
-            21, // phase settling time
+            settings.pll_tc[0],
+            settings.pll_tc[1],
         );
-
-        // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
-        let harmonic: i32 = -1;
-
-        // Demodulation LO phase offset
-        let phase_offset: i32 = 0;
-
-        // Log2 lowpass time constant
-        let time_constant: u8 = 6;
 
         let sample_frequency = ((pll_frequency
             >> design_parameters::SAMPLE_BUFFER_SIZE_LOG2)
             as i32)
-            .wrapping_mul(harmonic);
-        let sample_phase =
-            phase_offset.wrapping_add(pll_phase.wrapping_mul(harmonic));
+            .wrapping_mul(settings.lockin_harmonic);
+        let sample_phase = settings
+            .lockin_phase
+            .wrapping_add(pll_phase.wrapping_mul(settings.lockin_harmonic));
 
         let output: Complex<i32> = adc_samples[0]
             .iter()
@@ -113,22 +177,14 @@ const APP: () = {
             // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
             .map(|(&sample, phase)| {
                 let s = (sample as i16 as i32) << 16;
-                lockin.update(s, phase, time_constant)
+                lockin.update(s, phase, settings.lockin_tc)
             })
             // Decimate
             .last()
             .unwrap()
             * 2; // Full scale assuming the 2f component is gone.
 
-        #[allow(dead_code)]
-        enum Conf {
-            PowerPhase,
-            FrequencyDiscriminator,
-            Quadrature,
-        }
-
-        let conf = Conf::FrequencyDiscriminator;
-        let output = match conf {
+        let output = match settings.output_conf {
             // Convert from IQ to power and phase.
             Conf::PowerPhase => [(output.log2() << 24) as _, output.arg()],
             Conf::FrequencyDiscriminator => [pll_frequency as _, output.arg()],
@@ -142,11 +198,40 @@ const APP: () = {
         }
     }
 
-    #[idle(resources=[afes])]
-    fn idle(_: idle::Context) -> ! {
+    #[idle(resources=[mqtt_interface, clock], spawn=[settings_update])]
+    fn idle(mut c: idle::Context) -> ! {
+        let clock = c.resources.clock;
+
         loop {
-            cortex_m::asm::wfi();
+            let sleep = c.resources.mqtt_interface.lock(|interface| {
+                !interface.network_stack().poll(clock.current_ms())
+            });
+
+            match c
+                .resources
+                .mqtt_interface
+                .lock(|interface| interface.update().unwrap())
+            {
+                miniconf::Action::Continue => {
+                    if sleep {
+                        cortex_m::asm::wfi();
+                    }
+                }
+                miniconf::Action::CommitSettings => {
+                    c.spawn.settings_update().unwrap()
+                }
+            }
         }
+    }
+
+    #[task(priority = 1, resources=[mqtt_interface, settings, afes])]
+    fn settings_update(mut c: settings_update::Context) {
+        let settings = &c.resources.mqtt_interface.settings;
+
+        c.resources.afes.0.set_gain(settings.afe[0]);
+        c.resources.afes.1.set_gain(settings.afe[1]);
+
+        c.resources.settings.lock(|current| *current = *settings);
     }
 
     #[task(binds = ETH, priority = 1)]
