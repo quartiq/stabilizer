@@ -1,5 +1,7 @@
+use super::tools::macc_i32;
 use core::f64::consts::PI;
-use serde::{Deserialize, Serialize};
+use miniconf::StringSet;
+use serde::Deserialize;
 
 /// Generic vector for integer IIR filter.
 /// This struct is used to hold the x/y input/output data vector or the b/a coefficient
@@ -39,23 +41,12 @@ impl Coeff for Vec5 {
     }
 }
 
-fn macc(y0: i32, x: &[i32], a: &[i32], shift: u32) -> i32 {
-    // Rounding bias, half up
-    let y0 = ((y0 as i64) << shift) + (1 << (shift - 1));
-    let y = x
-        .iter()
-        .zip(a)
-        .map(|(x, a)| *x as i64 * *a as i64)
-        .fold(y0, |y, xa| y + xa);
-    (y >> shift) as i32
-}
-
 /// Integer biquad IIR
 ///
 /// See `dsp::iir::IIR` for general implementation details.
 /// Offset and limiting disabled to suit lowpass applications.
 /// Coefficient scaling fixed and optimized.
-#[derive(Copy, Clone, Default, Deserialize, Serialize)]
+#[derive(Copy, Clone, Default, Debug, StringSet, Deserialize)]
 pub struct IIR {
     pub ba: Vec5,
     // pub y_offset: i32,
@@ -85,7 +76,7 @@ impl IIR {
         // Store x0            x0 x1 x2 y1 y2
         xy[0] = x0;
         // Compute y0 by multiply-accumulate
-        let y0 = macc(0, xy, &self.ba, IIR::SHIFT);
+        let y0 = macc_i32(0, xy, &self.ba, IIR::SHIFT);
         // Limit y0
         // let y0 = y0.max(self.y_min).min(self.y_max);
         // Store y0            x0 x1 y0 y1 y2

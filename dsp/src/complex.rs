@@ -8,6 +8,8 @@ pub trait ComplexExt<T, U> {
     fn abs_sqr(&self) -> U;
     fn log2(&self) -> T;
     fn arg(&self) -> T;
+    fn saturating_add(&self, other: Self) -> Self;
+    fn saturating_sub(&self, other: Self) -> Self;
 }
 
 impl ComplexExt<i32, u32> for Complex<i32> {
@@ -23,7 +25,7 @@ impl ComplexExt<i32, u32> for Complex<i32> {
     /// ```
     fn from_angle(angle: i32) -> Self {
         let (c, s) = cossin(angle);
-        Self { re: c, im: s }
+        Self::new(c, s)
     }
 
     /// Return the absolute square (the squared magnitude).
@@ -84,6 +86,20 @@ impl ComplexExt<i32, u32> for Complex<i32> {
     /// ```
     fn arg(&self) -> i32 {
         atan2(self.im, self.re)
+    }
+
+    fn saturating_add(&self, other: Self) -> Self {
+        Self::new(
+            self.re.saturating_add(other.re),
+            self.im.saturating_add(other.im),
+        )
+    }
+
+    fn saturating_sub(&self, other: Self) -> Self {
+        Self::new(
+            self.re.saturating_sub(other.re),
+            self.im.saturating_sub(other.im),
+        )
     }
 }
 
