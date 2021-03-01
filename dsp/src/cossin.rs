@@ -14,7 +14,7 @@ include!(concat!(env!("OUT_DIR"), "/cossin_table.rs"));
 /// tuple. With a 7-bit deep LUT there is 1e-5 max and 6e-8 RMS error
 /// in each quadrature over 20 bit phase.
 pub fn cossin(phase: i32) -> (i32, i32) {
-    // Phase bits excluding the three highes MSB
+    // Phase bits excluding the three highest MSB
     const OCTANT_BITS: usize = 32 - 3;
 
     // This is a slightly more compact way to compute the four flags for
@@ -22,50 +22,52 @@ pub fn cossin(phase: i32) -> (i32, i32) {
     let mut octant = (phase as u32) >> OCTANT_BITS;
     octant ^= octant << 1;
 
-    // Mask off octant bits. This leaves the angle in the range [0, pi/4).
-    let mut phase = phase & ((1 << OCTANT_BITS) - 1);
-
+    let mut phase = phase;
     if octant & 1 != 0 {
         // phase = pi/4 - phase
-        phase = (1 << OCTANT_BITS) - 1 - phase;
+        phase = !phase;
     }
 
-    let lookup = COSSIN[(phase >> (OCTANT_BITS - COSSIN_DEPTH)) as usize];
-    // 1/2 < cos(0 <= x <= pi/4) <= 1: Shift the cos
-    // values and scale the sine values as encoded in the LUT.
-    let mut cos = lookup.0 as i32 + u16::MAX as i32;
-    let mut sin = (lookup.1 as i32) << 1;
+    // Mask off octant bits. This leaves the angle in the range [0, pi/4).
+    phase &= (1 << OCTANT_BITS) - 1;
 
     // 16 + 1 bits for cos/sin and 15 for dphi to saturate the i32 range.
     const ALIGN_MSB: usize = 32 - 16 - 1;
     phase >>= OCTANT_BITS - COSSIN_DEPTH - ALIGN_MSB;
+
+    let lookup = COSSIN[(phase >> ALIGN_MSB) as usize];
     phase &= (1 << ALIGN_MSB) - 1;
+
     // The phase values used for the LUT are at midpoint for the truncated phase.
     // Interpolate relative to the LUT entry midpoint.
+    // Also cancel the -1 bias that was conditionally introduced above.
     phase -= (1 << (ALIGN_MSB - 1)) - (octant & 1) as i32;
-    // Fixed point pi/4.
-    const PI4: i32 = (PI / 4. * (1 << (32 - ALIGN_MSB)) as f64) as i32;
-    // No rounding bias necessary here since we keep enough low bits.
-    let dphi = (phase * PI4) >> (32 - ALIGN_MSB);
 
-    // Make room for the sign bit.
-    let dcos = (sin * dphi) >> (COSSIN_DEPTH + 1);
+    // Fixed point pi/4.
+    const PI4: i32 = (PI / 4. * (1 << 16) as f64) as i32;
+    // No rounding bias necessary here since we keep enough low bits.
+    let dphi = (phase * PI4) >> 16;
+
+    // 1/2 < cos(0 <= x <= pi/4) <= 1: Shift the cos
+    // values and scale the sine values as encoded in the LUT.
+    let mut cos = (lookup & 0xffff) as i32 + (1 << 16);
+    let mut sin = (lookup >> 16) as i32;
+
+    let dcos = (sin * dphi) >> COSSIN_DEPTH;
     let dsin = (cos * dphi) >> (COSSIN_DEPTH + 1);
 
     cos = (cos << (ALIGN_MSB - 1)) - dcos;
-    sin = (sin << (ALIGN_MSB - 1)) + dsin;
+    sin = (sin << ALIGN_MSB) + dsin;
 
     // Unmap using octant bits.
     if octant & 2 != 0 {
         core::mem::swap(&mut sin, &mut cos);
     }
-
     if octant & 4 != 0 {
-        cos *= -1;
+        cos = -cos;
     }
-
     if octant & 8 != 0 {
-        sin *= -1;
+        sin = -sin;
     }
 
     (cos, sin)

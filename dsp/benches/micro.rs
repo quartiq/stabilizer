@@ -1,8 +1,9 @@
 use core::f32::consts::PI;
-use dsp::{atan2, cossin};
-use dsp::{iir, iir_int};
-use dsp::{PLL, RPLL};
+
 use easybench::bench_env;
+use generic_array::typenum::U4;
+
+use dsp::{atan2, cossin, iir, iir_int, Lowpass, PLL, RPLL};
 
 fn atan2_bench() {
     let xi = (10 << 16) as i32;
@@ -70,6 +71,18 @@ fn iir_bench() {
     );
 }
 
+fn lowpass_bench() {
+    let mut dut = Lowpass::<U4>::default();
+    println!(
+        "Lowpass::<U4>::update(x, k): {}",
+        bench_env((0x32421, 14), |(x, k)| dut.update(*x, *k))
+    );
+    println!(
+        "Lowpass::<U4>::update(x, 14): {}",
+        bench_env(0x32421, |x| dut.update(*x, 14))
+    );
+}
+
 fn main() {
     atan2_bench();
     cossin_bench();
@@ -77,4 +90,5 @@ fn main() {
     pll_bench();
     iir_int_bench();
     iir_bench();
+    lowpass_bench();
 }
