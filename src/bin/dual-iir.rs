@@ -139,8 +139,8 @@ const APP: () = {
         let clock = c.resources.clock;
 
         loop {
-            let _sleep = c.resources.mqtt_interface.lock(|interface| {
-                !interface.network_stack().poll(clock.current_ms())
+            let sleep = c.resources.mqtt_interface.lock(|interface| {
+                interface.network_stack().poll(clock.current_ms())
             });
 
             if c.resources
@@ -148,6 +148,10 @@ const APP: () = {
                 .lock(|interface| interface.update().unwrap())
             {
                 c.spawn.settings_update().unwrap()
+            }
+
+            if sleep {
+                cortex_m::asm::wfi();
             }
         }
     }
