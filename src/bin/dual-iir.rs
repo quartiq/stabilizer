@@ -8,7 +8,7 @@ use stabilizer::hardware;
 
 use miniconf::{
     embedded_nal::{IpAddr, Ipv4Addr},
-    minimq, MqttInterface, StringSet,
+    minimq, Miniconf, MqttInterface,
 };
 use serde::Deserialize;
 
@@ -23,7 +23,7 @@ const SCALE: f32 = i16::MAX as _;
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
 
-#[derive(Debug, Deserialize, StringSet)]
+#[derive(Debug, Deserialize, Miniconf)]
 pub struct Settings {
     afe: [AfeGain; 2],
     iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
@@ -63,12 +63,8 @@ const APP: () = {
         let mqtt_interface = {
             let mqtt_client = {
                 let broker = IpAddr::V4(Ipv4Addr::new(10, 34, 16, 1));
-                minimq::MqttClient::new(
-                    broker,
-                    "stabilizer",
-                    stabilizer.net.stack,
-                )
-                .unwrap()
+                minimq::MqttClient::new(broker, "", stabilizer.net.stack)
+                    .unwrap()
             };
 
             MqttInterface::new(mqtt_client, "stabilizer", Settings::default())
@@ -147,19 +143,13 @@ const APP: () = {
                 !interface.network_stack().poll(clock.current_ms())
             });
 
-            match c
-                .resources
+            if c.resources
                 .mqtt_interface
                 .lock(|interface| interface.update().unwrap())
             {
-                miniconf::Action::Continue => {
-                    if sleep {
-                        cortex_m::asm::wfi();
-                    }
-                }
-                miniconf::Action::CommitSettings => {
-                    c.spawn.settings_update().unwrap()
-                }
+                c.spawn.settings_update().unwrap()
+            } else if sleep {
+                cortex_m::asm::wfi();
             }
         }
     }

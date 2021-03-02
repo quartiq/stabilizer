@@ -52,6 +52,10 @@ generic-array = "0.14"
 git = "https://github.com/quartiq/miniconf.git"
 branch = "develop"
 
+[patch.crates-io.minimq]
+git = "https://github.com/quartiq/minimq.git"
+branch = "master"
+
 [patch.crates-io.serde-json-core]
 git = "https://github.com/rust-embedded-community/serde-json-core.git"
 branch = "master"

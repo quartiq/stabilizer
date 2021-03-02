@@ -199,9 +199,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive_stringset"
+name = "derive_miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?branch=develop#97ace3d8268075235cb67a2a8740d200bea1fe30"
+source = "git+https://github.com/quartiq/miniconf.git?branch=develop#394d0634a9622e43a55850afc34eb4695ecababa"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -402,9 +402,9 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?branch=develop#97ace3d8268075235cb67a2a8740d200bea1fe30"
+source = "git+https://github.com/quartiq/miniconf.git?branch=develop#394d0634a9622e43a55850afc34eb4695ecababa"
 dependencies = [
- "derive_stringset",
+ "derive_miniconf",
  "heapless",
  "minimq",
  "serde",
@@ -414,8 +414,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c5e626690b6f62e15710cf9815e5ca25ee54084899298c100a14b2504c80a46"
+source = "git+https://github.com/quartiq/minimq.git?branch=master#a89a6f11d0d1f63114fb15f676022eb4fe904f56"
 dependencies = [
  "bit_field",
  "embedded-nal",

@@ -1,4 +1,4 @@
-use miniconf::StringSet;
+use miniconf::MiniconfAtomic;
 use serde::Deserialize;
 
 use super::{abs, copysign, macc, max, min};
@@ -39,7 +39,7 @@ pub type Vec5 = [f32; 5];
 ///   Therefore it can trivially implement bump-less transfer.
 /// * Cascading multiple IIR filters allows stable and robust
 ///   implementation of transfer functions beyond bequadratic terms.
-#[derive(Copy, Clone, Debug, Default, Deserialize, StringSet)]
+#[derive(Copy, Clone, Debug, Default, Deserialize, MiniconfAtomic)]
 pub struct IIR {
     pub ba: Vec5,
     pub y_offset: f32,
