@@ -50,7 +50,7 @@ generic-array = "0.14"
 
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf.git"
-branch = "rs/crate-scope-derive"
+branch = "develop"
 
 [patch.crates-io.minimq]
 git = "https://github.com/quartiq/minimq.git"
