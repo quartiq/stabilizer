@@ -54,7 +54,7 @@ branch = "develop"
 
 [patch.crates-io.minimq]
 git = "https://github.com/quartiq/minimq.git"
-branch = "feature/optional-client-id"
+branch = "master"
 
 [patch.crates-io.serde-json-core]
 git = "https://github.com/rust-embedded-community/serde-json-core.git"
