@@ -34,13 +34,13 @@ pub struct Settings {
     lockin_harmonic: i32,
     lockin_phase: i32,
 
-    output_conf: Conf,
+    output_conf: [Conf; 2],
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            afe: [AfeGain::G1, AfeGain::G1],
+            afe: [AfeGain::G1; 2],
 
             pll_tc: [21, 21], // frequency and phase settling time (log2 counter cycles)
 
@@ -48,7 +48,7 @@ impl Default for Settings {
             lockin_harmonic: -1, // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
             lockin_phase: 0,     // Demodulation LO phase offset
 
-            output_conf: Conf::Quadrature,
+            output_conf: [Conf::Quadrature; 2],
         }
     }
 }
@@ -150,14 +150,10 @@ const APP: () = {
         let lockin = c.resources.lockin;
         let settings = c.resources.settings;
 
-        let timestamp = c
-            .resources
-            .timestamper
-            .latest_timestamp()
-            .unwrap_or(None) // Ignore data from timer capture overflows.
-            .map(|t| t as i32);
+        let timestamp =
+            c.resources.timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
         let (pll_phase, pll_frequency) = c.resources.pll.update(
-            timestamp,
+            timestamp.map(|t| t as i32),
             settings.pll_tc[0],
             settings.pll_tc[1],
         );
@@ -184,12 +180,18 @@ const APP: () = {
             .unwrap()
             * 2; // Full scale assuming the 2f component is gone.
 
-        let output = match settings.output_conf {
-            // Convert from IQ to power and phase.
-            Conf::PowerPhase => [(output.log2() << 24) as _, output.arg()],
-            Conf::FrequencyDiscriminator => [pll_frequency as _, output.arg()],
-            Conf::Quadrature => [output.re, output.im],
-        };
+        let output = [
+            match settings.output_conf[0] {
+                Conf::PowerPhase => output.abs_sqr() as _,
+                Conf::FrequencyDiscriminator => (output.log2() << 24) as _,
+                Conf::Quadrature => output.re,
+            },
+            match settings.output_conf[1] {
+                Conf::PowerPhase => output.arg(),
+                Conf::FrequencyDiscriminator => pll_frequency as _,
+                Conf::Quadrature => output.im,
+            },
+        ];
 
         // Convert to DAC data.
         for i in 0..dac_samples[0].len() {
