@@ -1,6 +1,6 @@
 use super::tools::macc_i32;
 use core::f64::consts::PI;
-use miniconf::StringSet;
+use miniconf::MiniconfAtomic;
 use serde::Deserialize;
 
 /// Generic vector for integer IIR filter.
@@ -46,7 +46,7 @@ impl Coeff for Vec5 {
 /// See `dsp::iir::IIR` for general implementation details.
 /// Offset and limiting disabled to suit lowpass applications.
 /// Coefficient scaling fixed and optimized.
-#[derive(Copy, Clone, Default, Debug, StringSet, Deserialize)]
+#[derive(Copy, Clone, Default, Debug, MiniconfAtomic, Deserialize)]
 pub struct IIR {
     pub ba: Vec5,
     // pub y_offset: i32,
