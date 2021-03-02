@@ -178,7 +178,7 @@ const APP: () = {
 
     #[task(binds = SPI3, priority = 3)]
     fn spi3(_: spi3::Context) {
-        panic!("ADC0 input overrun");
+        panic!("ADC1 input overrun");
     }
 
     #[task(binds = SPI4, priority = 3)]
