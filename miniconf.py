@@ -7,6 +7,7 @@ Description: Provides an API for controlling Miniconf devices over MQTT.
 """
 import argparse
 import asyncio
+import json
 import logging
 
 from gmqtt import Client as MqttClient
@@ -70,6 +71,7 @@ class Miniconf:
             raise NotImplementedError(
                     'Only one in-flight message per topic is supported')
 
+        value = json.dumps(value)
         logger.debug('Sending %s to "%s"', value, setting_topic)
         fut = asyncio.get_running_loop().create_future()
         self.inflight[response_topic] = fut
@@ -98,14 +100,14 @@ def main():
     args = parser.parse_args()
 
     logging.basicConfig(
-            format='%(asctime)s [%(levelname)s] %(message)s',
+            format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
             level=logging.WARN - 10*args.verbose)
 
     loop = asyncio.get_event_loop()
 
     async def configure_settings():
         interface = await Miniconf.create(args.prefix, args.broker)
-        response = await interface.command(args.path, args.value)
+        response = await interface.command(args.path, json.loads(args.value))
         logger.info(response)
 
     loop.run_until_complete(configure_settings())
