@@ -83,8 +83,12 @@ const APP: () = {
                     .unwrap()
             };
 
-            MqttInterface::new(mqtt_client, "lockin", Settings::default())
-                .unwrap()
+            MqttInterface::new(
+                mqtt_client,
+                "dt/sinara/lockin",
+                Settings::default(),
+            )
+            .unwrap()
         };
 
         let settings = Settings::default();
