@@ -140,7 +140,7 @@ const APP: () = {
 
         loop {
             let sleep = c.resources.mqtt_interface.lock(|interface| {
-                interface.network_stack().poll(clock.current_ms())
+                !interface.network_stack().poll(clock.current_ms())
             });
 
             if c.resources
