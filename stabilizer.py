@@ -72,7 +72,7 @@ class MiniconfApi:
 
         self.logger.debug('Sending %s to "%s"', value, setting_topic)
         self.inflight_settings[response_topic] = asyncio.get_running_loop().create_future()
-        self.client.publish(setting_topic, payload=value, qos=0, retain=False,
+        self.client.publish(setting_topic, payload=value, qos=0, retain=True,
                             response_topic=response_topic)
 
         response = await self.inflight_settings[response_topic]
