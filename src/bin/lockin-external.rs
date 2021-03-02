@@ -6,7 +6,7 @@ use generic_array::typenum::U4;
 
 use miniconf::{
     embedded_nal::{IpAddr, Ipv4Addr},
-    minimq, MqttInterface, StringSet,
+    minimq, Miniconf, MqttInterface,
 };
 use serde::Deserialize;
 
@@ -17,14 +17,14 @@ use stabilizer::hardware::{
     Dac0Output, Dac1Output, InputStamper, NetworkStack, AFE0, AFE1,
 };
 
-#[derive(Copy, Clone, Debug, Deserialize, StringSet)]
+#[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 enum Conf {
     PowerPhase,
     FrequencyDiscriminator,
     Quadrature,
 }
 
-#[derive(Copy, Clone, Debug, Deserialize, StringSet)]
+#[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 pub struct Settings {
     afe: [AfeGain; 2],
 
@@ -79,7 +79,7 @@ const APP: () = {
         let mqtt_interface = {
             let mqtt_client = {
                 let broker = IpAddr::V4(Ipv4Addr::new(10, 34, 16, 10));
-                minimq::MqttClient::new(broker, "lockin", stabilizer.net.stack)
+                minimq::MqttClient::new(broker, "", stabilizer.net.stack)
                     .unwrap()
             };
 
@@ -209,19 +209,13 @@ const APP: () = {
                 !interface.network_stack().poll(clock.current_ms())
             });
 
-            match c
-                .resources
+            if c.resources
                 .mqtt_interface
                 .lock(|interface| interface.update().unwrap())
             {
-                miniconf::Action::Continue => {
-                    if sleep {
-                        cortex_m::asm::wfi();
-                    }
-                }
-                miniconf::Action::CommitSettings => {
-                    c.spawn.settings_update().unwrap()
-                }
+                c.spawn.settings_update().unwrap()
+            } else if sleep {
+                cortex_m::asm::wfi();
             }
         }
     }
