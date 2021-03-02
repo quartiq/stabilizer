@@ -148,9 +148,7 @@ const APP: () = {
                 .lock(|interface| interface.update().unwrap())
             {
                 c.spawn.settings_update().unwrap()
-            }
-
-            if sleep {
+            } else if sleep {
                 cortex_m::asm::wfi();
             }
         }
