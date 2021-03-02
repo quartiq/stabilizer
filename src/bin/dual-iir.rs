@@ -63,12 +63,8 @@ const APP: () = {
         let mqtt_interface = {
             let mqtt_client = {
                 let broker = IpAddr::V4(Ipv4Addr::new(10, 34, 16, 1));
-                minimq::MqttClient::new(
-                    broker,
-                    "stabilizer",
-                    stabilizer.net.stack,
-                )
-                .unwrap()
+                minimq::MqttClient::new(broker, None, stabilizer.net.stack)
+                    .unwrap()
             };
 
             MqttInterface::new(mqtt_client, "stabilizer", Settings::default())

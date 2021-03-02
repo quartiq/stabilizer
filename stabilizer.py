@@ -108,10 +108,6 @@ async def configure_settings(args):
     response = await interface.command(f'settings/{args.setting}', json.dumps(request))
     logger.info(response)
 
-    if args.commit:
-        response = await interface.command('commit', 'commit')
-        logger.info(response)
-
 
 def main():
     """ Main program entry point. """
@@ -122,8 +118,6 @@ def main():
     parser.add_argument('--broker', default='10.34.16.1', type=str, help='The MQTT broker address')
     parser.add_argument('values', nargs='+', type=str,
                         help='The value of settings. key=value list or a single value is accepted.')
-    parser.add_argument('--commit', action='store_true',
-                        help='Specified true to commit after updating settings.')
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose logging')
 
     args = parser.parse_args()

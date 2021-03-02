@@ -201,6 +201,7 @@ dependencies = [
 [[package]]
 name = "derive_miniconf"
 version = "0.1.0"
+source = "git+https://github.com/quartiq/miniconf.git?branch=rs/crate-scope-derive#dbd3dfb0ea79b7227c9f217849817601adfa4421"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -401,6 +402,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.1.0"
+source = "git+https://github.com/quartiq/miniconf.git?branch=rs/crate-scope-derive#dbd3dfb0ea79b7227c9f217849817601adfa4421"
 dependencies = [
  "derive_miniconf",
  "heapless",
@@ -412,8 +414,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c5e626690b6f62e15710cf9815e5ca25ee54084899298c100a14b2504c80a46"
+source = "git+https://github.com/quartiq/minimq.git?branch=feature/optional-client-id#18c277088d427a54b8fdb49f2755ffda2479bf3f"
 dependencies = [
  "bit_field",
  "embedded-nal",
