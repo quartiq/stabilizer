@@ -72,7 +72,7 @@ class Miniconf:
                     'Only one in-flight message per topic is supported')
 
         value = json.dumps(value)
-        logger.debug('Sending %s to "%s"', value, setting_topic)
+        logger.info('Sending %s to "%s"', value, setting_topic)
         fut = asyncio.get_running_loop().create_future()
         self.inflight[response_topic] = fut
         self.client.publish(setting_topic, payload=value, qos=0, retain=True,
@@ -86,7 +86,7 @@ def main():
             epilog='''Example:
             %(prog)s -v -b mqtt dt/sinara/stabilizer afe/0 '"G10"'
             ''')
-    parser.add_argument('-v', '--verbose', action='count',
+    parser.add_argument('-v', '--verbose', action='count', default=0,
                         help='Increase logging verbosity')
     parser.add_argument('--broker', '-b', default='mqtt', type=str,
                         help='The MQTT broker address')
@@ -108,7 +108,7 @@ def main():
     async def configure_settings():
         interface = await Miniconf.create(args.prefix, args.broker)
         response = await interface.command(args.path, json.loads(args.value))
-        logger.info(response)
+        print(f"Response: {response}")
 
     loop.run_until_complete(configure_settings())
 
