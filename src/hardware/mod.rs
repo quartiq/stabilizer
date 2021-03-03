@@ -49,7 +49,8 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     let gpiod = unsafe { &*hal::stm32::GPIOD::ptr() };
     // Turn on both red LEDs, FP_LED_1, FP_LED_3
     gpiod.odr.modify(|_, w| w.odr6().high().odr12().high());
-    loop { // Halt
+    loop {
+        // Halt
         core::sync::atomic::compiler_fence(
             core::sync::atomic::Ordering::SeqCst,
         );
