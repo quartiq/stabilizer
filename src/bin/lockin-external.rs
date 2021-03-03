@@ -4,10 +4,7 @@
 
 use generic_array::typenum::U4;
 
-use miniconf::{
-    embedded_nal::{IpAddr, Ipv4Addr},
-    minimq, Miniconf, MqttInterface,
-};
+use miniconf::{minimq, Miniconf, MqttInterface};
 use serde::Deserialize;
 
 use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
@@ -77,14 +74,19 @@ const APP: () = {
         let (mut stabilizer, _pounder) = setup(c.core, c.device);
 
         let mqtt_interface = {
-            let mqtt_client = {
-                let broker = IpAddr::V4(Ipv4Addr::new(10, 34, 16, 10));
-                minimq::MqttClient::new(broker, "", stabilizer.net.stack)
-                    .unwrap()
-            };
+            let mqtt_client = minimq::MqttClient::new(
+                design_parameters::MQTT_BROKER.into(),
+                "",
+                stabilizer.net.stack,
+            )
+            .unwrap();
 
-            MqttInterface::new(mqtt_client, "lockin", Settings::default())
-                .unwrap()
+            MqttInterface::new(
+                mqtt_client,
+                "dt/sinara/lockin",
+                Settings::default(),
+            )
+            .unwrap()
         };
 
         let settings = Settings::default();

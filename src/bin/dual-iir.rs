@@ -6,10 +6,7 @@ use stm32h7xx_hal as hal;
 
 use stabilizer::hardware;
 
-use miniconf::{
-    embedded_nal::{IpAddr, Ipv4Addr},
-    minimq, Miniconf, MqttInterface,
-};
+use miniconf::{minimq, Miniconf, MqttInterface};
 use serde::Deserialize;
 
 use dsp::iir;
@@ -62,13 +59,20 @@ const APP: () = {
 
         let mqtt_interface = {
             let mqtt_client = {
-                let broker = IpAddr::V4(Ipv4Addr::new(10, 34, 16, 1));
-                minimq::MqttClient::new(broker, "", stabilizer.net.stack)
-                    .unwrap()
+                minimq::MqttClient::new(
+                    hardware::design_parameters::MQTT_BROKER.into(),
+                    "",
+                    stabilizer.net.stack,
+                )
+                .unwrap()
             };
 
-            MqttInterface::new(mqtt_client, "stabilizer", Settings::default())
-                .unwrap()
+            MqttInterface::new(
+                mqtt_client,
+                "dt/sinara/stabilizer",
+                Settings::default(),
+            )
+            .unwrap()
         };
 
         // Enable ADC/DAC events
