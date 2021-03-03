@@ -49,3 +49,6 @@ pub const ADC_SAMPLE_TICKS: u16 = 1 << ADC_SAMPLE_TICKS_LOG2;
 // The desired ADC sample processing buffer size.
 pub const SAMPLE_BUFFER_SIZE_LOG2: u8 = 3;
 pub const SAMPLE_BUFFER_SIZE: usize = 1 << SAMPLE_BUFFER_SIZE_LOG2;
+
+// The MQTT broker IPv4 address
+pub const MQTT_BROKER: [u8; 4] = [10, 34, 16, 10];
