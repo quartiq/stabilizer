@@ -84,7 +84,7 @@ def main():
     parser = argparse.ArgumentParser(
             description='Miniconf command line interface.',
             epilog='''Example:
-            miniconf.py -v -b mqtt dt/sinara/stabilizer afe/0 '"G10"'
+            %(prog)s -v -b mqtt dt/sinara/stabilizer afe/0 '"G10"'
             ''')
     parser.add_argument('-v', '--verbose', action='count',
                         help='Increase logging verbosity')
