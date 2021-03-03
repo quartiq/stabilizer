@@ -4,9 +4,6 @@ use stm32h7xx_hal as hal;
 #[cfg(feature = "semihosting")]
 use panic_semihosting as _;
 
-#[cfg(not(any(feature = "nightly", feature = "semihosting")))]
-use panic_halt as _;
-
 mod adc;
 mod afe;
 mod configuration;
@@ -47,24 +44,19 @@ pub use configuration::{setup, PounderDevices, StabilizerDevices};
 
 #[inline(never)]
 #[panic_handler]
-#[cfg(all(feature = "nightly", not(feature = "semihosting")))]
+#[cfg(all(not(feature = "semihosting")))]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     let gpiod = unsafe { &*hal::stm32::GPIOD::ptr() };
-    gpiod.odr.modify(|_, w| w.odr6().high().odr12().high()); // FP_LED_1, FP_LED_3
-    #[cfg(feature = "nightly")]
-    core::intrinsics::abort();
-    #[cfg(not(feature = "nightly"))]
-    unsafe {
-        core::intrinsics::abort();
+    // Turn on both red LEDs, FP_LED_1, FP_LED_3
+    gpiod.odr.modify(|_, w| w.odr6().high().odr12().high());
+    loop { // Halt
+        core::sync::atomic::compiler_fence(
+            core::sync::atomic::Ordering::SeqCst,
+        );
     }
 }
 
 #[cortex_m_rt::exception]
 fn HardFault(ef: &cortex_m_rt::ExceptionFrame) -> ! {
     panic!("HardFault at {:#?}", ef);
-}
-
-#[cortex_m_rt::exception]
-fn DefaultHandler(irqn: i16) {
-    panic!("Unhandled exception (IRQn = {})", irqn);
 }
