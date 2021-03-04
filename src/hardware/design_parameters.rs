@@ -43,7 +43,7 @@ pub const DDS_SYNC_CLK_DIV: u8 = 4;
 // The number of ticks in the ADC sampling timer. The timer runs at 100MHz, so the step size is
 // equal to 10ns per tick.
 // Currently, the sample rate is equal to: Fsample = 100/128 MHz ~ 800 KHz
-pub const ADC_SAMPLE_TICKS_LOG2: u8 = 7;
+pub const ADC_SAMPLE_TICKS_LOG2: u8 = 12;
 pub const ADC_SAMPLE_TICKS: u16 = 1 << ADC_SAMPLE_TICKS_LOG2;
 
 // The desired ADC sample processing buffer size.

@@ -201,7 +201,7 @@ dependencies = [
 [[package]]
 name = "derive_miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?branch=develop#394d0634a9622e43a55850afc34eb4695ecababa"
+source = "git+https://github.com/quartiq/miniconf.git?branch=develop#314fa5587d1aa28e1ad70106f19e30db646e9f28"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -414,10 +414,10 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?branch=develop#394d0634a9622e43a55850afc34eb4695ecababa"
+source = "git+https://github.com/quartiq/miniconf.git?branch=develop#314fa5587d1aa28e1ad70106f19e30db646e9f28"
 dependencies = [
  "derive_miniconf",
- "heapless 0.5.6",
+ "heapless 0.6.1",
  "minimq",
  "serde",
  "serde-json-core",
@@ -426,13 +426,13 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.2.0"
-source = "git+https://github.com/quartiq/minimq.git?branch=master#a89a6f11d0d1f63114fb15f676022eb4fe904f56"
+source = "git+https://github.com/quartiq/minimq.git?branch=feature/init-update#e686ccd89090f32990661fe49416d570e2e80835"
 dependencies = [
  "bit_field",
  "embedded-nal",
  "enum-iterator",
  "generic-array 0.14.4",
- "heapless 0.5.6",
+ "heapless 0.6.1",
 ]
 
 [[package]]
@@ -714,11 +714,10 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4e5aeb4818706fd74c35917692008d29a5314483c8180300a582253718ce57a"
+source = "git+https://github.com/quartiq/smoltcp-nal.git?branch=feature/dhcp-support#5c62caa539d011c45453314c5872e9ca9cd9f780"
 dependencies = [
  "embedded-nal",
- "heapless 0.5.6",
+ "heapless 0.6.1",
  "smoltcp",
 ]
 
