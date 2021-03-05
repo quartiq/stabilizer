@@ -825,6 +825,14 @@ pub fn setup(
         None
     };
 
+    let cycle_counter = {
+        // Set TRCENA bit, which is required for DWT counter to tick. (This is also
+        // set automatically when running in the debugger, and only cleared on power
+        // reset, not on soft reset.)
+        core.DCB.enable_trace();
+        CycleCounter::new(core.DWT, ccdr.clocks.c_ck())
+    };
+
     let stabilizer = StabilizerDevices {
         afes,
         adcs,
@@ -833,7 +841,7 @@ pub fn setup(
         net: network_devices,
         adc_dac_timer: sampling_timer,
         timestamp_timer,
-        cycle_counter: CycleCounter::new(core.DWT, ccdr.clocks.c_ck()),
+        cycle_counter,
     };
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
