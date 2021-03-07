@@ -486,13 +486,15 @@ pub fn setup(
             .set_speed(hal::gpio::Speed::VeryHigh);
     }
 
-    let mac_addr = match eeprom::read_eui48(&mut eeprom_i2c) {
-        Err(_) => {
-            info!("Could not read EEPROM, using default MAC address");
-            smoltcp::wire::EthernetAddress([0x10, 0xE2, 0xD5, 0x00, 0x03, 0x00])
-        }
-        Ok(raw_mac) => smoltcp::wire::EthernetAddress(raw_mac),
-    };
+    // The EEPROM only gets connected to I2C after the analog supplies are up, which
+    // takes a while (particularly on pre-v1.2 hardware). Wait until a read succeeds,
+    // and then read again to get non-corrupted data.
+    info!("Waiting for I2C EEPROM to become available...");
+    while eeprom::read_eui48(&mut eeprom_i2c).is_err() {}
+    let mac_addr = smoltcp::wire::EthernetAddress(
+        eeprom::read_eui48(&mut eeprom_i2c).unwrap(),
+    );
+    info!("MAC address: {}", mac_addr);
 
     let network_devices = {
         // Configure the ethernet controller
