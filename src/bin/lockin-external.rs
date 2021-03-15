@@ -208,7 +208,13 @@ const APP: () = {
 
         loop {
             let sleep = c.resources.mqtt_interface.lock(|interface| {
-                !interface.network_stack().poll(clock.current_ms())
+                match interface.network_stack().poll(clock.current_ms()) {
+                    Ok(updated) => !updated,
+                    Err(err) => {
+                        log::info!("Network error: {:?}", err);
+                        true
+                    }
+                }
             });
 
             if c.resources

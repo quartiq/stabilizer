@@ -52,7 +52,6 @@ branch = "develop"
 
 [patch.crates-io.minimq]
 git = "https://github.com/quartiq/minimq.git"
-branch = "feature/init-update"
 
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"

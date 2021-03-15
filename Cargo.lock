@@ -426,7 +426,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.2.0"
-source = "git+https://github.com/quartiq/minimq.git?branch=feature/init-update#e686ccd89090f32990661fe49416d570e2e80835"
+source = "git+https://github.com/quartiq/minimq.git#933687c2e4bc8a4d972de9a4d1508b0b554a8b38"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -708,7 +708,7 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/smoltcp-nal.git?branch=feature/dhcp-support#5c62caa539d011c45453314c5872e9ca9cd9f780"
+source = "git+https://github.com/quartiq/smoltcp-nal.git?branch=feature/dhcp-support#b3de37939140d04a64c79afddb97b81ff49e1f23"
 dependencies = [
  "embedded-nal",
  "heapless 0.6.1",
