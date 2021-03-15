@@ -43,7 +43,7 @@ enum-iterator = "0.6.0"
 paste = "1"
 dsp = { path = "dsp" }
 ad9959 = { path = "ad9959" }
-smoltcp-nal = "0.1."
+smoltcp-nal = "0.1.0"
 miniconf = "0.1"
 generic-array = "0.14"
 
@@ -61,6 +61,10 @@ branch = "feature/dhcp-support"
 [patch.crates-io.serde-json-core]
 git = "https://github.com/rust-embedded-community/serde-json-core.git"
 branch = "master"
+
+[patch.crates-io.smoltcp]
+git = "https://github.com/ryan-summers/smoltcp.git"
+branch = "feature/dhcp-lease-updates"
 
 [dependencies.mcp23017]
 git = "https://github.com/mrd0ll4r/mcp23017.git"
