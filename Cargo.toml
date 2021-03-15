@@ -43,6 +43,7 @@ enum-iterator = "0.6.0"
 paste = "1"
 dsp = { path = "dsp" }
 ad9959 = { path = "ad9959" }
+smoltcp-nal = "0.1."
 miniconf = "0.1"
 generic-array = "0.14"
 
@@ -53,7 +54,7 @@ branch = "develop"
 [patch.crates-io.minimq]
 git = "https://github.com/quartiq/minimq.git"
 
-[dependencies.smoltcp-nal]
+[patch.crates-io.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
 branch = "feature/dhcp-support"
 
