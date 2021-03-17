@@ -707,7 +707,7 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/smoltcp-nal.git?branch=feature/dhcp-support#79fd03e3d051402c71116839606e5b3294372c98"
+source = "git+https://github.com/quartiq/smoltcp-nal.git?branch=main#56519012d7c6a382eaa0d7ecb26f2701771d9ce8"
 dependencies = [
  "embedded-nal",
  "heapless 0.6.1",

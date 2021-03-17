@@ -56,7 +56,7 @@ git = "https://github.com/quartiq/minimq.git"
 
 [patch.crates-io.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
-branch = "feature/dhcp-support"
+branch = "main"
 
 [patch.crates-io.serde-json-core]
 git = "https://github.com/rust-embedded-community/serde-json-core.git"
