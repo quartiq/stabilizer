@@ -4,16 +4,17 @@
 
 use stm32h7xx_hal as hal;
 
-use stabilizer::hardware;
+use stabilizer::{hardware, net};
 
-use miniconf::{minimq, Miniconf, MqttInterface};
+use miniconf::Miniconf;
 use serde::Deserialize;
 
 use dsp::iir;
 use hardware::{
-    Adc0Input, Adc1Input, AfeGain, CycleCounter, Dac0Output, Dac1Output,
-    NetworkStack, AFE0, AFE1,
+    Adc0Input, Adc1Input, AfeGain, Dac0Output, Dac1Output, AFE0, AFE1,
 };
+
+use net::{Action, MqttSettings};
 
 const SCALE: f32 = i16::MAX as _;
 
@@ -41,9 +42,7 @@ const APP: () = {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        mqtt_interface:
-            MqttInterface<Settings, NetworkStack, minimq::consts::U256>,
-        clock: CycleCounter,
+        mqtt_settings: MqttSettings<Settings>,
 
         // Format: iir_state[ch][cascade-no][coeff]
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
@@ -57,23 +56,13 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let mqtt_interface = {
-            let mqtt_client = {
-                minimq::MqttClient::new(
-                    hardware::design_parameters::MQTT_BROKER.into(),
-                    "",
-                    stabilizer.net.stack,
-                )
-                .unwrap()
-            };
-
-            MqttInterface::new(
-                mqtt_client,
-                "dt/sinara/stabilizer",
-                Settings::default(),
-            )
-            .unwrap()
-        };
+        let mqtt_settings = MqttSettings::new(
+            stabilizer.net.stack,
+            "",
+            "dt/sinara/stabilizer",
+            stabilizer.net.phy,
+            stabilizer.cycle_counter,
+        );
 
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();
@@ -85,11 +74,10 @@ const APP: () = {
         stabilizer.adc_dac_timer.start();
 
         init::LateResources {
-            mqtt_interface,
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            clock: stabilizer.cycle_counter,
+            mqtt_settings,
         }
     }
 
@@ -138,44 +126,22 @@ const APP: () = {
         }
     }
 
-    #[idle(resources=[mqtt_interface, clock], spawn=[settings_update])]
+    #[idle(resources=[mqtt_settings], spawn=[settings_update])]
     fn idle(mut c: idle::Context) -> ! {
-        let clock = c.resources.clock;
-
         loop {
-            let sleep = c.resources.mqtt_interface.lock(|interface| {
-                match interface.network_stack().poll(clock.current_ms()) {
-                    Ok(updated) => !updated,
-                    Err(err) => {
-                        log::info!("Network error: {:?}", err);
-                        false
-                    }
+            match c.resources.mqtt_settings.lock(|settings| settings.update()) {
+                Some(Action::Sleep) => cortex_m::asm::wfi(),
+                Some(Action::UpdateSettings) => {
+                    c.spawn.settings_update().unwrap()
                 }
-            });
-
-            match c
-                .resources
-                .mqtt_interface
-                .lock(|interface| interface.update())
-            {
-                Ok(update) => {
-                    if update {
-                        c.spawn.settings_update().unwrap();
-                    } else if sleep {
-                        cortex_m::asm::wfi();
-                    }
-                }
-                Err(miniconf::MqttError::Network(
-                    smoltcp_nal::NetworkError::NoIpAddress,
-                )) => {}
-                Err(error) => log::info!("Unexpected error: {:?}", error),
+                _ => {}
             }
         }
     }
 
-    #[task(priority = 1, resources=[mqtt_interface, afes, iir_ch])]
+    #[task(priority = 1, resources=[mqtt_settings, afes, iir_ch])]
     fn settings_update(mut c: settings_update::Context) {
-        let settings = &c.resources.mqtt_interface.settings;
+        let settings = &c.resources.mqtt_settings.mqtt_interface.settings;
 
         // Update the IIR channels.
         c.resources.iir_ch.lock(|iir| *iir = settings.iir_ch);

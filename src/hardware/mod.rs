@@ -40,6 +40,8 @@ pub type NetworkStack = smoltcp_nal::NetworkStack<
     hal::ethernet::EthernetDMA<'static>,
 >;
 
+pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
+
 pub use configuration::{setup, PounderDevices, StabilizerDevices};
 
 #[inline(never)]
