@@ -597,6 +597,9 @@ pub fn setup(
                 &mut sockets,
                 dhcp_rx_buffer,
                 dhcp_tx_buffer,
+                // Smoltcp indicates that an instant with a negative time is indicative that time is
+                // not yet available. We can't get the current instant yet, so indicate an invalid
+                // time value.
                 smoltcp::time::Instant::from_millis(-1),
             )
         };
