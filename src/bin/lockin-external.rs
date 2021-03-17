@@ -217,13 +217,22 @@ const APP: () = {
                 }
             });
 
-            if c.resources
+            match c
+                .resources
                 .mqtt_interface
-                .lock(|interface| interface.update().unwrap())
+                .lock(|interface| interface.update())
             {
-                c.spawn.settings_update().unwrap()
-            } else if sleep {
-                cortex_m::asm::wfi();
+                Ok(update) => {
+                    if update {
+                        c.spawn.settings_update().unwrap();
+                    } else if sleep {
+                        cortex_m::asm::wfi();
+                    }
+                }
+                Err(miniconf::MqttError::Network(
+                    smoltcp_nal::NetworkError::NoIpAddress,
+                )) => {}
+                Err(error) => log::info!("Unexpected error: {:?}", error),
             }
         }
     }
