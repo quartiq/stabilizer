@@ -19,13 +19,38 @@ use super::{
 
 pub struct NetStorage {
     pub ip_addrs: [smoltcp::wire::IpCidr; 1],
-    pub sockets: [Option<smoltcp::socket::SocketSetItem<'static>>; 1],
+    pub sockets: [Option<smoltcp::socket::SocketSetItem<'static>>; 2],
     pub neighbor_cache:
         [Option<(smoltcp::wire::IpAddress, smoltcp::iface::Neighbor)>; 8],
     pub routes_cache:
         [Option<(smoltcp::wire::IpCidr, smoltcp::iface::Route)>; 8],
     pub tx_storage: [u8; 4096],
     pub rx_storage: [u8; 4096],
+
+    pub dhcp_rx_metadata: [smoltcp::socket::RawPacketMetadata; 1],
+    pub dhcp_tx_metadata: [smoltcp::socket::RawPacketMetadata; 1],
+    pub dhcp_tx_storage: [u8; 600],
+    pub dhcp_rx_storage: [u8; 600],
+}
+
+impl NetStorage {
+    pub fn new() -> Self {
+        NetStorage {
+            // Placeholder for the real IP address, which is initialized at runtime.
+            ip_addrs: [smoltcp::wire::IpCidr::Ipv6(
+                smoltcp::wire::Ipv6Cidr::SOLICITED_NODE_PREFIX,
+            )],
+            neighbor_cache: [None; 8],
+            routes_cache: [None; 8],
+            sockets: [None, None],
+            tx_storage: [0; 4096],
+            rx_storage: [0; 4096],
+            dhcp_tx_storage: [0; 600],
+            dhcp_rx_storage: [0; 600],
+            dhcp_rx_metadata: [smoltcp::socket::RawPacketMetadata::EMPTY; 1],
+            dhcp_tx_metadata: [smoltcp::socket::RawPacketMetadata::EMPTY; 1],
+        }
+    }
 }
 
 /// The available networking devices on Stabilizer.
@@ -58,22 +83,6 @@ pub struct PounderDevices {
 #[link_section = ".sram3.eth"]
 /// Static storage for the ethernet DMA descriptor ring.
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
-
-/// Static, global-scope network storage for the ethernet interface.
-///
-/// This is a static singleton so that the network storage can be referenced from all contexts.
-static mut NET_STORE: NetStorage = NetStorage {
-    // Placeholder for the real IP address, which is initialized at runtime.
-    ip_addrs: [smoltcp::wire::IpCidr::Ipv6(
-        smoltcp::wire::Ipv6Cidr::SOLICITED_NODE_PREFIX,
-    )],
-    neighbor_cache: [None; 8],
-    routes_cache: [None; 8],
-    sockets: [None; 1],
-
-    tx_storage: [0; 4096],
-    rx_storage: [0; 4096],
-};
 
 /// Configure the stabilizer hardware for operation.
 ///
@@ -516,17 +525,23 @@ pub fn setup(
 
         unsafe { ethernet::enable_interrupt() };
 
-        let store = unsafe { &mut NET_STORE };
+        // Note(unwrap): The hardware configuration function is only allowed to be called once.
+        // Unwrapping is intended to panic if called again to prevent re-use of global memory.
+        let store =
+            cortex_m::singleton!(: NetStorage = NetStorage::new()).unwrap();
 
         store.ip_addrs[0] = smoltcp::wire::IpCidr::new(
-            smoltcp::wire::IpAddress::v4(10, 34, 16, 103),
-            24,
+            smoltcp::wire::IpAddress::Ipv4(
+                smoltcp::wire::Ipv4Address::UNSPECIFIED,
+            ),
+            0,
         );
 
-        let default_v4_gw = smoltcp::wire::Ipv4Address::new(10, 34, 16, 1);
         let mut routes =
             smoltcp::iface::Routes::new(&mut store.routes_cache[..]);
-        routes.add_default_ipv4_route(default_v4_gw).unwrap();
+        routes
+            .add_default_ipv4_route(smoltcp::wire::Ipv4Address::UNSPECIFIED)
+            .unwrap();
 
         let neighbor_cache =
             smoltcp::iface::NeighborCache::new(&mut store.neighbor_cache[..]);
@@ -538,36 +553,54 @@ pub fn setup(
             .routes(routes)
             .finalize();
 
-        let sockets = {
-            // Note(unsafe): Configuration is only called once, so we only access the global
-            // storage a single time.
-            let socket_storage = unsafe { &mut NET_STORE.sockets[..] };
-            let mut sockets = smoltcp::socket::SocketSet::new(socket_storage);
+        let (mut sockets, handles) = {
+            let mut sockets =
+                smoltcp::socket::SocketSet::new(&mut store.sockets[..]);
 
             let tcp_socket = {
-                let rx_buffer = {
-                    // Note(unsafe): Configuration is only called once, so we only access the global
-                    // storage a single time.
-                    let storage = unsafe { &mut NET_STORE.rx_storage[..] };
-                    smoltcp::socket::TcpSocketBuffer::new(storage)
-                };
-
-                let tx_buffer = {
-                    // Note(unsafe): Configuration is only called once, so we only access the global
-                    // storage a single time.
-                    let storage = unsafe { &mut NET_STORE.tx_storage[..] };
-                    smoltcp::socket::TcpSocketBuffer::new(storage)
-                };
+                let rx_buffer = smoltcp::socket::TcpSocketBuffer::new(
+                    &mut store.rx_storage[..],
+                );
+                let tx_buffer = smoltcp::socket::TcpSocketBuffer::new(
+                    &mut store.tx_storage[..],
+                );
 
                 smoltcp::socket::TcpSocket::new(rx_buffer, tx_buffer)
             };
 
-            sockets.add(tcp_socket);
-            sockets
+            let handle = sockets.add(tcp_socket);
+            (sockets, [handle])
+        };
+
+        let dhcp_client = {
+            let dhcp_rx_buffer = smoltcp::socket::RawSocketBuffer::new(
+                &mut store.dhcp_rx_metadata[..],
+                &mut store.dhcp_rx_storage[..],
+            );
+
+            let dhcp_tx_buffer = smoltcp::socket::RawSocketBuffer::new(
+                &mut store.dhcp_tx_metadata[..],
+                &mut store.dhcp_tx_storage[..],
+            );
+
+            smoltcp::dhcp::Dhcpv4Client::new(
+                &mut sockets,
+                dhcp_rx_buffer,
+                dhcp_tx_buffer,
+                // Smoltcp indicates that an instant with a negative time is indicative that time is
+                // not yet available. We can't get the current instant yet, so indicate an invalid
+                // time value.
+                smoltcp::time::Instant::from_millis(-1),
+            )
         };
 
         NetworkDevices {
-            stack: smoltcp_nal::NetworkStack::new(interface, sockets),
+            stack: smoltcp_nal::NetworkStack::new(
+                interface,
+                sockets,
+                &handles,
+                Some(dhcp_client),
+            ),
             phy: lan8742a,
         }
     };

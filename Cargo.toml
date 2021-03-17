@@ -53,11 +53,18 @@ branch = "develop"
 
 [patch.crates-io.minimq]
 git = "https://github.com/quartiq/minimq.git"
-branch = "master"
+
+[patch.crates-io.smoltcp-nal]
+git = "https://github.com/quartiq/smoltcp-nal.git"
+branch = "main"
 
 [patch.crates-io.serde-json-core]
 git = "https://github.com/rust-embedded-community/serde-json-core.git"
 branch = "master"
+
+[patch.crates-io.smoltcp]
+git = "https://github.com/ryan-summers/smoltcp.git"
+branch = "feature/dhcp-lease-updates"
 
 [dependencies.mcp23017]
 git = "https://github.com/mrd0ll4r/mcp23017.git"
