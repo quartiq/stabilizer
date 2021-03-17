@@ -212,7 +212,7 @@ const APP: () = {
                     Ok(updated) => !updated,
                     Err(err) => {
                         log::info!("Network error: {:?}", err);
-                        true
+                        false
                     }
                 }
             });
