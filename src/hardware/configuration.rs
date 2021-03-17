@@ -33,6 +33,26 @@ pub struct NetStorage {
     pub dhcp_rx_storage: [u8; 600],
 }
 
+impl NetStorage {
+    pub fn new() -> Self {
+        NetStorage {
+            // Placeholder for the real IP address, which is initialized at runtime.
+            ip_addrs: [smoltcp::wire::IpCidr::Ipv6(
+                smoltcp::wire::Ipv6Cidr::SOLICITED_NODE_PREFIX,
+            )],
+            neighbor_cache: [None; 8],
+            routes_cache: [None; 8],
+            sockets: [None, None],
+            tx_storage: [0; 4096],
+            rx_storage: [0; 4096],
+            dhcp_tx_storage: [0; 600],
+            dhcp_rx_storage: [0; 600],
+            dhcp_rx_metadata: [smoltcp::socket::RawPacketMetadata::EMPTY; 1],
+            dhcp_tx_metadata: [smoltcp::socket::RawPacketMetadata::EMPTY; 1],
+        }
+    }
+}
+
 /// The available networking devices on Stabilizer.
 pub struct NetworkDevices {
     pub stack: NetworkStack,
@@ -63,27 +83,6 @@ pub struct PounderDevices {
 #[link_section = ".sram3.eth"]
 /// Static storage for the ethernet DMA descriptor ring.
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
-
-/// Static, global-scope network storage for the ethernet interface.
-///
-/// This is a static singleton so that the network storage can be referenced from all contexts.
-static mut NET_STORE: NetStorage = NetStorage {
-    // Placeholder for the real IP address, which is initialized at runtime.
-    ip_addrs: [smoltcp::wire::IpCidr::Ipv6(
-        smoltcp::wire::Ipv6Cidr::SOLICITED_NODE_PREFIX,
-    )],
-    neighbor_cache: [None; 8],
-    routes_cache: [None; 8],
-    sockets: [None, None],
-
-    tx_storage: [0; 4096],
-    rx_storage: [0; 4096],
-
-    dhcp_tx_storage: [0; 600],
-    dhcp_rx_storage: [0; 600],
-    dhcp_rx_metadata: [smoltcp::socket::RawPacketMetadata::EMPTY; 1],
-    dhcp_tx_metadata: [smoltcp::socket::RawPacketMetadata::EMPTY; 1],
-};
 
 /// Configure the stabilizer hardware for operation.
 ///
@@ -526,7 +525,10 @@ pub fn setup(
 
         unsafe { ethernet::enable_interrupt() };
 
-        let store = unsafe { &mut NET_STORE };
+        // Note(unwrap): The hardware configuration function is only allowed to be called once.
+        // Unwrapping is intended to panic if called again to prevent re-use of global memory.
+        let store =
+            cortex_m::singleton!(: NetStorage = NetStorage::new()).unwrap();
 
         store.ip_addrs[0] = smoltcp::wire::IpCidr::new(
             smoltcp::wire::IpAddress::Ipv4(
@@ -552,25 +554,16 @@ pub fn setup(
             .finalize();
 
         let (mut sockets, handles) = {
-            // Note(unsafe): Configuration is only called once, so we only access the global
-            // storage a single time.
-            let socket_storage = unsafe { &mut NET_STORE.sockets[..] };
-            let mut sockets = smoltcp::socket::SocketSet::new(socket_storage);
+            let mut sockets =
+                smoltcp::socket::SocketSet::new(&mut store.sockets[..]);
 
             let tcp_socket = {
-                let rx_buffer = {
-                    // Note(unsafe): Configuration is only called once, so we only access the global
-                    // storage a single time.
-                    let storage = unsafe { &mut NET_STORE.rx_storage[..] };
-                    smoltcp::socket::TcpSocketBuffer::new(storage)
-                };
-
-                let tx_buffer = {
-                    // Note(unsafe): Configuration is only called once, so we only access the global
-                    // storage a single time.
-                    let storage = unsafe { &mut NET_STORE.tx_storage[..] };
-                    smoltcp::socket::TcpSocketBuffer::new(storage)
-                };
+                let rx_buffer = smoltcp::socket::TcpSocketBuffer::new(
+                    &mut store.rx_storage[..],
+                );
+                let tx_buffer = smoltcp::socket::TcpSocketBuffer::new(
+                    &mut store.tx_storage[..],
+                );
 
                 smoltcp::socket::TcpSocket::new(rx_buffer, tx_buffer)
             };
@@ -580,17 +573,14 @@ pub fn setup(
         };
 
         let dhcp_client = {
-            let rx = unsafe { &mut NET_STORE.dhcp_rx_storage[..] };
-            let tx = unsafe { &mut NET_STORE.dhcp_tx_storage[..] };
-
             let dhcp_rx_buffer = smoltcp::socket::RawSocketBuffer::new(
-                unsafe { &mut NET_STORE.dhcp_rx_metadata[..] },
-                rx,
+                &mut store.dhcp_rx_metadata[..],
+                &mut store.dhcp_rx_storage[..],
             );
 
             let dhcp_tx_buffer = smoltcp::socket::RawSocketBuffer::new(
-                unsafe { &mut NET_STORE.dhcp_tx_metadata[..] },
-                tx,
+                &mut store.dhcp_tx_metadata[..],
+                &mut store.dhcp_tx_storage[..],
             );
 
             smoltcp::dhcp::Dhcpv4Client::new(
