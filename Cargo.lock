@@ -390,9 +390,9 @@ dependencies = [
 
 [[package]]
 name = "managed"
-version = "0.7.2"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c75de51135344a4f8ed3cfe2720dc27736f7711989703a0b43aadf3753c55577"
+checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
 
 [[package]]
 name = "matrixmultiply"
@@ -697,7 +697,7 @@ dependencies = [
 [[package]]
 name = "smoltcp"
 version = "0.7.0"
-source = "git+https://github.com/ryan-summers/smoltcp.git?branch=feature/dhcp-lease-updates#e3954ebb8149341c52a4992e037d4b5109387910"
+source = "git+https://github.com/smoltcp-rs/smoltcp.git#1bff999a6f3f7adf623d837ea96cc807e1b3a470"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -707,7 +707,7 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/smoltcp-nal.git?branch=feature/reset-support#a6db6579100987502563578fb386109ad08758a7"
+source = "git+https://github.com/quartiq/smoltcp-nal.git?branch=feature/reset-support#c43e751afe3c14aac153fa4425231270dbfd918b"
 dependencies = [
  "embedded-nal",
  "heapless 0.6.1",

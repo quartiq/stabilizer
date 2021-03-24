@@ -65,7 +65,7 @@ where
             // sending an excessive number of DHCP requests.
             if !self.network_was_reset {
                 self.network_was_reset = true;
-                self.mqtt_interface.network_stack().reset();
+                self.mqtt_interface.network_stack().handle_link_reset();
             }
         } else {
             self.network_was_reset = false;
