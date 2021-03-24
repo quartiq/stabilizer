@@ -141,7 +141,7 @@ const APP: () = {
 
     #[task(priority = 1, resources=[mqtt_settings, afes, iir_ch])]
     fn settings_update(mut c: settings_update::Context) {
-        let settings = &c.resources.mqtt_settings.mqtt_interface.settings;
+        let settings = &c.resources.mqtt_settings.mqtt.settings;
 
         // Update the IIR channels.
         c.resources.iir_ch.lock(|iir| *iir = settings.iir_ch);

@@ -205,7 +205,7 @@ const APP: () = {
 
     #[task(priority = 1, resources=[mqtt_settings, settings, afes])]
     fn settings_update(mut c: settings_update::Context) {
-        let settings = &c.resources.mqtt_settings.mqtt_interface.settings;
+        let settings = &c.resources.mqtt_settings.mqtt.settings;
 
         c.resources.afes.0.set_gain(settings.afe[0]);
         c.resources.afes.1.set_gain(settings.afe[1]);
