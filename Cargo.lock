@@ -390,9 +390,9 @@ dependencies = [
 
 [[package]]
 name = "managed"
-version = "0.7.2"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c75de51135344a4f8ed3cfe2720dc27736f7711989703a0b43aadf3753c55577"
+checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
 
 [[package]]
 name = "matrixmultiply"
@@ -697,7 +697,7 @@ dependencies = [
 [[package]]
 name = "smoltcp"
 version = "0.7.0"
-source = "git+https://github.com/ryan-summers/smoltcp.git?branch=feature/dhcp-lease-updates#e3954ebb8149341c52a4992e037d4b5109387910"
+source = "git+https://github.com/smoltcp-rs/smoltcp.git#43567b9743cb9f422de83fad9ff42a6d13f6e5ee"
 dependencies = [
  "bitflags",
  "byteorder",
