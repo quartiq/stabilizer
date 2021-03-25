@@ -63,6 +63,8 @@ git = "https://github.com/rust-embedded-community/serde-json-core.git"
 branch = "master"
 
 [patch.crates-io.smoltcp]
+# We manually patch smoltcp so that we can get access to unreleased updates to the DHCP server. When
+# a new release of smoltcp is made, we can remove this patch.
 git = "https://github.com/smoltcp-rs/smoltcp.git"
 
 [dependencies.mcp23017]
