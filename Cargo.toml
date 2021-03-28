@@ -47,6 +47,23 @@ smoltcp-nal = "0.1.0"
 miniconf = "0.1"
 generic-array = "0.14"
 
+[dependencies.mcp23017]
+git = "https://github.com/mrd0ll4r/mcp23017.git"
+
+[dependencies.stm32h7xx-hal]
+features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]
+git = "https://github.com/stm32-rs/stm32h7xx-hal"
+branch = "master"
+
+[build-dependencies]
+cc = "1.0"
+
+[patch.crates-io.cortex-m-rt]
+path = "../cortex-m-rt"
+# 0.6.13
+# git = "https://github.com/rust-embedded/cortex-m-rt.git"
+# rev = "8c90451"
+
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf.git"
 branch = "develop"
@@ -66,14 +83,6 @@ branch = "master"
 # We manually patch smoltcp so that we can get access to unreleased updates to the DHCP server. When
 # a new release of smoltcp is made, we can remove this patch.
 git = "https://github.com/smoltcp-rs/smoltcp.git"
-
-[dependencies.mcp23017]
-git = "https://github.com/mrd0ll4r/mcp23017.git"
-
-[dependencies.stm32h7xx-hal]
-features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]
-git = "https://github.com/stm32-rs/stm32h7xx-hal"
-branch = "master"
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]

@@ -1,6 +1,7 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
 runner = "gdb-multiarch -q -x openocd.gdb"
 rustflags = [
+    "-C", "link-arg=--nmagic",
     "-C", "link-arg=-Tlink.x",
 # The target (below) defaults to cortex-m4
 # There currently are two different options to go beyond that:
