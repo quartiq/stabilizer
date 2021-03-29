@@ -7,6 +7,22 @@
 .thumb_func
 .cfi_startproc
 __pre_init:
+
+  # Enable ITCM and DTCM
+  ldr r0, =1
+  ldr r1, =0xE000EF90
+  ldr r2, [r1]
+  # Set ITCMCR.EN
+  orr r2, r2, r0
+  str r2, [r1]
+  ldr r1, =0xE000EF94
+  ldr r2, [r1]
+  # Set DTCMCR.EN
+  orr r2, r2, r0
+  str r2, [r1]
+  dsb
+  isb
+
   # Analogous to cortex-m-rt Reset code for .data copying.
   # Initialise .itcm code. `__sitcm`, `__siitcm`, and `__eitcm` come from the
   # linker script. Copy from r2 into r0 until r0 reaches r1.
