@@ -7,11 +7,16 @@
 #   This shell file is executed by the hardware runner in Quartiq's office to exercise the various
 #   hardware aspects of Stabilizer.
 
+# Set up python for testing
+python3 -m venv --system-site-packages py
+source py/bin/activate
+python3 -m pip install -r requirements.txt
+
 # Test pinging Stabilizer. This exercises that:
 # * DHCP is functional and an IP has been acquired
 # * Stabilizer's network is functioning as intended
 # * The stabilizer application is opeerational
-ping -c 5 -W 20 gonnigan.ber.quartiq.de
+ping -c 5 -w 20 gonnigan.ber.quartiq.de
 
 # Test the MQTT interface.
 python3 miniconf.py dt/sinara/stabilizer afe/0 '"G2"'
