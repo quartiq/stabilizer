@@ -34,7 +34,7 @@ cortex-m-log = { version = "0.7", features = ["log-integration"] }
 log = "0.4"
 panic-semihosting = { version = "0.5", optional = true }
 serde = { version = "1.0", features = ["derive"], default-features = false }
-heapless = { version = "0.5", features = ["serde"] }
+heapless = { version = "0.6", features = ["serde"] }
 cortex-m-rtic = "0.5.6"
 embedded-hal = "0.2.4"
 nb = "1.0.0"
@@ -53,11 +53,19 @@ branch = "develop"
 
 [patch.crates-io.minimq]
 git = "https://github.com/quartiq/minimq.git"
-branch = "master"
+
+[patch.crates-io.smoltcp-nal]
+git = "https://github.com/quartiq/smoltcp-nal.git"
+branch = "main"
 
 [patch.crates-io.serde-json-core]
 git = "https://github.com/rust-embedded-community/serde-json-core.git"
 branch = "master"
+
+[patch.crates-io.smoltcp]
+# We manually patch smoltcp so that we can get access to unreleased updates to the DHCP server. When
+# a new release of smoltcp is made, we can remove this patch.
+git = "https://github.com/smoltcp-rs/smoltcp.git"
 
 [dependencies.mcp23017]
 git = "https://github.com/mrd0ll4r/mcp23017.git"

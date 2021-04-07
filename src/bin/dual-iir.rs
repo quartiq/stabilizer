@@ -144,16 +144,31 @@ const APP: () = {
 
         loop {
             let sleep = c.resources.mqtt_interface.lock(|interface| {
-                !interface.network_stack().poll(clock.current_ms())
+                match interface.network_stack().poll(clock.current_ms()) {
+                    Ok(updated) => !updated,
+                    Err(err) => {
+                        log::info!("Network error: {:?}", err);
+                        false
+                    }
+                }
             });
 
-            if c.resources
+            match c
+                .resources
                 .mqtt_interface
-                .lock(|interface| interface.update().unwrap())
+                .lock(|interface| interface.update())
             {
-                c.spawn.settings_update().unwrap()
-            } else if sleep {
-                cortex_m::asm::wfi();
+                Ok(update) => {
+                    if update {
+                        c.spawn.settings_update().unwrap();
+                    } else if sleep {
+                        cortex_m::asm::wfi();
+                    }
+                }
+                Err(miniconf::MqttError::Network(
+                    smoltcp_nal::NetworkError::NoIpAddress,
+                )) => {}
+                Err(error) => log::info!("Unexpected error: {:?}", error),
             }
         }
     }
