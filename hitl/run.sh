@@ -19,4 +19,4 @@ python3 -m pip install -r requirements.txt
 ping -c 5 -w 20 gonnigan.ber.quartiq.de
 
 # Test the MQTT interface.
-python3 miniconf.py dt/sinara/stabilizer afe/0 '"G2"'
+python3 miniconf.py --broker mqtt.ber.quartiq.de dt/sinara/stabilizer afe/0 '"G2"'
