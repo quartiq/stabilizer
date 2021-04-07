@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Title:
 #   Stabilizer hardware-in-the-loop (HITL) test script.
