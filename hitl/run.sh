@@ -12,8 +12,8 @@ set -eux
 
 # Set up python for testing
 python3 -m venv --system-site-packages py
-
-py/bin/pip install -r requirements.txt
+. py/bin/activate
+python3 -m pip install -r requirements.txt
 
 # Test pinging Stabilizer. This exercises that:
 # * DHCP is functional and an IP has been acquired
@@ -22,4 +22,4 @@ py/bin/pip install -r requirements.txt
 ping -c 5 -w 20 stabilizer-hitl
 
 # Test the MQTT interface.
-py/bin/python3 miniconf.py dt/sinara/stabilizer afe/0 '"G2"'
+python3 miniconf.py dt/sinara/stabilizer afe/0 '"G2"'
