@@ -203,7 +203,7 @@ dependencies = [
 [[package]]
 name = "derive_miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?branch=develop#314fa5587d1aa28e1ad70106f19e30db646e9f28"
+source = "git+https://github.com/quartiq/miniconf.git?rev=314fa5587d#314fa5587d1aa28e1ad70106f19e30db646e9f28"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -392,9 +392,9 @@ dependencies = [
 
 [[package]]
 name = "managed"
-version = "0.8.0"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
+checksum = "c75de51135344a4f8ed3cfe2720dc27736f7711989703a0b43aadf3753c55577"
 
 [[package]]
 name = "matrixmultiply"
@@ -408,7 +408,7 @@ dependencies = [
 [[package]]
 name = "mcp23017"
 version = "0.1.1"
-source = "git+https://github.com/mrd0ll4r/mcp23017.git#61933f857abe5a837800493a5f58e91a3c9435ec"
+source = "git+https://github.com/mrd0ll4r/mcp23017.git?rev=61933f857a#61933f857abe5a837800493a5f58e91a3c9435ec"
 dependencies = [
  "embedded-hal",
 ]
@@ -416,7 +416,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?branch=develop#314fa5587d1aa28e1ad70106f19e30db646e9f28"
+source = "git+https://github.com/quartiq/miniconf.git?rev=314fa5587d#314fa5587d1aa28e1ad70106f19e30db646e9f28"
 dependencies = [
  "derive_miniconf",
  "heapless 0.6.1",
@@ -428,7 +428,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.2.0"
-source = "git+https://github.com/quartiq/minimq.git#933687c2e4bc8a4d972de9a4d1508b0b554a8b38"
+source = "git+https://github.com/quartiq/minimq.git?rev=933687c2e4b#933687c2e4bc8a4d972de9a4d1508b0b554a8b38"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -688,7 +688,7 @@ dependencies = [
 [[package]]
 name = "serde-json-core"
 version = "0.2.0"
-source = "git+https://github.com/rust-embedded-community/serde-json-core.git?branch=master#ee06ac91bc43b72450a92198a00d9e5c5b9946d2"
+source = "git+https://github.com/rust-embedded-community/serde-json-core.git?rev=ee06ac91bc#ee06ac91bc43b72450a92198a00d9e5c5b9946d2"
 dependencies = [
  "heapless 0.5.6",
  "serde",
@@ -707,8 +707,9 @@ dependencies = [
 
 [[package]]
 name = "smoltcp"
-version = "0.7.0"
-source = "git+https://github.com/smoltcp-rs/smoltcp.git#43567b9743cb9f422de83fad9ff42a6d13f6e5ee"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97173c1ef35b0a09304cb3882eba594761243005847cbbf6124f966e8da6519a"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -718,7 +719,7 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/smoltcp-nal.git?branch=main#56519012d7c6a382eaa0d7ecb26f2701771d9ce8"
+source = "git+https://github.com/quartiq/smoltcp-nal.git?rev=56519012d7#56519012d7c6a382eaa0d7ecb26f2701771d9ce8"
 dependencies = [
  "embedded-nal",
  "heapless 0.6.1",
