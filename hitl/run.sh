@@ -1,4 +1,4 @@
-#!/usr/bin/bash -e
+#!/bin/sh
 
 # Title:
 #   Stabilizer hardware-in-the-loop (HITL) test script.
@@ -15,8 +15,8 @@ python3 -m pip install -r requirements.txt
 # Test pinging Stabilizer. This exercises that:
 # * DHCP is functional and an IP has been acquired
 # * Stabilizer's network is functioning as intended
-# * The stabilizer application is opeerational
-ping -c 5 -w 20 gonnigan.ber.quartiq.de
+# * The stabilizer application is operational
+ping -c 5 -w 20 stabilizer-hitl
 
 # Test the MQTT interface.
 python3 miniconf.py dt/sinara/stabilizer afe/0 '"G2"'
