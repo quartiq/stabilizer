@@ -12,7 +12,7 @@ set -eux
 
 # Set up python for testing
 python3 -m venv --system-site-packages py
-source py/bin/activate
+. py/bin/activate
 python3 -m pip install -r requirements.txt
 
 # Test pinging Stabilizer. This exercises that:
