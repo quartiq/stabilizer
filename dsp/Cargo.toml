@@ -14,7 +14,7 @@ miniconf = "0.1"
 [dev-dependencies]
 easybench = "1.0"
 rand = "0.8"
-ndarray = "0.14"
+ndarray = "0.15"
 
 [[bench]]
 name = "micro"
