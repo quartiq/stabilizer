@@ -9,10 +9,10 @@ repository.
 **Note**: In order to ensure application security, all HITL runs must first be approved by a Quartiq
 representative before execution.
 
-# Hardware Configuration
-Stabilizer is configured with an ethernet connection to a router. The router runs a DHCP server for
-the local network, and Stabilizers MAC address has been assigned to the unique host name of
-`gonnigan.ber.quartiq.de`.
+# Configuration
+* Stabilizer is configured with an ethernet connection to a router. The router runs a DHCP server for
+the local network, and ensures that the Stabilizer used for these tests is available under the hostname `stabilizer-hitl`.
+* An MQTT broker is running at the hostname `mqtt`.
 
 # HITL Workflow
 The private HITL repository does the following:
