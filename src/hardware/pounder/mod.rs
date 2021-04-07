@@ -231,14 +231,16 @@ impl ad9959::Interface for QspiInterface {
                 };
 
                 self.qspi
-                    .write(encoded_address, &encoded_payload)
+                    .write(encoded_address.into(), &encoded_payload)
                     .map_err(|_| Error::Qspi)
             }
             ad9959::Mode::FourBitSerial => {
                 if self.streaming {
                     Err(Error::Qspi)
                 } else {
-                    self.qspi.write(addr, data).map_err(|_| Error::Qspi)?;
+                    self.qspi
+                        .write(addr.into(), data)
+                        .map_err(|_| Error::Qspi)?;
                     Ok(())
                 }
             }
@@ -257,7 +259,7 @@ impl ad9959::Interface for QspiInterface {
         }
 
         self.qspi
-            .read(0x80_u8 | addr, dest)
+            .read((0x80_u8 | addr).into(), dest)
             .map_err(|_| Error::Qspi)
     }
 }
