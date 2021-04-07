@@ -7,6 +7,9 @@
 #   This shell file is executed by the hardware runner in Quartiq's office to exercise the various
 #   hardware aspects of Stabilizer.
 
+# Enable shell operating mode flags.
+set -eux
+
 # Set up python for testing
 python3 -m venv --system-site-packages py
 source py/bin/activate
