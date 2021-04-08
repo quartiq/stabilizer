@@ -83,9 +83,12 @@ class Miniconf:
 def main():
     parser = argparse.ArgumentParser(
             description='Miniconf command line interface.',
-            epilog='''Example:
-            %(prog)s -v -b mqtt dt/sinara/stabilizer afe/0 '"G10"'
-            ''')
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            epilog='''Examples:
+%(prog)s dt/sinara/stabilizer afe/0 '"G10"'
+%(prog)s dt/sinara/stabilizer iir_ch/0/0 \
+'{"y_min": -32767, "y_max": 32767, "y_offset": 0, "ba": [1.0, 0, 0, 0, 0]}'
+''')
     parser.add_argument('-v', '--verbose', action='count', default=0,
                         help='Increase logging verbosity')
     parser.add_argument('--broker', '-b', default='mqtt', type=str,
