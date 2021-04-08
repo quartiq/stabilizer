@@ -582,7 +582,9 @@ impl ProfileSerializer {
         }
 
         if let Some(acr) = acr {
-            self.add_write(Register::ACR, &acr.to_be_bytes());
+            let mut data = [0; 3];
+            data[1..=2].copy_from_slice(&acr.to_be_bytes());
+            self.add_write(Register::ACR, &data);
         }
     }
 
