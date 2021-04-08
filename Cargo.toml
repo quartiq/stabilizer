@@ -60,7 +60,7 @@ rev = "314fa5587d"
 
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
-rev = "db2d6c6"
+rev = "d200d4e"
 
 [patch.crates-io.minimq]
 git = "https://github.com/quartiq/minimq.git"
