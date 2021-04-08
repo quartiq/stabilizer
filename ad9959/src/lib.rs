@@ -558,13 +558,14 @@ impl ProfileSerializer {
     /// * `channels` - A list of channels to apply the configuration to.
     /// * `ftw` - If provided, indicates a frequency tuning word for the channels.
     /// * `pow` - If provided, indicates a phase offset word for the channels.
-    /// * `acr` - If provided, indicates the amplitude control register for the channels.
+    /// * `acr` - If provided, indicates the amplitude control register for the channels. The ACR
+    ///   should be stored in the 3 LSB of the word.
     pub fn update_channels(
         &mut self,
         channels: &[Channel],
         ftw: Option<u32>,
         pow: Option<u16>,
-        acr: Option<u16>,
+        acr: Option<u32>,
     ) {
         let mut csr: u8 = *0u8.set_bits(1..3, self.mode as u8);
         for channel in channels.iter() {
@@ -582,9 +583,7 @@ impl ProfileSerializer {
         }
 
         if let Some(acr) = acr {
-            let mut data = [0; 3];
-            data[1..=2].copy_from_slice(&acr.to_be_bytes());
-            self.add_write(Register::ACR, &data);
+            self.add_write(Register::ACR, &acr.to_be_bytes()[1..=4]);
         }
     }
 
@@ -608,7 +607,6 @@ impl ProfileSerializer {
         // Pad the buffer to 32-bit alignment by adding dummy writes to CSR and LSRR.
         let padding = 4 - (self.index % 4);
         match padding {
-            0 => {}
             1 => {
                 // For a pad size of 1, we have to pad with 5 bytes to align things.
                 self.add_write(Register::CSR, &[(self.mode as u8) << 1]);
@@ -616,6 +614,7 @@ impl ProfileSerializer {
             }
             2 => self.add_write(Register::CSR, &[(self.mode as u8) << 1]),
             3 => self.add_write(Register::LSRR, &[0, 0, 0]),
+            4 => {}
 
             _ => unreachable!(),
         }
