@@ -8,13 +8,13 @@ edition = "2018"
 libm = "0.2.1"
 serde = { version = "1.0", features = ["derive"], default-features = false }
 generic-array = "0.14"
-num = { version = "0.3.1", default-features = false }
+num = { version = "0.4.0", default-features = false }
 miniconf = "0.1"
 
 [dev-dependencies]
 easybench = "1.0"
 rand = "0.8"
-ndarray = "0.14"
+ndarray = "0.15"
 
 [[bench]]
 name = "micro"
