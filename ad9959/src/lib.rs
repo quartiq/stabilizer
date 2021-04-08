@@ -559,7 +559,8 @@ impl ProfileSerializer {
     /// * `ftw` - If provided, indicates a frequency tuning word for the channels.
     /// * `pow` - If provided, indicates a phase offset word for the channels.
     /// * `acr` - If provided, indicates the amplitude control register for the channels. The ACR
-    ///   should be stored in the 3 LSB of the word.
+    ///   should be stored in the 3 LSB of the word. Note that if amplitude scaling is to be used,
+    ///   the "Amplitude multiplier enable" bit must be set.
     pub fn update_channels(
         &mut self,
         channels: &[Channel],
