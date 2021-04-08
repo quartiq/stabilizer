@@ -594,13 +594,25 @@ pub fn setup(
             )
         };
 
+        let random_seed = {
+            let mut rng =
+                device.RNG.constrain(ccdr.peripheral.RNG, &ccdr.clocks);
+            let mut data = [0u8; 4];
+            rng.fill(&mut data).unwrap();
+            data
+        };
+
+        let mut stack = smoltcp_nal::NetworkStack::new(
+            interface,
+            sockets,
+            &handles,
+            Some(dhcp_client),
+        );
+
+        stack.seed_random_port(&random_seed);
+
         NetworkDevices {
-            stack: smoltcp_nal::NetworkStack::new(
-                interface,
-                sockets,
-                &handles,
-                Some(dhcp_client),
-            ),
+            stack,
             phy: lan8742a,
         }
     };

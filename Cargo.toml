@@ -60,7 +60,7 @@ rev = "314fa5587d"
 
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
-rev = "7572183"
+branch = "feature/random-port"
 
 [patch.crates-io.minimq]
 git = "https://github.com/quartiq/minimq.git"
