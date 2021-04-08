@@ -111,7 +111,7 @@ def main():
     async def configure_settings():
         interface = await Miniconf.create(args.prefix, args.broker)
         response = await interface.command(args.path, json.loads(args.value))
-        print(f"Response: {response}")
+        print(response)
 
     loop.run_until_complete(configure_settings())
 
