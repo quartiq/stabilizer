@@ -610,10 +610,10 @@ impl ProfileSerializer {
             1 => {
                 // For a pad size of 1, we have to pad with 5 bytes to align things.
                 self.add_write(Register::CSR, &[(self.mode as u8) << 1]);
-                self.add_write(Register::LSRR, &[0, 0, 0]);
+                self.add_write(Register::LSRR, &[0, 0]);
             }
             2 => self.add_write(Register::CSR, &[(self.mode as u8) << 1]),
-            3 => self.add_write(Register::LSRR, &[0, 0, 0]),
+            3 => self.add_write(Register::LSRR, &[0, 0]),
             4 => {}
 
             _ => unreachable!(),
