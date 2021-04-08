@@ -22,4 +22,6 @@ python3 -m pip install -r requirements.txt
 ping -c 5 -w 20 stabilizer-hitl
 
 # Test the MQTT interface.
-python3 miniconf.py dt/sinara/stabilizer afe/0 '"G2"'
+python3 miniconf.py dt/sinara/stabilizer afe/0='"G2"'
+python3 miniconf.py dt/sinara/stabilizer afe/0='"G1"' iir_ch/0/0=\
+'{"y_min": -32767, "y_max": 32767, "y_offset": 0, "ba": [1.0, 0, 0, 0, 0]}'
