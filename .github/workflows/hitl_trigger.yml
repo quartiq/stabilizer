@@ -6,7 +6,7 @@ on:
     branches: [ master ]
 
 jobs:
-  hitl:
+  hitl-trigger:
     runs-on: ubuntu-latest
     environment: hitl
     steps:
