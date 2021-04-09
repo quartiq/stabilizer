@@ -17,8 +17,8 @@ jobs:
           repository: quartiq/hitl
           client-payload: '{"github": ${{ toJson(github) }}}'
 
-    - uses: fountainhead/action-wait-for-check@v1.0.0
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        checkName: HITL
-        ref: ${{ github.event.pull_request.head.sha }}
+      - uses: fountainhead/action-wait-for-check@v1.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          checkName: HITL
+          ref: ${{ github.event.pull_request.head.sha }}
