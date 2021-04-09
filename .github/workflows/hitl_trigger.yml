@@ -1,4 +1,4 @@
-name: HITL Run Request
+name: HITL Trigger
 
 on:
   workflow_dispatch:
