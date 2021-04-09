@@ -83,19 +83,19 @@ class Miniconf:
 def main():
     parser = argparse.ArgumentParser(
             description='Miniconf command line interface.',
-            epilog='''Example:
-            %(prog)s -v -b mqtt dt/sinara/stabilizer afe/0 '"G10"'
-            ''')
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            epilog='''Examples:
+%(prog)s dt/sinara/stabilizer afe/0='"G2"' iir_ch/0/0=\
+'{"y_min": -32767, "y_max": 32767, "y_offset": 0, "ba": [1.0, 0, 0, 0, 0]}'
+''')
     parser.add_argument('-v', '--verbose', action='count', default=0,
                         help='Increase logging verbosity')
     parser.add_argument('--broker', '-b', default='mqtt', type=str,
                         help='The MQTT broker address')
     parser.add_argument('prefix', type=str,
                         help='The MQTT topic prefix of the target')
-    parser.add_argument('path', type=str,
-                        help='The setting path to configure')
-    parser.add_argument('value', type=str,
-                        help='The value of setting in JSON format')
+    parser.add_argument('settings', metavar="KEY=VALUE", nargs='+',
+                        help='JSON encoded values for settings path keys.')
 
     args = parser.parse_args()
 
@@ -107,8 +107,10 @@ def main():
 
     async def configure_settings():
         interface = await Miniconf.create(args.prefix, args.broker)
-        response = await interface.command(args.path, json.loads(args.value))
-        print(f"Response: {response}")
+        for kv in args.settings:
+            path, value = kv.split("=", 1)
+            response = await interface.command(path, json.loads(value))
+            print(response)
 
     loop.run_until_complete(configure_settings())
 
