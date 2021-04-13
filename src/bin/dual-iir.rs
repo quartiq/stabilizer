@@ -1,4 +1,3 @@
-#![deny(warnings)]
 #![no_std]
 #![no_main]
 
@@ -140,6 +139,7 @@ const APP: () = {
 
     #[idle(resources=[mqtt_interface, clock], spawn=[settings_update])]
     fn idle(mut c: idle::Context) -> ! {
+        loop {}
         let clock = c.resources.clock;
 
         loop {
