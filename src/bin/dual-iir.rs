@@ -59,7 +59,10 @@ const APP: () = {
         let mqtt_settings = MqttSettings::new(
             stabilizer.net.stack,
             "",
-            "dt/sinara/stabilizer",
+            &net::get_device_prefix(
+                env!("CARGO_BIN_NAME"),
+                stabilizer.net.mac_address,
+            ),
             stabilizer.net.phy,
             stabilizer.cycle_counter,
         );

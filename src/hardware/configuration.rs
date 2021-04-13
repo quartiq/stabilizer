@@ -57,6 +57,7 @@ impl NetStorage {
 pub struct NetworkDevices {
     pub stack: NetworkStack,
     pub phy: EthernetPhy,
+    pub mac_address: smoltcp::wire::EthernetAddress,
 }
 
 /// The available hardware interfaces on Stabilizer.
@@ -544,7 +545,7 @@ pub fn setup(
             smoltcp::iface::NeighborCache::new(&mut store.neighbor_cache[..]);
 
         let interface = smoltcp::iface::EthernetInterfaceBuilder::new(eth_dma)
-            .ethernet_addr(mac_addr)
+            .ethernet_addr(mac_addr.clone())
             .neighbor_cache(neighbor_cache)
             .ip_addrs(&mut store.ip_addrs[..])
             .routes(routes)
@@ -599,6 +600,7 @@ pub fn setup(
                 Some(dhcp_client),
             ),
             phy: lan8742a,
+            mac_address: mac_addr,
         }
     };
 
