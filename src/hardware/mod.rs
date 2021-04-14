@@ -34,6 +34,14 @@ pub type AFE1 = afe::ProgrammableGainAmplifier<
     hal::gpio::gpiod::PD15<hal::gpio::Output<hal::gpio::PushPull>>,
 >;
 
+// Type alias for digital input 0 (DI0).
+pub type DigitalInput0 =
+    hal::gpio::gpiog::PG9<hal::gpio::Input<hal::gpio::Floating>>;
+
+// Type alias for digital input 1 (DI1).
+pub type DigitalInput1 =
+    hal::gpio::gpioc::PC15<hal::gpio::Input<hal::gpio::Floating>>;
+
 pub type NetworkStack = smoltcp_nal::NetworkStack<
     'static,
     'static,

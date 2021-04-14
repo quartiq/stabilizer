@@ -4,6 +4,8 @@
 
 use stm32h7xx_hal as hal;
 
+pub use embedded_hal::digital::v2::InputPin;
+
 use stabilizer::hardware;
 
 use miniconf::{minimq, Miniconf, MqttInterface};
@@ -12,7 +14,7 @@ use serde::Deserialize;
 use dsp::iir;
 use hardware::{
     Adc0Input, Adc1Input, AfeGain, CycleCounter, Dac0Output, Dac1Output,
-    NetworkStack, AFE0, AFE1,
+    DigitalInput1, NetworkStack, AFE0, AFE1,
 };
 
 const SCALE: f32 = i16::MAX as _;
@@ -39,6 +41,7 @@ impl Default for Settings {
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
+        di1: DigitalInput1,
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         mqtt_interface:
@@ -90,6 +93,7 @@ const APP: () = {
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
             clock: stabilizer.cycle_counter,
+            di1: stabilizer.digital_inputs.1,
         }
     }
 
@@ -109,7 +113,7 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adcs, dacs, iir_state, iir_ch], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, di1, dacs, iir_state, iir_ch], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -121,13 +125,17 @@ const APP: () = {
             c.resources.dacs.1.acquire_buffer(),
         ];
 
+        let hold = c.resources.di1.is_high().unwrap();
+
         for channel in 0..adc_samples.len() {
             for sample in 0..adc_samples[0].len() {
-                let x = f32::from(adc_samples[channel][sample] as i16);
-                let mut y = x;
+                let mut y = f32::from(adc_samples[channel][sample] as i16);
                 for i in 0..c.resources.iir_state[channel].len() {
-                    y = c.resources.iir_ch[channel][i]
-                        .update(&mut c.resources.iir_state[channel][i], y);
+                    y = c.resources.iir_ch[channel][i].update(
+                        &mut c.resources.iir_state[channel][i],
+                        y,
+                        hold,
+                    );
                 }
                 // Note(unsafe): The filter limits ensure that the value is in range.
                 // The truncation introduces 1/2 LSB distortion.
