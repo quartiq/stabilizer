@@ -22,10 +22,12 @@ const SCALE: f32 = i16::MAX as _;
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
 
-#[derive(Debug, Deserialize, Miniconf)]
+#[derive(Clone, Copy, Debug, Deserialize, Miniconf)]
 pub struct Settings {
     afe: [AfeGain; 2],
     iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+    allow_hold: bool,
+    force_hold: bool,
 }
 
 impl Default for Settings {
@@ -33,6 +35,8 @@ impl Default for Settings {
         Self {
             afe: [AfeGain::G1, AfeGain::G1],
             iir_ch: [[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2],
+            allow_hold: false,
+            force_hold: false,
         }
     }
 }
@@ -51,11 +55,10 @@ const APP: () = {
         // Format: iir_state[ch][cascade-no][coeff]
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
         iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
-        #[init([[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2])]
-        iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+        settings: Settings,
     }
 
-    #[init]
+    #[init(spawn=[settings_update])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
@@ -78,6 +81,9 @@ const APP: () = {
             .unwrap()
         };
 
+        // Spawn a settings update for default settings.
+        c.spawn.settings_update().unwrap();
+
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();
         stabilizer.adcs.1.start();
@@ -94,6 +100,7 @@ const APP: () = {
             dacs: stabilizer.dacs,
             clock: stabilizer.cycle_counter,
             di1: stabilizer.digital_inputs.1,
+            settings: Settings::default(),
         }
     }
 
@@ -113,7 +120,7 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adcs, di1, dacs, iir_state, iir_ch], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, di1, dacs, iir_state, settings], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -125,13 +132,15 @@ const APP: () = {
             c.resources.dacs.1.acquire_buffer(),
         ];
 
-        let hold = c.resources.di1.is_high().unwrap();
+        let hold = c.resources.settings.force_hold
+            || (c.resources.di1.is_high().unwrap()
+                && c.resources.settings.allow_hold);
 
         for channel in 0..adc_samples.len() {
             for sample in 0..adc_samples[0].len() {
                 let mut y = f32::from(adc_samples[channel][sample] as i16);
                 for i in 0..c.resources.iir_state[channel].len() {
-                    y = c.resources.iir_ch[channel][i].update(
+                    y = c.resources.settings.iir_ch[channel][i].update(
                         &mut c.resources.iir_state[channel][i],
                         y,
                         hold,
@@ -181,12 +190,12 @@ const APP: () = {
         }
     }
 
-    #[task(priority = 1, resources=[mqtt_interface, afes, iir_ch])]
+    #[task(priority = 1, resources=[mqtt_interface, afes, settings])]
     fn settings_update(mut c: settings_update::Context) {
         let settings = &c.resources.mqtt_interface.settings;
 
         // Update the IIR channels.
-        c.resources.iir_ch.lock(|iir| *iir = settings.iir_ch);
+        c.resources.settings.lock(|current| *current = *settings);
 
         // Update AFEs
         c.resources.afes.0.set_gain(settings.afe[0]);
