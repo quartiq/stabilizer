@@ -144,14 +144,15 @@ impl<'a> ProfileBuilder<'a> {
     /// * `channels` - A list of channels to apply the configuration to.
     /// * `ftw` - If provided, indicates a frequency tuning word for the channels.
     /// * `pow` - If provided, indicates a phase offset word for the channels.
-    /// * `acr` - If provided, indicates the amplitude control register for the channels.
+    /// * `acr` - If provided, indicates the amplitude control register for the channels. The
+    ///   24-bits of the ACR should be stored in the last 3 LSB.
     #[allow(dead_code)]
     pub fn update_channels(
         mut self,
         channels: &[Channel],
         ftw: Option<u32>,
         pow: Option<u16>,
-        acr: Option<u16>,
+        acr: Option<u32>,
     ) -> Self {
         self.serializer.update_channels(channels, ftw, pow, acr);
         self

@@ -1,0 +1,4 @@
+# add changes-hitl label if any hitl scripts are changed
+# REVIEW those changes before approving HITL deployment!
+changes-hitl:
+  - any: [hitl/*]
