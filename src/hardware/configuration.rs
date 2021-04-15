@@ -13,8 +13,8 @@ use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use super::{
     adc, afe, cycle_counter::CycleCounter, dac, design_parameters,
-    digital_input_stamper, eeprom, pounder, timers, DdsOutput, NetworkStack,
-    AFE0, AFE1,
+    digital_input_stamper, eeprom, pounder, system_timer, timers, DdsOutput,
+    NetworkStack, AFE0, AFE1,
 };
 
 pub struct NetStorage {
@@ -96,7 +96,7 @@ static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 /// `Some(devices)` if pounder is detected, where `devices` is a `PounderDevices` structure
 /// containing all of the pounder hardware interfaces in a disabled state.
 pub fn setup(
-    mut core: rtic::export::Peripherals,
+    mut core: rtic::Peripherals,
     device: stm32h7xx_hal::stm32::Peripherals,
 ) -> (StabilizerDevices, Option<PounderDevices>) {
     let pwr = device.PWR.constrain();
@@ -139,7 +139,17 @@ pub fn setup(
         init_log(logger).unwrap();
     }
 
-    let mut delay = hal::delay::Delay::new(core.SYST, ccdr.clocks);
+    // Set up the system timer for RTIC scheduling.
+    {
+        let tim15 =
+            device
+                .TIM15
+                .timer(10.khz(), ccdr.peripheral.TIM15, &ccdr.clocks);
+        system_timer::SystemTimer::initialize(tim15);
+    }
+
+    let mut delay =
+        asm_delay::AsmDelay::new(asm_delay::bitrate::MegaHertz(2 * 400));
 
     let gpioa = device.GPIOA.split(ccdr.peripheral.GPIOA);
     let gpiob = device.GPIOB.split(ccdr.peripheral.GPIOB);

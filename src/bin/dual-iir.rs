@@ -7,12 +7,12 @@ use stm32h7xx_hal as hal;
 use stabilizer::hardware;
 
 use miniconf::{minimq, Miniconf, MqttInterface};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use dsp::iir;
 use hardware::{
     Adc0Input, Adc1Input, AfeGain, CycleCounter, Dac0Output, Dac1Output,
-    NetworkStack, AFE0, AFE1,
+    NetworkStack, SystemTimer, AFE0, AFE1,
 };
 
 const SCALE: f32 = i16::MAX as _;
@@ -20,10 +20,18 @@ const SCALE: f32 = i16::MAX as _;
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
 
-#[derive(Debug, Deserialize, Miniconf)]
+#[derive(Debug, Deserialize, Miniconf, Copy, Clone)]
 pub struct Settings {
     afe: [AfeGain; 2],
     iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+    telemetry_period_secs: u16,
+}
+
+#[derive(Serialize, Clone)]
+pub struct Telemetry {
+    latest_samples: [i16; 2],
+    latest_outputs: [i16; 2],
+    digital_inputs: [bool; 2],
 }
 
 impl Default for Settings {
@@ -31,11 +39,22 @@ impl Default for Settings {
         Self {
             afe: [AfeGain::G1, AfeGain::G1],
             iir_ch: [[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2],
+            telemetry_period_secs: 10,
         }
     }
 }
 
-#[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
+impl Default for Telemetry {
+    fn default() -> Self {
+        Self {
+            latest_samples: [0, 0],
+            latest_outputs: [0, 0],
+            digital_inputs: [false, false],
+        }
+    }
+}
+
+#[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = crate::hardware::SystemTimer)]
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
@@ -43,6 +62,8 @@ const APP: () = {
         dacs: (Dac0Output, Dac1Output),
         mqtt_interface:
             MqttInterface<Settings, NetworkStack, minimq::consts::U256>,
+        telemetry: Telemetry,
+        settings: Settings,
         clock: CycleCounter,
 
         // Format: iir_state[ch][cascade-no][coeff]
@@ -52,7 +73,7 @@ const APP: () = {
         iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
     }
 
-    #[init]
+    #[init(schedule = [telemetry])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
@@ -82,7 +103,9 @@ const APP: () = {
         stabilizer.dacs.1.start();
 
         // Start sampling ADCs.
-        stabilizer.adc_dac_timer.start();
+        //stabilizer.adc_dac_timer.start();
+
+        c.schedule.telemetry(c.start).unwrap();
 
         init::LateResources {
             mqtt_interface,
@@ -90,6 +113,8 @@ const APP: () = {
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
             clock: stabilizer.cycle_counter,
+            settings: Settings::default(),
+            telemetry: Telemetry::default(),
         }
     }
 
@@ -109,7 +134,7 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adcs, dacs, iir_state, iir_ch], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, dacs, iir_state, iir_ch, telemetry], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -136,6 +161,14 @@ const APP: () = {
                 dac_samples[channel][sample] = y as u16 ^ 0x8000;
             }
         }
+
+        // Update telemetry measurements.
+        // TODO: Should we report these as voltages?
+        c.resources.telemetry.latest_samples =
+            [adc_samples[0][0] as i16, adc_samples[1][0] as i16];
+
+        c.resources.telemetry.latest_outputs =
+            [dac_samples[0][0] as i16, dac_samples[1][0] as i16];
     }
 
     #[idle(resources=[mqtt_interface, clock], spawn=[settings_update])]
@@ -162,7 +195,7 @@ const APP: () = {
                     if update {
                         c.spawn.settings_update().unwrap();
                     } else if sleep {
-                        cortex_m::asm::wfi();
+                        //cortex_m::asm::wfi();
                     }
                 }
                 Err(miniconf::MqttError::Network(
@@ -173,16 +206,51 @@ const APP: () = {
         }
     }
 
-    #[task(priority = 1, resources=[mqtt_interface, afes, iir_ch])]
+    #[task(priority = 1, resources=[mqtt_interface, afes, settings, iir_ch])]
     fn settings_update(mut c: settings_update::Context) {
         let settings = &c.resources.mqtt_interface.settings;
 
         // Update the IIR channels.
         c.resources.iir_ch.lock(|iir| *iir = settings.iir_ch);
 
+        // Update currently-cached settings.
+        *c.resources.settings = *settings;
+
         // Update AFEs
         c.resources.afes.0.set_gain(settings.afe[0]);
         c.resources.afes.1.set_gain(settings.afe[1]);
+    }
+
+    #[task(priority = 1, resources=[mqtt_interface, settings, telemetry], schedule=[telemetry])]
+    fn telemetry(mut c: telemetry::Context) {
+        let telemetry = c.resources.telemetry.lock(|telemetry| {
+            // TODO: Incorporate digital input status.
+            telemetry.digital_inputs = [false, false];
+            telemetry.clone()
+        });
+
+        // Serialize telemetry outside of a critical section to prevent blocking the processing
+        // task.
+        let _telemetry = miniconf::serde_json_core::to_string::<
+            heapless::consts::U256,
+            _,
+        >(&telemetry)
+        .unwrap();
+
+        //c.resources.mqtt_interface.client(|client| {
+        //    // TODO: Incorporate current MQTT prefix instead of hard-coded value.
+        //    client.publish("dt/sinara/dual-iir/telemetry", telemetry.as_bytes(), minimq::QoS::AtMostOnce, &[]).ok()
+        //});
+
+        // Schedule the telemetry task in the future.
+        c.schedule
+            .telemetry(
+                c.scheduled
+                    + SystemTimer::ticks_from_secs(
+                        c.resources.settings.telemetry_period_secs as u32,
+                    ),
+            )
+            .unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]
