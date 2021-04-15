@@ -67,7 +67,7 @@ fn iir_bench() {
     let mut xy = iir::Vec5::default();
     println!(
         "int::IIR::update(s, x): {}",
-        bench_env(0.32241, |x| dut.update(&mut xy, *x))
+        bench_env(0.32241, |x| dut.update(&mut xy, *x, true))
     );
 }
 
