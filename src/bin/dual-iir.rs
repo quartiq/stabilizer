@@ -2,8 +2,6 @@
 #![no_std]
 #![no_main]
 
-use stm32h7xx_hal as hal;
-
 use stabilizer::hardware;
 
 use miniconf::{minimq, Miniconf, MqttInterface};
@@ -12,20 +10,13 @@ use serde::{Deserialize, Serialize};
 use dsp::iir;
 use hardware::{
     Adc0Input, Adc1Input, AfeGain, CycleCounter, Dac0Output, Dac1Output,
-    NetworkStack, SystemTimer, AFE0, AFE1,
+    DigitalInput0, DigitalInput1, SystemTimer, InputPin, NetworkStack, AFE0, AFE1,
 };
 
 const SCALE: f32 = i16::MAX as _;
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
-
-#[derive(Debug, Deserialize, Miniconf, Copy, Clone)]
-pub struct Settings {
-    afe: [AfeGain; 2],
-    iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
-    telemetry_period_secs: u16,
-}
 
 #[derive(Serialize, Clone)]
 pub struct Telemetry {
@@ -34,11 +25,22 @@ pub struct Telemetry {
     digital_inputs: [bool; 2],
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Miniconf)]
+pub struct Settings {
+    afe: [AfeGain; 2],
+    iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+    allow_hold: bool,
+    force_hold: bool,
+    telemetry_period_secs: u16,
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
             afe: [AfeGain::G1, AfeGain::G1],
             iir_ch: [[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2],
+            allow_hold: false,
+            force_hold: false,
             telemetry_period_secs: 10,
         }
     }
@@ -58,6 +60,7 @@ impl Default for Telemetry {
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
+        digital_inputs: (DigitalInput0, DigitalInput1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         mqtt_interface:
@@ -69,11 +72,9 @@ const APP: () = {
         // Format: iir_state[ch][cascade-no][coeff]
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
         iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
-        #[init([[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2])]
-        iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
     }
 
-    #[init(schedule = [telemetry])]
+    #[init(spawn=[telemetry, settings_update])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
@@ -96,6 +97,10 @@ const APP: () = {
             .unwrap()
         };
 
+        // Spawn a settings update for default settings.
+        c.spawn.settings_update().unwrap();
+        c.spawn.telemetry().unwrap();
+
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();
         stabilizer.adcs.1.start();
@@ -105,16 +110,15 @@ const APP: () = {
         // Start sampling ADCs.
         stabilizer.adc_dac_timer.start();
 
-        c.schedule.telemetry(c.start).unwrap();
-
         init::LateResources {
             mqtt_interface,
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
             clock: stabilizer.cycle_counter,
-            settings: Settings::default(),
             telemetry: Telemetry::default(),
+            digital_inputs: stabilizer.digital_inputs,
+            settings: Settings::default(),
         }
     }
 
@@ -134,7 +138,7 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adcs, dacs, iir_state, iir_ch, telemetry], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, digital_inputs, dacs, iir_state, settings, telemetry], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -146,13 +150,19 @@ const APP: () = {
             c.resources.dacs.1.acquire_buffer(),
         ];
 
+        let hold = c.resources.settings.force_hold
+            || (c.resources.digital_inputs.1.is_high().unwrap()
+                && c.resources.settings.allow_hold);
+
         for channel in 0..adc_samples.len() {
             for sample in 0..adc_samples[0].len() {
-                let x = f32::from(adc_samples[channel][sample] as i16);
-                let mut y = x;
+                let mut y = f32::from(adc_samples[channel][sample] as i16);
                 for i in 0..c.resources.iir_state[channel].len() {
-                    y = c.resources.iir_ch[channel][i]
-                        .update(&mut c.resources.iir_state[channel][i], y);
+                    y = c.resources.settings.iir_ch[channel][i].update(
+                        &mut c.resources.iir_state[channel][i],
+                        y,
+                        hold,
+                    );
                 }
                 // Note(unsafe): The filter limits ensure that the value is in range.
                 // The truncation introduces 1/2 LSB distortion.
@@ -169,6 +179,11 @@ const APP: () = {
 
         c.resources.telemetry.latest_outputs =
             [dac_samples[0][0] as i16, dac_samples[1][0] as i16];
+
+        c.resources.telemetry.digital_inputs = [
+            c.resources.digital_inputs.0.is_high().unwrap(),
+            c.resources.digital_inputs.1.is_high().unwrap(),
+        ];
     }
 
     #[idle(resources=[mqtt_interface, clock], spawn=[settings_update])]
@@ -206,15 +221,12 @@ const APP: () = {
         }
     }
 
-    #[task(priority = 1, resources=[mqtt_interface, afes, settings, iir_ch])]
+    #[task(priority = 1, resources=[mqtt_interface, afes, settings])]
     fn settings_update(mut c: settings_update::Context) {
         let settings = &c.resources.mqtt_interface.settings;
 
         // Update the IIR channels.
-        c.resources.iir_ch.lock(|iir| *iir = settings.iir_ch);
-
-        // Update currently-cached settings.
-        *c.resources.settings = *settings;
+        c.resources.settings.lock(|current| *current = *settings);
 
         // Update AFEs
         c.resources.afes.0.set_gain(settings.afe[0]);
@@ -223,11 +235,7 @@ const APP: () = {
 
     #[task(priority = 1, resources=[mqtt_interface, settings, telemetry], schedule=[telemetry])]
     fn telemetry(mut c: telemetry::Context) {
-        let telemetry = c.resources.telemetry.lock(|telemetry| {
-            // TODO: Incorporate digital input status.
-            telemetry.digital_inputs = [false, false];
-            telemetry.clone()
-        });
+        let telemetry = c.resources.telemetry.lock(|telemetry| telemetry.clone());
 
         // Serialize telemetry outside of a critical section to prevent blocking the processing
         // task.
@@ -242,20 +250,16 @@ const APP: () = {
             client.publish("dt/sinara/dual-iir/telemetry", telemetry.as_bytes(), minimq::QoS::AtMostOnce, &[]).ok()
         });
 
+        let telemetry_period = c.resources.settings.lock(|settings| settings.telemetry_period_secs);
+
         // Schedule the telemetry task in the future.
-        c.schedule
-            .telemetry(
-                c.scheduled
-                    + SystemTimer::ticks_from_secs(
-                        c.resources.settings.telemetry_period_secs as u32,
-                    ),
-            )
+        c.schedule.telemetry( c.scheduled + SystemTimer::ticks_from_secs(telemetry_period as u32))
             .unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]
     fn eth(_: eth::Context) {
-        unsafe { hal::ethernet::interrupt_handler() }
+        unsafe { stm32h7xx_hal::ethernet::interrupt_handler() }
     }
 
     #[task(binds = SPI2, priority = 3)]

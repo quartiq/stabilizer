@@ -13,8 +13,8 @@ use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use super::{
     adc, afe, cycle_counter::CycleCounter, dac, design_parameters,
-    digital_input_stamper, eeprom, pounder, system_timer, timers, DdsOutput,
-    NetworkStack, AFE0, AFE1,
+    digital_input_stamper, eeprom, pounder, timers, system_timer, DdsOutput, DigitalInput0,
+    DigitalInput1, NetworkStack, AFE0, AFE1,
 };
 
 pub struct NetStorage {
@@ -69,6 +69,7 @@ pub struct StabilizerDevices {
     pub timestamp_timer: timers::TimestampTimer,
     pub net: NetworkDevices,
     pub cycle_counter: CycleCounter,
+    pub digital_inputs: (DigitalInput0, DigitalInput1),
 }
 
 /// The available Pounder-specific hardware interfaces.
@@ -447,6 +448,12 @@ pub fn setup(
             trigger,
             timestamp_timer_channels.ch4,
         )
+    };
+
+    let digital_inputs = {
+        let di0 = gpiog.pg9.into_floating_input();
+        let di1 = gpioc.pc15.into_floating_input();
+        (di0, di1)
     };
 
     let mut eeprom_i2c = {
@@ -882,6 +889,7 @@ pub fn setup(
         adc_dac_timer: sampling_timer,
         timestamp_timer,
         cycle_counter,
+        digital_inputs,
     };
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
