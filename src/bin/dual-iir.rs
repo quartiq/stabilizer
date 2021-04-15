@@ -2,10 +2,6 @@
 #![no_std]
 #![no_main]
 
-use stm32h7xx_hal as hal;
-
-pub use embedded_hal::digital::v2::InputPin;
-
 use stabilizer::hardware;
 
 use miniconf::{minimq, Miniconf, MqttInterface};
@@ -14,7 +10,7 @@ use serde::Deserialize;
 use dsp::iir;
 use hardware::{
     Adc0Input, Adc1Input, AfeGain, CycleCounter, Dac0Output, Dac1Output,
-    DigitalInput1, NetworkStack, AFE0, AFE1,
+    DigitalInput1, InputPin, NetworkStack, AFE0, AFE1,
 };
 
 const SCALE: f32 = i16::MAX as _;
@@ -45,7 +41,7 @@ impl Default for Settings {
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
-        di1: DigitalInput1,
+        digital_input1: DigitalInput1,
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         mqtt_interface:
@@ -99,7 +95,7 @@ const APP: () = {
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
             clock: stabilizer.cycle_counter,
-            di1: stabilizer.digital_inputs.1,
+            digital_input1: stabilizer.digital_inputs.1,
             settings: Settings::default(),
         }
     }
@@ -120,7 +116,7 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adcs, di1, dacs, iir_state, settings], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, digital_input1, dacs, iir_state, settings], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -133,7 +129,7 @@ const APP: () = {
         ];
 
         let hold = c.resources.settings.force_hold
-            || (c.resources.di1.is_high().unwrap()
+            || (c.resources.digital_input1.is_high().unwrap()
                 && c.resources.settings.allow_hold);
 
         for channel in 0..adc_samples.len() {
@@ -204,7 +200,7 @@ const APP: () = {
 
     #[task(binds = ETH, priority = 1)]
     fn eth(_: eth::Context) {
-        unsafe { hal::ethernet::interrupt_handler() }
+        unsafe { stm32h7xx_hal::ethernet::interrupt_handler() }
     }
 
     #[task(binds = SPI2, priority = 3)]

@@ -1,6 +1,9 @@
 ///! Module for all hardware-specific setup of Stabilizer
 use stm32h7xx_hal as hal;
 
+// Re-export for the DigitalInputs below:
+pub use embedded_hal::digital::v2::InputPin;
+
 #[cfg(feature = "semihosting")]
 use panic_semihosting as _;
 

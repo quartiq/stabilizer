@@ -9,7 +9,7 @@ use stm32h7xx_hal::{
 
 use smoltcp_nal::smoltcp;
 
-pub use embedded_hal::digital::v2::{InputPin, OutputPin};
+use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use super::{
     adc, afe, cycle_counter::CycleCounter, dac, design_parameters,
