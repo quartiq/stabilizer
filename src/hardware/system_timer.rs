@@ -10,14 +10,14 @@ impl SystemTimer {
         timer.pause();
         // Have the system timer operate at a tick rate of 10KHz (100uS per tick). With this
         // configuration and a 65535 period, we get an overflow once every 6.5 seconds.
-        timer.set_tick_freq(10.khz());
+        timer.set_tick_freq(1.mhz());
         timer.apply_freq();
 
         timer.resume();
     }
 
     pub fn ticks_from_secs(secs: u32) -> i32 {
-        (secs * 10_000) as i32
+        (secs * 1_000_000) as i32
     }
 }
 
@@ -27,7 +27,7 @@ impl rtic::Monotonic for SystemTimer {
     fn ratio() -> rtic::Fraction {
         rtic::Fraction {
             numerator: 1,
-            denominator: 40000,
+            denominator: 400,
         }
     }
 

@@ -103,7 +103,7 @@ const APP: () = {
         stabilizer.dacs.1.start();
 
         // Start sampling ADCs.
-        //stabilizer.adc_dac_timer.start();
+        stabilizer.adc_dac_timer.start();
 
         c.schedule.telemetry(c.start).unwrap();
 
@@ -231,16 +231,16 @@ const APP: () = {
 
         // Serialize telemetry outside of a critical section to prevent blocking the processing
         // task.
-        let _telemetry = miniconf::serde_json_core::to_string::<
+        let telemetry = miniconf::serde_json_core::to_string::<
             heapless::consts::U256,
             _,
         >(&telemetry)
         .unwrap();
 
-        //c.resources.mqtt_interface.client(|client| {
-        //    // TODO: Incorporate current MQTT prefix instead of hard-coded value.
-        //    client.publish("dt/sinara/dual-iir/telemetry", telemetry.as_bytes(), minimq::QoS::AtMostOnce, &[]).ok()
-        //});
+        c.resources.mqtt_interface.client(|client| {
+            // TODO: Incorporate current MQTT prefix instead of hard-coded value.
+            client.publish("dt/sinara/dual-iir/telemetry", telemetry.as_bytes(), minimq::QoS::AtMostOnce, &[]).ok()
+        });
 
         // Schedule the telemetry task in the future.
         c.schedule
