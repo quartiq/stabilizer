@@ -14,7 +14,7 @@ use embedded_hal::digital::v2::{InputPin, OutputPin};
 use super::{
     adc, afe, cycle_counter::CycleCounter, dac, design_parameters,
     digital_input_stamper, eeprom, pounder, timers, DdsOutput, DigitalInput0,
-    DigitalInput1, NetworkStack, AFE0, AFE1,
+    DigitalInput1, EthernetPhy, NetworkStack, AFE0, AFE1,
 };
 
 pub struct NetStorage {
@@ -56,7 +56,7 @@ impl NetStorage {
 /// The available networking devices on Stabilizer.
 pub struct NetworkDevices {
     pub stack: NetworkStack,
-    pub phy: ethernet::phy::LAN8742A<ethernet::EthernetMAC>,
+    pub phy: EthernetPhy,
 }
 
 /// The available hardware interfaces on Stabilizer.
