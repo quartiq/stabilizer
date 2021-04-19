@@ -51,4 +51,4 @@ pub const SAMPLE_BUFFER_SIZE_LOG2: u8 = 3;
 pub const SAMPLE_BUFFER_SIZE: usize = 1 << SAMPLE_BUFFER_SIZE_LOG2;
 
 // The MQTT broker IPv4 address
-pub const MQTT_BROKER: [u8; 4] = [10, 35, 16, 10];
+pub const MQTT_BROKER: [u8; 4] = [10, 34, 16, 10];
