@@ -117,7 +117,7 @@ impl IIR {
     /// # Arguments
     /// * `xy` - Current filter state.
     /// * `x0` - New input.
-    pub fn update(&self, xy: &mut Vec5, x0: f32) -> f32 {
+    pub fn update(&self, xy: &mut Vec5, x0: f32, hold: bool) -> f32 {
         let n = self.ba.len();
         debug_assert!(xy.len() == n);
         // `xy` contains       x0 x1 y0 y1 y2
@@ -128,7 +128,11 @@ impl IIR {
         // Store x0            x0 x1 x2 y1 y2
         xy[0] = x0;
         // Compute y0 by multiply-accumulate
-        let y0 = macc(self.y_offset, xy, &self.ba);
+        let y0 = if hold {
+            xy[n / 2 + 1]
+        } else {
+            macc(self.y_offset, xy, &self.ba)
+        };
         // Limit y0
         let y0 = max(self.y_min, min(self.y_max, y0));
         // Store y0            x0 x1 y0 y1 y2

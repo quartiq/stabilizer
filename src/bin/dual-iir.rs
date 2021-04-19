@@ -2,8 +2,6 @@
 #![no_std]
 #![no_main]
 
-use stm32h7xx_hal as hal;
-
 use stabilizer::{hardware, net};
 
 use miniconf::Miniconf;
@@ -11,20 +9,23 @@ use serde::Deserialize;
 
 use dsp::iir;
 use hardware::{
-    Adc0Input, Adc1Input, AfeGain, Dac0Output, Dac1Output, AFE0, AFE1,
+    Adc0Input, Adc1Input, AfeGain, Dac0Output, Dac1Output, DigitalInput1,
+    InputPin, AFE0, AFE1,
 };
 
-use net::{Action, MqttSettings};
+use net::{Action, MiniconfInterface};
 
 const SCALE: f32 = i16::MAX as _;
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
 
-#[derive(Debug, Deserialize, Miniconf)]
+#[derive(Clone, Copy, Debug, Deserialize, Miniconf)]
 pub struct Settings {
     afe: [AfeGain; 2],
     iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+    allow_hold: bool,
+    force_hold: bool,
 }
 
 impl Default for Settings {
@@ -32,6 +33,8 @@ impl Default for Settings {
         Self {
             afe: [AfeGain::G1, AfeGain::G1],
             iir_ch: [[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2],
+            allow_hold: false,
+            force_hold: false,
         }
     }
 }
@@ -40,29 +43,32 @@ impl Default for Settings {
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
+        digital_input1: DigitalInput1,
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        mqtt_settings: MqttSettings<Settings>,
+        mqtt_config: MiniconfInterface<Settings>,
 
         // Format: iir_state[ch][cascade-no][coeff]
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
         iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
-        #[init([[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2])]
-        iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+        settings: Settings,
     }
 
-    #[init]
+    #[init(spawn=[settings_update])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let mqtt_settings = MqttSettings::new(
+        let mqtt_config = MiniconfInterface::new(
             stabilizer.net.stack,
             "",
             "dt/sinara/stabilizer",
             stabilizer.net.phy,
             stabilizer.cycle_counter,
         );
+
+        // Spawn a settings update for default settings.
+        c.spawn.settings_update().unwrap();
 
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();
@@ -77,7 +83,9 @@ const APP: () = {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            mqtt_settings,
+            mqtt_config,
+            digital_input1: stabilizer.digital_inputs.1,
+            settings: Settings::default(),
         }
     }
 
@@ -97,7 +105,7 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adcs, dacs, iir_state, iir_ch], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, digital_input1, dacs, iir_state, settings], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -109,13 +117,19 @@ const APP: () = {
             c.resources.dacs.1.acquire_buffer(),
         ];
 
+        let hold = c.resources.settings.force_hold
+            || (c.resources.digital_input1.is_high().unwrap()
+                && c.resources.settings.allow_hold);
+
         for channel in 0..adc_samples.len() {
             for sample in 0..adc_samples[0].len() {
-                let x = f32::from(adc_samples[channel][sample] as i16);
-                let mut y = x;
+                let mut y = f32::from(adc_samples[channel][sample] as i16);
                 for i in 0..c.resources.iir_state[channel].len() {
-                    y = c.resources.iir_ch[channel][i]
-                        .update(&mut c.resources.iir_state[channel][i], y);
+                    y = c.resources.settings.iir_ch[channel][i].update(
+                        &mut c.resources.iir_state[channel][i],
+                        y,
+                        hold,
+                    );
                 }
                 // Note(unsafe): The filter limits ensure that the value is in range.
                 // The truncation introduces 1/2 LSB distortion.
@@ -126,10 +140,14 @@ const APP: () = {
         }
     }
 
-    #[idle(resources=[mqtt_settings], spawn=[settings_update])]
+    #[idle(resources=[mqtt_config], spawn=[settings_update])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
-            match c.resources.mqtt_settings.lock(|settings| settings.update()) {
+            match c
+                .resources
+                .mqtt_config
+                .lock(|config_interface| config_interface.update())
+            {
                 Some(Action::Sleep) => cortex_m::asm::wfi(),
                 Some(Action::UpdateSettings) => {
                     c.spawn.settings_update().unwrap()
@@ -139,12 +157,12 @@ const APP: () = {
         }
     }
 
-    #[task(priority = 1, resources=[mqtt_settings, afes, iir_ch])]
+    #[task(priority = 1, resources=[mqtt_config, afes, settings])]
     fn settings_update(mut c: settings_update::Context) {
-        let settings = &c.resources.mqtt_settings.mqtt.settings;
+        let settings = &c.resources.mqtt_config.mqtt.settings;
 
         // Update the IIR channels.
-        c.resources.iir_ch.lock(|iir| *iir = settings.iir_ch);
+        c.resources.settings.lock(|current| *current = *settings);
 
         // Update AFEs
         c.resources.afes.0.set_gain(settings.afe[0]);
@@ -153,7 +171,7 @@ const APP: () = {
 
     #[task(binds = ETH, priority = 1)]
     fn eth(_: eth::Context) {
-        unsafe { hal::ethernet::interrupt_handler() }
+        unsafe { stm32h7xx_hal::ethernet::interrupt_handler() }
     }
 
     #[task(binds = SPI2, priority = 3)]
