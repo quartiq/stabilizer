@@ -16,7 +16,7 @@ use stabilizer::hardware::{
 };
 
 use miniconf::Miniconf;
-use stabilizer::net::{Action, MqttSettings};
+use stabilizer::net::{Action, MiniconfInterface};
 
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 enum Conf {
@@ -60,7 +60,7 @@ const APP: () = {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        mqtt_settings: MqttSettings<Settings>,
+        mqtt_config: MiniconfInterface<Settings>,
         settings: Settings,
 
         timestamper: InputStamper,
@@ -73,7 +73,7 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = setup(c.core, c.device);
 
-        let mqtt_settings = MqttSettings::new(
+        let mqtt_config = MiniconfInterface::new(
             stabilizer.net.stack,
             "",
             &net::get_device_prefix(
@@ -113,7 +113,7 @@ const APP: () = {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            mqtt_settings,
+            mqtt_config,
             timestamper: stabilizer.timestamper,
 
             settings,
@@ -195,10 +195,14 @@ const APP: () = {
         }
     }
 
-    #[idle(resources=[mqtt_settings], spawn=[settings_update])]
+    #[idle(resources=[mqtt_config], spawn=[settings_update])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
-            match c.resources.mqtt_settings.lock(|settings| settings.update()) {
+            match c
+                .resources
+                .mqtt_config
+                .lock(|config_interface| config_interface.update())
+            {
                 Some(Action::Sleep) => cortex_m::asm::wfi(),
                 Some(Action::UpdateSettings) => {
                     c.spawn.settings_update().unwrap()
@@ -208,9 +212,9 @@ const APP: () = {
         }
     }
 
-    #[task(priority = 1, resources=[mqtt_settings, settings, afes])]
+    #[task(priority = 1, resources=[mqtt_config, settings, afes])]
     fn settings_update(mut c: settings_update::Context) {
-        let settings = &c.resources.mqtt_settings.mqtt.settings;
+        let settings = &c.resources.mqtt_config.mqtt.settings;
 
         c.resources.afes.0.set_gain(settings.afe[0]);
         c.resources.afes.1.set_gain(settings.afe[1]);

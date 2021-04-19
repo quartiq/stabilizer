@@ -5,8 +5,7 @@ use crate::hardware::{
 use core::fmt::Write;
 
 use heapless::{consts, String};
-
-use miniconf::{minimq, MqttInterface};
+use miniconf::minimq;
 
 /// Potential actions for firmware to take.
 pub enum Action {
@@ -18,17 +17,17 @@ pub enum Action {
 }
 
 /// MQTT settings interface.
-pub struct MqttSettings<S>
+pub struct MiniconfInterface<S>
 where
     S: miniconf::Miniconf + Default,
 {
-    pub mqtt: MqttInterface<S, NetworkStack, minimq::consts::U256>,
+    pub mqtt: miniconf::MqttInterface<S, NetworkStack, minimq::consts::U256>,
     clock: CycleCounter,
     phy: EthernetPhy,
     network_was_reset: bool,
 }
 
-impl<S> MqttSettings<S>
+impl<S> MiniconfInterface<S>
 where
     S: miniconf::Miniconf + Default,
 {
@@ -53,7 +52,8 @@ where
                     .unwrap()
             };
 
-            MqttInterface::new(mqtt_client, prefix, S::default()).unwrap()
+            miniconf::MqttInterface::new(mqtt_client, prefix, S::default())
+                .unwrap()
         };
 
         Self {
