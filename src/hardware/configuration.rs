@@ -57,6 +57,7 @@ impl NetStorage {
 pub struct NetworkDevices {
     pub stack: NetworkStack,
     pub phy: EthernetPhy,
+    pub mac_address: smoltcp::wire::EthernetAddress,
 }
 
 /// The available hardware interfaces on Stabilizer.
@@ -618,6 +619,7 @@ pub fn setup(
         NetworkDevices {
             stack,
             phy: lan8742a,
+            mac_address: mac_addr,
         }
     };
 

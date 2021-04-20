@@ -8,6 +8,8 @@ use serde::Deserialize;
 
 use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
 
+use stabilizer::net;
+
 use stabilizer::hardware::{
     design_parameters, setup, Adc0Input, Adc1Input, AfeGain, Dac0Output,
     Dac1Output, InputStamper, AFE0, AFE1,
@@ -74,7 +76,10 @@ const APP: () = {
         let mqtt_config = MiniconfInterface::new(
             stabilizer.net.stack,
             "",
-            "dt/sinara/lockin",
+            &net::get_device_prefix(
+                env!("CARGO_BIN_NAME"),
+                stabilizer.net.mac_address,
+            ),
             stabilizer.net.phy,
             stabilizer.cycle_counter,
         );
