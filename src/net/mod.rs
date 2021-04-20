@@ -7,6 +7,9 @@ use core::fmt::Write;
 use heapless::{consts, String};
 use miniconf::minimq;
 
+mod telemetry;
+pub use telemetry::Telemetry;
+
 /// Potential actions for firmware to take.
 pub enum Action {
     /// Indicates that firmware can sleep for the next event.

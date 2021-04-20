@@ -2,6 +2,7 @@
 #![no_std]
 #![no_main]
 
+use embedded_hal::digital::v2::InputPin;
 use generic_array::typenum::U4;
 
 use serde::Deserialize;
@@ -12,10 +13,11 @@ use stabilizer::net;
 
 use stabilizer::hardware::{
     design_parameters, setup, Adc0Input, Adc1Input, AfeGain, Dac0Output,
-    Dac1Output, InputStamper, AFE0, AFE1,
+    Dac1Output, DigitalInput0, DigitalInput1, InputStamper, SystemTimer, AFE0,
+    AFE1,
 };
 
-use miniconf::Miniconf;
+use miniconf::{minimq, Miniconf};
 use stabilizer::net::{Action, MiniconfInterface};
 
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
@@ -36,6 +38,7 @@ pub struct Settings {
     lockin_phase: i32,
 
     output_conf: [Conf; 2],
+    telemetry_period_secs: u16,
 }
 
 impl Default for Settings {
@@ -50,11 +53,12 @@ impl Default for Settings {
             lockin_phase: 0,     // Demodulation LO phase offset
 
             output_conf: [Conf::Quadrature; 2],
+            telemetry_period_secs: 10,
         }
     }
 }
 
-#[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
+#[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = stabilizer::hardware::SystemTimer)]
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
@@ -62,13 +66,15 @@ const APP: () = {
         dacs: (Dac0Output, Dac1Output),
         mqtt_config: MiniconfInterface<Settings>,
         settings: Settings,
+        telemetry: net::Telemetry,
+        digital_inputs: (DigitalInput0, DigitalInput1),
 
         timestamper: InputStamper,
         pll: RPLL,
         lockin: Lockin<U4>,
     }
 
-    #[init(spawn=[settings_update])]
+    #[init(spawn=[settings_update, telemetry])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = setup(c.core, c.device);
@@ -91,8 +97,9 @@ const APP: () = {
                 + design_parameters::SAMPLE_BUFFER_SIZE_LOG2,
         );
 
-        // Spawn a settings update for default settings.
+        // Spawn a settings and telemetry update for default settings.
         c.spawn.settings_update().unwrap();
+        c.spawn.telemetry().unwrap();
 
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();
@@ -113,8 +120,10 @@ const APP: () = {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
+            digital_inputs: stabilizer.digital_inputs,
             mqtt_config,
             timestamper: stabilizer.timestamper,
+            telemetry: net::Telemetry::default(),
 
             settings,
 
@@ -130,7 +139,7 @@ const APP: () = {
     /// This is an implementation of a externally (DI0) referenced PLL lockin on the ADC0 signal.
     /// It outputs either I/Q or power/phase on DAC0/DAC1. Data is normalized to full scale.
     /// PLL bandwidth, filter bandwidth, slope, and x/y or power/phase post-filters are available.
-    #[task(binds=DMA1_STR4, resources=[adcs, dacs, lockin, timestamper, pll, settings], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, dacs, lockin, timestamper, pll, settings, telemetry], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -193,6 +202,14 @@ const APP: () = {
             dac_samples[0][i] = (output[0] >> 16) as u16 ^ 0x8000;
             dac_samples[1][i] = (output[1] >> 16) as u16 ^ 0x8000;
         }
+
+        // Update telemetry measurements.
+        // TODO: Should we report these as voltages?
+        c.resources.telemetry.latest_samples =
+            [adc_samples[0][0] as i16, adc_samples[1][0] as i16];
+
+        c.resources.telemetry.latest_outputs =
+            [dac_samples[0][0] as i16, dac_samples[1][0] as i16];
     }
 
     #[idle(resources=[mqtt_config], spawn=[settings_update])]
@@ -220,6 +237,50 @@ const APP: () = {
         c.resources.afes.1.set_gain(settings.afe[1]);
 
         c.resources.settings.lock(|current| *current = *settings);
+    }
+
+    #[task(priority = 1, resources=[mqtt_config, digital_inputs, settings, telemetry], schedule=[telemetry])]
+    fn telemetry(mut c: telemetry::Context) {
+        let mut telemetry =
+            c.resources.telemetry.lock(|telemetry| telemetry.clone());
+
+        telemetry.digital_inputs = [
+            c.resources.digital_inputs.0.is_high().unwrap(),
+            c.resources.digital_inputs.1.is_high().unwrap(),
+        ];
+
+        // Serialize telemetry outside of a critical section to prevent blocking the processing
+        // task.
+        let telemetry = miniconf::serde_json_core::to_string::<
+            heapless::consts::U256,
+            _,
+        >(&telemetry)
+        .unwrap();
+
+        c.resources.mqtt_config.mqtt.client(|client| {
+            // TODO: Incorporate current MQTT prefix instead of hard-coded value.
+            client
+                .publish(
+                    "dt/sinara/dual-iir/telemetry",
+                    telemetry.as_bytes(),
+                    minimq::QoS::AtMostOnce,
+                    &[],
+                )
+                .ok()
+        });
+
+        let telemetry_period = c
+            .resources
+            .settings
+            .lock(|settings| settings.telemetry_period_secs);
+
+        // Schedule the telemetry task in the future.
+        c.schedule
+            .telemetry(
+                c.scheduled
+                    + SystemTimer::ticks_from_secs(telemetry_period as u32),
+            )
+            .unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]

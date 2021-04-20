@@ -5,7 +5,7 @@
 use stabilizer::{hardware, net};
 
 use miniconf::{minimq, Miniconf};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use dsp::iir;
 use hardware::{
@@ -19,13 +19,6 @@ const SCALE: f32 = i16::MAX as _;
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
-
-#[derive(Serialize, Clone)]
-pub struct Telemetry {
-    latest_samples: [i16; 2],
-    latest_outputs: [i16; 2],
-    digital_inputs: [bool; 2],
-}
 
 #[derive(Clone, Copy, Debug, Deserialize, Miniconf)]
 pub struct Settings {
@@ -48,17 +41,7 @@ impl Default for Settings {
     }
 }
 
-impl Default for Telemetry {
-    fn default() -> Self {
-        Self {
-            latest_samples: [0, 0],
-            latest_outputs: [0, 0],
-            digital_inputs: [false, false],
-        }
-    }
-}
-
-#[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = crate::hardware::SystemTimer)]
+#[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = stabilizer::hardware::SystemTimer)]
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
@@ -66,7 +49,7 @@ const APP: () = {
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         mqtt_config: MiniconfInterface<Settings>,
-        telemetry: Telemetry,
+        telemetry: net::Telemetry,
         settings: Settings,
 
         // Format: iir_state[ch][cascade-no][coeff]
@@ -107,7 +90,7 @@ const APP: () = {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            telemetry: Telemetry::default(),
+            telemetry: net::Telemetry::default(),
             digital_inputs: stabilizer.digital_inputs,
             mqtt_config,
             settings: Settings::default(),
