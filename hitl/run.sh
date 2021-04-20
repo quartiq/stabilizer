@@ -21,7 +21,7 @@ cargo flash --elf target/thumbv7em-none-eabihf/release/dual-iir --chip STM32H743
 # * DHCP is functional and an IP has been acquired
 # * Stabilizer's network is functioning as intended
 # * The stabilizer application is operational
-ping -c 5 -w 20 stabilizer-hitl
+ping -c 5 -w 45 stabilizer-hitl
 
 # Test the MQTT interface.
 python3 miniconf.py dt/sinara/stabilizer afe/0='"G2"'
