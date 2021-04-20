@@ -552,7 +552,7 @@ pub fn setup(
             smoltcp::iface::NeighborCache::new(&mut store.neighbor_cache[..]);
 
         let interface = smoltcp::iface::EthernetInterfaceBuilder::new(eth_dma)
-            .ethernet_addr(mac_addr.clone())
+            .ethernet_addr(mac_addr)
             .neighbor_cache(neighbor_cache)
             .ip_addrs(&mut store.ip_addrs[..])
             .routes(routes)
