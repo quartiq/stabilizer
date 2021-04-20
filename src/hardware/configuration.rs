@@ -13,8 +13,8 @@ use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use super::{
     adc, afe, cycle_counter::CycleCounter, dac, design_parameters,
-    digital_input_stamper, eeprom, pounder, timers, system_timer, DdsOutput, DigitalInput0,
-    DigitalInput1, NetworkStack, AFE0, AFE1,
+    digital_input_stamper, eeprom, pounder, system_timer, timers, DdsOutput,
+    DigitalInput0, DigitalInput1, EthernetPhy, NetworkStack, AFE0, AFE1,
 };
 
 pub struct NetStorage {
@@ -56,7 +56,8 @@ impl NetStorage {
 /// The available networking devices on Stabilizer.
 pub struct NetworkDevices {
     pub stack: NetworkStack,
-    pub phy: ethernet::phy::LAN8742A<ethernet::EthernetMAC>,
+    pub phy: EthernetPhy,
+    pub mac_address: smoltcp::wire::EthernetAddress,
 }
 
 /// The available hardware interfaces on Stabilizer.
@@ -608,14 +609,27 @@ pub fn setup(
             )
         };
 
+        let random_seed = {
+            let mut rng =
+                device.RNG.constrain(ccdr.peripheral.RNG, &ccdr.clocks);
+            let mut data = [0u8; 4];
+            rng.fill(&mut data).unwrap();
+            data
+        };
+
+        let mut stack = smoltcp_nal::NetworkStack::new(
+            interface,
+            sockets,
+            &handles,
+            Some(dhcp_client),
+        );
+
+        stack.seed_random_port(&random_seed);
+
         NetworkDevices {
-            stack: smoltcp_nal::NetworkStack::new(
-                interface,
-                sockets,
-                &handles,
-                Some(dhcp_client),
-            ),
+            stack,
             phy: lan8742a,
+            mac_address: mac_addr,
         }
     };
 

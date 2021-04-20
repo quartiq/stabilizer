@@ -438,6 +438,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "nanorand"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac1378b66f7c93a1c0f8464a19bf47df8795083842e5090f4b7305973d5a22d0"
+
+[[package]]
 name = "nb"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -710,10 +716,11 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/smoltcp-nal.git?rev=56519012d7#56519012d7c6a382eaa0d7ecb26f2701771d9ce8"
+source = "git+https://github.com/quartiq/smoltcp-nal.git?rev=8468f11#8468f11abacd7aba82454e6904df19c1d1ab91bb"
 dependencies = [
  "embedded-nal",
  "heapless 0.6.1",
+ "nanorand",
  "smoltcp",
 ]
 

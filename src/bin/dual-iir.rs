@@ -2,16 +2,18 @@
 #![no_std]
 #![no_main]
 
-use stabilizer::hardware;
+use stabilizer::{hardware, net};
 
-use miniconf::{minimq, Miniconf, MqttInterface};
+use miniconf::{minimq, Miniconf};
 use serde::{Deserialize, Serialize};
 
 use dsp::iir;
 use hardware::{
-    Adc0Input, Adc1Input, AfeGain, CycleCounter, Dac0Output, Dac1Output,
-    DigitalInput0, DigitalInput1, SystemTimer, InputPin, NetworkStack, AFE0, AFE1,
+    Adc0Input, Adc1Input, AfeGain, Dac0Output, Dac1Output, DigitalInput0,
+    DigitalInput1, InputPin, SystemTimer, AFE0, AFE1,
 };
+
+use net::{Action, MiniconfInterface};
 
 const SCALE: f32 = i16::MAX as _;
 
@@ -63,11 +65,9 @@ const APP: () = {
         digital_inputs: (DigitalInput0, DigitalInput1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        mqtt_interface:
-            MqttInterface<Settings, NetworkStack, minimq::consts::U256>,
+        mqtt_config: MiniconfInterface<Settings>,
         telemetry: Telemetry,
         settings: Settings,
-        clock: CycleCounter,
 
         // Format: iir_state[ch][cascade-no][coeff]
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
@@ -79,23 +79,16 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let mqtt_interface = {
-            let mqtt_client = {
-                minimq::MqttClient::new(
-                    hardware::design_parameters::MQTT_BROKER.into(),
-                    "",
-                    stabilizer.net.stack,
-                )
-                .unwrap()
-            };
-
-            MqttInterface::new(
-                mqtt_client,
-                "dt/sinara/stabilizer",
-                Settings::default(),
-            )
-            .unwrap()
-        };
+        let mqtt_config = MiniconfInterface::new(
+            stabilizer.net.stack,
+            "",
+            &net::get_device_prefix(
+                env!("CARGO_BIN_NAME"),
+                stabilizer.net.mac_address,
+            ),
+            stabilizer.net.phy,
+            stabilizer.cycle_counter,
+        );
 
         // Spawn a settings update for default settings.
         c.spawn.settings_update().unwrap();
@@ -111,13 +104,12 @@ const APP: () = {
         stabilizer.adc_dac_timer.start();
 
         init::LateResources {
-            mqtt_interface,
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            clock: stabilizer.cycle_counter,
             telemetry: Telemetry::default(),
             digital_inputs: stabilizer.digital_inputs,
+            mqtt_config,
             settings: Settings::default(),
         }
     }
@@ -186,44 +178,26 @@ const APP: () = {
         ];
     }
 
-    #[idle(resources=[mqtt_interface, clock], spawn=[settings_update])]
+    #[idle(resources=[mqtt_config], spawn=[settings_update])]
     fn idle(mut c: idle::Context) -> ! {
-        let clock = c.resources.clock;
-
         loop {
-            let sleep = c.resources.mqtt_interface.lock(|interface| {
-                match interface.network_stack().poll(clock.current_ms()) {
-                    Ok(updated) => !updated,
-                    Err(err) => {
-                        log::info!("Network error: {:?}", err);
-                        false
-                    }
-                }
-            });
-
             match c
                 .resources
-                .mqtt_interface
-                .lock(|interface| interface.update())
+                .mqtt_config
+                .lock(|config_interface| config_interface.update())
             {
-                Ok(update) => {
-                    if update {
-                        c.spawn.settings_update().unwrap();
-                    } else if sleep {
-                        //cortex_m::asm::wfi();
-                    }
+                Some(Action::Sleep) => cortex_m::asm::wfi(),
+                Some(Action::UpdateSettings) => {
+                    c.spawn.settings_update().unwrap()
                 }
-                Err(miniconf::MqttError::Network(
-                    smoltcp_nal::NetworkError::NoIpAddress,
-                )) => {}
-                Err(error) => log::info!("Unexpected error: {:?}", error),
+                _ => {}
             }
         }
     }
 
-    #[task(priority = 1, resources=[mqtt_interface, afes, settings])]
+    #[task(priority = 1, resources=[mqtt_config, afes, settings])]
     fn settings_update(mut c: settings_update::Context) {
-        let settings = &c.resources.mqtt_interface.settings;
+        let settings = &c.resources.mqtt_config.mqtt.settings;
 
         // Update the IIR channels.
         c.resources.settings.lock(|current| *current = *settings);
@@ -233,9 +207,10 @@ const APP: () = {
         c.resources.afes.1.set_gain(settings.afe[1]);
     }
 
-    #[task(priority = 1, resources=[mqtt_interface, settings, telemetry], schedule=[telemetry])]
+    #[task(priority = 1, resources=[mqtt_config, settings, telemetry], schedule=[telemetry])]
     fn telemetry(mut c: telemetry::Context) {
-        let telemetry = c.resources.telemetry.lock(|telemetry| telemetry.clone());
+        let telemetry =
+            c.resources.telemetry.lock(|telemetry| telemetry.clone());
 
         // Serialize telemetry outside of a critical section to prevent blocking the processing
         // task.
@@ -245,15 +220,29 @@ const APP: () = {
         >(&telemetry)
         .unwrap();
 
-        c.resources.mqtt_interface.client(|client| {
+        c.resources.mqtt_config.mqtt.client(|client| {
             // TODO: Incorporate current MQTT prefix instead of hard-coded value.
-            client.publish("dt/sinara/dual-iir/telemetry", telemetry.as_bytes(), minimq::QoS::AtMostOnce, &[]).ok()
+            client
+                .publish(
+                    "dt/sinara/dual-iir/telemetry",
+                    telemetry.as_bytes(),
+                    minimq::QoS::AtMostOnce,
+                    &[],
+                )
+                .ok()
         });
 
-        let telemetry_period = c.resources.settings.lock(|settings| settings.telemetry_period_secs);
+        let telemetry_period = c
+            .resources
+            .settings
+            .lock(|settings| settings.telemetry_period_secs);
 
         // Schedule the telemetry task in the future.
-        c.schedule.telemetry( c.scheduled + SystemTimer::ticks_from_secs(telemetry_period as u32))
+        c.schedule
+            .telemetry(
+                c.scheduled
+                    + SystemTimer::ticks_from_secs(telemetry_period as u32),
+            )
             .unwrap();
     }
 
