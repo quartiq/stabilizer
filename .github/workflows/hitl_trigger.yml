@@ -6,7 +6,7 @@ on:
     branches:
       - staging
       - trying
-   pull_request:
+  pull_request:
       - staging
 
 jobs:
