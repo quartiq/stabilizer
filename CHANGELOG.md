@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
-* Rebust EEPROM MAC address reading slow supply start
+* Robust EEPROM MAC address reading slow supply start
 
 ## [v0.4.1] - 2020-06-23
 
