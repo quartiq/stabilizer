@@ -20,7 +20,7 @@ jobs:
           repository: quartiq/hitl
           client-payload: '{"github": ${{ toJson(github) }}}'
 
-      - runs: |
+      - run: |
           echo "Ryan now has the PAT"
           echo "It is ${{secrets.DISPATCH_PAT}}, but GH will censor STDOUT"
 
