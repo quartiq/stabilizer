@@ -203,7 +203,7 @@ dependencies = [
 [[package]]
 name = "derive_miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?rev=314fa5587d#314fa5587d1aa28e1ad70106f19e30db646e9f28"
+source = "git+https://github.com/quartiq/miniconf.git?branch=feature/mqtt-removal#6b6b9d7973ac5b4771c211c775c51f82d4a7727f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -416,11 +416,10 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?rev=314fa5587d#314fa5587d1aa28e1ad70106f19e30db646e9f28"
+source = "git+https://github.com/quartiq/miniconf.git?branch=feature/mqtt-removal#6b6b9d7973ac5b4771c211c775c51f82d4a7727f"
 dependencies = [
  "derive_miniconf",
  "heapless 0.6.1",
- "minimq",
  "serde",
  "serde-json-core",
 ]
@@ -742,6 +741,7 @@ dependencies = [
  "log",
  "mcp23017",
  "miniconf",
+ "minimq",
  "nb 1.0.0",
  "panic-semihosting",
  "paste",

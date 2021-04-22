@@ -2,10 +2,10 @@ use crate::hardware::{
     design_parameters::MQTT_BROKER, CycleCounter, EthernetPhy, NetworkStack,
 };
 
-use core::fmt::Write;
+use core::{cell::RefCell, fmt::Write};
 
-use heapless::{consts, String};
-use miniconf::minimq;
+use heapless::{consts, String, Vec};
+use serde::Serialize;
 
 /// Potential actions for firmware to take.
 pub enum Action {
@@ -17,19 +17,22 @@ pub enum Action {
 }
 
 /// MQTT settings interface.
-pub struct MiniconfInterface<S>
+pub struct MqttInterface<S>
 where
-    S: miniconf::Miniconf + Default,
+    S: miniconf::Miniconf + Default + Clone,
 {
-    pub mqtt: miniconf::MqttInterface<S, NetworkStack, minimq::consts::U256>,
+    telemetry_topic: String<consts::U128>,
+    mqtt: RefCell<minimq::MqttClient<minimq::consts::U256, NetworkStack>>,
+    miniconf: RefCell<miniconf::MiniconfInterface<S>>,
     clock: CycleCounter,
     phy: EthernetPhy,
     network_was_reset: bool,
+    subscribed: bool,
 }
 
-impl<S> MiniconfInterface<S>
+impl<S> MqttInterface<S>
 where
-    S: miniconf::Miniconf + Default,
+    S: miniconf::Miniconf + Default + Clone,
 {
     /// Construct a new MQTT settings interface.
     ///
@@ -46,21 +49,23 @@ where
         phy: EthernetPhy,
         clock: CycleCounter,
     ) -> Self {
-        let mqtt = {
-            let mqtt_client = {
-                minimq::MqttClient::new(MQTT_BROKER.into(), client_id, stack)
-                    .unwrap()
-            };
+        let mqtt_client =
+            minimq::MqttClient::new(MQTT_BROKER.into(), client_id, stack)
+                .unwrap();
+        let config =
+            miniconf::MiniconfInterface::new(prefix, S::default()).unwrap();
 
-            miniconf::MqttInterface::new(mqtt_client, prefix, S::default())
-                .unwrap()
-        };
+        let mut telemetry_topic: String<consts::U128> = String::new();
+        write!(&mut telemetry_topic, "{}/telemetry", prefix).unwrap();
 
         Self {
-            mqtt,
+            mqtt: RefCell::new(mqtt_client),
+            miniconf: RefCell::new(config),
             clock,
             phy,
+            telemetry_topic,
             network_was_reset: false,
+            subscribed: false,
         }
     }
 
@@ -72,7 +77,7 @@ where
         let now = self.clock.current_ms();
 
         // First, service the network stack to process and inbound and outbound traffic.
-        let sleep = match self.mqtt.network_stack().poll(now) {
+        let sleep = match self.mqtt.borrow_mut().network_stack.poll(now) {
             Ok(updated) => !updated,
             Err(err) => {
                 log::info!("Network error: {:?}", err);
@@ -87,19 +92,93 @@ where
             // sending an excessive number of DHCP requests.
             if !self.network_was_reset {
                 self.network_was_reset = true;
-                self.mqtt.network_stack().handle_link_reset();
+                self.mqtt.borrow_mut().network_stack.handle_link_reset();
             }
         } else {
             self.network_was_reset = false;
         }
 
-        // Finally, service the MQTT interface and handle any necessary messages.
-        match self.mqtt.update() {
-            Ok(true) => Some(Action::UpdateSettings),
-            Ok(false) if sleep => Some(Action::Sleep),
-            Ok(_) => None,
+        // If we're no longer subscribed to the settings topic, but we are connected to the broker,
+        // resubscribe.
+        if !self.subscribed && self.mqtt.borrow_mut().is_connected().unwrap() {
+            self.mqtt
+                .borrow_mut()
+                .subscribe(
+                    self.miniconf.borrow_mut().get_listening_topic(),
+                    &[],
+                )
+                .unwrap();
+            self.subscribed = true;
+        }
 
-            Err(miniconf::MqttError::Network(
+        let mut update = false;
+
+        // Handle any MQTT traffic.
+        match self.mqtt.borrow_mut().poll(
+            |client, topic, message, properties| {
+                // Find correlation-data and response topics.
+                let correlation_data = properties.iter().find_map(|prop| {
+                    if let minimq::Property::CorrelationData(data) = prop {
+                        Some(*data)
+                    } else {
+                        None
+                    }
+                });
+                let response_topic = properties.iter().find_map(|prop| {
+                    if let minimq::Property::ResponseTopic(topic) = prop {
+                        Some(*topic)
+                    } else {
+                        None
+                    }
+                });
+
+                let incoming = miniconf::Message {
+                    data: message,
+                    correlation_data,
+                    response_topic,
+                };
+
+                if let Some(response) =
+                    self.miniconf.borrow_mut().process(topic, incoming)
+                {
+                    let mut response_properties: Vec<
+                        minimq::Property,
+                        consts::U1,
+                    > = Vec::new();
+                    if let Some(data) = response.correlation_data {
+                        response_properties
+                            .push(minimq::Property::CorrelationData(data))
+                            .unwrap();
+                    }
+
+                    // Make a best-effort attempt to send the response.
+                    client
+                        .publish(
+                            response.topic,
+                            &response.data.into_bytes(),
+                            minimq::QoS::AtMostOnce,
+                            &response_properties,
+                        )
+                        .ok();
+                    update = true;
+                }
+            },
+        ) {
+            // If settings updated,
+            Ok(_) => {
+                if update {
+                    Some(Action::UpdateSettings)
+                } else if sleep {
+                    Some(Action::Sleep)
+                } else {
+                    None
+                }
+            }
+            Err(minimq::Error::Disconnected) => {
+                self.subscribed = false;
+                None
+            }
+            Err(minimq::Error::Network(
                 smoltcp_nal::NetworkError::NoIpAddress,
             )) => None,
 
@@ -108,6 +187,25 @@ where
                 None
             }
         }
+    }
+
+    pub fn publish_telemetry(&mut self, telemetry: &impl Serialize) {
+        let telemetry =
+            miniconf::serde_json_core::to_string::<consts::U256, _>(telemetry)
+                .unwrap();
+        self.mqtt
+            .borrow_mut()
+            .publish(
+                &self.telemetry_topic,
+                telemetry.as_bytes(),
+                minimq::QoS::AtMostOnce,
+                &[],
+            )
+            .ok();
+    }
+
+    pub fn settings(&self) -> S {
+        self.miniconf.borrow().settings.clone()
     }
 }
 

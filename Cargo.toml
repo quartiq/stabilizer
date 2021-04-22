@@ -56,13 +56,13 @@ version = "0.9.0"
 
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf.git"
-rev = "314fa5587d"
+branch = "feature/mqtt-removal"
 
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
 rev = "8468f11"
 
-[patch.crates-io.minimq]
+[dependencies.minimq]
 git = "https://github.com/quartiq/minimq.git"
 rev = "933687c2e4b"
 
