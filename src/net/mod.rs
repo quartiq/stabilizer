@@ -116,31 +116,10 @@ where
         // Handle any MQTT traffic.
         match self.mqtt.borrow_mut().poll(
             |client, topic, message, properties| {
-                // Find correlation-data and response topics.
-                let correlation_data = properties.iter().find_map(|prop| {
-                    if let minimq::Property::CorrelationData(data) = prop {
-                        Some(*data)
-                    } else {
-                        None
-                    }
-                });
-                let response_topic = properties.iter().find_map(|prop| {
-                    if let minimq::Property::ResponseTopic(topic) = prop {
-                        Some(*topic)
-                    } else {
-                        None
-                    }
-                });
-
-                let incoming = miniconf::Message {
-                    data: message,
-                    correlation_data,
-                    response_topic,
-                };
-
-                if let Some(response) =
-                    self.miniconf.borrow_mut().process(topic, incoming)
-                {
+                if let Some(response) = self.miniconf.borrow_mut().process(
+                    topic,
+                    miniconf::Message::from(message, properties),
+                ) {
                     let mut response_properties: Vec<
                         minimq::Property,
                         consts::U1,
