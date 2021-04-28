@@ -203,6 +203,7 @@ dependencies = [
 [[package]]
 name = "derive_miniconf"
 version = "0.1.0"
+source = "git+https://github.com/quartiq/miniconf.git?rev=c8d819c#c8d819cdab65f18396e65dafa3558daea29e3031"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -415,10 +416,10 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.1.0"
+source = "git+https://github.com/quartiq/miniconf.git?rev=c8d819c#c8d819cdab65f18396e65dafa3558daea29e3031"
 dependencies = [
  "derive_miniconf",
  "heapless 0.6.1",
- "minimq",
  "serde",
  "serde-json-core",
 ]
@@ -426,7 +427,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.2.0"
-source = "git+https://github.com/quartiq/minimq.git?rev=933687c2e4b#933687c2e4bc8a4d972de9a4d1508b0b554a8b38"
+source = "git+https://github.com/quartiq/minimq.git?branch=rs/issue-40/copyable-properties#c95c758b620ee98752852bb643df8557a7200f3f"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -657,6 +658,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ryu"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
+
+[[package]]
 name = "semver"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -683,9 +690,10 @@ dependencies = [
 [[package]]
 name = "serde-json-core"
 version = "0.2.0"
-source = "git+https://github.com/rust-embedded-community/serde-json-core.git?rev=ee06ac91bc#ee06ac91bc43b72450a92198a00d9e5c5b9946d2"
+source = "git+https://github.com/quartiq/serde-json-core.git?branch=feature/dependency-update#a304506a1efb4a90a6ef3faf71ec3ef5f8433fb4"
 dependencies = [
- "heapless 0.5.6",
+ "heapless 0.6.1",
+ "ryu",
  "serde",
 ]
 

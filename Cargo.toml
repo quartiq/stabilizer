@@ -44,7 +44,7 @@ paste = "1"
 dsp = { path = "dsp" }
 ad9959 = { path = "ad9959" }
 generic-array = "0.14"
-miniconf = { version = "0.1.0", features = ["minimq-support"] }
+miniconf = "0.1.0"
 
 [dependencies.mcp23017]
 git = "https://github.com/mrd0ll4r/mcp23017.git"
@@ -55,13 +55,8 @@ features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]
 version = "0.9.0"
 
 [patch.crates-io.miniconf]
-path = "../miniconf"
-# git = "https://github.com/quartiq/miniconf.git"
-# branch = "feature/mqtt-removal"
-
-[patch.crates-io.minimq]
-git = "https://github.com/quartiq/minimq.git"
-rev = "933687c2e4b"
+git = "https://github.com/quartiq/miniconf.git"
+rev = "c8d819c"
 
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
@@ -69,11 +64,11 @@ rev = "8468f11"
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq.git"
-rev = "933687c2e4b"
+branch = "rs/issue-40/copyable-properties"
 
 [patch.crates-io.serde-json-core]
-git = "https://github.com/rust-embedded-community/serde-json-core.git"
-rev = "ee06ac91bc"
+git = "https://github.com/quartiq/serde-json-core.git"
+branch = "feature/dependency-update"
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
