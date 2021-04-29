@@ -66,7 +66,7 @@ const APP: () = {
         dacs: (Dac0Output, Dac1Output),
         mqtt: MqttInterface<Settings>,
         settings: Settings,
-        telemetry: net::Telemetry,
+        telemetry: net::TelemetryBuffer,
         digital_inputs: (DigitalInput0, DigitalInput1),
 
         timestamper: InputStamper,
@@ -123,7 +123,7 @@ const APP: () = {
             mqtt,
             digital_inputs: stabilizer.digital_inputs,
             timestamper: stabilizer.timestamper,
-            telemetry: net::Telemetry::default(),
+            telemetry: net::TelemetryBuffer::default(),
 
             settings,
 
@@ -245,7 +245,8 @@ const APP: () = {
             c.resources.digital_inputs.1.is_high().unwrap(),
         ];
 
-        c.resources.mqtt.publish_telemetry(&telemetry);
+        let gains = c.resources.settings.lock(|settings| settings.afe.clone());
+        c.resources.mqtt.publish_telemetry(&telemetry.to_telemetry(gains[0], gains[1]));
 
         let telemetry_period = c
             .resources

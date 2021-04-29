@@ -15,7 +15,7 @@ use messages::{MqttMessage, SettingsResponse, SettingsResponseCode};
 pub use mqtt_interface::MqttInterface;
 
 mod telemetry;
-pub use telemetry::Telemetry;
+pub use telemetry::{Telemetry, TelemetryBuffer};
 
 /// Potential actions for firmware to take.
 pub enum Action {

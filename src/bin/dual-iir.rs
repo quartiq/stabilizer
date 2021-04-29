@@ -57,7 +57,7 @@ const APP: () = {
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         mqtt: MqttInterface<Settings>,
-        telemetry: net::Telemetry,
+        telemetry: net::TelemetryBuffer,
         settings: Settings,
 
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
@@ -99,7 +99,7 @@ const APP: () = {
             dacs: stabilizer.dacs,
             mqtt,
             digital_inputs: stabilizer.digital_inputs,
-            telemetry: net::Telemetry::default(),
+            telemetry: net::TelemetryBuffer::default(),
             settings: Settings::default(),
         }
     }
@@ -197,7 +197,8 @@ const APP: () = {
         let telemetry =
             c.resources.telemetry.lock(|telemetry| telemetry.clone());
 
-        c.resources.mqtt.publish_telemetry(&telemetry);
+        let gains = c.resources.settings.lock(|settings| settings.afe.clone());
+        c.resources.mqtt.publish_telemetry(&telemetry.to_telemetry(gains[0], gains[1]));
 
         let telemetry_period = c
             .resources
