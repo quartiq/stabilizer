@@ -21,7 +21,8 @@ jobs:
           name: HITL Run Status
           status: in_progress
           details_url: "https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}"
-          output: { "summary": "Starting..." }
+          output: |
+            {"summary": "Starting..."}
 
       - uses: peter-evans/repository-dispatch@v1
         with:
