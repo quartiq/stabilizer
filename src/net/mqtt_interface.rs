@@ -22,7 +22,7 @@ where
     phy: EthernetPhy,
     network_was_reset: bool,
     subscribed: bool,
-    id: String<consts::U32>,
+    id: String<consts::U64>,
 }
 
 impl<S> MqttInterface<S>
@@ -99,9 +99,24 @@ where
             self.network_was_reset = false;
         }
 
+        let mqtt_connected = match self.mqtt.borrow_mut().is_connected() {
+            Ok(connected) => connected,
+            Err(minimq::Error::Network(
+                smoltcp_nal::NetworkError::NoIpAddress,
+            )) => false,
+            Err(minimq::Error::Network(error)) => {
+                log::info!("Unexpected network error: {:?}", error);
+                false
+            }
+            Err(error) => {
+                log::warn!("Unexpected MQTT error: {:?}", error);
+                false
+            }
+        };
+
         // If we're no longer subscribed to the settings topic, but we are connected to the broker,
         // resubscribe.
-        if !self.subscribed && self.mqtt.borrow_mut().is_connected().unwrap() {
+        if !self.subscribed && mqtt_connected {
             let mut settings_topic: String<consts::U128> = String::new();
             write!(&mut settings_topic, "{}/settings/#", self.id.as_str())
                 .unwrap();

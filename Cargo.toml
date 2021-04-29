@@ -64,11 +64,11 @@ rev = "8468f11"
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq.git"
-branch = "rs/issue-40/copyable-properties"
+rev = "b3f364d"
 
 [patch.crates-io.serde-json-core]
-git = "https://github.com/quartiq/serde-json-core.git"
-branch = "feature/dependency-update"
+git = "https://github.com/rust-embedded-community/serde-json-core.git"
+rev = "da460d1"
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]

@@ -427,7 +427,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.2.0"
-source = "git+https://github.com/quartiq/minimq.git?branch=rs/issue-40/copyable-properties#c95c758b620ee98752852bb643df8557a7200f3f"
+source = "git+https://github.com/quartiq/minimq.git?rev=b3f364d#b3f364d55dea35da6572f78ddb91c87bfbb453bf"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -690,7 +690,7 @@ dependencies = [
 [[package]]
 name = "serde-json-core"
 version = "0.2.0"
-source = "git+https://github.com/quartiq/serde-json-core.git?branch=feature/dependency-update#a304506a1efb4a90a6ef3faf71ec3ef5f8433fb4"
+source = "git+https://github.com/rust-embedded-community/serde-json-core.git?rev=da460d1#da460d123e217f0e822a3977eb2170ed5d279d5e"
 dependencies = [
  "heapless 0.6.1",
  "ryu",
