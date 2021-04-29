@@ -114,9 +114,9 @@ def main():
         for kv in args.settings:
             path, value = kv.split("=", 1)
             code, response = await interface.command(path, json.loads(value))
+            print(response)
             if code != 0:
                 failures += 1
-                logging.warning('%s update failed!', path)
 
         return failures
 
