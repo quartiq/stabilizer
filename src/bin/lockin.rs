@@ -204,12 +204,11 @@ const APP: () = {
         }
 
         // Update telemetry measurements.
-        // TODO: Should we report these as voltages?
         c.resources.telemetry.latest_samples =
             [adc_samples[0][0] as i16, adc_samples[1][0] as i16];
 
         c.resources.telemetry.latest_outputs =
-            [dac_samples[0][0] as i16, dac_samples[1][0] as i16];
+            [dac_samples[0][0], dac_samples[1][0]];
     }
 
     #[idle(resources=[mqtt], spawn=[settings_update])]
@@ -246,7 +245,9 @@ const APP: () = {
         ];
 
         let gains = c.resources.settings.lock(|settings| settings.afe.clone());
-        c.resources.mqtt.publish_telemetry(&telemetry.to_telemetry(gains[0], gains[1]));
+        c.resources
+            .mqtt
+            .publish_telemetry(&telemetry.to_telemetry(gains[0], gains[1]));
 
         let telemetry_period = c
             .resources

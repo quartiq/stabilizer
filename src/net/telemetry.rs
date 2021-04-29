@@ -5,7 +5,7 @@ use crate::hardware::AfeGain;
 #[derive(Copy, Clone)]
 pub struct TelemetryBuffer {
     pub latest_samples: [i16; 2],
-    pub latest_outputs: [i16; 2],
+    pub latest_outputs: [u16; 2],
     pub digital_inputs: [bool; 2],
 }
 
@@ -13,7 +13,7 @@ pub struct TelemetryBuffer {
 pub struct Telemetry {
     input_levels: [f32; 2],
     output_levels: [f32; 2],
-    digital_inputs: [bool; 2]
+    digital_inputs: [bool; 2],
 }
 
 impl Default for TelemetryBuffer {
@@ -28,11 +28,21 @@ impl Default for TelemetryBuffer {
 
 impl TelemetryBuffer {
     pub fn to_telemetry(self, afe0: AfeGain, afe1: AfeGain) -> Telemetry {
-        let in0_volts = self.latest_samples[0] as f32 / (i16::MAX as f32 * 5.0 * afe0.to_multiplier() as f32) * 4.096;
-        let in1_volts = self.latest_samples[1] as f32 / (i16::MAX as f32 * 5.0 * afe1.to_multiplier() as f32) * 4.096;
+        let in0_volts =
+            (self.latest_samples[0] as f32 / i16::MAX as f32) * 4.096 / 2.0
+                * 5.0
+                / afe0.to_multiplier() as f32;
+        let in1_volts =
+            (self.latest_samples[1] as f32 / i16::MAX as f32) * 4.096 / 2.0
+                * 5.0
+                / afe1.to_multiplier() as f32;
 
-        let out0_volts = self.latest_outputs[0] as f32 / (i16::MAX as f32) * 10.24;
-        let out1_volts = self.latest_outputs[1] as f32 / (i16::MAX as f32) * 10.24;
+        let out0_volts = (10.24 * 2.0)
+            * (self.latest_outputs[0] as f32 / (u16::MAX as f32))
+            - 10.24;
+        let out1_volts = (10.24 * 2.0)
+            * (self.latest_outputs[1] as f32 / (u16::MAX as f32))
+            - 10.24;
 
         Telemetry {
             input_levels: [in0_volts, in1_volts],

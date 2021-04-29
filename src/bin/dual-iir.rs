@@ -160,7 +160,7 @@ const APP: () = {
             [adc_samples[0][0] as i16, adc_samples[1][0] as i16];
 
         c.resources.telemetry.latest_outputs =
-            [dac_samples[0][0] as i16, dac_samples[1][0] as i16];
+            [dac_samples[0][0], dac_samples[1][0]];
 
         c.resources.telemetry.digital_inputs = [
             c.resources.digital_inputs.0.is_high().unwrap(),
@@ -198,7 +198,9 @@ const APP: () = {
             c.resources.telemetry.lock(|telemetry| telemetry.clone());
 
         let gains = c.resources.settings.lock(|settings| settings.afe.clone());
-        c.resources.mqtt.publish_telemetry(&telemetry.to_telemetry(gains[0], gains[1]));
+        c.resources
+            .mqtt
+            .publish_telemetry(&telemetry.to_telemetry(gains[0], gains[1]));
 
         let telemetry_period = c
             .resources
