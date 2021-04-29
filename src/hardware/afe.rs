@@ -20,6 +20,18 @@ pub struct ProgrammableGainAmplifier<A0, A1> {
     a1: A1,
 }
 
+impl Gain {
+    /// Get the AFE gain as a multiplying integer.
+    pub fn to_multiplier(&self) -> u8 {
+        match self {
+            Gain::G1 => 1,
+            Gain::G2 => 2,
+            Gain::G5 => 5,
+            Gain::G10 => 10,
+        }
+    }
+}
+
 impl TryFrom<u8> for Gain {
     type Error = ();
 
