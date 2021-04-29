@@ -1,5 +1,6 @@
 [![QUARTIQ Matrix Chat](https://img.shields.io/matrix/quartiq:matrix.org)](https://matrix.to/#/#quartiq:matrix.org)
-[![HITL (private)](https://github.com/quartiq/hitl/workflows/Stabilizer/badge.svg)](https://github.com/quartiq/hitl/actions?query=workflow%3AStabilizer)
+[![Continuous Integration](https://github.com/quartiq/stabilizer/actions/workflows/ci.yml/badge.svg)](https://github.com/quartiq/stabilizer/actions/workflows/ci.yml)
+[![Stabilizer HITL [Nightly]](https://github.com/quartiq/hitl/actions/workflows/stabilizer-nightly.yml/badge.svg)](https://github.com/quartiq/hitl/actions/workflows/stabilizer-nightly.yml)
 
 # Stabilizer Firmware
 

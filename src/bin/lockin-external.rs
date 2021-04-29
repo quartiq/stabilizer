@@ -4,15 +4,19 @@
 
 use generic_array::typenum::U4;
 
-use miniconf::{minimq, Miniconf, MqttInterface};
 use serde::Deserialize;
 
 use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
 
+use stabilizer::net;
+
 use stabilizer::hardware::{
-    design_parameters, setup, Adc0Input, Adc1Input, AfeGain, CycleCounter,
-    Dac0Output, Dac1Output, InputStamper, NetworkStack, AFE0, AFE1,
+    design_parameters, setup, Adc0Input, Adc1Input, AfeGain, Dac0Output,
+    Dac1Output, InputStamper, AFE0, AFE1,
 };
+
+use miniconf::Miniconf;
+use stabilizer::net::{Action, MiniconfInterface};
 
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 enum Conf {
@@ -56,11 +60,7 @@ const APP: () = {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        clock: CycleCounter,
-
-        mqtt_interface:
-            MqttInterface<Settings, NetworkStack, minimq::consts::U256>,
-
+        mqtt_config: MiniconfInterface<Settings>,
         settings: Settings,
 
         timestamper: InputStamper,
@@ -73,21 +73,16 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = setup(c.core, c.device);
 
-        let mqtt_interface = {
-            let mqtt_client = minimq::MqttClient::new(
-                design_parameters::MQTT_BROKER.into(),
-                "",
-                stabilizer.net.stack,
-            )
-            .unwrap();
-
-            MqttInterface::new(
-                mqtt_client,
-                "dt/sinara/lockin",
-                Settings::default(),
-            )
-            .unwrap()
-        };
+        let mqtt_config = MiniconfInterface::new(
+            stabilizer.net.stack,
+            "",
+            &net::get_device_prefix(
+                env!("CARGO_BIN_NAME"),
+                stabilizer.net.mac_address,
+            ),
+            stabilizer.net.phy,
+            stabilizer.cycle_counter,
+        );
 
         let settings = Settings::default();
 
@@ -118,10 +113,8 @@ const APP: () = {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
+            mqtt_config,
             timestamper: stabilizer.timestamper,
-            clock: stabilizer.cycle_counter,
-
-            mqtt_interface,
 
             settings,
 
@@ -202,44 +195,26 @@ const APP: () = {
         }
     }
 
-    #[idle(resources=[mqtt_interface, clock], spawn=[settings_update])]
+    #[idle(resources=[mqtt_config], spawn=[settings_update])]
     fn idle(mut c: idle::Context) -> ! {
-        let clock = c.resources.clock;
-
         loop {
-            let sleep = c.resources.mqtt_interface.lock(|interface| {
-                match interface.network_stack().poll(clock.current_ms()) {
-                    Ok(updated) => !updated,
-                    Err(err) => {
-                        log::info!("Network error: {:?}", err);
-                        false
-                    }
-                }
-            });
-
             match c
                 .resources
-                .mqtt_interface
-                .lock(|interface| interface.update())
+                .mqtt_config
+                .lock(|config_interface| config_interface.update())
             {
-                Ok(update) => {
-                    if update {
-                        c.spawn.settings_update().unwrap();
-                    } else if sleep {
-                        cortex_m::asm::wfi();
-                    }
+                Some(Action::Sleep) => cortex_m::asm::wfi(),
+                Some(Action::UpdateSettings) => {
+                    c.spawn.settings_update().unwrap()
                 }
-                Err(miniconf::MqttError::Network(
-                    smoltcp_nal::NetworkError::NoIpAddress,
-                )) => {}
-                Err(error) => log::info!("Unexpected error: {:?}", error),
+                _ => {}
             }
         }
     }
 
-    #[task(priority = 1, resources=[mqtt_interface, settings, afes])]
+    #[task(priority = 1, resources=[mqtt_config, settings, afes])]
     fn settings_update(mut c: settings_update::Context) {
-        let settings = &c.resources.mqtt_interface.settings;
+        let settings = &c.resources.mqtt_config.mqtt.settings;
 
         c.resources.afes.0.set_gain(settings.afe[0]);
         c.resources.afes.1.set_gain(settings.afe[1]);

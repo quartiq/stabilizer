@@ -13,8 +13,8 @@ use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use super::{
     adc, afe, cycle_counter::CycleCounter, dac, design_parameters,
-    digital_input_stamper, eeprom, pounder, timers, DdsOutput, NetworkStack,
-    AFE0, AFE1,
+    digital_input_stamper, eeprom, pounder, timers, DdsOutput, DigitalInput0,
+    DigitalInput1, EthernetPhy, NetworkStack, AFE0, AFE1,
 };
 
 pub struct NetStorage {
@@ -56,7 +56,8 @@ impl NetStorage {
 /// The available networking devices on Stabilizer.
 pub struct NetworkDevices {
     pub stack: NetworkStack,
-    pub phy: ethernet::phy::LAN8742A<ethernet::EthernetMAC>,
+    pub phy: EthernetPhy,
+    pub mac_address: smoltcp::wire::EthernetAddress,
 }
 
 /// The available hardware interfaces on Stabilizer.
@@ -69,6 +70,7 @@ pub struct StabilizerDevices {
     pub timestamp_timer: timers::TimestampTimer,
     pub net: NetworkDevices,
     pub cycle_counter: CycleCounter,
+    pub digital_inputs: (DigitalInput0, DigitalInput1),
 }
 
 /// The available Pounder-specific hardware interfaces.
@@ -439,6 +441,12 @@ pub fn setup(
         )
     };
 
+    let digital_inputs = {
+        let di0 = gpiog.pg9.into_floating_input();
+        let di1 = gpioc.pc15.into_floating_input();
+        (di0, di1)
+    };
+
     let mut eeprom_i2c = {
         let sda = gpiof.pf0.into_alternate_af4().set_open_drain();
         let scl = gpiof.pf1.into_alternate_af4().set_open_drain();
@@ -495,13 +503,10 @@ pub fn setup(
             .set_speed(hal::gpio::Speed::VeryHigh);
     }
 
-    let mac_addr = match eeprom::read_eui48(&mut eeprom_i2c) {
-        Err(_) => {
-            info!("Could not read EEPROM, using default MAC address");
-            smoltcp::wire::EthernetAddress([0x10, 0xE2, 0xD5, 0x00, 0x03, 0x00])
-        }
-        Ok(raw_mac) => smoltcp::wire::EthernetAddress(raw_mac),
-    };
+    let mac_addr = smoltcp::wire::EthernetAddress(eeprom::read_eui48(
+        &mut eeprom_i2c,
+        &mut delay,
+    ));
 
     let network_devices = {
         // Configure the ethernet controller
@@ -594,14 +599,27 @@ pub fn setup(
             )
         };
 
+        let random_seed = {
+            let mut rng =
+                device.RNG.constrain(ccdr.peripheral.RNG, &ccdr.clocks);
+            let mut data = [0u8; 4];
+            rng.fill(&mut data).unwrap();
+            data
+        };
+
+        let mut stack = smoltcp_nal::NetworkStack::new(
+            interface,
+            sockets,
+            &handles,
+            Some(dhcp_client),
+        );
+
+        stack.seed_random_port(&random_seed);
+
         NetworkDevices {
-            stack: smoltcp_nal::NetworkStack::new(
-                interface,
-                sockets,
-                &handles,
-                Some(dhcp_client),
-            ),
+            stack,
             phy: lan8742a,
+            mac_address: mac_addr,
         }
     };
 
@@ -875,6 +893,7 @@ pub fn setup(
         adc_dac_timer: sampling_timer,
         timestamp_timer,
         cycle_counter,
+        digital_inputs,
     };
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());

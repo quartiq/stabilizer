@@ -2,35 +2,47 @@
 #![no_std]
 #![no_main]
 
-use stm32h7xx_hal as hal;
+use stabilizer::{hardware, net};
 
-use stabilizer::hardware;
-
-use miniconf::{minimq, Miniconf, MqttInterface};
+use miniconf::Miniconf;
 use serde::Deserialize;
 
 use dsp::iir;
 use hardware::{
-    Adc0Input, Adc1Input, AfeGain, CycleCounter, Dac0Output, Dac1Output,
-    NetworkStack, AFE0, AFE1,
+    Adc0Input, Adc1Input, AfeGain, Dac0Output, Dac1Output, DigitalInput1,
+    InputPin, AFE0, AFE1,
 };
+
+use net::{Action, MiniconfInterface};
 
 const SCALE: f32 = i16::MAX as _;
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
 
-#[derive(Debug, Deserialize, Miniconf)]
+#[derive(Clone, Copy, Debug, Deserialize, Miniconf)]
 pub struct Settings {
     afe: [AfeGain; 2],
     iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+    allow_hold: bool,
+    force_hold: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            // Analog frontend programmable gain amplifier gains (G1, G2, G5, G10)
             afe: [AfeGain::G1, AfeGain::G1],
+            // IIR filter tap gains are an array `[b0, b1, b2, a1, a2]` such that the
+            // new output is computed as `y0 = a1*y1 + a2*y2 + b0*x0 + b1*x1 + b2*x2`.
+            // The array is `iir_state[channel-index][cascade-index][coeff-index]`.
+            // The IIR coefficients can be mapped to other transfer function
+            // representations, for example as described in https://arxiv.org/abs/1508.06319
             iir_ch: [[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2],
+            // Permit the DI1 digital input to suppress filter output updates.
+            allow_hold: false,
+            // Force suppress filter output updates.
+            force_hold: false,
         }
     }
 }
@@ -39,41 +51,34 @@ impl Default for Settings {
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
+        digital_input1: DigitalInput1,
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        mqtt_interface:
-            MqttInterface<Settings, NetworkStack, minimq::consts::U256>,
-        clock: CycleCounter,
+        mqtt_config: MiniconfInterface<Settings>,
 
-        // Format: iir_state[ch][cascade-no][coeff]
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
         iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
-        #[init([[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2])]
-        iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+        settings: Settings,
     }
 
-    #[init]
+    #[init(spawn=[settings_update])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let mqtt_interface = {
-            let mqtt_client = {
-                minimq::MqttClient::new(
-                    hardware::design_parameters::MQTT_BROKER.into(),
-                    "",
-                    stabilizer.net.stack,
-                )
-                .unwrap()
-            };
+        let mqtt_config = MiniconfInterface::new(
+            stabilizer.net.stack,
+            "",
+            &net::get_device_prefix(
+                env!("CARGO_BIN_NAME"),
+                stabilizer.net.mac_address,
+            ),
+            stabilizer.net.phy,
+            stabilizer.cycle_counter,
+        );
 
-            MqttInterface::new(
-                mqtt_client,
-                "dt/sinara/stabilizer",
-                Settings::default(),
-            )
-            .unwrap()
-        };
+        // Spawn a settings update for default settings.
+        c.spawn.settings_update().unwrap();
 
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();
@@ -85,11 +90,12 @@ const APP: () = {
         stabilizer.adc_dac_timer.start();
 
         init::LateResources {
-            mqtt_interface,
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            clock: stabilizer.cycle_counter,
+            mqtt_config,
+            digital_input1: stabilizer.digital_inputs.1,
+            settings: Settings::default(),
         }
     }
 
@@ -109,7 +115,7 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adcs, dacs, iir_state, iir_ch], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, digital_input1, dacs, iir_state, settings], priority=2)]
     #[inline(never)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
@@ -123,13 +129,19 @@ const APP: () = {
             c.resources.dacs.1.acquire_buffer(),
         ];
 
+        let hold = c.resources.settings.force_hold
+            || (c.resources.digital_input1.is_high().unwrap()
+                && c.resources.settings.allow_hold);
+
         for channel in 0..adc_samples.len() {
             for sample in 0..adc_samples[0].len() {
-                let x = f32::from(adc_samples[channel][sample] as i16);
-                let mut y = x;
+                let mut y = f32::from(adc_samples[channel][sample] as i16);
                 for i in 0..c.resources.iir_state[channel].len() {
-                    y = c.resources.iir_ch[channel][i]
-                        .update(&mut c.resources.iir_state[channel][i], y);
+                    y = c.resources.settings.iir_ch[channel][i].update(
+                        &mut c.resources.iir_state[channel][i],
+                        y,
+                        hold,
+                    );
                 }
                 // Note(unsafe): The filter limits ensure that the value is in range.
                 // The truncation introduces 1/2 LSB distortion.
@@ -140,47 +152,29 @@ const APP: () = {
         }
     }
 
-    #[idle(resources=[mqtt_interface, clock], spawn=[settings_update])]
+    #[idle(resources=[mqtt_config], spawn=[settings_update])]
     fn idle(mut c: idle::Context) -> ! {
-        let clock = c.resources.clock;
-
         loop {
-            let sleep = c.resources.mqtt_interface.lock(|interface| {
-                match interface.network_stack().poll(clock.current_ms()) {
-                    Ok(updated) => !updated,
-                    Err(err) => {
-                        log::info!("Network error: {:?}", err);
-                        false
-                    }
-                }
-            });
-
             match c
                 .resources
-                .mqtt_interface
-                .lock(|interface| interface.update())
+                .mqtt_config
+                .lock(|config_interface| config_interface.update())
             {
-                Ok(update) => {
-                    if update {
-                        c.spawn.settings_update().unwrap();
-                    } else if sleep {
-                        cortex_m::asm::wfi();
-                    }
+                Some(Action::Sleep) => cortex_m::asm::wfi(),
+                Some(Action::UpdateSettings) => {
+                    c.spawn.settings_update().unwrap()
                 }
-                Err(miniconf::MqttError::Network(
-                    smoltcp_nal::NetworkError::NoIpAddress,
-                )) => {}
-                Err(error) => log::info!("Unexpected error: {:?}", error),
+                _ => {}
             }
         }
     }
 
-    #[task(priority = 1, resources=[mqtt_interface, afes, iir_ch])]
+    #[task(priority = 1, resources=[mqtt_config, afes, settings])]
     fn settings_update(mut c: settings_update::Context) {
-        let settings = &c.resources.mqtt_interface.settings;
+        let settings = &c.resources.mqtt_config.mqtt.settings;
 
         // Update the IIR channels.
-        c.resources.iir_ch.lock(|iir| *iir = settings.iir_ch);
+        c.resources.settings.lock(|current| *current = *settings);
 
         // Update AFEs
         c.resources.afes.0.set_gain(settings.afe[0]);
@@ -189,7 +183,7 @@ const APP: () = {
 
     #[task(binds = ETH, priority = 1)]
     fn eth(_: eth::Context) {
-        unsafe { hal::ethernet::interrupt_handler() }
+        unsafe { stm32h7xx_hal::ethernet::interrupt_handler() }
     }
 
     #[task(binds = SPI2, priority = 3)]
