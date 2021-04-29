@@ -203,7 +203,7 @@ dependencies = [
 [[package]]
 name = "derive_miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?rev=314fa5587d#314fa5587d1aa28e1ad70106f19e30db646e9f28"
+source = "git+https://github.com/quartiq/miniconf.git?rev=c8d819c#c8d819cdab65f18396e65dafa3558daea29e3031"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -416,11 +416,10 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?rev=314fa5587d#314fa5587d1aa28e1ad70106f19e30db646e9f28"
+source = "git+https://github.com/quartiq/miniconf.git?rev=c8d819c#c8d819cdab65f18396e65dafa3558daea29e3031"
 dependencies = [
  "derive_miniconf",
  "heapless 0.6.1",
- "minimq",
  "serde",
  "serde-json-core",
 ]
@@ -428,7 +427,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.2.0"
-source = "git+https://github.com/quartiq/minimq.git?rev=933687c2e4b#933687c2e4bc8a4d972de9a4d1508b0b554a8b38"
+source = "git+https://github.com/quartiq/minimq.git?rev=b3f364d#b3f364d55dea35da6572f78ddb91c87bfbb453bf"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -659,6 +658,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ryu"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
+
+[[package]]
 name = "semver"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -685,9 +690,10 @@ dependencies = [
 [[package]]
 name = "serde-json-core"
 version = "0.2.0"
-source = "git+https://github.com/rust-embedded-community/serde-json-core.git?rev=ee06ac91bc#ee06ac91bc43b72450a92198a00d9e5c5b9946d2"
+source = "git+https://github.com/rust-embedded-community/serde-json-core.git?rev=da460d1#da460d123e217f0e822a3977eb2170ed5d279d5e"
 dependencies = [
- "heapless 0.5.6",
+ "heapless 0.6.1",
+ "ryu",
  "serde",
 ]
 
@@ -726,7 +732,7 @@ dependencies = [
 
 [[package]]
 name = "stabilizer"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "ad9959",
  "asm-delay",
@@ -742,6 +748,7 @@ dependencies = [
  "log",
  "mcp23017",
  "miniconf",
+ "minimq",
  "nb 1.0.0",
  "panic-semihosting",
  "paste",

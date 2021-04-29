@@ -2,8 +2,10 @@ name: HITL Trigger
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches: [ master ]
+  push:
+    branches:
+      - staging
+      - trying
 
 jobs:
   hitl-trigger:

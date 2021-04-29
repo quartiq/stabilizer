@@ -9,6 +9,7 @@ import argparse
 import asyncio
 import json
 import logging
+import sys
 
 from gmqtt import Client as MqttClient
 
@@ -51,7 +52,8 @@ class Miniconf:
             logger.warning('Unexpected response on topic: %s', topic)
             return
 
-        self.inflight[topic].set_result(payload.decode('ascii'))
+        response = json.loads(payload)
+        self.inflight[topic].set_result((response['code'], response['msg']))
         del self.inflight[topic]
 
     async def command(self, path, value):
@@ -62,7 +64,8 @@ class Miniconf:
             value: The value to write to the path.
 
         Returns:
-            The received response to the command.
+            (code, msg) tuple as a response to the command. `code` is zero for success and `msg` is
+            a use-readable message indicating further information.
         """
         setting_topic = f'{self.prefix}/settings/{path}'
         response_topic = f'{self.prefix}/response/{path}'
@@ -107,12 +110,17 @@ def main():
 
     async def configure_settings():
         interface = await Miniconf.create(args.prefix, args.broker)
+        failures = 0
         for kv in args.settings:
             path, value = kv.split("=", 1)
-            response = await interface.command(path, json.loads(value))
+            code, response = await interface.command(path, json.loads(value))
             print(response)
+            if code != 0:
+                failures += 1
 
-    loop.run_until_complete(configure_settings())
+        return failures
+
+    sys.exit(loop.run_until_complete(configure_settings()))
 
 
 if __name__ == '__main__':

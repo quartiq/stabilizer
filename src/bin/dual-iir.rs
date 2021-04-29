@@ -4,7 +4,7 @@
 
 use stabilizer::{hardware, net};
 
-use miniconf::{minimq, Miniconf};
+use miniconf::Miniconf;
 use serde::Deserialize;
 
 use dsp::iir;
@@ -13,7 +13,7 @@ use hardware::{
     DigitalInput1, InputPin, SystemTimer, AFE0, AFE1,
 };
 
-use net::{Action, MiniconfInterface};
+use net::{Action, MqttInterface};
 
 const SCALE: f32 = i16::MAX as _;
 
@@ -32,9 +32,17 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            // Analog frontend programmable gain amplifier gains (G1, G2, G5, G10)
             afe: [AfeGain::G1, AfeGain::G1],
+            // IIR filter tap gains are an array `[b0, b1, b2, a1, a2]` such that the
+            // new output is computed as `y0 = a1*y1 + a2*y2 + b0*x0 + b1*x1 + b2*x2`.
+            // The array is `iir_state[channel-index][cascade-index][coeff-index]`.
+            // The IIR coefficients can be mapped to other transfer function
+            // representations, for example as described in https://arxiv.org/abs/1508.06319
             iir_ch: [[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2],
+            // Permit the DI1 digital input to suppress filter output updates.
             allow_hold: false,
+            // Force suppress filter output updates.
             force_hold: false,
             telemetry_period_secs: 10,
         }
@@ -48,11 +56,10 @@ const APP: () = {
         digital_inputs: (DigitalInput0, DigitalInput1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        mqtt_config: MiniconfInterface<Settings>,
+        mqtt: MqttInterface<Settings>,
         telemetry: net::Telemetry,
         settings: Settings,
 
-        // Format: iir_state[ch][cascade-no][coeff]
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
         iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
     }
@@ -62,7 +69,7 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let mqtt_config = MiniconfInterface::new(
+        let mqtt = MqttInterface::new(
             stabilizer.net.stack,
             "",
             &net::get_device_prefix(
@@ -90,9 +97,9 @@ const APP: () = {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            telemetry: net::Telemetry::default(),
+            mqtt,
             digital_inputs: stabilizer.digital_inputs,
-            mqtt_config,
+            telemetry: net::Telemetry::default(),
             settings: Settings::default(),
         }
     }
@@ -161,14 +168,10 @@ const APP: () = {
         ];
     }
 
-    #[idle(resources=[mqtt_config], spawn=[settings_update])]
+    #[idle(resources=[mqtt], spawn=[settings_update])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
-            match c
-                .resources
-                .mqtt_config
-                .lock(|config_interface| config_interface.update())
-            {
+            match c.resources.mqtt.lock(|mqtt| mqtt.update()) {
                 Some(Action::Sleep) => cortex_m::asm::wfi(),
                 Some(Action::UpdateSettings) => {
                     c.spawn.settings_update().unwrap()
@@ -178,42 +181,23 @@ const APP: () = {
         }
     }
 
-    #[task(priority = 1, resources=[mqtt_config, afes, settings])]
+    #[task(priority = 1, resources=[mqtt, afes, settings])]
     fn settings_update(mut c: settings_update::Context) {
-        let settings = &c.resources.mqtt_config.mqtt.settings;
-
         // Update the IIR channels.
-        c.resources.settings.lock(|current| *current = *settings);
+        let settings = c.resources.mqtt.settings();
+        c.resources.settings.lock(|current| *current = settings);
 
         // Update AFEs
         c.resources.afes.0.set_gain(settings.afe[0]);
         c.resources.afes.1.set_gain(settings.afe[1]);
     }
 
-    #[task(priority = 1, resources=[mqtt_config, settings, telemetry], schedule=[telemetry])]
+    #[task(priority = 1, resources=[mqtt, settings, telemetry], schedule=[telemetry])]
     fn telemetry(mut c: telemetry::Context) {
         let telemetry =
             c.resources.telemetry.lock(|telemetry| telemetry.clone());
 
-        // Serialize telemetry outside of a critical section to prevent blocking the processing
-        // task.
-        let telemetry = miniconf::serde_json_core::to_string::<
-            heapless::consts::U256,
-            _,
-        >(&telemetry)
-        .unwrap();
-
-        c.resources.mqtt_config.mqtt.client(|client| {
-            // TODO: Incorporate current MQTT prefix instead of hard-coded value.
-            client
-                .publish(
-                    "dt/sinara/dual-iir/telemetry",
-                    telemetry.as_bytes(),
-                    minimq::QoS::AtMostOnce,
-                    &[],
-                )
-                .ok()
-        });
+        c.resources.mqtt.publish_telemetry(&telemetry);
 
         let telemetry_period = c
             .resources
