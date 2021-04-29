@@ -1,11 +1,18 @@
+///! Stabilizer network management module
+///!
+///! # Design
+///! The stabilizer network architecture supports numerous layers to permit transmission of
+///! telemetry (via MQTT), configuration of run-time settings (via MQTT + Miniconf), and live data
+///! streaming over raw UDP/TCP sockets. This module encompasses the main processing routines
+///! related to Stabilizer networking operations.
 use heapless::{consts, String};
 
 use core::fmt::Write;
 
+mod messages;
 mod mqtt_interface;
-mod router;
+use messages::{MqttMessage, SettingsResponse, SettingsResponseCode};
 pub use mqtt_interface::MqttInterface;
-use router::{RouteResult, SettingsResponse};
 
 /// Potential actions for firmware to take.
 pub enum Action {

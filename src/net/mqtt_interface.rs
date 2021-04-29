@@ -7,7 +7,7 @@ use core::{cell::RefCell, fmt::Write};
 use heapless::{consts, String};
 use serde::Serialize;
 
-use super::{Action, RouteResult, SettingsResponse};
+use super::{Action, MqttMessage, SettingsResponse, SettingsResponseCode};
 
 /// MQTT settings interface.
 pub struct MqttInterface<S>
@@ -136,7 +136,7 @@ where
                     self.route_message(topic, message, properties);
                 client
                     .publish(
-                        response.response_topic,
+                        response.topic,
                         &response.message,
                         minimq::QoS::AtMostOnce,
                         &response.properties,
@@ -175,33 +175,41 @@ where
         topic: &str,
         message: &[u8],
         properties: &[minimq::Property<'a>],
-    ) -> (RouteResult<'a>, bool) {
-        let mut response =
-            RouteResult::new(properties, &self.default_response_topic);
+    ) -> (MqttMessage<'a>, bool) {
         let mut update = false;
-
-        if let Some(path) = topic.strip_prefix(self.id.as_str()) {
-            let mut parts = path[1..].split('/');
-            match parts.next() {
-                Some("settings") => {
-                    let result = self
-                        .settings
-                        .borrow_mut()
-                        .string_set(parts.peekable(), message);
-                    update = result.is_ok();
-                    response.set_message(SettingsResponse::new(result, topic));
+        let response_msg =
+            if let Some(path) = topic.strip_prefix(self.id.as_str()) {
+                let mut parts = path[1..].split('/');
+                match parts.next() {
+                    Some("settings") => {
+                        match self
+                            .settings
+                            .borrow_mut()
+                            .string_set(parts.peekable(), message)
+                        {
+                            Ok(_) => {
+                                update = true;
+                                SettingsResponse::update_success(path)
+                            }
+                            Err(error) => {
+                                SettingsResponse::update_failure(path, error)
+                            }
+                        }
+                    }
+                    Some(_) => SettingsResponse::code(
+                        SettingsResponseCode::UnknownTopic,
+                    ),
+                    _ => SettingsResponse::code(SettingsResponseCode::NoTopic),
                 }
-                Some(_) => response.set_message(SettingsResponse::custom(
-                    "Unknown topic",
-                    255,
-                )),
-                _ => response
-                    .set_message(SettingsResponse::custom("No topic", 254)),
-            }
-        } else {
-            response
-                .set_message(SettingsResponse::custom("Invalid prefix", 253));
-        }
+            } else {
+                SettingsResponse::code(SettingsResponseCode::InvalidPrefix)
+            };
+
+        let response = MqttMessage::new(
+            properties,
+            &self.default_response_topic,
+            &response_msg,
+        );
 
         (response, update)
     }
