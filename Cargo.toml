@@ -59,10 +59,8 @@ branch = "master"
 cc = "1.0"
 
 [patch.crates-io.cortex-m-rt]
-path = "../cortex-m-rt"
-# 0.6.13
-# git = "https://github.com/rust-embedded/cortex-m-rt.git"
-# rev = "8c90451"
+git = "https://github.com/rust-embedded/cortex-m-rt.git"
+rev = "a2e3ad5"
 
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf.git"

@@ -151,6 +151,7 @@ dependencies = [
 [[package]]
 name = "cortex-m-rt"
 version = "0.6.13"
+source = "git+https://github.com/rust-embedded/cortex-m-rt.git?rev=a2e3ad5#a2e3ad54478c6b98e519a1b0946395d790c0b6c7"
 dependencies = [
  "cortex-m-rt-macros",
 ]
@@ -158,6 +159,7 @@ dependencies = [
 [[package]]
 name = "cortex-m-rt-macros"
 version = "0.6.11"
+source = "git+https://github.com/rust-embedded/cortex-m-rt.git?rev=a2e3ad5#a2e3ad54478c6b98e519a1b0946395d790c0b6c7"
 dependencies = [
  "proc-macro2",
  "quote",
