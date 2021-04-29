@@ -31,9 +31,17 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            // Analog frontend programmable gain amplifier gains (G1, G2, G5, G10)
             afe: [AfeGain::G1, AfeGain::G1],
+            // IIR filter tap gains are an array `[b0, b1, b2, a1, a2]` such that the
+            // new output is computed as `y0 = a1*y1 + a2*y2 + b0*x0 + b1*x1 + b2*x2`.
+            // The array is `iir_state[channel-index][cascade-index][coeff-index]`.
+            // The IIR coefficients can be mapped to other transfer function
+            // representations, for example as described in https://arxiv.org/abs/1508.06319
             iir_ch: [[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2],
+            // Permit the DI1 digital input to suppress filter output updates.
             allow_hold: false,
+            // Force suppress filter output updates.
             force_hold: false,
         }
     }
@@ -48,7 +56,6 @@ const APP: () = {
         dacs: (Dac0Output, Dac1Output),
         mqtt: MqttInterface<Settings>,
 
-        // Format: iir_state[ch][cascade-no][coeff]
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
         iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
         settings: Settings,
