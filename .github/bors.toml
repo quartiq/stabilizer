@@ -1,5 +1,6 @@
 block_labels = [ "S-blocked" ]
 delete_merged_branches = true
+timeout_sec = 1200
 status = [
   "style",
   "test (stable)",
