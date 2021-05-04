@@ -2,8 +2,6 @@ use crate::hardware::{
     design_parameters::MQTT_BROKER, CycleCounter, EthernetPhy, NetworkStack,
 };
 
-use core::fmt::Write;
-
 use heapless::{consts, String};
 
 use super::{Action, MqttMessage, SettingsResponse};
@@ -46,13 +44,11 @@ where
             minimq::MqttClient::new(MQTT_BROKER.into(), client_id, stack)
                 .unwrap();
 
-        let mut response_topic: String<consts::U128> = String::new();
-        write!(&mut response_topic, "{}/log", prefix).unwrap();
+        let mut response_topic: String<consts::U128> = String::from(prefix);
+        response_topic.push_str("/log").unwrap();
 
-        let mut settings_prefix: String<consts::U64> = String::new();
-        write!(&mut settings_prefix, "{}/settings", prefix).unwrap();
-
-        // Ensure we have two remaining spaces
+        let mut settings_prefix: String<consts::U64> = String::from(prefix);
+        settings_prefix.push_str("/settings").unwrap();
 
         Self {
             mqtt,
@@ -83,16 +79,17 @@ where
 
         // If the PHY indicates there's no more ethernet link, reset the DHCP server in the network
         // stack.
-        if self.phy.poll_link() == false {
+        match self.phy.poll_link() {
+            true => self.network_was_reset = false,
+
             // Only reset the network stack once per link reconnection. This prevents us from
             // sending an excessive number of DHCP requests.
-            if !self.network_was_reset {
+            false if !self.network_was_reset => {
                 self.network_was_reset = true;
                 self.mqtt.network_stack.handle_link_reset();
             }
-        } else {
-            self.network_was_reset = false;
-        }
+            _ => {},
+        };
 
         let mqtt_connected = match self.mqtt.is_connected() {
             Ok(connected) => connected,
@@ -160,6 +157,8 @@ where
                 .publish(
                     response.topic,
                     &response.message,
+                    // TODO: When Minimq supports more QoS levels, this should be increased to
+                    // ensure that the client has received it at least once.
                     minimq::QoS::AtMostOnce,
                     &response.properties,
                 )
