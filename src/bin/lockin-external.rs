@@ -215,7 +215,7 @@ const APP: () = {
         c.resources.afes.0.set_gain(settings.afe[0]);
         c.resources.afes.1.set_gain(settings.afe[1]);
 
-        c.resources.settings.lock(|current| *current = settings);
+        c.resources.settings.lock(|current| *current = *settings);
     }
 
     #[task(binds = ETH, priority = 1)]

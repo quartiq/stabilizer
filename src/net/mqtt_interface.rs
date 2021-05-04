@@ -2,27 +2,25 @@ use crate::hardware::{
     design_parameters::MQTT_BROKER, CycleCounter, EthernetPhy, NetworkStack,
 };
 
-use core::{cell::RefCell, fmt::Write};
+use core::fmt::Write;
 
 use heapless::{consts, String};
-use serde::Serialize;
 
-use super::{Action, MqttMessage, SettingsResponse, SettingsResponseCode};
+use super::{Action, MqttMessage, SettingsResponse};
 
 /// MQTT settings interface.
 pub struct MqttInterface<S>
 where
     S: miniconf::Miniconf + Default + Clone,
 {
-    telemetry_topic: String<consts::U128>,
     default_response_topic: String<consts::U128>,
-    mqtt: RefCell<minimq::MqttClient<minimq::consts::U256, NetworkStack>>,
-    settings: RefCell<S>,
+    mqtt: minimq::MqttClient<minimq::consts::U256, NetworkStack>,
+    settings: S,
     clock: CycleCounter,
     phy: EthernetPhy,
     network_was_reset: bool,
     subscribed: bool,
-    id: String<consts::U64>,
+    settings_prefix: String<consts::U64>,
 }
 
 impl<S> MqttInterface<S>
@@ -44,23 +42,24 @@ where
         phy: EthernetPhy,
         clock: CycleCounter,
     ) -> Self {
-        let mqtt_client =
+        let mqtt =
             minimq::MqttClient::new(MQTT_BROKER.into(), client_id, stack)
                 .unwrap();
-
-        let mut telemetry_topic: String<consts::U128> = String::new();
-        write!(&mut telemetry_topic, "{}/telemetry", prefix).unwrap();
 
         let mut response_topic: String<consts::U128> = String::new();
         write!(&mut response_topic, "{}/log", prefix).unwrap();
 
+        let mut settings_prefix: String<consts::U64> = String::new();
+        write!(&mut settings_prefix, "{}/settings", prefix).unwrap();
+
+        // Ensure we have two remaining spaces
+
         Self {
-            mqtt: RefCell::new(mqtt_client),
-            settings: RefCell::new(S::default()),
-            id: String::from(prefix),
+            mqtt,
+            settings: S::default(),
+            settings_prefix,
             clock,
             phy,
-            telemetry_topic,
             default_response_topic: response_topic,
             network_was_reset: false,
             subscribed: false,
@@ -73,11 +72,7 @@ where
     /// An option containing an action that should be completed as a result of network servicing.
     pub fn update(&mut self) -> Option<Action> {
         // First, service the network stack to process any inbound and outbound traffic.
-        let sleep = match self
-            .mqtt
-            .borrow_mut()
-            .network_stack
-            .poll(self.clock.current_ms())
+        let sleep = match self.mqtt.network_stack.poll(self.clock.current_ms())
         {
             Ok(updated) => !updated,
             Err(err) => {
@@ -93,13 +88,13 @@ where
             // sending an excessive number of DHCP requests.
             if !self.network_was_reset {
                 self.network_was_reset = true;
-                self.mqtt.borrow_mut().network_stack.handle_link_reset();
+                self.mqtt.network_stack.handle_link_reset();
             }
         } else {
             self.network_was_reset = false;
         }
 
-        let mqtt_connected = match self.mqtt.borrow_mut().is_connected() {
+        let mqtt_connected = match self.mqtt.is_connected() {
             Ok(connected) => connected,
             Err(minimq::Error::Network(
                 smoltcp_nal::NetworkError::NoIpAddress,
@@ -117,34 +112,59 @@ where
         // If we're no longer subscribed to the settings topic, but we are connected to the broker,
         // resubscribe.
         if !self.subscribed && mqtt_connected {
-            let mut settings_topic: String<consts::U128> = String::new();
-            write!(&mut settings_topic, "{}/settings/#", self.id.as_str())
-                .unwrap();
+            // Note(unwrap): We construct a string with two more characters than the prefix
+            // strucutre, so we are guaranteed to have space for storage.
+            let mut settings_topic: String<consts::U66> =
+                String::from(self.settings_prefix.as_str());
+            settings_topic.push_str("/#").unwrap();
 
-            self.mqtt
-                .borrow_mut()
-                .subscribe(&settings_topic, &[])
-                .unwrap();
+            self.mqtt.subscribe(&settings_topic, &[]).unwrap();
             self.subscribed = true;
         }
 
         // Handle any MQTT traffic.
+        let settings = &mut self.settings;
+        let mqtt = &mut self.mqtt;
+        let prefix = self.settings_prefix.as_str();
+        let default_response_topic = self.default_response_topic.as_str();
+
         let mut update = false;
-        match self.mqtt.borrow_mut().poll(
-            |client, topic, message, properties| {
-                let (response, settings_update) =
-                    self.route_message(topic, message, properties);
-                client
-                    .publish(
-                        response.topic,
-                        &response.message,
-                        minimq::QoS::AtMostOnce,
-                        &response.properties,
-                    )
-                    .ok();
-                update = settings_update;
-            },
-        ) {
+        match mqtt.poll(|client, topic, message, properties| {
+            let path = match topic.strip_prefix(prefix) {
+                // For paths, we do not want to include the leading slash.
+                Some(path) => {
+                    if path.len() > 0 {
+                        &path[1..]
+                    } else {
+                        path
+                    }
+                }
+                None => {
+                    info!("Unexpected MQTT topic: {}", topic);
+                    return;
+                }
+            };
+
+            let message: SettingsResponse = settings
+                .string_set(path.split('/').peekable(), message)
+                .and_then(|_| {
+                    update = true;
+                    Ok(())
+                })
+                .into();
+
+            let response =
+                MqttMessage::new(properties, default_response_topic, &message);
+
+            client
+                .publish(
+                    response.topic,
+                    &response.message,
+                    minimq::QoS::AtMostOnce,
+                    &response.properties,
+                )
+                .ok();
+        }) {
             // If settings updated,
             Ok(_) => {
                 if update {
@@ -170,66 +190,7 @@ where
         }
     }
 
-    fn route_message<'a, 'me: 'a>(
-        &'me self,
-        topic: &str,
-        message: &[u8],
-        properties: &[minimq::Property<'a>],
-    ) -> (MqttMessage<'a>, bool) {
-        let mut update = false;
-        let response_msg =
-            if let Some(path) = topic.strip_prefix(self.id.as_str()) {
-                let mut parts = path[1..].split('/');
-                match parts.next() {
-                    Some("settings") => {
-                        match self
-                            .settings
-                            .borrow_mut()
-                            .string_set(parts.peekable(), message)
-                        {
-                            Ok(_) => {
-                                update = true;
-                                SettingsResponse::update_success(path)
-                            }
-                            Err(error) => {
-                                SettingsResponse::update_failure(path, error)
-                            }
-                        }
-                    }
-                    Some(_) => SettingsResponse::code(
-                        SettingsResponseCode::UnknownTopic,
-                    ),
-                    _ => SettingsResponse::code(SettingsResponseCode::NoTopic),
-                }
-            } else {
-                SettingsResponse::code(SettingsResponseCode::InvalidPrefix)
-            };
-
-        let response = MqttMessage::new(
-            properties,
-            &self.default_response_topic,
-            &response_msg,
-        );
-
-        (response, update)
-    }
-
-    pub fn publish_telemetry(&mut self, telemetry: &impl Serialize) {
-        let telemetry =
-            miniconf::serde_json_core::to_string::<consts::U256, _>(telemetry)
-                .unwrap();
-        self.mqtt
-            .borrow_mut()
-            .publish(
-                &self.telemetry_topic,
-                telemetry.as_bytes(),
-                minimq::QoS::AtMostOnce,
-                &[],
-            )
-            .ok();
-    }
-
-    pub fn settings(&self) -> S {
-        self.settings.borrow().clone()
+    pub fn settings(&self) -> &S {
+        &self.settings
     }
 }

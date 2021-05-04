@@ -6,10 +6,7 @@ use core::fmt::Write;
 #[derive(Debug, Copy, Clone)]
 pub enum SettingsResponseCode {
     NoError = 0,
-    NoTopic = 1,
-    InvalidPrefix = 2,
-    UnknownTopic = 3,
-    UpdateFailure = 4,
+    MiniconfError = 1,
 }
 
 /// Represents a generic MQTT message.
@@ -70,55 +67,25 @@ impl<'a> MqttMessage<'a> {
     }
 }
 
-impl SettingsResponse {
-    /// Construct a settings response upon successful settings update.
-    ///
-    /// # Args
-    /// * `path` - The path of the setting that was updated.
-    pub fn update_success(path: &str) -> Self {
-        let mut msg: String<consts::U64> = String::new();
-        if write!(&mut msg, "{} updated", path).is_err() {
-            msg = String::from("Latest update succeeded");
-        }
+impl From<Result<(), miniconf::Error>> for SettingsResponse {
+    fn from(result: Result<(), miniconf::Error>) -> Self {
+        match result {
+            Ok(_) => Self {
+                msg: String::from("OK"),
+                code: SettingsResponseCode::NoError as u8,
+            },
 
-        Self {
-            msg,
-            code: SettingsResponseCode::NoError as u8,
-        }
-    }
+            Err(error) => {
+                let mut msg = String::new();
+                if write!(&mut msg, "{:?}", error).is_err() {
+                    msg = String::from("Miniconf Error");
+                }
 
-    /// Construct a response when a settings update failed.
-    ///
-    /// # Args
-    /// * `path` - The settings path that configuration failed for.
-    /// * `err` - The settings update error that occurred.
-    pub fn update_failure(path: &str, err: miniconf::Error) -> Self {
-        let mut msg: String<consts::U64> = String::new();
-        if write!(&mut msg, "{} update failed: {:?}", path, err).is_err() {
-            if write!(&mut msg, "Latest update failed: {:?}", err).is_err() {
-                msg = String::from("Latest update failed");
+                Self {
+                    code: SettingsResponseCode::MiniconfError as u8,
+                    msg,
+                }
             }
-        }
-
-        Self {
-            msg,
-            code: SettingsResponseCode::UpdateFailure as u8,
-        }
-    }
-
-    /// Construct a response from a custom response code.
-    ///
-    /// # Args
-    /// * `code` - The response code to provide.
-    pub fn code(code: SettingsResponseCode) -> Self {
-        let mut msg: String<consts::U64> = String::new();
-
-        // Note(unwrap): All code debug names shall fit in the 64 byte string.
-        write!(&mut msg, "{:?}", code).unwrap();
-
-        Self {
-            code: code as u8,
-            msg,
         }
     }
 }

@@ -168,7 +168,7 @@ const APP: () = {
         let settings = c.resources.mqtt.settings();
 
         // Update the IIR channels.
-        c.resources.settings.lock(|current| *current = settings);
+        c.resources.settings.lock(|current| *current = *settings);
 
         // Update AFEs
         c.resources.afes.0.set_gain(settings.afe[0]);
