@@ -11,19 +11,23 @@ use core::fmt::Write;
 
 mod messages;
 mod mqtt_interface;
+mod shared;
+mod stack_manager;
 use messages::{MqttMessage, SettingsResponse};
-pub use mqtt_interface::MqttInterface;
+pub use mqtt_interface::MiniconfClient;
+pub use stack_manager::NetworkProcessor;
+
+pub use shared::NetworkManager;
+
+use crate::hardware::NetworkStack;
+pub type NetworkReference = shared::NetworkStackProxy<'static, NetworkStack>;
 
 mod telemetry;
 pub use telemetry::{Telemetry, TelemetryBuffer};
 
-/// Potential actions for firmware to take.
-pub enum Action {
-    /// Indicates that firmware can sleep for the next event.
-    Sleep,
-
-    /// Indicates that settings have updated and firmware needs to propogate changes.
-    UpdateSettings,
+pub enum UpdateState {
+    NoChange,
+    Updated,
 }
 
 /// Get the MQTT prefix of a device.
