@@ -185,7 +185,7 @@ const APP: () = {
     fn settings_update(mut c: settings_update::Context) {
         // Update the IIR channels.
         let settings = c.resources.mqtt.settings();
-        c.resources.settings.lock(|current| *current = settings);
+        c.resources.settings.lock(|current| *current = *settings);
 
         // Update AFEs
         c.resources.afes.0.set_gain(settings.afe[0]);

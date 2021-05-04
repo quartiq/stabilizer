@@ -11,7 +11,7 @@ use core::fmt::Write;
 
 mod messages;
 mod mqtt_interface;
-use messages::{MqttMessage, SettingsResponse, SettingsResponseCode};
+use messages::{MqttMessage, SettingsResponse};
 pub use mqtt_interface::MqttInterface;
 
 mod telemetry;
