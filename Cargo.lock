@@ -709,6 +709,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared-bus"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78b60428415b23ed3f0e3abc776e10e548cf2cbb4288e73d5d181a02b5a90b95"
+dependencies = [
+ "cortex-m 0.6.7",
+ "embedded-hal",
+]
+
+[[package]]
 name = "smoltcp"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -753,6 +763,7 @@ dependencies = [
  "panic-semihosting",
  "paste",
  "serde",
+ "shared-bus",
  "smoltcp-nal",
  "stm32h7xx-hal",
 ]

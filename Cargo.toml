@@ -45,6 +45,7 @@ dsp = { path = "dsp" }
 ad9959 = { path = "ad9959" }
 generic-array = "0.14"
 miniconf = "0.1.0"
+shared-bus = {version = "0.2.2", features = ["cortex-m"] }
 
 [dependencies.mcp23017]
 git = "https://github.com/mrd0ll4r/mcp23017.git"
