@@ -1,6 +1,6 @@
-use super::{UpdateState, NetworkReference};
+use super::{NetworkReference, UpdateState};
 
-use crate::hardware::{EthernetPhy, CycleCounter};
+use crate::hardware::{CycleCounter, EthernetPhy};
 
 pub struct NetworkProcessor {
     stack: NetworkReference,
@@ -10,13 +10,24 @@ pub struct NetworkProcessor {
 }
 
 impl NetworkProcessor {
-    pub fn new(stack: NetworkReference, phy: EthernetPhy, clock: CycleCounter) -> Self {
-        Self { stack, phy, clock, network_was_reset: false }
+    pub fn new(
+        stack: NetworkReference,
+        phy: EthernetPhy,
+        clock: CycleCounter,
+    ) -> Self {
+        Self {
+            stack,
+            phy,
+            clock,
+            network_was_reset: false,
+        }
     }
 
     pub fn update(&mut self) -> UpdateState {
         // Service the network stack to process any inbound and outbound traffic.
-        let result = match self.stack.poll(self.clock.current_ms()) {
+        let now = self.clock.current_ms();
+
+        let result = match self.stack.lock(|stack| stack.poll(now)) {
             Ok(true) => UpdateState::Updated,
             Ok(false) => UpdateState::NoChange,
             Err(err) => {
@@ -34,9 +45,9 @@ impl NetworkProcessor {
             // sending an excessive number of DHCP requests.
             false if !self.network_was_reset => {
                 self.network_was_reset = true;
-                self.stack.handle_link_reset();
+                self.stack.lock(|stack| stack.handle_link_reset());
             }
-            _ => {},
+            _ => {}
         };
 
         result

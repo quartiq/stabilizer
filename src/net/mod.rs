@@ -13,21 +13,28 @@ mod messages;
 mod mqtt_interface;
 mod shared;
 mod stack_manager;
-use messages::{MqttMessage, SettingsResponse};
-pub use mqtt_interface::MiniconfClient;
-pub use stack_manager::NetworkProcessor;
-
-pub use shared::NetworkManager;
+mod telemetry;
 
 use crate::hardware::NetworkStack;
-pub type NetworkReference = shared::NetworkStackProxy<'static, NetworkStack>;
+use messages::{MqttMessage, SettingsResponse};
+use miniconf::Miniconf;
 
-mod telemetry;
+pub use mqtt_interface::MiniconfClient;
+pub use shared::NetworkManager;
+pub use stack_manager::NetworkProcessor;
 pub use telemetry::{Telemetry, TelemetryBuffer};
 
+pub type NetworkReference = shared::NetworkStackProxy<'static, NetworkStack>;
+
+#[derive(Copy, Clone, PartialEq)]
 pub enum UpdateState {
     NoChange,
     Updated,
+}
+
+pub struct NetworkUsers<S: Default + Clone + Miniconf> {
+    pub miniconf: MiniconfClient<S>,
+    pub processor: NetworkProcessor,
 }
 
 /// Get the MQTT prefix of a device.

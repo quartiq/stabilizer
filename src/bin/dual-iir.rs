@@ -13,7 +13,10 @@ use hardware::{
     DigitalInput1, InputPin, SystemTimer, AFE0, AFE1,
 };
 
-use net::{UpdateState, MiniconfClient, NetworkProcessor};
+use net::{
+    MiniconfClient, NetworkManager, NetworkProcessor, NetworkUsers,
+    TelemetryBuffer, UpdateState,
+};
 
 const SCALE: f32 = i16::MAX as _;
 
@@ -49,11 +52,6 @@ impl Default for Settings {
     }
 }
 
-struct NetworkUsers {
-    miniconf: MiniconfClient<Settings>,
-    processor: NetworkProcessor,
-}
-
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = stabilizer::hardware::SystemTimer)]
 const APP: () = {
     struct Resources {
@@ -61,9 +59,10 @@ const APP: () = {
         digital_inputs: (DigitalInput0, DigitalInput1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        network: NetworkUsers,
+        network: NetworkUsers<Settings>,
 
         settings: Settings,
+        telemetry: TelemetryBuffer,
 
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
         iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
@@ -75,7 +74,8 @@ const APP: () = {
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
         let network = {
-            let stack_manager = cortex_m::singleton!(: NetworkManager = NetworkManager::new(stabilizer.net.stack)).unwrap();
+            let stack = stabilizer.net.stack;
+            let stack_manager = cortex_m::singleton!(: NetworkManager = NetworkManager::new(stack)).unwrap();
 
             let processor = NetworkProcessor::new(
                 stack_manager.acquire_stack(),
@@ -83,7 +83,7 @@ const APP: () = {
                 stabilizer.cycle_counter,
             );
 
-            let settings = MqttInterface::new(
+            let settings = MiniconfClient::new(
                 stack_manager.acquire_stack(),
                 "",
                 &net::get_device_prefix(
@@ -112,7 +112,6 @@ const APP: () = {
 
         // Start sampling ADCs.
         stabilizer.adc_dac_timer.start();
-
 
         init::LateResources {
             afes: stabilizer.afes,
@@ -193,12 +192,19 @@ const APP: () = {
     fn idle(mut c: idle::Context) -> ! {
         loop {
             // Update the smoltcp network stack.
-            let poll_result = c.resources.network.lock(|network| network.processor.poll());
+            let poll_result = c
+                .resources
+                .network
+                .lock(|network| network.processor.update());
 
             // Service the MQTT configuration client.
-            if c.resources.miniconf_client.lock(|client| client.update()) == UpdateStatus::Updated {
+            if c.resources
+                .network
+                .lock(|network| network.miniconf.update())
+                == UpdateState::Updated
+            {
                 c.spawn.settings_update().unwrap()
-            } else if poll_result == UpdateStatus::NoChange {
+            } else if poll_result == UpdateState::NoChange {
                 cortex_m::asm::wfi();
             }
         }
@@ -217,10 +223,10 @@ const APP: () = {
 
     #[task(priority = 1, resources=[network, settings, telemetry], schedule=[telemetry])]
     fn telemetry(mut c: telemetry::Context) {
-        let telemetry =
+        let _telemetry =
             c.resources.telemetry.lock(|telemetry| telemetry.clone());
 
-        let gains = c.resources.settings.lock(|settings| settings.afe.clone());
+        let _gains = c.resources.settings.lock(|settings| settings.afe.clone());
 
         // TODO: Publish telemetry through the telemetry client here.
         //c.resources

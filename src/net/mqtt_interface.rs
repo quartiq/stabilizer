@@ -2,7 +2,7 @@ use crate::hardware::design_parameters::MQTT_BROKER;
 
 use heapless::{consts, String};
 
-use super::{UpdateState, MqttMessage, SettingsResponse, NetworkReference};
+use super::{MqttMessage, NetworkReference, SettingsResponse, UpdateState};
 
 /// MQTT settings interface.
 pub struct MiniconfClient<S>
@@ -26,11 +26,7 @@ where
     /// * `stack` - The network stack to use for communication.
     /// * `client_id` - The ID of the MQTT client. May be an empty string for auto-assigning.
     /// * `prefix` - The MQTT device prefix to use for this device.
-    pub fn new(
-        stack: NetworkReference,
-        client_id: &str,
-        prefix: &str,
-    ) -> Self {
+    pub fn new(stack: NetworkReference, client_id: &str, prefix: &str) -> Self {
         let mqtt =
             minimq::MqttClient::new(MQTT_BROKER.into(), client_id, stack)
                 .unwrap();
@@ -55,7 +51,6 @@ where
     /// # Returns
     /// An option containing an action that should be completed as a result of network servicing.
     pub fn update(&mut self) -> UpdateState {
-
         let mqtt_connected = match self.mqtt.is_connected() {
             Ok(connected) => connected,
             Err(minimq::Error::Network(
