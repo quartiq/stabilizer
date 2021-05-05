@@ -14,8 +14,6 @@ import uuid
 
 from gmqtt import Client as MqttClient
 
-logger = logging.getLogger(__name__)
-
 
 class Miniconf:
     """An asynchronous API for controlling Miniconf devices using MQTT."""
@@ -34,13 +32,14 @@ class Miniconf:
             client: A connected MQTT5 client.
             prefix: The MQTT toptic prefix of the device to control.
         """
-        self.uuid = uuid.uuid1(prefix)
+        self.uuid = uuid.uuid1()
         self.request_id = 0
         self.client = client
         self.prefix = prefix
         self.inflight = {}
         self.client.on_message = self._handle_response
         self.client.subscribe(f'{prefix}/response/#')
+        self.logger = logging.getLogger(__name__)
 
     def _handle_response(self, _client, _topic, payload, _qos, properties):
         """Callback function for when messages are received over MQTT.
@@ -54,23 +53,23 @@ class Miniconf:
         """
         # Extract corrleation data from the properties
         try:
-            correlation_data = json.loads(properties['correlation_data'])
+            correlation_data = json.loads(properties['correlation_data'][0].decode('ascii'))
         except (json.decoder.JSONDecodeError, KeyError):
-            logger.warning('Ignoring message with invalid correlation data')
+            self.logger.warning('Ignoring message with invalid correlation data')
             return
 
         # Validate the correlation data.
         try:
             if correlation_data['id'] != self.uuid.hex:
-                logger.info('Ignoring correlation data for different ID')
+                self.logger.info('Ignoring correlation data for different ID')
                 return
             pid = correlation_data['pid']
         except KeyError:
-            logger.warning('Ignoring unknown correlation data: %s', correlation_data)
+            self.logger.warning('Ignoring unknown correlation data: %s', correlation_data)
             return
 
         if pid not in self.inflight:
-            logger.warning('Unexpected pid: %s', pid)
+            self.logger.warning('Unexpected pid: %s', pid)
             return
 
         try:
@@ -78,7 +77,7 @@ class Miniconf:
             self.inflight[pid].set_result((response['code'], response['msg']))
             del self.inflight[pid]
         except json.decoder.JSONDecodeError:
-            logger.warning('Invalid response format: %s', payload)
+            self.logger.warning('Invalid response format: %s', payload)
 
 
     async def command(self, path, value):
@@ -103,10 +102,10 @@ class Miniconf:
         correlation_data = json.dumps({
             'id': self.uuid.hex,
             'pid': pid,
-        })
+        }).encode('ascii')
 
         value = json.dumps(value)
-        logger.info('Sending %s to "%s"', value, setting_topic)
+        self.logger.info('Sending %s to "%s"', value, setting_topic)
         fut = asyncio.get_running_loop().create_future()
 
         self.inflight[pid] = fut
