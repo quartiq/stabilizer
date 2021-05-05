@@ -75,6 +75,8 @@ where
                 String::from(self.settings_prefix.as_str());
             settings_topic.push_str("/#").unwrap();
 
+            // We do not currently handle or process potential subscription failures. Instead, this
+            // failure will be logged through the stabilizer logging interface.
             self.mqtt.subscribe(&settings_topic, &[]).unwrap();
             self.subscribed = true;
         }
