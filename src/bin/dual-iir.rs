@@ -13,10 +13,7 @@ use hardware::{
     DigitalInput1, InputPin, SystemTimer, AFE0, AFE1,
 };
 
-use net::{
-    MiniconfClient, NetworkManager, NetworkProcessor, NetworkUsers,
-    TelemetryBuffer, UpdateState,
-};
+use net::{NetworkUsers, Telemetry, TelemetryBuffer, UpdateState};
 
 const SCALE: f32 = i16::MAX as _;
 
@@ -59,7 +56,7 @@ const APP: () = {
         digital_inputs: (DigitalInput0, DigitalInput1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        network: NetworkUsers<Settings>,
+        network: NetworkUsers<Settings, Telemetry>,
 
         settings: Settings,
         telemetry: TelemetryBuffer,
@@ -73,32 +70,13 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let network = {
-            let stack = stabilizer.net.stack;
-            let stack_manager = cortex_m::singleton!(: NetworkManager = NetworkManager::new(stack)).unwrap();
-
-            let processor = NetworkProcessor::new(
-                stack_manager.acquire_stack(),
-                stabilizer.net.phy,
-                stabilizer.cycle_counter,
-            );
-
-            let settings = MiniconfClient::new(
-                stack_manager.acquire_stack(),
-                "",
-                &net::get_device_prefix(
-                    env!("CARGO_BIN_NAME"),
-                    stabilizer.net.mac_address,
-                ),
-            );
-
-            // TODO: Add telemetry client
-
-            NetworkUsers {
-                miniconf: settings,
-                processor,
-            }
-        };
+        let network = NetworkUsers::new(
+            stabilizer.net.stack,
+            stabilizer.net.phy,
+            stabilizer.cycle_counter,
+            env!("CARGO_BIN_NAME"),
+            stabilizer.net.mac_address,
+        );
 
         // Spawn a settings update for default settings.
         c.spawn.settings_update().unwrap();
@@ -223,15 +201,15 @@ const APP: () = {
 
     #[task(priority = 1, resources=[network, settings, telemetry], schedule=[telemetry])]
     fn telemetry(mut c: telemetry::Context) {
-        let _telemetry =
+        let telemetry =
             c.resources.telemetry.lock(|telemetry| telemetry.clone());
 
-        let _gains = c.resources.settings.lock(|settings| settings.afe.clone());
+        let gains = c.resources.settings.lock(|settings| settings.afe.clone());
 
-        // TODO: Publish telemetry through the telemetry client here.
-        //c.resources
-        //    .mqtt
-        //    .publish_telemetry(&telemetry.to_telemetry(gains[0], gains[1]));
+        c.resources
+            .network
+            .telemetry
+            .publish(&telemetry.to_telemetry(gains[0], gains[1]));
 
         let telemetry_period = c
             .resources

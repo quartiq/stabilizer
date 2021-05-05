@@ -18,9 +18,7 @@ use stabilizer::hardware::{
 };
 
 use miniconf::Miniconf;
-use stabilizer::net::{
-    MiniconfClient, NetworkManager, NetworkProcessor, NetworkUsers, UpdateState,
-};
+use net::{NetworkUsers, Telemetry, TelemetryBuffer, UpdateState};
 
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 enum Conf {
@@ -66,9 +64,9 @@ const APP: () = {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        network: NetworkUsers<Settings>,
+        network: NetworkUsers<Settings, Telemetry>,
         settings: Settings,
-        telemetry: net::TelemetryBuffer,
+        telemetry: TelemetryBuffer,
         digital_inputs: (DigitalInput0, DigitalInput1),
 
         timestamper: InputStamper,
@@ -81,32 +79,13 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = setup(c.core, c.device);
 
-        let network = {
-            let stack = stabilizer.net.stack;
-            let stack_manager = cortex_m::singleton!(: NetworkManager = NetworkManager::new(stack)).unwrap();
-
-            let processor = NetworkProcessor::new(
-                stack_manager.acquire_stack(),
-                stabilizer.net.phy,
-                stabilizer.cycle_counter,
-            );
-
-            let settings = MiniconfClient::new(
-                stack_manager.acquire_stack(),
-                "",
-                &net::get_device_prefix(
-                    env!("CARGO_BIN_NAME"),
-                    stabilizer.net.mac_address,
-                ),
-            );
-
-            // TODO: Add telemetry client
-
-            NetworkUsers {
-                miniconf: settings,
-                processor,
-            }
-        };
+        let network = NetworkUsers::new(
+            stabilizer.net.stack,
+            stabilizer.net.phy,
+            stabilizer.cycle_counter,
+            env!("CARGO_BIN_NAME"),
+            stabilizer.net.mac_address,
+        );
 
         let settings = Settings::default();
 
@@ -271,12 +250,12 @@ const APP: () = {
             c.resources.digital_inputs.1.is_high().unwrap(),
         ];
 
-        let _gains = c.resources.settings.lock(|settings| settings.afe.clone());
+        let gains = c.resources.settings.lock(|settings| settings.afe.clone());
 
-        // TODO: Publish telemetry.
-        //c.resources
-        //    .mqtt
-        //    .publish_telemetry(&telemetry.to_telemetry(gains[0], gains[1]));
+        c.resources
+            .network
+            .telemetry
+            .publish(&telemetry.to_telemetry(gains[0], gains[1]));
 
         let telemetry_period = c
             .resources

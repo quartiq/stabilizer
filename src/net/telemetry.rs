@@ -1,4 +1,9 @@
+use heapless::{consts, String, Vec};
 use serde::Serialize;
+
+use super::NetworkReference;
+use crate::hardware::design_parameters::MQTT_BROKER;
+use minimq::QoS;
 
 use crate::hardware::AfeGain;
 
@@ -49,5 +54,36 @@ impl TelemetryBuffer {
             output_levels: [out0_volts, out1_volts],
             digital_inputs: self.digital_inputs,
         }
+    }
+}
+
+pub struct TelemetryClient<T: Serialize> {
+    mqtt: minimq::MqttClient<minimq::consts::U256, NetworkReference>,
+    telemetry_topic: String<consts::U128>,
+    _telemetry: core::marker::PhantomData<T>,
+}
+
+impl<T: Serialize> TelemetryClient<T> {
+    pub fn new(stack: NetworkReference, client_id: &str, prefix: &str) -> Self {
+        let mqtt =
+            minimq::MqttClient::new(MQTT_BROKER.into(), client_id, stack)
+                .unwrap();
+
+        let mut telemetry_topic: String<consts::U128> = String::from(prefix);
+        telemetry_topic.push_str("/telemetry").unwrap();
+
+        Self {
+            mqtt,
+            telemetry_topic,
+            _telemetry: core::marker::PhantomData::default(),
+        }
+    }
+
+    pub fn publish(&mut self, telemetry: &T) {
+        let telemetry: Vec<u8, consts::U256> =
+            serde_json_core::to_vec(telemetry).unwrap();
+        self.mqtt
+            .publish(&self.telemetry_topic, &telemetry, QoS::AtMostOnce, &[])
+            .ok();
     }
 }
