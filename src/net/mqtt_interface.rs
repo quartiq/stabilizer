@@ -88,7 +88,7 @@ where
                 self.network_was_reset = true;
                 self.mqtt.network_stack.handle_link_reset();
             }
-            _ => {},
+            _ => {}
         };
 
         let mqtt_connected = match self.mqtt.is_connected() {
