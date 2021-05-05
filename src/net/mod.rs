@@ -80,6 +80,19 @@ where
             telemetry,
         }
     }
+
+    pub fn update(&mut self) -> UpdateState {
+        // Poll for incoming data.
+        let poll_result = self.processor.update();
+
+        // Update the MQTT clients.
+        self.telemetry.update();
+
+        match self.miniconf.update() {
+            UpdateState::Updated => UpdateState::Updated,
+            UpdateState::NoChange => poll_result,
+        }
+    }
 }
 
 fn get_client_id(

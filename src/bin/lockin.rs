@@ -211,21 +211,9 @@ const APP: () = {
     #[idle(resources=[network], spawn=[settings_update])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
-            // Update the smoltcp network stack.
-            let poll_result = c
-                .resources
-                .network
-                .lock(|network| network.processor.update());
-
-            // Service the MQTT configuration client.
-            if c.resources
-                .network
-                .lock(|network| network.miniconf.update())
-                == UpdateState::Updated
-            {
-                c.spawn.settings_update().unwrap()
-            } else if poll_result == UpdateState::NoChange {
-                cortex_m::asm::wfi();
+            match c.resources.network.lock(|net| net.update()) {
+                UpdateState::Updated => c.spawn.settings_update().unwrap(),
+                UpdateState::NoChange => cortex_m::asm::wfi(),
             }
         }
     }

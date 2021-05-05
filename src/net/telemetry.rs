@@ -86,4 +86,15 @@ impl<T: Serialize> TelemetryClient<T> {
             .publish(&self.telemetry_topic, &telemetry, QoS::AtMostOnce, &[])
             .ok();
     }
+
+    pub fn update(&mut self) {
+        match self.mqtt.poll(|_client, _topic, _message, _properties| {}) {
+            Err(minimq::Error::Network(
+                smoltcp_nal::NetworkError::NoIpAddress,
+            )) => {}
+
+            Err(error) => log::info!("Unexpected error: {:?}", error),
+            _ => {}
+        }
+    }
 }

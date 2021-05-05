@@ -7,6 +7,9 @@ use stm32h7xx_hal::{
     prelude::*,
 };
 
+const NUM_SOCKETS: usize = 4;
+
+use heapless::{consts, Vec};
 use smoltcp_nal::smoltcp;
 
 use embedded_hal::digital::v2::{InputPin, OutputPin};
@@ -19,18 +22,33 @@ use super::{
 
 pub struct NetStorage {
     pub ip_addrs: [smoltcp::wire::IpCidr; 1],
-    pub sockets: [Option<smoltcp::socket::SocketSetItem<'static>>; 2],
+    pub sockets:
+        [Option<smoltcp::socket::SocketSetItem<'static>>; NUM_SOCKETS + 1],
+    pub socket_storage: [SocketStorage; NUM_SOCKETS],
     pub neighbor_cache:
         [Option<(smoltcp::wire::IpAddress, smoltcp::iface::Neighbor)>; 8],
     pub routes_cache:
         [Option<(smoltcp::wire::IpCidr, smoltcp::iface::Route)>; 8],
-    pub tx_storage: [u8; 4096],
-    pub rx_storage: [u8; 4096],
 
     pub dhcp_rx_metadata: [smoltcp::socket::RawPacketMetadata; 1],
     pub dhcp_tx_metadata: [smoltcp::socket::RawPacketMetadata; 1],
     pub dhcp_tx_storage: [u8; 600],
     pub dhcp_rx_storage: [u8; 600],
+}
+
+#[derive(Copy, Clone)]
+pub struct SocketStorage {
+    rx_storage: [u8; 4096],
+    tx_storage: [u8; 4096],
+}
+
+impl SocketStorage {
+    const fn new() -> Self {
+        Self {
+            rx_storage: [0; 4096],
+            tx_storage: [0; 4096],
+        }
+    }
 }
 
 impl NetStorage {
@@ -42,9 +60,8 @@ impl NetStorage {
             )],
             neighbor_cache: [None; 8],
             routes_cache: [None; 8],
-            sockets: [None, None],
-            tx_storage: [0; 4096],
-            rx_storage: [0; 4096],
+            sockets: [None, None, None, None, None],
+            socket_storage: [SocketStorage::new(); NUM_SOCKETS],
             dhcp_tx_storage: [0; 600],
             dhcp_rx_storage: [0; 600],
             dhcp_rx_metadata: [smoltcp::socket::RawPacketMetadata::EMPTY; 1],
@@ -572,19 +589,25 @@ pub fn setup(
             let mut sockets =
                 smoltcp::socket::SocketSet::new(&mut store.sockets[..]);
 
-            let tcp_socket = {
-                let rx_buffer = smoltcp::socket::TcpSocketBuffer::new(
-                    &mut store.rx_storage[..],
-                );
-                let tx_buffer = smoltcp::socket::TcpSocketBuffer::new(
-                    &mut store.tx_storage[..],
-                );
+            let mut handles: Vec<smoltcp::socket::SocketHandle, consts::U64> =
+                Vec::new();
+            for storage in store.socket_storage.iter_mut() {
+                let tcp_socket = {
+                    let rx_buffer = smoltcp::socket::TcpSocketBuffer::new(
+                        &mut storage.rx_storage[..],
+                    );
+                    let tx_buffer = smoltcp::socket::TcpSocketBuffer::new(
+                        &mut storage.tx_storage[..],
+                    );
 
-                smoltcp::socket::TcpSocket::new(rx_buffer, tx_buffer)
-            };
+                    smoltcp::socket::TcpSocket::new(rx_buffer, tx_buffer)
+                };
+                let handle = sockets.add(tcp_socket);
 
-            let handle = sockets.add(tcp_socket);
-            (sockets, [handle])
+                handles.push(handle).unwrap();
+            }
+
+            (sockets, handles)
         };
 
         let dhcp_client = {
