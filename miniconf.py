@@ -38,7 +38,7 @@ class Miniconf:
         self.prefix = prefix
         self.inflight = {}
         self.client.on_message = self._handle_response
-        self.client.subscribe(f'{prefix}/response/#')
+        self.client.subscribe(f'{prefix}/response/{self.uuid.hex}')
         self.logger = logging.getLogger(__name__)
 
     def _handle_response(self, _client, _topic, payload, _qos, properties):
@@ -52,32 +52,13 @@ class Miniconf:
             properties: A dictionary of properties associated with the message.
         """
         # Extract corrleation data from the properties
-        try:
-            correlation_data = json.loads(properties['correlation_data'][0].decode('ascii'))
-        except (json.decoder.JSONDecodeError, KeyError):
-            self.logger.warning('Ignoring message with invalid correlation data')
-            return
+        correlation_data = json.loads(properties['correlation_data'][0].decode('ascii'))
 
-        # Validate the correlation data.
-        try:
-            if correlation_data['id'] != self.uuid.hex:
-                self.logger.info('Ignoring correlation data for different ID')
-                return
-            pid = correlation_data['pid']
-        except KeyError:
-            self.logger.warning('Ignoring unknown correlation data: %s', correlation_data)
-            return
+        # Get the request ID from the correlation data
+        request_id = correlation_data['request_id']
 
-        if pid not in self.inflight:
-            self.logger.warning('Unexpected pid: %s', pid)
-            return
-
-        try:
-            response = json.loads(payload)
-            self.inflight[pid].set_result((response['code'], response['msg']))
-            del self.inflight[pid]
-        except json.decoder.JSONDecodeError:
-            self.logger.warning('Invalid response format: %s', payload)
+        self.inflight[request_id].set_result(json.loads(payload))
+        del self.inflight[request_id]
 
 
     async def command(self, path, value):
@@ -92,23 +73,22 @@ class Miniconf:
             a use-readable message indicating further information.
         """
         setting_topic = f'{self.prefix}/settings/{path}'
-        response_topic = f'{self.prefix}/response/{path}'
+        response_topic = f'{self.prefix}/response/{self.uuid.hex}'
 
         # Assign a unique identifier to this update request.
-        pid = self.request_id
+        request_id = self.request_id
         self.request_id += 1
-        assert pid not in self.inflight, 'Invalid PID encountered'
+        assert request_id not in self.inflight, 'Invalid ID encountered'
 
         correlation_data = json.dumps({
-            'id': self.uuid.hex,
-            'pid': pid,
+            'request_id': request_id,
         }).encode('ascii')
 
         value = json.dumps(value)
         self.logger.info('Sending %s to "%s"', value, setting_topic)
         fut = asyncio.get_running_loop().create_future()
 
-        self.inflight[pid] = fut
+        self.inflight[request_id] = fut
         self.client.publish(setting_topic, payload=value, qos=0, retain=True,
                             response_topic=response_topic,
                             correlation_data=correlation_data)
@@ -145,10 +125,10 @@ def main():
         interface = await Miniconf.create(args.prefix, args.broker)
         for key_value in args.settings:
             path, value = key_value.split("=", 1)
-            code, response = await interface.command(path, json.loads(value))
+            response = await interface.command(path, json.loads(value))
             print(f'{path}: {response}')
-            if code != 0:
-                return code
+            if response['code'] != 0:
+                return response['code']
         return 0
 
     sys.exit(loop.run_until_complete(configure_settings()))
