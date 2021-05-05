@@ -14,6 +14,7 @@ import uuid
 
 from gmqtt import Client as MqttClient
 
+LOGGER = logging.getLogger(__name__)
 
 class Miniconf:
     """An asynchronous API for controlling Miniconf devices using MQTT."""
@@ -39,7 +40,6 @@ class Miniconf:
         self.inflight = {}
         self.client.on_message = self._handle_response
         self.client.subscribe(f'{prefix}/response/{self.uuid.hex}')
-        self.logger = logging.getLogger(__name__)
 
     def _handle_response(self, _client, _topic, payload, _qos, properties):
         """Callback function for when messages are received over MQTT.
@@ -69,8 +69,7 @@ class Miniconf:
             value: The value to write to the path.
 
         Returns:
-            (code, msg) tuple as a response to the command. `code` is zero for success and `msg` is
-            a use-readable message indicating further information.
+            The response to the command as a dictionary.
         """
         setting_topic = f'{self.prefix}/settings/{path}'
         response_topic = f'{self.prefix}/response/{self.uuid.hex}'
@@ -85,7 +84,7 @@ class Miniconf:
         }).encode('ascii')
 
         value = json.dumps(value)
-        self.logger.info('Sending %s to "%s"', value, setting_topic)
+        LOGGER.info('Sending %s to "%s"', value, setting_topic)
         fut = asyncio.get_running_loop().create_future()
 
         self.inflight[request_id] = fut
