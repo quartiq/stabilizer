@@ -56,19 +56,15 @@ version = "0.9.0"
 
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf.git"
-rev = "314fa5587d"
+rev = "c6f2b28"
 
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
 rev = "8468f11"
 
-[patch.crates-io.minimq]
+[dependencies.minimq]
 git = "https://github.com/quartiq/minimq.git"
-rev = "933687c2e4b"
-
-[patch.crates-io.serde-json-core]
-git = "https://github.com/rust-embedded-community/serde-json-core.git"
-rev = "ee06ac91bc"
+rev = "b3f364d"
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
