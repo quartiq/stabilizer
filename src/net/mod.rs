@@ -11,17 +11,17 @@ use miniconf::Miniconf;
 use serde::Serialize;
 
 mod messages;
-mod mqtt_interface;
+mod miniconf_client;
 mod shared;
-mod stack_manager;
+mod network_processor;
 mod telemetry;
 
 use crate::hardware::{CycleCounter, EthernetPhy, NetworkStack};
 use messages::{MqttMessage, SettingsResponse};
 
-pub use mqtt_interface::MiniconfClient;
+pub use miniconf_client::MiniconfClient;
 pub use shared::NetworkManager;
-pub use stack_manager::NetworkProcessor;
+pub use network_processor::NetworkProcessor;
 pub use telemetry::{Telemetry, TelemetryBuffer, TelemetryClient};
 
 pub type NetworkReference = shared::NetworkStackProxy<'static, NetworkStack>;
