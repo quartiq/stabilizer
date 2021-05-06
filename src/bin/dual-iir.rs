@@ -191,7 +191,8 @@ const APP: () = {
         let telemetry: TelemetryBuffer =
             c.resources.telemetry.lock(|telemetry| *telemetry);
 
-        let gains: [AfeGain; 2] = c.resources.settings.lock(|settings| settings.afe);
+        let gains: [AfeGain; 2] =
+            c.resources.settings.lock(|settings| settings.afe);
 
         c.resources
             .network

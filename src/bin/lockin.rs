@@ -284,7 +284,8 @@ const APP: () = {
             c.resources.digital_inputs.1.is_high().unwrap(),
         ];
 
-        let gains: [AfeGain; 2] = c.resources.settings.lock(|settings| settings.afe);
+        let gains: [AfeGain; 2] =
+            c.resources.settings.lock(|settings| settings.afe);
 
         c.resources
             .network
