@@ -1,4 +1,3 @@
-use core::fmt::Write;
 ///! Stabilizer network management module
 ///!
 ///! # Design
@@ -9,6 +8,8 @@ use core::fmt::Write;
 use heapless::{consts, String};
 use miniconf::Miniconf;
 use serde::Serialize;
+
+use core::fmt::Write;
 
 mod messages;
 mod miniconf_client;
@@ -32,6 +33,7 @@ pub enum UpdateState {
     Updated,
 }
 
+/// A structure of Stabilizer's default network users.
 pub struct NetworkUsers<S: Default + Clone + Miniconf, T: Serialize> {
     pub miniconf: MiniconfClient<S>,
     pub processor: NetworkProcessor,
@@ -43,6 +45,17 @@ where
     S: Default + Clone + Miniconf,
     T: Serialize,
 {
+    /// Construct Stabilizer's default network users.
+    ///
+    /// # Args
+    /// * `stack` - The network stack that will be used to share with all network users.
+    /// * `phy` - The ethernet PHY connecting the network.
+    /// * `cycle_counter` - The clock used for measuring time in the network.
+    /// * `app` - The name of the application.
+    /// * `mac` - The MAC address of the network.
+    ///
+    /// # Returns
+    /// A new struct of network users.
     pub fn new(
         stack: NetworkStack,
         phy: EthernetPhy,
@@ -81,6 +94,10 @@ where
         }
     }
 
+    /// Update and process all of the network users state.
+    ///
+    /// # Returns
+    /// An indication if any of the network users indicated a state change.
     pub fn update(&mut self) -> UpdateState {
         // Poll for incoming data.
         let poll_result = self.processor.update();
@@ -95,6 +112,15 @@ where
     }
 }
 
+/// Get an MQTT client ID for a client.
+///
+/// # Args
+/// * `app` - The name of the application
+/// * `client` - The unique tag of the client
+/// * `mac` - The MAC address of the device.
+///
+/// # Returns
+/// A client ID that may be used for MQTT client identification.
 fn get_client_id(
     app: &str,
     client: &str,

@@ -1,7 +1,18 @@
-use crate::hardware::design_parameters::MQTT_BROKER;
-
+///! Stabilizer Run-time Settings Client
+///!
+///! # Design
+///! Stabilizer allows for settings to be configured at run-time via MQTT using miniconf.
+///! Settings are written in serialized JSON form to the settings path associated with the setting.
+///!
+///! # Limitations
+///! The MQTT client logs failures to subscribe to the settings topic, but does not re-attempt to
+///connect to it when errors occur.
+///!
+///! Respones to settings updates are sent without quality-of-service guarantees, so there's no
+///! guarantee that the requestee will be informed that settings have been applied.
 use heapless::{consts, String};
 
+use crate::hardware::design_parameters::MQTT_BROKER;
 use super::{MqttMessage, NetworkReference, SettingsResponse, UpdateState};
 
 /// MQTT settings interface.
@@ -144,6 +155,7 @@ where
         }
     }
 
+    /// Get the current settings from miniconf.
     pub fn settings(&self) -> &S {
         &self.settings
     }

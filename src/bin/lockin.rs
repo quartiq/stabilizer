@@ -243,7 +243,7 @@ const APP: () = {
         c.resources
             .network
             .telemetry
-            .publish(&telemetry.to_telemetry(gains[0], gains[1]));
+            .publish(&telemetry.finalize(gains[0], gains[1]));
 
         let telemetry_period = c
             .resources

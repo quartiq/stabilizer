@@ -153,7 +153,6 @@ const APP: () = {
         }
 
         // Update telemetry measurements.
-        // TODO: Should we report these as voltages?
         c.resources.telemetry.latest_samples =
             [adc_samples[0][0] as i16, adc_samples[1][0] as i16];
 
@@ -197,7 +196,7 @@ const APP: () = {
         c.resources
             .network
             .telemetry
-            .publish(&telemetry.to_telemetry(gains[0], gains[1]));
+            .publish(&telemetry.finalize(gains[0], gains[1]));
 
         let telemetry_period = c
             .resources
