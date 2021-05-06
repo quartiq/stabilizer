@@ -29,7 +29,7 @@ const DAC_SEQUENCE: [i16; design_parameters::SAMPLE_BUFFER_SIZE] =
 enum Conf {
     Magnitude,
     Phase,
-    PllFrequency,
+    ReferenceFrequency,
     LogPower,
     InPhase,
     Quadrature,
@@ -165,49 +165,37 @@ const APP: () = {
         let lockin = c.resources.lockin;
         let settings = c.resources.settings;
 
-        let mut pll_frequency = 0;
-
-        let (sample_phase, sample_frequency) = match settings.lockin_mode {
+        let (reference_phase, reference_frequency) = match settings.lockin_mode
+        {
             LockinMode::External => {
                 let timestamp =
                     c.resources.timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
-                let (pll_phase, frequency) = c.resources.pll.update(
+                let (pll_phase, pll_frequency) = c.resources.pll.update(
                     timestamp.map(|t| t as i32),
                     settings.pll_tc[0],
                     settings.pll_tc[1],
                 );
-
-                pll_frequency = frequency;
-
-                let sample_frequency = ((pll_frequency
-                    >> design_parameters::SAMPLE_BUFFER_SIZE_LOG2)
-                    as i32)
-                    .wrapping_mul(settings.lockin_harmonic);
-                let sample_phase = settings.lockin_phase.wrapping_add(
-                    pll_phase.wrapping_mul(settings.lockin_harmonic),
-                );
-
-                (sample_phase, sample_frequency)
+                (
+                    pll_phase,
+                    (pll_frequency
+                        >> design_parameters::SAMPLE_BUFFER_SIZE_LOG2)
+                        as i32,
+                )
             }
-
             LockinMode::Internal => {
                 // Reference phase and frequency are known.
-                let pll_phase = 0i32;
-                let pll_frequency =
-                    1i32 << (32 - design_parameters::SAMPLE_BUFFER_SIZE_LOG2);
-
-                // Demodulation LO phase offset
-                let phase_offset: i32 = 1 << 30;
-
-                let sample_frequency = (pll_frequency as i32)
-                    .wrapping_mul(settings.lockin_harmonic);
-                let sample_phase = phase_offset.wrapping_add(
-                    pll_phase.wrapping_mul(settings.lockin_harmonic),
-                );
-
-                (sample_phase, sample_frequency)
+                (
+                    1i32 << 30,
+                    1i32 << (32 - design_parameters::SAMPLE_BUFFER_SIZE_LOG2),
+                )
             }
         };
+
+        let sample_frequency =
+            reference_frequency.wrapping_mul(settings.lockin_harmonic);
+        let sample_phase = settings.lockin_phase.wrapping_add(
+            reference_phase.wrapping_mul(settings.lockin_harmonic),
+        );
 
         let output: Complex<i32> = adc_samples[0]
             .iter()
@@ -230,7 +218,9 @@ const APP: () = {
                     Conf::Magnitude => output.abs_sqr() as i32 >> 16,
                     Conf::Phase => output.arg() >> 16,
                     Conf::LogPower => (output.log2() << 24) as i32 >> 16,
-                    Conf::PllFrequency => pll_frequency as i32 >> 16,
+                    Conf::ReferenceFrequency => {
+                        reference_frequency as i32 >> 16
+                    }
                     Conf::InPhase => output.re >> 16,
                     Conf::Quadrature => output.im >> 16,
                     Conf::Modulation => DAC_SEQUENCE[i] as i32,
