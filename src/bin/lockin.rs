@@ -27,9 +27,13 @@ const DAC_SEQUENCE: [i16; design_parameters::SAMPLE_BUFFER_SIZE] =
 
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 enum Conf {
-    PowerPhase,
+    Power,
+    Phase,
+    PllFrequency,
     FrequencyDiscriminator,
-    Quadrature,
+    QuadratureReal,
+    QuadratureImaginary,
+    Reference,
 }
 
 #[derive(Copy, Clone, Debug, Miniconf, Deserialize, PartialEq)]
@@ -66,7 +70,7 @@ impl Default for Settings {
             lockin_harmonic: -1, // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
             lockin_phase: 0,     // Demodulation LO phase offset
 
-            output_conf: [Conf::Quadrature; 2],
+            output_conf: [Conf::QuadratureReal, Conf::QuadratureImaginary],
             telemetry_period_secs: 10,
         }
     }
@@ -221,29 +225,21 @@ const APP: () = {
             .unwrap()
             * 2; // Full scale assuming the 2f component is gone.
 
-        let output = [
-            match settings.output_conf[0] {
-                Conf::PowerPhase => output.abs_sqr() as _,
-                Conf::FrequencyDiscriminator => (output.log2() << 24) as _,
-                Conf::Quadrature => output.re,
-            },
-            match settings.output_conf[1] {
-                Conf::PowerPhase => output.arg(),
-                Conf::FrequencyDiscriminator => pll_frequency as _,
-                Conf::Quadrature => output.im,
-            },
-        ];
-
         // Convert to DAC data.
         for i in 0..dac_samples[0].len() {
-            // When operating in internal lockin mode, DAC0 is always used for generating the
-            // reference signal.
-            if settings.lockin_mode == LockinMode::Internal {
-                dac_samples[0][i] = DAC_SEQUENCE[i] as u16 ^ 0x8000;
-            } else {
-                dac_samples[0][i] = (output[0] >> 16) as u16 ^ 0x8000;
+            for channel in 0..2 {
+                let value = match settings.output_conf[0] {
+                    Conf::Power => output.abs_sqr() as i32 >> 16,
+                    Conf::Phase => output.arg() >> 16,
+                    Conf::FrequencyDiscriminator => (output.log2() << 24) as i32 >> 16,
+                    Conf::PllFrequency => pll_frequency as i32 >> 16,
+                    Conf::QuadratureReal => output.re >> 16,
+                    Conf::QuadratureImaginary => output.im >> 16,
+                    Conf::Reference => DAC_SEQUENCE[i] as i32,
+                };
+
+                dac_samples[channel][i] = value as u16 ^ 0x8000;
             }
-            dac_samples[1][i] = (output[1] >> 16) as u16 ^ 0x8000;
         }
     }
 
