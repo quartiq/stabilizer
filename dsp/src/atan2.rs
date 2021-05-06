@@ -77,6 +77,8 @@ pub fn atan2(y: i32, x: i32) -> i32 {
 
     if sign.1 {
         angle = angle.wrapping_neg();
+        // Negation ends up in slightly faster assembly
+        // angle = !angle;
     }
 
     angle
