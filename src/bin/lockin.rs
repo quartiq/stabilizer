@@ -231,7 +231,9 @@ const APP: () = {
                 let value = match settings.output_conf[0] {
                     Conf::Power => output.abs_sqr() as i32 >> 16,
                     Conf::Phase => output.arg() >> 16,
-                    Conf::FrequencyDiscriminator => (output.log2() << 24) as i32 >> 16,
+                    Conf::FrequencyDiscriminator => {
+                        (output.log2() << 24) as i32 >> 16
+                    }
                     Conf::PllFrequency => pll_frequency as i32 >> 16,
                     Conf::QuadratureReal => output.re >> 16,
                     Conf::QuadratureImaginary => output.im >> 16,
