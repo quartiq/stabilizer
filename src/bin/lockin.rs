@@ -18,6 +18,13 @@ use stabilizer::hardware::{
 use miniconf::Miniconf;
 use stabilizer::net::{Action, MqttInterface};
 
+// A constant sinusoid to send on the DAC output.
+// Full-scale gives a +/- 10.24V amplitude waveform. Scale it down to give +/- 1V.
+const ONE: i16 = ((1.0 / 10.24) * u16::MAX as f32) as _;
+const SQRT2: i16 = (ONE as f32 * 0.707) as _;
+const DAC_SEQUENCE: [i16; design_parameters::SAMPLE_BUFFER_SIZE] =
+    [ONE, SQRT2, 0, -SQRT2, -ONE, -SQRT2, 0, SQRT2];
+
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 enum Conf {
     PowerPhase,
@@ -25,9 +32,16 @@ enum Conf {
     Quadrature,
 }
 
+#[derive(Copy, Clone, Debug, Miniconf, Deserialize, PartialEq)]
+enum LockinMode {
+    Internal,
+    External,
+}
+
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 pub struct Settings {
     afe: [AfeGain; 2],
+    lockin_mode: LockinMode,
 
     pll_tc: [u8; 2],
 
@@ -36,12 +50,15 @@ pub struct Settings {
     lockin_phase: i32,
 
     output_conf: [Conf; 2],
+    telemetry_period_secs: u16,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
             afe: [AfeGain::G1; 2],
+
+            lockin_mode: LockinMode::External,
 
             pll_tc: [21, 21], // frequency and phase settling time (log2 counter cycles)
 
@@ -50,6 +67,7 @@ impl Default for Settings {
             lockin_phase: 0,     // Demodulation LO phase offset
 
             output_conf: [Conf::Quadrature; 2],
+            telemetry_period_secs: 10,
         }
     }
 }
@@ -145,21 +163,49 @@ const APP: () = {
         let lockin = c.resources.lockin;
         let settings = c.resources.settings;
 
-        let timestamp =
-            c.resources.timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
-        let (pll_phase, pll_frequency) = c.resources.pll.update(
-            timestamp.map(|t| t as i32),
-            settings.pll_tc[0],
-            settings.pll_tc[1],
-        );
+        let mut pll_frequency = 0;
 
-        let sample_frequency = ((pll_frequency
-            >> design_parameters::SAMPLE_BUFFER_SIZE_LOG2)
-            as i32)
-            .wrapping_mul(settings.lockin_harmonic);
-        let sample_phase = settings
-            .lockin_phase
-            .wrapping_add(pll_phase.wrapping_mul(settings.lockin_harmonic));
+        let (sample_phase, sample_frequency) = match settings.lockin_mode {
+            LockinMode::External => {
+                let timestamp =
+                    c.resources.timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
+                let (pll_phase, frequency) = c.resources.pll.update(
+                    timestamp.map(|t| t as i32),
+                    settings.pll_tc[0],
+                    settings.pll_tc[1],
+                );
+
+                pll_frequency = frequency;
+
+                let sample_frequency = ((pll_frequency
+                    >> design_parameters::SAMPLE_BUFFER_SIZE_LOG2)
+                    as i32)
+                    .wrapping_mul(settings.lockin_harmonic);
+                let sample_phase = settings.lockin_phase.wrapping_add(
+                    pll_phase.wrapping_mul(settings.lockin_harmonic),
+                );
+
+                (sample_phase, sample_frequency)
+            }
+
+            LockinMode::Internal => {
+                // Reference phase and frequency are known.
+                let pll_phase = 0i32;
+                let pll_frequency =
+                    1i32 << (32 - design_parameters::SAMPLE_BUFFER_SIZE_LOG2);
+
+                // Demodulation LO phase offset
+                let phase_offset: i32 = 1 << 30;
+
+                let sample_frequency = (pll_frequency as i32)
+                    .wrapping_mul(settings.lockin_harmonic);
+                let sample_phase = phase_offset.wrapping_add(
+                    pll_phase.wrapping_mul(settings.lockin_harmonic),
+                );
+
+                (sample_phase, sample_frequency)
+            }
+        };
 
         let output: Complex<i32> = adc_samples[0]
             .iter()
@@ -190,7 +236,13 @@ const APP: () = {
 
         // Convert to DAC data.
         for i in 0..dac_samples[0].len() {
-            dac_samples[0][i] = (output[0] >> 16) as u16 ^ 0x8000;
+            // When operating in internal lockin mode, DAC0 is always used for generating the
+            // reference signal.
+            if settings.lockin_mode == LockinMode::Internal {
+                dac_samples[0][i] = DAC_SEQUENCE[i] as u16 ^ 0x8000;
+            } else {
+                dac_samples[0][i] = (output[0] >> 16) as u16 ^ 0x8000;
+            }
             dac_samples[1][i] = (output[1] >> 16) as u16 ^ 0x8000;
         }
     }
