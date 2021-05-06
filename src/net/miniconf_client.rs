@@ -140,7 +140,7 @@ where
             // If settings updated,
             Ok(_) if update => UpdateState::Updated,
             Ok(_) => UpdateState::NoChange,
-            Err(minimq::Error::Disconnected) => {
+            Err(minimq::Error::SessionReset) => {
                 self.subscribed = false;
                 UpdateState::NoChange
             }
