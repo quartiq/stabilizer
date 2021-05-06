@@ -30,10 +30,10 @@ enum Conf {
     Power,
     Phase,
     PllFrequency,
-    FrequencyDiscriminator,
-    QuadratureReal,
-    QuadratureImaginary,
-    Reference,
+    LogPower,
+    InPhase,
+    Quadrature,
+    Modulation,
 }
 
 #[derive(Copy, Clone, Debug, Miniconf, Deserialize, PartialEq)]
@@ -69,7 +69,7 @@ impl Default for Settings {
             lockin_harmonic: -1, // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
             lockin_phase: 0,     // Demodulation LO phase offset
 
-            output_conf: [Conf::QuadratureReal, Conf::QuadratureImaginary],
+            output_conf: [Conf::InPhase, Conf::Quadrature],
         }
     }
 }
@@ -229,13 +229,11 @@ const APP: () = {
                 let value = match settings.output_conf[channel] {
                     Conf::Power => output.abs_sqr() as i32 >> 16,
                     Conf::Phase => output.arg() >> 16,
-                    Conf::FrequencyDiscriminator => {
-                        (output.log2() << 24) as i32 >> 16
-                    }
+                    Conf::LogPower => (output.log2() << 24) as i32 >> 16,
                     Conf::PllFrequency => pll_frequency as i32 >> 16,
-                    Conf::QuadratureReal => output.re >> 16,
-                    Conf::QuadratureImaginary => output.im >> 16,
-                    Conf::Reference => DAC_SEQUENCE[i] as i32,
+                    Conf::InPhase => output.re >> 16,
+                    Conf::Quadrature => output.im >> 16,
+                    Conf::Modulation => DAC_SEQUENCE[i] as i32,
                 };
 
                 *sample = value as u16 ^ 0x8000;
