@@ -20,7 +20,7 @@ use stabilizer::net::{Action, MqttInterface};
 
 // A constant sinusoid to send on the DAC output.
 // Full-scale gives a +/- 10.24V amplitude waveform. Scale it down to give +/- 1V.
-const ONE: i16 = ((1.0 / 10.24) * u16::MAX as f32) as _;
+const ONE: i16 = ((1.0 / 10.24) * i16::MAX as f32) as _;
 const SQRT2: i16 = (ONE as f32 * 0.707) as _;
 const DAC_SEQUENCE: [i16; design_parameters::SAMPLE_BUFFER_SIZE] =
     [ONE, SQRT2, 0, -SQRT2, -ONE, -SQRT2, 0, SQRT2];
