@@ -22,7 +22,7 @@ pub struct ProgrammableGainAmplifier<A0, A1> {
 
 impl Gain {
     /// Get the AFE gain as a numerical value.
-    pub fn as_multiplier (self) -> f32 {
+    pub fn as_multiplier(self) -> f32 {
         match self {
             Gain::G1 => 1.0,
             Gain::G2 => 2.0,

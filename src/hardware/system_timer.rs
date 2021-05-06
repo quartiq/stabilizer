@@ -91,7 +91,7 @@ impl rtic::Monotonic for SystemTimer {
                 if regs.sr.read().uif().bit_is_clear() {
                     return (overflows * 65535 + current_value) as i32;
                 }
-            }
+            })
         }
     }
 

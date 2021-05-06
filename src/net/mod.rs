@@ -13,16 +13,16 @@ use core::fmt::Write;
 
 mod messages;
 mod miniconf_client;
-mod shared;
 mod network_processor;
+mod shared;
 mod telemetry;
 
 use crate::hardware::{CycleCounter, EthernetPhy, NetworkStack};
 use messages::{MqttMessage, SettingsResponse};
 
 pub use miniconf_client::MiniconfClient;
-pub use shared::NetworkManager;
 pub use network_processor::NetworkProcessor;
+pub use shared::NetworkManager;
 pub use telemetry::{Telemetry, TelemetryBuffer, TelemetryClient};
 
 pub type NetworkReference = shared::NetworkStackProxy<'static, NetworkStack>;

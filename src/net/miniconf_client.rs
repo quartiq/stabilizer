@@ -12,8 +12,8 @@
 ///! guarantee that the requestee will be informed that settings have been applied.
 use heapless::{consts, String};
 
-use crate::hardware::design_parameters::MQTT_BROKER;
 use super::{MqttMessage, NetworkReference, SettingsResponse, UpdateState};
+use crate::hardware::design_parameters::MQTT_BROKER;
 
 /// MQTT settings interface.
 pub struct MiniconfClient<S>

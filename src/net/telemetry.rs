@@ -11,11 +11,11 @@
 ///! required immediately before transmission. This ensures that any slower computation required
 ///! for unit conversion can be off-loaded to lower priority tasks.
 use heapless::{consts, String, Vec};
-use serde::Serialize;
 use minimq::QoS;
+use serde::Serialize;
 
 use super::NetworkReference;
-use crate::hardware::{AfeGain, design_parameters::MQTT_BROKER};
+use crate::hardware::{design_parameters::MQTT_BROKER, AfeGain};
 
 /// The telemetry client for reporting telemetry data over MQTT.
 pub struct TelemetryClient<T: Serialize> {
@@ -72,7 +72,6 @@ impl TelemetryBuffer {
     /// # Returns
     /// The finalized telemetry structure that can be serialized and reported.
     pub fn finalize(self, afe0: AfeGain, afe1: AfeGain) -> Telemetry {
-
         // The input voltage is measured by the ADC across a dynamic scale of +/- 4.096 V with a
         // dynamic range across signed integers. Additionally, the signal is fully differential, so
         // the differential voltage is measured at the ADC. Thus, the single-ended signal is
