@@ -2,6 +2,7 @@
 #![no_std]
 #![no_main]
 
+use embedded_hal::digital::v2::InputPin;
 use generic_array::typenum::U4;
 
 use serde::Deserialize;

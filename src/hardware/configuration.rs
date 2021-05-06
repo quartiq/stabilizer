@@ -167,8 +167,9 @@ pub fn setup(
         system_timer::SystemTimer::initialize(tim15);
     }
 
-    let mut delay =
-        asm_delay::AsmDelay::new(asm_delay::bitrate::MegaHertz(2 * 400));
+    let mut delay = asm_delay::AsmDelay::new(asm_delay::bitrate::MegaHertz(
+        ccdr.clocks.c_ck().0 / 1_000_000,
+    ));
 
     let gpioa = device.GPIOA.split(ccdr.peripheral.GPIOA);
     let gpiob = device.GPIOB.split(ccdr.peripheral.GPIOB);
