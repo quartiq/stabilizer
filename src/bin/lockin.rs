@@ -27,7 +27,7 @@ const DAC_SEQUENCE: [i16; design_parameters::SAMPLE_BUFFER_SIZE] =
 
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 enum Conf {
-    Power,
+    Magnitude,
     Phase,
     PllFrequency,
     LogPower,
@@ -227,7 +227,7 @@ const APP: () = {
         for (channel, samples) in dac_samples.iter_mut().enumerate() {
             for (i, sample) in samples.iter_mut().enumerate() {
                 let value = match settings.output_conf[channel] {
-                    Conf::Power => output.abs_sqr() as i32 >> 16,
+                    Conf::Magnitude => output.abs_sqr() as i32 >> 16,
                     Conf::Phase => output.arg() >> 16,
                     Conf::LogPower => (output.log2() << 24) as i32 >> 16,
                     Conf::PllFrequency => pll_frequency as i32 >> 16,
