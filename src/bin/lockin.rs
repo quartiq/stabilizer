@@ -54,7 +54,6 @@ pub struct Settings {
     lockin_phase: i32,
 
     output_conf: [Conf; 2],
-    telemetry_period_secs: u16,
 }
 
 impl Default for Settings {
