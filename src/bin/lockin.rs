@@ -22,16 +22,20 @@ use net::{NetworkUsers, Telemetry, TelemetryBuffer, UpdateState};
 
 // A constant sinusoid to send on the DAC output.
 // Full-scale gives a +/- 10.24V amplitude waveform. Scale it down to give +/- 1V.
-const ONE: i16 = ((1.0 / 10.24) * u16::MAX as f32) as _;
+const ONE: i16 = ((1.0 / 10.24) * i16::MAX as f32) as _;
 const SQRT2: i16 = (ONE as f32 * 0.707) as _;
 const DAC_SEQUENCE: [i16; design_parameters::SAMPLE_BUFFER_SIZE] =
     [ONE, SQRT2, 0, -SQRT2, -ONE, -SQRT2, 0, SQRT2];
 
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 enum Conf {
-    PowerPhase,
-    FrequencyDiscriminator,
+    Magnitude,
+    Phase,
+    PllFrequency,
+    LogPower,
+    InPhase,
     Quadrature,
+    Modulation,
 }
 
 #[derive(Copy, Clone, Debug, Miniconf, Deserialize, PartialEq)]
@@ -68,7 +72,7 @@ impl Default for Settings {
             lockin_harmonic: -1, // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
             lockin_phase: 0,     // Demodulation LO phase offset
 
-            output_conf: [Conf::Quadrature; 2],
+            output_conf: [Conf::InPhase, Conf::Quadrature],
             telemetry_period_secs: 10,
         }
     }
@@ -159,7 +163,7 @@ const APP: () = {
             c.resources.adcs.1.acquire_buffer(),
         ];
 
-        let dac_samples = [
+        let mut dac_samples = [
             c.resources.dacs.0.acquire_buffer(),
             c.resources.dacs.1.acquire_buffer(),
         ];
@@ -225,29 +229,21 @@ const APP: () = {
             .unwrap()
             * 2; // Full scale assuming the 2f component is gone.
 
-        let output = [
-            match settings.output_conf[0] {
-                Conf::PowerPhase => output.abs_sqr() as _,
-                Conf::FrequencyDiscriminator => (output.log2() << 24) as _,
-                Conf::Quadrature => output.re,
-            },
-            match settings.output_conf[1] {
-                Conf::PowerPhase => output.arg(),
-                Conf::FrequencyDiscriminator => pll_frequency as _,
-                Conf::Quadrature => output.im,
-            },
-        ];
-
         // Convert to DAC data.
-        for i in 0..dac_samples[0].len() {
-            // When operating in internal lockin mode, DAC0 is always used for generating the
-            // reference signal.
-            if settings.lockin_mode == LockinMode::Internal {
-                dac_samples[0][i] = DAC_SEQUENCE[i] as u16 ^ 0x8000;
-            } else {
-                dac_samples[0][i] = (output[0] >> 16) as u16 ^ 0x8000;
+        for (channel, samples) in dac_samples.iter_mut().enumerate() {
+            for (i, sample) in samples.iter_mut().enumerate() {
+                let value = match settings.output_conf[channel] {
+                    Conf::Magnitude => output.abs_sqr() as i32 >> 16,
+                    Conf::Phase => output.arg() >> 16,
+                    Conf::LogPower => (output.log2() << 24) as i32 >> 16,
+                    Conf::PllFrequency => pll_frequency as i32 >> 16,
+                    Conf::InPhase => output.re >> 16,
+                    Conf::Quadrature => output.im >> 16,
+                    Conf::Modulation => DAC_SEQUENCE[i] as i32,
+                };
+
+                *sample = value as u16 ^ 0x8000;
             }
-            dac_samples[1][i] = (output[1] >> 16) as u16 ^ 0x8000;
         }
 
         // Update telemetry measurements.
