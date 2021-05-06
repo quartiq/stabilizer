@@ -276,15 +276,15 @@ const APP: () = {
 
     #[task(priority = 1, resources=[network, digital_inputs, settings, telemetry], schedule=[telemetry])]
     fn telemetry(mut c: telemetry::Context) {
-        let mut telemetry =
-            c.resources.telemetry.lock(|telemetry| telemetry.clone());
+        let mut telemetry: TelemetryBuffer =
+            c.resources.telemetry.lock(|telemetry| *telemetry);
 
         telemetry.digital_inputs = [
             c.resources.digital_inputs.0.is_high().unwrap(),
             c.resources.digital_inputs.1.is_high().unwrap(),
         ];
 
-        let gains = c.resources.settings.lock(|settings| settings.afe.clone());
+        let gains: [AfeGain; 2] = c.resources.settings.lock(|settings| settings.afe);
 
         c.resources
             .network

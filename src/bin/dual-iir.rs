@@ -188,10 +188,10 @@ const APP: () = {
 
     #[task(priority = 1, resources=[network, settings, telemetry], schedule=[telemetry])]
     fn telemetry(mut c: telemetry::Context) {
-        let telemetry =
-            c.resources.telemetry.lock(|telemetry| telemetry.clone());
+        let telemetry: TelemetryBuffer =
+            c.resources.telemetry.lock(|telemetry| *telemetry);
 
-        let gains = c.resources.settings.lock(|settings| settings.afe.clone());
+        let gains: [AfeGain; 2] = c.resources.settings.lock(|settings| settings.afe);
 
         c.resources
             .network

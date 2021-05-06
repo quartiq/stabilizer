@@ -85,7 +85,7 @@ impl NetworkManager {
     /// # Returns
     /// A proxy that can be used in place of the network stack. Note the requirements of
     /// concurrency listed in the description of this file for usage.
-    pub fn acquire_stack<'a>(&'a self) -> NetworkStackProxy<'a, NetworkStack> {
+    pub fn acquire_stack(&'_ self) -> NetworkStackProxy<'_, NetworkStack> {
         NetworkStackProxy { mutex: &self.mutex }
     }
 }
