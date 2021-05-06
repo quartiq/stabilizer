@@ -157,7 +157,7 @@ const APP: () = {
             c.resources.adcs.1.acquire_buffer(),
         ];
 
-        let dac_samples = [
+        let mut dac_samples = [
             c.resources.dacs.0.acquire_buffer(),
             c.resources.dacs.1.acquire_buffer(),
         ];
@@ -224,9 +224,9 @@ const APP: () = {
             * 2; // Full scale assuming the 2f component is gone.
 
         // Convert to DAC data.
-        for i in 0..dac_samples[0].len() {
-            for channel in 0..2 {
-                let value = match settings.output_conf[0] {
+        for (channel, samples) in dac_samples.iter_mut().enumerate() {
+            for (i, sample) in samples.iter_mut().enumerate() {
+                let value = match settings.output_conf[channel] {
                     Conf::Power => output.abs_sqr() as i32 >> 16,
                     Conf::Phase => output.arg() >> 16,
                     Conf::FrequencyDiscriminator => {
@@ -238,7 +238,7 @@ const APP: () = {
                     Conf::Reference => DAC_SEQUENCE[i] as i32,
                 };
 
-                dac_samples[channel][i] = value as u16 ^ 0x8000;
+                *sample = value as u16 ^ 0x8000;
             }
         }
     }
