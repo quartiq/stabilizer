@@ -74,7 +74,7 @@ impl rtic::Monotonic for SystemTimer {
             // other task that is accessing the current time could potentially race for the
             // registers. Note that this is only required for writing to global state (e.g. timer
             // registers and overflow counter)
-            cortex_m::interrupt::free(|_cs| {
+            if let Some(time) = cortex_m::interrupt::free(|_cs| {
                 // Check for overflows and clear the overflow bit atomically. This must be done in
                 // a critical section to prevent race conditions on the status register.
                 if regs.sr.read().uif().bit_is_set() {
@@ -89,9 +89,15 @@ impl rtic::Monotonic for SystemTimer {
                 // Check that an overflow didn't occur since we just cleared the overflow bit. If
                 // it did, loop around and retry.
                 if regs.sr.read().uif().bit_is_clear() {
-                    return (overflows * 65535 + current_value) as i32;
+                    // Note(unsafe): We are in a critical section, so it is safe to read the
+                    // global variable.
+                    unsafe { Some((OVERFLOWS * 65535 + current_value) as i32) }
+                } else {
+                    None
                 }
-            })
+            }) {
+                return time;
+            }
         }
     }
 
