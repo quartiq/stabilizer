@@ -70,7 +70,6 @@ impl Default for Settings {
             lockin_phase: 0,     // Demodulation LO phase offset
 
             output_conf: [Conf::QuadratureReal, Conf::QuadratureImaginary],
-            telemetry_period_secs: 10,
         }
     }
 }
