@@ -193,18 +193,15 @@ const APP: () = {
         let telemetry: TelemetryBuffer =
             c.resources.telemetry.lock(|telemetry| *telemetry);
 
-        let gains: [AfeGain; 2] =
-            c.resources.settings.lock(|settings| settings.afe);
+        let (gains, telemetry_period) = c
+            .resources
+            .settings
+            .lock(|settings| (settings.afe, settings.telemetry_period));
 
         c.resources
             .network
             .telemetry
             .publish(&telemetry.finalize(gains[0], gains[1]));
-
-        let telemetry_period = c
-            .resources
-            .settings
-            .lock(|settings| settings.telemetry_period);
 
         // Schedule the telemetry task in the future.
         c.schedule
