@@ -9,8 +9,8 @@ use serde::Deserialize;
 
 use dsp::iir;
 use hardware::{
-    Adc0Input, Adc1Input, AfeGain, Dac0Output, Dac1Output, DigitalInput0,
-    DigitalInput1, InputPin, SystemTimer, AFE0, AFE1,
+    Adc0Input, Adc1Input, AdcSample, AfeGain, Dac0Output, Dac1Output, DacCode,
+    DigitalInput0, DigitalInput1, InputPin, SystemTimer, AFE0, AFE1,
 };
 
 use net::{NetworkUsers, Telemetry, TelemetryBuffer, UpdateState};
@@ -154,15 +154,16 @@ const APP: () = {
                 // The truncation introduces 1/2 LSB distortion.
                 let y = unsafe { y.to_int_unchecked::<i16>() };
                 // Convert to DAC code
-                dac_samples[channel][sample] = y as u16 ^ 0x8000;
+                dac_samples[channel][sample] = DacCode::from(y).0;
             }
         }
 
         // Update telemetry measurements.
         c.resources.telemetry.adcs =
-            [adc_samples[0][0] as i16, adc_samples[1][0] as i16];
+            [AdcSample(adc_samples[0][0]), AdcSample(adc_samples[1][0])];
 
-        c.resources.telemetry.dacs = [dac_samples[0][0], dac_samples[1][0]];
+        c.resources.telemetry.dacs =
+            [DacCode(dac_samples[0][0]), DacCode(dac_samples[1][0])];
 
         c.resources.telemetry.digital_inputs = digital_inputs;
     }

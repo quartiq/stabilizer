@@ -12,9 +12,9 @@ use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
 use stabilizer::net;
 
 use stabilizer::hardware::{
-    design_parameters, setup, Adc0Input, Adc1Input, AfeGain, Dac0Output,
-    Dac1Output, DigitalInput0, DigitalInput1, InputStamper, SystemTimer, AFE0,
-    AFE1,
+    design_parameters, setup, Adc0Input, Adc1Input, AdcSample, AfeGain,
+    Dac0Output, Dac1Output, DacCode, DigitalInput0, DigitalInput1,
+    InputStamper, SystemTimer, AFE0, AFE1,
 };
 
 use miniconf::Miniconf;
@@ -234,15 +234,16 @@ const APP: () = {
                     Conf::Modulation => DAC_SEQUENCE[i] as i32,
                 };
 
-                *sample = value as u16 ^ 0x8000;
+                *sample = DacCode::from(value as i16).0;
             }
         }
 
         // Update telemetry measurements.
         c.resources.telemetry.adcs =
-            [adc_samples[0][0] as i16, adc_samples[1][0] as i16];
+            [AdcSample(adc_samples[0][0]), AdcSample(adc_samples[1][0])];
 
-        c.resources.telemetry.dacs = [dac_samples[0][0], dac_samples[1][0]];
+        c.resources.telemetry.dacs =
+            [DacCode(dac_samples[0][0]), DacCode(dac_samples[1][0])];
     }
 
     #[idle(resources=[network], spawn=[settings_update])]
