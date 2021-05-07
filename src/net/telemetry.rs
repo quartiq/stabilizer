@@ -16,7 +16,7 @@ use serde::Serialize;
 
 use super::NetworkReference;
 use crate::hardware::{
-    design_parameters::MQTT_BROKER, AdcSample, AfeGain, DacCode,
+    design_parameters::MQTT_BROKER, AdcCode, AfeGain, DacCode,
 };
 
 /// The telemetry client for reporting telemetry data over MQTT.
@@ -35,7 +35,7 @@ pub struct TelemetryClient<T: Serialize> {
 #[derive(Copy, Clone)]
 pub struct TelemetryBuffer {
     /// The latest input sample on ADC0/ADC1.
-    pub adcs: [AdcSample; 2],
+    pub adcs: [AdcCode; 2],
     /// The latest output code on DAC0/DAC1.
     pub dacs: [DacCode; 2],
     /// The latest digital input states during processing.
@@ -57,7 +57,7 @@ pub struct Telemetry {
 impl Default for TelemetryBuffer {
     fn default() -> Self {
         Self {
-            adcs: [AdcSample(0), AdcSample(0)],
+            adcs: [AdcCode(0), AdcCode(0)],
             dacs: [DacCode(0), DacCode(0)],
             digital_inputs: [false, false],
         }

@@ -12,7 +12,7 @@ use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
 use stabilizer::net;
 
 use stabilizer::hardware::{
-    design_parameters, setup, Adc0Input, Adc1Input, AdcSample, AfeGain,
+    design_parameters, setup, Adc0Input, Adc1Input, AdcCode, AfeGain,
     Dac0Output, Dac1Output, DacCode, DigitalInput0, DigitalInput1,
     InputStamper, SystemTimer, AFE0, AFE1,
 };
@@ -240,7 +240,7 @@ const APP: () = {
 
         // Update telemetry measurements.
         c.resources.telemetry.adcs =
-            [AdcSample(adc_samples[0][0]), AdcSample(adc_samples[1][0])];
+            [AdcCode(adc_samples[0][0]), AdcCode(adc_samples[1][0])];
 
         c.resources.telemetry.dacs =
             [DacCode(dac_samples[0][0]), DacCode(dac_samples[1][0])];

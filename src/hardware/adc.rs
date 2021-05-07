@@ -86,9 +86,9 @@ use hal::dma::{
 
 /// A type representing an ADC sample.
 #[derive(Copy, Clone)]
-pub struct AdcSample(pub u16);
+pub struct AdcCode(pub u16);
 
-impl Into<f32> for AdcSample {
+impl Into<f32> for AdcCode {
     /// Convert raw ADC codes to/from voltage levels.
     ///
     /// # Note

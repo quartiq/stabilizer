@@ -19,7 +19,7 @@ pub mod pounder;
 mod system_timer;
 mod timers;
 
-pub use adc::{Adc0Input, Adc1Input, AdcSample};
+pub use adc::{Adc0Input, Adc1Input, AdcCode};
 pub use afe::Gain as AfeGain;
 pub use cycle_counter::CycleCounter;
 pub use dac::{Dac0Output, Dac1Output, DacCode};
