@@ -26,7 +26,9 @@ pub struct Settings {
     iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
     allow_hold: bool,
     force_hold: bool,
-    telemetry_period_secs: u16,
+
+    // The telemetry period in seconds.
+    telemetry_period: u16,
 }
 
 impl Default for Settings {
@@ -44,7 +46,7 @@ impl Default for Settings {
             allow_hold: false,
             // Force suppress filter output updates.
             force_hold: false,
-            telemetry_period_secs: 10,
+            telemetry_period: 10,
         }
     }
 }
@@ -130,9 +132,13 @@ const APP: () = {
             c.resources.dacs.1.acquire_buffer(),
         ];
 
+        let digital_inputs = [
+            c.resources.digital_inputs.0.is_high().unwrap(),
+            c.resources.digital_inputs.1.is_high().unwrap(),
+        ];
+
         let hold = c.resources.settings.force_hold
-            || (c.resources.digital_inputs.1.is_high().unwrap()
-                && c.resources.settings.allow_hold);
+            || (digital_inputs[1] && c.resources.settings.allow_hold);
 
         for channel in 0..adc_samples.len() {
             for sample in 0..adc_samples[0].len() {
@@ -153,16 +159,12 @@ const APP: () = {
         }
 
         // Update telemetry measurements.
-        c.resources.telemetry.latest_samples =
+        c.resources.telemetry.adcs =
             [adc_samples[0][0] as i16, adc_samples[1][0] as i16];
 
-        c.resources.telemetry.latest_outputs =
-            [dac_samples[0][0], dac_samples[1][0]];
+        c.resources.telemetry.dacs = [dac_samples[0][0], dac_samples[1][0]];
 
-        c.resources.telemetry.digital_inputs = [
-            c.resources.digital_inputs.0.is_high().unwrap(),
-            c.resources.digital_inputs.1.is_high().unwrap(),
-        ];
+        c.resources.telemetry.digital_inputs = digital_inputs;
     }
 
     #[idle(resources=[network], spawn=[settings_update])]
@@ -202,7 +204,7 @@ const APP: () = {
         let telemetry_period = c
             .resources
             .settings
-            .lock(|settings| settings.telemetry_period_secs);
+            .lock(|settings| settings.telemetry_period);
 
         // Schedule the telemetry task in the future.
         c.schedule

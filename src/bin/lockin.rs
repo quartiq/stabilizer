@@ -56,7 +56,9 @@ pub struct Settings {
     lockin_phase: i32,
 
     output_conf: [Conf; 2],
-    telemetry_period_secs: u16,
+
+    // The telemetry period in seconds.
+    telemetry_period: u16,
 }
 
 impl Default for Settings {
@@ -73,7 +75,7 @@ impl Default for Settings {
             lockin_phase: 0,     // Demodulation LO phase offset
 
             output_conf: [Conf::InPhase, Conf::Quadrature],
-            telemetry_period_secs: 10,
+            telemetry_period: 10,
         }
     }
 }
@@ -237,11 +239,10 @@ const APP: () = {
         }
 
         // Update telemetry measurements.
-        c.resources.telemetry.latest_samples =
+        c.resources.telemetry.adcs =
             [adc_samples[0][0] as i16, adc_samples[1][0] as i16];
 
-        c.resources.telemetry.latest_outputs =
-            [dac_samples[0][0], dac_samples[1][0]];
+        c.resources.telemetry.dacs = [dac_samples[0][0], dac_samples[1][0]];
     }
 
     #[idle(resources=[network], spawn=[settings_update])]
@@ -285,7 +286,7 @@ const APP: () = {
         let telemetry_period = c
             .resources
             .settings
-            .lock(|settings| settings.telemetry_period_secs);
+            .lock(|settings| settings.telemetry_period);
 
         // Schedule the telemetry task in the future.
         c.schedule

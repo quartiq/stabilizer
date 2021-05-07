@@ -69,12 +69,12 @@ impl rtic::Monotonic for SystemTimer {
         // is taken when reading and modifying register values.
         let regs = unsafe { &*hal::device::TIM15::ptr() };
 
-        loop {
-            // Checking for overflows of the current counter must be performed atomically. Any
-            // other task that is accessing the current time could potentially race for the
-            // registers. Note that this is only required for writing to global state (e.g. timer
-            // registers and overflow counter)
-            if let Some(time) = cortex_m::interrupt::free(|_cs| {
+        cortex_m::interrupt::free(|_cs| {
+            loop {
+                // Checking for overflows of the current counter must be performed atomically. Any
+                // other task that is accessing the current time could potentially race for the
+                // registers. Note that this is only required for writing to global state (e.g. timer
+                // registers and overflow counter)
                 // Check for overflows and clear the overflow bit atomically. This must be done in
                 // a critical section to prevent race conditions on the status register.
                 if regs.sr.read().uif().bit_is_set() {
@@ -91,14 +91,12 @@ impl rtic::Monotonic for SystemTimer {
                 if regs.sr.read().uif().bit_is_clear() {
                     // Note(unsafe): We are in a critical section, so it is safe to read the
                     // global variable.
-                    unsafe { Some((OVERFLOWS * 65535 + current_value) as i32) }
-                } else {
-                    None
+                    return unsafe {
+                        ((OVERFLOWS << 16) + current_value) as i32
+                    };
                 }
-            }) {
-                return time;
             }
-        }
+        })
     }
 
     /// Reset the timer count.
