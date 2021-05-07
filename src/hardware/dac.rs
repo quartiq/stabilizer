@@ -80,13 +80,14 @@ impl Into<f32> for DacCode {
         // signal then passes through a 2.5x gain stage. Note that the DAC operates using unsigned
         // integers, and u16::MAX / 2 is considered zero voltage output. Thus, the dynamic range of
         // the output stage is +/- 10.24 V. At a DAC code of zero, there is an output of -10.24 V,
-        // and at a max DAC code, there is an output of 10.24 V.
-        //
-        // Note: The MAX code corresponding to +VREF is not programmable, as it is 1 bit larger
-        // than full-scale.
-        let dac_volts_per_lsb = 10.24 * 2.0 / (u16::MAX as u32 + 1) as f32;
+        // and at a max DAC code, there is an output of (slightly less than) 10.24 V.
 
-        (self.0 as f32) * dac_volts_per_lsb - 10.24
+        let dac_volts_per_lsb = 10.24 * 2.0 / u16::MAX as f32;
+
+        // Note that the bipolar table is an offset-binary code, but it is much more logical and
+        // correct to treat it as a twos-complement value. TO do that, we XOR the most significant
+        // bit to convert it.
+        (self.0 ^ 0x8000) as i16 as f32 * dac_volts_per_lsb
     }
 }
 
