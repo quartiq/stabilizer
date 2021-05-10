@@ -1,12 +1,11 @@
 use super::{Complex, ComplexExt, Lowpass, MulScaled};
-use generic_array::ArrayLength;
 
 #[derive(Clone, Default)]
-pub struct Lockin<N: ArrayLength<i32>> {
+pub struct Lockin<const N: usize> {
     state: [Lowpass<N>; 2],
 }
 
-impl<N: ArrayLength<i32>> Lockin<N> {
+impl<const N: usize> Lockin<N> {
     /// Update the lockin with a sample taken at a given phase.
     pub fn update(&mut self, sample: i32, phase: i32, k: u8) -> Complex<i32> {
         // Get the LO signal for demodulation and mix the sample;

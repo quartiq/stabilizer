@@ -3,7 +3,6 @@
 #![no_main]
 
 use embedded_hal::digital::v2::InputPin;
-use generic_array::typenum::U4;
 
 use serde::Deserialize;
 
@@ -92,7 +91,7 @@ const APP: () = {
 
         timestamper: InputStamper,
         pll: RPLL,
-        lockin: Lockin<U4>,
+        lockin: Lockin<4>,
     }
 
     #[init(spawn=[settings_update, telemetry])]
