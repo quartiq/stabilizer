@@ -80,14 +80,14 @@ impl Into<f32> for DacCode {
         // V with 16-bit resolution. The anti-aliasing filter has an additional gain of 2.5.
         let dac_volts_per_lsb = 4.096 * 2.5 / (1u16 << 15) as f32;
 
-        (self.0 ^ 0x8000) as i16 as f32 * dac_volts_per_lsb
+        (self.0 as i16).wrapping_add(i16::MIN) as f32 * dac_volts_per_lsb
     }
 }
 
 impl From<i16> for DacCode {
     /// Encode signed 16-bit values into DAC offset binary for a bipolar output configuration.
     fn from(value: i16) -> Self {
-        Self(value as u16 ^ 0x8000)
+        Self(value.wrapping_add(i16::MIN) as u16)
     }
 }
 
