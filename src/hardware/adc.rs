@@ -84,6 +84,24 @@ use hal::dma::{
     MemoryToPeripheral, PeripheralToMemory, Transfer,
 };
 
+/// A type representing an ADC sample.
+#[derive(Copy, Clone)]
+pub struct AdcCode(pub u16);
+
+impl Into<f32> for AdcCode {
+    /// Convert raw ADC codes to/from voltage levels.
+    ///
+    /// # Note
+    /// This does not account for the programmable gain amplifier at the signal input.
+    fn into(self) -> f32 {
+        // The ADC has a differential input with a range of +/- 4.096 V and 16-bit resolution.
+        // The gain into the two inputs is 1/5.
+        let adc_volts_per_lsb = 5.0 / 2.0 * 4.096 / (1u16 << 15) as f32;
+
+        (self.0 as i16) as f32 * adc_volts_per_lsb
+    }
+}
+
 // The following data is written by the timer ADC sample trigger into the SPI CR1 to start the
 // transfer. Data in AXI SRAM is not initialized on boot, so the contents are random. This value is
 // initialized during setup.

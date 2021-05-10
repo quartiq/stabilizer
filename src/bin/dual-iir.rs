@@ -9,11 +9,11 @@ use serde::Deserialize;
 
 use dsp::iir;
 use hardware::{
-    Adc0Input, Adc1Input, AfeGain, Dac0Output, Dac1Output, DigitalInput1,
-    InputPin, AFE0, AFE1,
+    Adc0Input, Adc1Input, AdcCode, AfeGain, Dac0Output, Dac1Output, DacCode,
+    DigitalInput0, DigitalInput1, InputPin, SystemTimer, AFE0, AFE1,
 };
 
-use net::{Action, MqttInterface};
+use net::{NetworkUsers, Telemetry, TelemetryBuffer, UpdateState};
 
 const SCALE: f32 = i16::MAX as _;
 
@@ -26,6 +26,7 @@ pub struct Settings {
     iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
     allow_hold: bool,
     force_hold: bool,
+    telemetry_period: u16,
 }
 
 impl Default for Settings {
@@ -43,42 +44,44 @@ impl Default for Settings {
             allow_hold: false,
             // Force suppress filter output updates.
             force_hold: false,
+            // The default telemetry period in seconds.
+            telemetry_period: 10,
         }
     }
 }
 
-#[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
+#[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = stabilizer::hardware::SystemTimer)]
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
-        digital_input1: DigitalInput1,
+        digital_inputs: (DigitalInput0, DigitalInput1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        mqtt: MqttInterface<Settings>,
+        network: NetworkUsers<Settings, Telemetry>,
+
+        settings: Settings,
+        telemetry: TelemetryBuffer,
 
         #[init([[[0.; 5]; IIR_CASCADE_LENGTH]; 2])]
         iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
-        settings: Settings,
     }
 
-    #[init(spawn=[settings_update])]
+    #[init(spawn=[telemetry, settings_update])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let mqtt = MqttInterface::new(
+        let network = NetworkUsers::new(
             stabilizer.net.stack,
-            "",
-            &net::get_device_prefix(
-                env!("CARGO_BIN_NAME"),
-                stabilizer.net.mac_address,
-            ),
             stabilizer.net.phy,
             stabilizer.cycle_counter,
+            env!("CARGO_BIN_NAME"),
+            stabilizer.net.mac_address,
         );
 
         // Spawn a settings update for default settings.
         c.spawn.settings_update().unwrap();
+        c.spawn.telemetry().unwrap();
 
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();
@@ -93,8 +96,9 @@ const APP: () = {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            mqtt,
-            digital_input1: stabilizer.digital_inputs.1,
+            network,
+            digital_inputs: stabilizer.digital_inputs,
+            telemetry: net::TelemetryBuffer::default(),
             settings: Settings::default(),
         }
     }
@@ -115,7 +119,7 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adcs, digital_input1, dacs, iir_state, settings], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, digital_inputs, dacs, iir_state, settings, telemetry], priority=2)]
     #[inline(never)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
@@ -129,9 +133,13 @@ const APP: () = {
             c.resources.dacs.1.acquire_buffer(),
         ];
 
+        let digital_inputs = [
+            c.resources.digital_inputs.0.is_high().unwrap(),
+            c.resources.digital_inputs.1.is_high().unwrap(),
+        ];
+
         let hold = c.resources.settings.force_hold
-            || (c.resources.digital_input1.is_high().unwrap()
-                && c.resources.settings.allow_hold);
+            || (digital_inputs[1] && c.resources.settings.allow_hold);
 
         for channel in 0..adc_samples.len() {
             for sample in 0..adc_samples[0].len() {
@@ -147,34 +155,63 @@ const APP: () = {
                 // The truncation introduces 1/2 LSB distortion.
                 let y = unsafe { y.to_int_unchecked::<i16>() };
                 // Convert to DAC code
-                dac_samples[channel][sample] = y as u16 ^ 0x8000;
+                dac_samples[channel][sample] = DacCode::from(y).0;
             }
         }
+
+        // Update telemetry measurements.
+        c.resources.telemetry.adcs =
+            [AdcCode(adc_samples[0][0]), AdcCode(adc_samples[1][0])];
+
+        c.resources.telemetry.dacs =
+            [DacCode(dac_samples[0][0]), DacCode(dac_samples[1][0])];
+
+        c.resources.telemetry.digital_inputs = digital_inputs;
     }
 
-    #[idle(resources=[mqtt], spawn=[settings_update])]
+    #[idle(resources=[network], spawn=[settings_update])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
-            match c.resources.mqtt.lock(|mqtt| mqtt.update()) {
-                Some(Action::Sleep) => cortex_m::asm::wfi(),
-                Some(Action::UpdateSettings) => {
-                    c.spawn.settings_update().unwrap()
-                }
-                _ => {}
+            match c.resources.network.lock(|net| net.update()) {
+                UpdateState::Updated => c.spawn.settings_update().unwrap(),
+                UpdateState::NoChange => cortex_m::asm::wfi(),
             }
         }
     }
 
-    #[task(priority = 1, resources=[mqtt, afes, settings])]
+    #[task(priority = 1, resources=[network, afes, settings])]
     fn settings_update(mut c: settings_update::Context) {
-        let settings = c.resources.mqtt.settings();
-
         // Update the IIR channels.
+        let settings = c.resources.network.miniconf.settings();
         c.resources.settings.lock(|current| *current = *settings);
 
         // Update AFEs
         c.resources.afes.0.set_gain(settings.afe[0]);
         c.resources.afes.1.set_gain(settings.afe[1]);
+    }
+
+    #[task(priority = 1, resources=[network, settings, telemetry], schedule=[telemetry])]
+    fn telemetry(mut c: telemetry::Context) {
+        let telemetry: TelemetryBuffer =
+            c.resources.telemetry.lock(|telemetry| *telemetry);
+
+        let (gains, telemetry_period) = c
+            .resources
+            .settings
+            .lock(|settings| (settings.afe, settings.telemetry_period));
+
+        c.resources
+            .network
+            .telemetry
+            .publish(&telemetry.finalize(gains[0], gains[1]));
+
+        // Schedule the telemetry task in the future.
+        c.schedule
+            .telemetry(
+                c.scheduled
+                    + SystemTimer::ticks_from_secs(telemetry_period as u32),
+            )
+            .unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]

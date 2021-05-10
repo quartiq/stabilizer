@@ -1,27 +1,33 @@
-use crate::hardware::{
-    design_parameters::MQTT_BROKER, CycleCounter, EthernetPhy, NetworkStack,
-};
-
+///! Stabilizer Run-time Settings Client
+///!
+///! # Design
+///! Stabilizer allows for settings to be configured at run-time via MQTT using miniconf.
+///! Settings are written in serialized JSON form to the settings path associated with the setting.
+///!
+///! # Limitations
+///! The MQTT client logs failures to subscribe to the settings topic, but does not re-attempt to
+///connect to it when errors occur.
+///!
+///! Respones to settings updates are sent without quality-of-service guarantees, so there's no
+///! guarantee that the requestee will be informed that settings have been applied.
 use heapless::{consts, String};
 
-use super::{Action, MqttMessage, SettingsResponse};
+use super::{MqttMessage, NetworkReference, SettingsResponse, UpdateState};
+use crate::hardware::design_parameters::MQTT_BROKER;
 
 /// MQTT settings interface.
-pub struct MqttInterface<S>
+pub struct MiniconfClient<S>
 where
     S: miniconf::Miniconf + Default + Clone,
 {
     default_response_topic: String<consts::U128>,
-    mqtt: minimq::MqttClient<minimq::consts::U256, NetworkStack>,
+    mqtt: minimq::MqttClient<minimq::consts::U256, NetworkReference>,
     settings: S,
-    clock: CycleCounter,
-    phy: EthernetPhy,
-    network_was_reset: bool,
     subscribed: bool,
     settings_prefix: String<consts::U64>,
 }
 
-impl<S> MqttInterface<S>
+impl<S> MiniconfClient<S>
 where
     S: miniconf::Miniconf + Default + Clone,
 {
@@ -31,15 +37,7 @@ where
     /// * `stack` - The network stack to use for communication.
     /// * `client_id` - The ID of the MQTT client. May be an empty string for auto-assigning.
     /// * `prefix` - The MQTT device prefix to use for this device.
-    /// * `phy` - The PHY driver for querying the link state.
-    /// * `clock` - The clock to utilize for querying the current system time.
-    pub fn new(
-        stack: NetworkStack,
-        client_id: &str,
-        prefix: &str,
-        phy: EthernetPhy,
-        clock: CycleCounter,
-    ) -> Self {
+    pub fn new(stack: NetworkReference, client_id: &str, prefix: &str) -> Self {
         let mqtt =
             minimq::MqttClient::new(MQTT_BROKER.into(), client_id, stack)
                 .unwrap();
@@ -54,10 +52,7 @@ where
             mqtt,
             settings: S::default(),
             settings_prefix,
-            clock,
-            phy,
             default_response_topic: response_topic,
-            network_was_reset: false,
             subscribed: false,
         }
     }
@@ -66,31 +61,7 @@ where
     ///
     /// # Returns
     /// An option containing an action that should be completed as a result of network servicing.
-    pub fn update(&mut self) -> Option<Action> {
-        // First, service the network stack to process any inbound and outbound traffic.
-        let sleep = match self.mqtt.network_stack.poll(self.clock.current_ms())
-        {
-            Ok(updated) => !updated,
-            Err(err) => {
-                log::info!("Network error: {:?}", err);
-                false
-            }
-        };
-
-        // If the PHY indicates there's no more ethernet link, reset the DHCP server in the network
-        // stack.
-        match self.phy.poll_link() {
-            true => self.network_was_reset = false,
-
-            // Only reset the network stack once per link reconnection. This prevents us from
-            // sending an excessive number of DHCP requests.
-            false if !self.network_was_reset => {
-                self.network_was_reset = true;
-                self.mqtt.network_stack.handle_link_reset();
-            }
-            _ => {}
-        };
-
+    pub fn update(&mut self) -> UpdateState {
         let mqtt_connected = match self.mqtt.is_connected() {
             Ok(connected) => connected,
             Err(minimq::Error::Network(
@@ -167,30 +138,24 @@ where
                 .ok();
         }) {
             // If settings updated,
-            Ok(_) => {
-                if update {
-                    Some(Action::UpdateSettings)
-                } else if sleep {
-                    Some(Action::Sleep)
-                } else {
-                    None
-                }
-            }
-            Err(minimq::Error::Disconnected) => {
+            Ok(_) if update => UpdateState::Updated,
+            Ok(_) => UpdateState::NoChange,
+            Err(minimq::Error::SessionReset) => {
                 self.subscribed = false;
-                None
+                UpdateState::NoChange
             }
             Err(minimq::Error::Network(
                 smoltcp_nal::NetworkError::NoIpAddress,
-            )) => None,
+            )) => UpdateState::NoChange,
 
             Err(error) => {
                 log::info!("Unexpected error: {:?}", error);
-                None
+                UpdateState::NoChange
             }
         }
     }
 
+    /// Get the current settings from miniconf.
     pub fn settings(&self) -> &S {
         &self.settings
     }

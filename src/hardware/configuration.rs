@@ -7,30 +7,50 @@ use stm32h7xx_hal::{
     prelude::*,
 };
 
+const NUM_SOCKETS: usize = 4;
+
+use heapless::{consts, Vec};
 use smoltcp_nal::smoltcp;
 
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use super::{
     adc, afe, cycle_counter::CycleCounter, dac, design_parameters,
-    digital_input_stamper, eeprom, pounder, timers, DdsOutput, DigitalInput0,
-    DigitalInput1, EthernetPhy, NetworkStack, AFE0, AFE1,
+    digital_input_stamper, eeprom, pounder, system_timer, timers, DdsOutput,
+    DigitalInput0, DigitalInput1, EthernetPhy, NetworkStack, AFE0, AFE1,
 };
 
 pub struct NetStorage {
     pub ip_addrs: [smoltcp::wire::IpCidr; 1],
-    pub sockets: [Option<smoltcp::socket::SocketSetItem<'static>>; 2],
+
+    // Note: There is an additional socket set item required for the DHCP socket.
+    pub sockets:
+        [Option<smoltcp::socket::SocketSetItem<'static>>; NUM_SOCKETS + 1],
+    pub socket_storage: [SocketStorage; NUM_SOCKETS],
     pub neighbor_cache:
         [Option<(smoltcp::wire::IpAddress, smoltcp::iface::Neighbor)>; 8],
     pub routes_cache:
         [Option<(smoltcp::wire::IpCidr, smoltcp::iface::Route)>; 8],
-    pub tx_storage: [u8; 4096],
-    pub rx_storage: [u8; 4096],
 
     pub dhcp_rx_metadata: [smoltcp::socket::RawPacketMetadata; 1],
     pub dhcp_tx_metadata: [smoltcp::socket::RawPacketMetadata; 1],
     pub dhcp_tx_storage: [u8; 600],
     pub dhcp_rx_storage: [u8; 600],
+}
+
+#[derive(Copy, Clone)]
+pub struct SocketStorage {
+    rx_storage: [u8; 1024],
+    tx_storage: [u8; 1024],
+}
+
+impl SocketStorage {
+    const fn new() -> Self {
+        Self {
+            rx_storage: [0; 1024],
+            tx_storage: [0; 1024],
+        }
+    }
 }
 
 impl NetStorage {
@@ -42,9 +62,8 @@ impl NetStorage {
             )],
             neighbor_cache: [None; 8],
             routes_cache: [None; 8],
-            sockets: [None, None],
-            tx_storage: [0; 4096],
-            rx_storage: [0; 4096],
+            sockets: [None, None, None, None, None],
+            socket_storage: [SocketStorage::new(); NUM_SOCKETS],
             dhcp_tx_storage: [0; 600],
             dhcp_rx_storage: [0; 600],
             dhcp_rx_metadata: [smoltcp::socket::RawPacketMetadata::EMPTY; 1],
@@ -98,7 +117,7 @@ static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 /// `Some(devices)` if pounder is detected, where `devices` is a `PounderDevices` structure
 /// containing all of the pounder hardware interfaces in a disabled state.
 pub fn setup(
-    mut core: rtic::export::Peripherals,
+    mut core: rtic::Peripherals,
     device: stm32h7xx_hal::stm32::Peripherals,
 ) -> (StabilizerDevices, Option<PounderDevices>) {
     let pwr = device.PWR.constrain();
@@ -141,7 +160,18 @@ pub fn setup(
         init_log(logger).unwrap();
     }
 
-    let mut delay = hal::delay::Delay::new(core.SYST, ccdr.clocks);
+    // Set up the system timer for RTIC scheduling.
+    {
+        let tim15 =
+            device
+                .TIM15
+                .timer(10.khz(), ccdr.peripheral.TIM15, &ccdr.clocks);
+        system_timer::SystemTimer::initialize(tim15);
+    }
+
+    let mut delay = asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(
+        ccdr.clocks.c_ck().0,
+    ));
 
     let gpioa = device.GPIOA.split(ccdr.peripheral.GPIOA);
     let gpiob = device.GPIOB.split(ccdr.peripheral.GPIOB);
@@ -562,19 +592,25 @@ pub fn setup(
             let mut sockets =
                 smoltcp::socket::SocketSet::new(&mut store.sockets[..]);
 
-            let tcp_socket = {
-                let rx_buffer = smoltcp::socket::TcpSocketBuffer::new(
-                    &mut store.rx_storage[..],
-                );
-                let tx_buffer = smoltcp::socket::TcpSocketBuffer::new(
-                    &mut store.tx_storage[..],
-                );
+            let mut handles: Vec<smoltcp::socket::SocketHandle, consts::U64> =
+                Vec::new();
+            for storage in store.socket_storage.iter_mut() {
+                let tcp_socket = {
+                    let rx_buffer = smoltcp::socket::TcpSocketBuffer::new(
+                        &mut storage.rx_storage[..],
+                    );
+                    let tx_buffer = smoltcp::socket::TcpSocketBuffer::new(
+                        &mut storage.tx_storage[..],
+                    );
 
-                smoltcp::socket::TcpSocket::new(rx_buffer, tx_buffer)
-            };
+                    smoltcp::socket::TcpSocket::new(rx_buffer, tx_buffer)
+                };
+                let handle = sockets.add(tcp_socket);
 
-            let handle = sockets.add(tcp_socket);
-            (sockets, [handle])
+                handles.push(handle).unwrap();
+            }
+
+            (sockets, handles)
         };
 
         let dhcp_client = {

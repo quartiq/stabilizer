@@ -429,7 +429,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.2.0"
-source = "git+https://github.com/quartiq/minimq.git?rev=b3f364d#b3f364d55dea35da6572f78ddb91c87bfbb453bf"
+source = "git+https://github.com/quartiq/minimq.git?rev=d2ec3e8#d2ec3e8351fa403ea96defd98c0b4410cbaa18a4"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -706,6 +706,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared-bus"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78b60428415b23ed3f0e3abc776e10e548cf2cbb4288e73d5d181a02b5a90b95"
+dependencies = [
+ "cortex-m 0.6.7",
+ "embedded-hal",
+]
+
+[[package]]
 name = "smoltcp"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -719,7 +729,7 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/smoltcp-nal.git?rev=8468f11#8468f11abacd7aba82454e6904df19c1d1ab91bb"
+source = "git+https://github.com/quartiq/smoltcp-nal.git?rev=4a1711c#4a1711c54cdf79f5ee8c1c99a1e8984f5944270c"
 dependencies = [
  "embedded-nal",
  "heapless 0.6.1",
@@ -751,6 +761,8 @@ dependencies = [
  "panic-semihosting",
  "paste",
  "serde",
+ "serde-json-core",
+ "shared-bus",
  "smoltcp-nal",
  "stm32h7xx-hal",
 ]
