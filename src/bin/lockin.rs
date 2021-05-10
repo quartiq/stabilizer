@@ -16,18 +16,36 @@ use stabilizer::hardware::{
 };
 
 use miniconf::Miniconf;
-use stabilizer::net::{Action, MiniconfInterface};
+use stabilizer::net::{Action, MqttInterface};
+
+// A constant sinusoid to send on the DAC output.
+// Full-scale gives a +/- 10.24V amplitude waveform. Scale it down to give +/- 1V.
+const ONE: i16 = ((1.0 / 10.24) * i16::MAX as f32) as _;
+const SQRT2: i16 = (ONE as f32 * 0.707) as _;
+const DAC_SEQUENCE: [i16; design_parameters::SAMPLE_BUFFER_SIZE] =
+    [ONE, SQRT2, 0, -SQRT2, -ONE, -SQRT2, 0, SQRT2];
 
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 enum Conf {
-    PowerPhase,
-    FrequencyDiscriminator,
+    Magnitude,
+    Phase,
+    ReferenceFrequency,
+    LogPower,
+    InPhase,
     Quadrature,
+    Modulation,
+}
+
+#[derive(Copy, Clone, Debug, Miniconf, Deserialize, PartialEq)]
+enum LockinMode {
+    Internal,
+    External,
 }
 
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 pub struct Settings {
     afe: [AfeGain; 2],
+    lockin_mode: LockinMode,
 
     pll_tc: [u8; 2],
 
@@ -43,13 +61,15 @@ impl Default for Settings {
         Self {
             afe: [AfeGain::G1; 2],
 
+            lockin_mode: LockinMode::External,
+
             pll_tc: [21, 21], // frequency and phase settling time (log2 counter cycles)
 
             lockin_tc: 6,        // lockin lowpass time constant
             lockin_harmonic: -1, // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
             lockin_phase: 0,     // Demodulation LO phase offset
 
-            output_conf: [Conf::Quadrature; 2],
+            output_conf: [Conf::InPhase, Conf::Quadrature],
         }
     }
 }
@@ -60,7 +80,7 @@ const APP: () = {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        mqtt_config: MiniconfInterface<Settings>,
+        mqtt: MqttInterface<Settings>,
         settings: Settings,
 
         timestamper: InputStamper,
@@ -73,7 +93,7 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = setup(c.core, c.device);
 
-        let mqtt_config = MiniconfInterface::new(
+        let mqtt = MqttInterface::new(
             stabilizer.net.stack,
             "",
             &net::get_device_prefix(
@@ -113,7 +133,7 @@ const APP: () = {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            mqtt_config,
+            mqtt,
             timestamper: stabilizer.timestamper,
 
             settings,
@@ -137,7 +157,7 @@ const APP: () = {
             c.resources.adcs.1.acquire_buffer(),
         ];
 
-        let dac_samples = [
+        let mut dac_samples = [
             c.resources.dacs.0.acquire_buffer(),
             c.resources.dacs.1.acquire_buffer(),
         ];
@@ -145,21 +165,37 @@ const APP: () = {
         let lockin = c.resources.lockin;
         let settings = c.resources.settings;
 
-        let timestamp =
-            c.resources.timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
-        let (pll_phase, pll_frequency) = c.resources.pll.update(
-            timestamp.map(|t| t as i32),
-            settings.pll_tc[0],
-            settings.pll_tc[1],
-        );
+        let (reference_phase, reference_frequency) = match settings.lockin_mode
+        {
+            LockinMode::External => {
+                let timestamp =
+                    c.resources.timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
+                let (pll_phase, pll_frequency) = c.resources.pll.update(
+                    timestamp.map(|t| t as i32),
+                    settings.pll_tc[0],
+                    settings.pll_tc[1],
+                );
+                (
+                    pll_phase,
+                    (pll_frequency
+                        >> design_parameters::SAMPLE_BUFFER_SIZE_LOG2)
+                        as i32,
+                )
+            }
+            LockinMode::Internal => {
+                // Reference phase and frequency are known.
+                (
+                    1i32 << 30,
+                    1i32 << (32 - design_parameters::SAMPLE_BUFFER_SIZE_LOG2),
+                )
+            }
+        };
 
-        let sample_frequency = ((pll_frequency
-            >> design_parameters::SAMPLE_BUFFER_SIZE_LOG2)
-            as i32)
-            .wrapping_mul(settings.lockin_harmonic);
-        let sample_phase = settings
-            .lockin_phase
-            .wrapping_add(pll_phase.wrapping_mul(settings.lockin_harmonic));
+        let sample_frequency =
+            reference_frequency.wrapping_mul(settings.lockin_harmonic);
+        let sample_phase = settings.lockin_phase.wrapping_add(
+            reference_phase.wrapping_mul(settings.lockin_harmonic),
+        );
 
         let output: Complex<i32> = adc_samples[0]
             .iter()
@@ -175,34 +211,30 @@ const APP: () = {
             .unwrap()
             * 2; // Full scale assuming the 2f component is gone.
 
-        let output = [
-            match settings.output_conf[0] {
-                Conf::PowerPhase => output.abs_sqr() as _,
-                Conf::FrequencyDiscriminator => (output.log2() << 24) as _,
-                Conf::Quadrature => output.re,
-            },
-            match settings.output_conf[1] {
-                Conf::PowerPhase => output.arg(),
-                Conf::FrequencyDiscriminator => pll_frequency as _,
-                Conf::Quadrature => output.im,
-            },
-        ];
-
         // Convert to DAC data.
-        for i in 0..dac_samples[0].len() {
-            dac_samples[0][i] = (output[0] >> 16) as u16 ^ 0x8000;
-            dac_samples[1][i] = (output[1] >> 16) as u16 ^ 0x8000;
+        for (channel, samples) in dac_samples.iter_mut().enumerate() {
+            for (i, sample) in samples.iter_mut().enumerate() {
+                let value = match settings.output_conf[channel] {
+                    Conf::Magnitude => output.abs_sqr() as i32 >> 16,
+                    Conf::Phase => output.arg() >> 16,
+                    Conf::LogPower => (output.log2() << 24) as i32 >> 16,
+                    Conf::ReferenceFrequency => {
+                        reference_frequency as i32 >> 16
+                    }
+                    Conf::InPhase => output.re >> 16,
+                    Conf::Quadrature => output.im >> 16,
+                    Conf::Modulation => DAC_SEQUENCE[i] as i32,
+                };
+
+                *sample = value as u16 ^ 0x8000;
+            }
         }
     }
 
-    #[idle(resources=[mqtt_config], spawn=[settings_update])]
+    #[idle(resources=[mqtt], spawn=[settings_update])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
-            match c
-                .resources
-                .mqtt_config
-                .lock(|config_interface| config_interface.update())
-            {
+            match c.resources.mqtt.lock(|mqtt| mqtt.update()) {
                 Some(Action::Sleep) => cortex_m::asm::wfi(),
                 Some(Action::UpdateSettings) => {
                     c.spawn.settings_update().unwrap()
@@ -212,9 +244,9 @@ const APP: () = {
         }
     }
 
-    #[task(priority = 1, resources=[mqtt_config, settings, afes])]
+    #[task(priority = 1, resources=[mqtt, settings, afes])]
     fn settings_update(mut c: settings_update::Context) {
-        let settings = &c.resources.mqtt_config.mqtt.settings;
+        let settings = c.resources.mqtt.settings();
 
         c.resources.afes.0.set_gain(settings.afe[0]);
         c.resources.afes.1.set_gain(settings.afe[1]);

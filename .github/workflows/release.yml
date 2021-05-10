@@ -25,8 +25,7 @@ jobs:
       - run: >
           zip bin.zip
           target/*/release/dual-iir
-          target/*/release/lockin-external
-          target/*/release/lockin-internal
+          target/*/release/lockin
       - id: create_release
         uses: actions/create-release@v1
         env:

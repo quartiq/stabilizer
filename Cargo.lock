@@ -206,7 +206,7 @@ dependencies = [
 [[package]]
 name = "derive_miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?rev=314fa5587d#314fa5587d1aa28e1ad70106f19e30db646e9f28"
+source = "git+https://github.com/quartiq/miniconf.git?rev=c6f2b28#c6f2b28f735e27b337eaa986846536e904c6f2bd"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -419,11 +419,9 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?rev=314fa5587d#314fa5587d1aa28e1ad70106f19e30db646e9f28"
+source = "git+https://github.com/quartiq/miniconf.git?rev=c6f2b28#c6f2b28f735e27b337eaa986846536e904c6f2bd"
 dependencies = [
  "derive_miniconf",
- "heapless 0.6.1",
- "minimq",
  "serde",
  "serde-json-core",
 ]
@@ -431,7 +429,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.2.0"
-source = "git+https://github.com/quartiq/minimq.git?rev=933687c2e4b#933687c2e4bc8a4d972de9a4d1508b0b554a8b38"
+source = "git+https://github.com/quartiq/minimq.git?rev=b3f364d#b3f364d55dea35da6572f78ddb91c87bfbb453bf"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -656,6 +654,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ryu"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
+
+[[package]]
 name = "semver"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -681,10 +685,12 @@ dependencies = [
 
 [[package]]
 name = "serde-json-core"
-version = "0.2.0"
-source = "git+https://github.com/rust-embedded-community/serde-json-core.git?rev=ee06ac91bc#ee06ac91bc43b72450a92198a00d9e5c5b9946d2"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39af17f40c2a28d2c9a7918663ddc8a10f54cc6f109ead5c3f010869761df186"
 dependencies = [
- "heapless 0.5.6",
+ "heapless 0.6.1",
+ "ryu",
  "serde",
 ]
 
@@ -740,6 +746,7 @@ dependencies = [
  "log",
  "mcp23017",
  "miniconf",
+ "minimq",
  "nb 1.0.0",
  "panic-semihosting",
  "paste",

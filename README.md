@@ -29,9 +29,7 @@ to implement different use cases. Several applications are provides by default
 * anti-windup
 * derivative kick avoidance
 
-### Lockin external
-
-### Lockin internal
+### Lockin
 
 ## Minimal bootstrapping documentation
 
