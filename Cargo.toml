@@ -45,6 +45,8 @@ dsp = { path = "dsp" }
 ad9959 = { path = "ad9959" }
 generic-array = "0.14"
 miniconf = "0.1.0"
+shared-bus = {version = "0.2.2", features = ["cortex-m"] }
+serde-json-core = "0.3"
 
 [dependencies.mcp23017]
 git = "https://github.com/mrd0ll4r/mcp23017.git"
@@ -60,11 +62,11 @@ rev = "c6f2b28"
 
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
-rev = "8468f11"
+rev = "4a1711c"
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq.git"
-rev = "b3f364d"
+rev = "d2ec3e8"
 
 [features]
 semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
