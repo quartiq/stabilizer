@@ -82,7 +82,7 @@ impl Into<f32> for DacCode {
         // the output stage is +/- 10.24 V. At a DAC code of zero, there is an output of -10.24 V,
         // and at a max DAC code, there is an output of (slightly less than) 10.24 V.
 
-        let dac_volts_per_lsb = 10.24 * 2.0 / u16::MAX as f32;
+        let dac_volts_per_lsb = 4.096 * 2.5 / (1u16 << 15) as f32;
 
         // Note that the bipolar table is an offset-binary code, but it is much more logical and
         // correct to treat it as a twos-complement value. TO do that, we XOR the most significant
