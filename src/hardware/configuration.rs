@@ -22,6 +22,8 @@ use super::{
 
 pub struct NetStorage {
     pub ip_addrs: [smoltcp::wire::IpCidr; 1],
+
+    // Note: There is an additional socket set item required for the DHCP socket.
     pub sockets:
         [Option<smoltcp::socket::SocketSetItem<'static>>; NUM_SOCKETS + 1],
     pub socket_storage: [SocketStorage; NUM_SOCKETS],
@@ -38,15 +40,15 @@ pub struct NetStorage {
 
 #[derive(Copy, Clone)]
 pub struct SocketStorage {
-    rx_storage: [u8; 4096],
-    tx_storage: [u8; 4096],
+    rx_storage: [u8; 1024],
+    tx_storage: [u8; 1024],
 }
 
 impl SocketStorage {
     const fn new() -> Self {
         Self {
-            rx_storage: [0; 4096],
-            tx_storage: [0; 4096],
+            rx_storage: [0; 1024],
+            tx_storage: [0; 1024],
         }
     }
 }
@@ -167,8 +169,8 @@ pub fn setup(
         system_timer::SystemTimer::initialize(tim15);
     }
 
-    let mut delay = asm_delay::AsmDelay::new(asm_delay::bitrate::MegaHertz(
-        ccdr.clocks.c_ck().0 / 1_000_000,
+    let mut delay = asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(
+        ccdr.clocks.c_ck().0,
     ));
 
     let gpioa = device.GPIOA.split(ccdr.peripheral.GPIOA);

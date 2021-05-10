@@ -126,24 +126,8 @@ fn get_client_id(
     client: &str,
     mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
 ) -> String<consts::U64> {
-    let mac_string = {
-        let mut mac_string: String<consts::U32> = String::new();
-        let mac = mac.as_bytes();
-
-        // Note(unwrap): 32-bytes is guaranteed to be valid for any mac address, as the address has
-        // a fixed length.
-        write!(
-            &mut mac_string,
-            "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
-            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
-        )
-        .unwrap();
-
-        mac_string
-    };
-
     let mut identifier = String::new();
-    write!(&mut identifier, "{}-{}-{}", app, mac_string, client).unwrap();
+    write!(&mut identifier, "{}-{}-{}", app, mac, client).unwrap();
     identifier
 }
 
@@ -159,26 +143,10 @@ pub fn get_device_prefix(
     app: &str,
     mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
 ) -> String<consts::U128> {
-    let mac_string = {
-        let mut mac_string: String<consts::U32> = String::new();
-        let mac = mac.as_bytes();
-
-        // Note(unwrap): 32-bytes is guaranteed to be valid for any mac address, as the address has
-        // a fixed length.
-        write!(
-            &mut mac_string,
-            "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
-            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
-        )
-        .unwrap();
-
-        mac_string
-    };
-
     // Note(unwrap): The mac address + binary name must be short enough to fit into this string. If
     // they are defined too long, this will panic and the device will fail to boot.
     let mut prefix: String<consts::U128> = String::new();
-    write!(&mut prefix, "dt/sinara/{}/{}", app, mac_string).unwrap();
+    write!(&mut prefix, "dt/sinara/{}/{}", app, mac).unwrap();
 
     prefix
 }
