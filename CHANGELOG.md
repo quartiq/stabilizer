@@ -9,7 +9,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+* Telemetry
+
 ### Changed
+
+* Const generics bumping the MSRV to 1.51.0
 
 ### Fixed
 

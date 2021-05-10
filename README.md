@@ -37,6 +37,7 @@ to implement different use cases. Several applications are provides by default
 * Get [rustup](https://rustup.rs/)
 * `rustup target add thumbv7em-none-eabihf`
 * `cargo build --release`
+* Minimum supported Rust version (MSRV) is 1.51.0
 * When using debug (non `--release`) mode, increase the sample interval significantly.
   The added error checking code and missing optimizations may lead to the code
   missing deadlines and panicing.

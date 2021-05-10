@@ -1,16 +1,20 @@
-use generic_array::{ArrayLength, GenericArray};
-
 /// Arbitrary order, high dynamic range, wide coefficient range,
 /// lowpass filter implementation. DC gain is 1.
 ///
 /// Type argument N is the filter order.
-#[derive(Clone, Default)]
-pub struct Lowpass<N: ArrayLength<i32>> {
+#[derive(Clone)]
+pub struct Lowpass<const N: usize> {
     // IIR state storage
-    y: GenericArray<i32, N>,
+    y: [i32; N],
 }
 
-impl<N: ArrayLength<i32>> Lowpass<N> {
+impl<const N: usize> Default for Lowpass<N> {
+    fn default() -> Self {
+        Lowpass { y: [0i32; N] }
+    }
+}
+
+impl<const N: usize> Lowpass<N> {
     /// Update the filter with a new sample.
     ///
     /// # Args
