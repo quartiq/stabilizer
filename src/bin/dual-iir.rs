@@ -26,8 +26,6 @@ pub struct Settings {
     iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
     allow_hold: bool,
     force_hold: bool,
-
-    // The telemetry period in seconds.
     telemetry_period: u16,
 }
 
@@ -46,6 +44,7 @@ impl Default for Settings {
             allow_hold: false,
             // Force suppress filter output updates.
             force_hold: false,
+            // The default telemetry period in seconds.
             telemetry_period: 10,
         }
     }

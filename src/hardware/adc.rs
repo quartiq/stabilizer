@@ -92,14 +92,10 @@ impl Into<f32> for AdcCode {
     /// Convert raw ADC codes to/from voltage levels.
     ///
     /// # Note
-    ///
     /// This does not account for the programmable gain amplifier at the signal input.
     fn into(self) -> f32 {
-        // The input voltage is measured by the ADC across a dynamic scale of +/- 4.096 V with a
-        // dynamic range across signed integers. Additionally, the signal is fully differential, so
-        // the differential voltage is measured at the ADC. Thus, the single-ended signal is
-        // measured at the input is half of the ADC-reported measurement. As a pre-filter, the
-        // input signal has a fixed gain of 1/5 through a static input active filter.
+        // The ADC has a differential input with a range of +/- 4.096 V and 16-bit resolution.
+        // The gain into the two inputs is 1/5.
         let adc_volts_per_lsb = 5.0 / 2.0 * 4.096 / i16::MAX as f32;
 
         (self.0 as i16) as f32 * adc_volts_per_lsb

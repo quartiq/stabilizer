@@ -56,8 +56,6 @@ pub struct Settings {
     lockin_phase: i32,
 
     output_conf: [Conf; 2],
-
-    // The telemetry period in seconds.
     telemetry_period: u16,
 }
 
@@ -75,6 +73,7 @@ impl Default for Settings {
             lockin_phase: 0,     // Demodulation LO phase offset
 
             output_conf: [Conf::InPhase, Conf::Quadrature],
+            // The default telemetry period in seconds.
             telemetry_period: 10,
         }
     }
