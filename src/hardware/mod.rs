@@ -4,9 +4,6 @@ use stm32h7xx_hal as hal;
 // Re-export for the DigitalInputs below:
 pub use embedded_hal::digital::v2::InputPin;
 
-#[cfg(feature = "semihosting")]
-use panic_semihosting as _;
-
 mod adc;
 mod afe;
 mod configuration;
@@ -57,9 +54,12 @@ pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
 
 pub use configuration::{setup, PounderDevices, StabilizerDevices};
 
+#[cfg(feature = "rtt")]
+use panic_rtt_target as _;
+
 #[inline(never)]
 #[panic_handler]
-#[cfg(all(not(feature = "semihosting")))]
+#[cfg(all(not(feature = "rtt")))]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     let gpiod = unsafe { &*hal::stm32::GPIOD::ptr() };
     // Turn on both red LEDs, FP_LED_1, FP_LED_3
