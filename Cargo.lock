@@ -226,7 +226,6 @@ name = "dsp"
 version = "0.1.0"
 dependencies = [
  "easybench",
- "libm",
  "miniconf",
  "ndarray",
  "num",
@@ -384,12 +383,6 @@ name = "libc"
 version = "0.2.93"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9385f66bf6105b241aa65a61cb923ef20efc665cb9f9bb50ac2f0c4b7f378d41"
-
-[[package]]
-name = "libm"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
 
 [[package]]
 name = "log"
@@ -783,7 +776,6 @@ dependencies = [
  "cortex-m-rtic",
  "dsp",
  "embedded-hal",
- "enum-iterator",
  "heapless 0.6.1",
  "log",
  "mcp23017",
