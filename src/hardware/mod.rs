@@ -59,15 +59,22 @@ pub use configuration::{setup, PounderDevices, StabilizerDevices};
 fn panic(info: &core::panic::PanicInfo) -> ! {
     use core::{
         fmt::Write,
-        sync::atomic::{compiler_fence, Ordering::SeqCst},
+        sync::atomic::{AtomicBool, Ordering},
     };
-    use cortex_m::interrupt;
+    use cortex_m::asm;
     use rtt_target::{ChannelMode, UpChannel};
 
-    interrupt::disable();
+    cortex_m::interrupt::disable();
 
-    let gpiod = unsafe { &*hal::stm32::GPIOD::ptr() };
+    // Recursion protection
+    static PANICKED: AtomicBool = AtomicBool::new(false);
+    while PANICKED.load(Ordering::Relaxed) {
+        asm::bkpt();
+    }
+    PANICKED.store(true, Ordering::Relaxed);
+
     // Turn on both red LEDs, FP_LED_1, FP_LED_3
+    let gpiod = unsafe { &*hal::stm32::GPIOD::ptr() };
     gpiod.odr.modify(|_, w| w.odr6().high().odr12().high());
 
     // Analogous to panic-rtt-target
@@ -76,10 +83,10 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
         writeln!(channel, "{}", info).ok();
     }
 
-    loop {
-        // Halt
-        compiler_fence(SeqCst);
-    }
+    // Abort
+    asm::udf();
+    // Halt
+    // loop { core::sync::atomic::compiler_fence(Ordering::SeqCst); }
 }
 
 #[cortex_m_rt::exception]

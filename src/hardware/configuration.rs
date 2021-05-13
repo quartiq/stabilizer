@@ -157,7 +157,7 @@ pub fn setup(
         log::set_logger(&LOGGER)
             .map(|()| log::set_max_level(log::LevelFilter::Trace))
             .unwrap();
-        log::info!("Starting...");
+        log::info!("starting...");
     }
 
     // Set up the system timer for RTIC scheduling.
@@ -537,6 +537,7 @@ pub fn setup(
         &mut eeprom_i2c,
         &mut delay,
     ));
+    log::info!("EUI48: {}", mac_addr);
 
     let network_devices = {
         // Configure the ethernet controller
@@ -673,6 +674,7 @@ pub fn setup(
     let pounder_pgood = gpiob.pb13.into_pull_down_input();
     delay.delay_ms(2u8);
     let pounder = if pounder_pgood.is_high().unwrap() {
+        log::info!("Found Pounder");
         let ad9959 = {
             let qspi_interface = {
                 // Instantiate the QUADSPI pins and peripheral interface.
@@ -935,6 +937,7 @@ pub fn setup(
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
     // info!("Built on {}", build_info::BUILT_TIME_UTC);
     // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
+    log::info!("setup() complete");
 
     // Enable the instruction cache.
     core.SCB.enable_icache();
