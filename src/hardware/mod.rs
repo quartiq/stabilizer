@@ -54,21 +54,31 @@ pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
 
 pub use configuration::{setup, PounderDevices, StabilizerDevices};
 
-#[cfg(feature = "rtt")]
-use panic_rtt_target as _;
-
 #[inline(never)]
 #[panic_handler]
-#[cfg(all(not(feature = "rtt")))]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    use core::{
+        fmt::Write,
+        sync::atomic::{compiler_fence, Ordering::SeqCst},
+    };
+    use cortex_m::interrupt;
+    use rtt_target::{ChannelMode, UpChannel};
+
+    interrupt::disable();
+
     let gpiod = unsafe { &*hal::stm32::GPIOD::ptr() };
     // Turn on both red LEDs, FP_LED_1, FP_LED_3
     gpiod.odr.modify(|_, w| w.odr6().high().odr12().high());
+
+    // Analogous to panic-rtt-target
+    if let Some(mut channel) = unsafe { UpChannel::conjure(0) } {
+        channel.set_mode(ChannelMode::BlockIfFull);
+        writeln!(channel, "{}", info).ok();
+    }
+
     loop {
         // Halt
-        core::sync::atomic::compiler_fence(
-            core::sync::atomic::Ordering::SeqCst,
-        );
+        compiler_fence(SeqCst);
     }
 }
 

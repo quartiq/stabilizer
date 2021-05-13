@@ -518,16 +518,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "panic-rtt-target"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d6ab67bc881453e4c90f958c657c1303670ea87bc1a16e87fd71a40f656dce9"
-dependencies = [
- "cortex-m 0.7.2",
- "rtt-target 0.3.1",
-]
-
-[[package]]
 name = "paste"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -633,7 +623,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d082d3a20a5d4f69ad509720de1777fe5aa2092ea1af51b254ff79113d46d2ea"
 dependencies = [
  "log",
- "rtt-target 0.2.2",
+ "rtt-target",
 ]
 
 [[package]]
@@ -643,15 +633,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0869b4c5b6a6d8c5583fc473f9eb3423a170f77626b8c8a7fb18eddcda5770e2"
 dependencies = [
  "cortex-m 0.6.7",
- "ufmt-write",
-]
-
-[[package]]
-name = "rtt-target"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "065d6058bb1204f51a562a67209e1817cf714759d5cf845aa45c75fa7b0b9d9b"
-dependencies = [
  "ufmt-write",
 ]
 
@@ -767,10 +748,9 @@ dependencies = [
  "miniconf",
  "minimq",
  "nb 1.0.0",
- "panic-rtt-target",
  "paste",
  "rtt-logger",
- "rtt-target 0.2.2",
+ "rtt-target",
  "serde",
  "serde-json-core",
  "shared-bus",

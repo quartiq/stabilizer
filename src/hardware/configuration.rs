@@ -145,21 +145,19 @@ pub fn setup(
         .pll2_q_ck(100.mhz())
         .freeze(vos, &device.SYSCFG);
 
-    #[cfg(feature = "rtt")]
+    // Set up RTT logging
     {
         // Enable debug during WFE/WFI-induced sleep
         device.DBGMCU.cr.modify(|_, w| w.dbgsleep_d1().set_bit());
 
-        use log::LevelFilter;
         use rtt_logger::RTTLogger;
-        use rtt_target::rtt_init_print;
 
-        static LOGGER: RTTLogger = RTTLogger::new(LevelFilter::Info);
-        rtt_init_print!(NoBlockSkip, 1024);
+        static LOGGER: RTTLogger = RTTLogger::new(log::LevelFilter::Info);
+        rtt_target::rtt_init_print!(NoBlockSkip, 1024);
         log::set_logger(&LOGGER)
             .map(|()| log::set_max_level(log::LevelFilter::Trace))
             .unwrap();
-        log::info!("Setup...");
+        log::info!("Starting...");
     }
 
     // Set up the system timer for RTIC scheduling.
