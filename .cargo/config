@@ -2,7 +2,6 @@
 runner = "probe-run --chip STM32H743ZITx --speed 30000"
 # runner = "gdb-multiarch -q -x openocd.gdb"
 rustflags = [
-    "-C", "link-arg=--nmagic",
     "-C", "link-arg=-Tlink.x",
     "-C", "link-arg=--nmagic",
     "-C", "target-cpu=cortex-m7",
