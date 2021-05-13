@@ -30,9 +30,9 @@ members = ["ad9959", "dsp"]
 [dependencies]
 cortex-m = { version = "0.6", features = ["const-fn"] }
 cortex-m-rt = { version = "0.6", features = ["device"] }
-cortex-m-log = { version = "0.7", features = ["log-integration"] }
-log = "0.4"
-panic-semihosting = { version = "0.5", optional = true }
+log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
+rtt-target = { version = "0.2.1", features = ["cortex-m"] }
+rtt-logger = { version = "0.1" }
 serde = { version = "1.0", features = ["derive"], default-features = false }
 heapless = { version = "0.6", features = ["serde"] }
 cortex-m-rtic = "0.5.6"
@@ -76,7 +76,6 @@ git = "https://github.com/quartiq/minimq.git"
 rev = "d2ec3e8"
 
 [features]
-semihosting = ["panic-semihosting", "cortex-m-log/semihosting"]
 bkpt = [ ]
 nightly = ["cortex-m/inline-asm", "dsp/nightly"]
 pounder_v1_1 = [ ]
