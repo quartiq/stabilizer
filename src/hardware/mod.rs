@@ -4,9 +4,6 @@ use stm32h7xx_hal as hal;
 // Re-export for the DigitalInputs below:
 pub use embedded_hal::digital::v2::InputPin;
 
-#[cfg(feature = "semihosting")]
-use panic_semihosting as _;
-
 mod adc;
 mod afe;
 mod configuration;
@@ -59,17 +56,37 @@ pub use configuration::{setup, PounderDevices, StabilizerDevices};
 
 #[inline(never)]
 #[panic_handler]
-#[cfg(all(not(feature = "semihosting")))]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
-    let gpiod = unsafe { &*hal::stm32::GPIOD::ptr() };
-    // Turn on both red LEDs, FP_LED_1, FP_LED_3
-    gpiod.odr.modify(|_, w| w.odr6().high().odr12().high());
-    loop {
-        // Halt
-        core::sync::atomic::compiler_fence(
-            core::sync::atomic::Ordering::SeqCst,
-        );
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    use core::{
+        fmt::Write,
+        sync::atomic::{AtomicBool, Ordering},
+    };
+    use cortex_m::asm;
+    use rtt_target::{ChannelMode, UpChannel};
+
+    cortex_m::interrupt::disable();
+
+    // Recursion protection
+    static PANICKED: AtomicBool = AtomicBool::new(false);
+    while PANICKED.load(Ordering::Relaxed) {
+        asm::bkpt();
     }
+    PANICKED.store(true, Ordering::Relaxed);
+
+    // Turn on both red LEDs, FP_LED_1, FP_LED_3
+    let gpiod = unsafe { &*hal::stm32::GPIOD::ptr() };
+    gpiod.odr.modify(|_, w| w.odr6().high().odr12().high());
+
+    // Analogous to panic-rtt-target
+    if let Some(mut channel) = unsafe { UpChannel::conjure(0) } {
+        channel.set_mode(ChannelMode::BlockIfFull);
+        writeln!(channel, "{}", info).ok();
+    }
+
+    // Abort
+    asm::udf();
+    // Halt
+    // loop { core::sync::atomic::compiler_fence(Ordering::SeqCst); }
 }
 
 #[cortex_m_rt::exception]

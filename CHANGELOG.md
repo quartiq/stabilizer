@@ -10,10 +10,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 
 * Telemetry
+* RTT logging
 
 ### Changed
 
-* Const generics bumping the MSRV to 1.51.0
+* Const generics, bumping the MSRV to 1.51.0
+* `lockin-internal` and `lockin-external` have been merged into `lockin`
+* Set target CPU to cortex-m7, effectively bumping the MSRV to 1.52.0
 
 ### Fixed
 

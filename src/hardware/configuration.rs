@@ -145,19 +145,19 @@ pub fn setup(
         .pll2_q_ck(100.mhz())
         .freeze(vos, &device.SYSCFG);
 
-    #[cfg(feature = "semihosting")]
+    // Set up RTT logging
     {
-        use cortex_m_log::log::{init as init_log, Logger};
-        use cortex_m_log::printer::semihosting::{hio::HStdout, InterruptOk};
-        use log::LevelFilter;
-        static mut LOGGER: Option<Logger<InterruptOk<HStdout>>> = None;
-        let logger = Logger {
-            inner: InterruptOk::<_>::stdout().unwrap(),
-            level: LevelFilter::Info,
-        };
-        let logger = unsafe { LOGGER.get_or_insert(logger) };
+        // Enable debug during WFE/WFI-induced sleep
+        device.DBGMCU.cr.modify(|_, w| w.dbgsleep_d1().set_bit());
 
-        init_log(logger).unwrap();
+        use rtt_logger::RTTLogger;
+
+        static LOGGER: RTTLogger = RTTLogger::new(log::LevelFilter::Info);
+        rtt_target::rtt_init_print!(NoBlockSkip, 1024);
+        log::set_logger(&LOGGER)
+            .map(|()| log::set_max_level(log::LevelFilter::Trace))
+            .unwrap();
+        log::info!("starting...");
     }
 
     // Set up the system timer for RTIC scheduling.
@@ -537,6 +537,7 @@ pub fn setup(
         &mut eeprom_i2c,
         &mut delay,
     ));
+    log::info!("EUI48: {}", mac_addr);
 
     let network_devices = {
         // Configure the ethernet controller
@@ -673,6 +674,7 @@ pub fn setup(
     let pounder_pgood = gpiob.pb13.into_pull_down_input();
     delay.delay_ms(2u8);
     let pounder = if pounder_pgood.is_high().unwrap() {
+        log::info!("Found Pounder");
         let ad9959 = {
             let qspi_interface = {
                 // Instantiate the QUADSPI pins and peripheral interface.
@@ -935,6 +937,7 @@ pub fn setup(
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
     // info!("Built on {}", build_info::BUILT_TIME_UTC);
     // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
+    log::info!("setup() complete");
 
     // Enable the instruction cache.
     core.SCB.enable_icache();
