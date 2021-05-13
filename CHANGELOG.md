@@ -14,8 +14,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
-* Const generics bumping the MSRV to 1.51.0
+* Const generics, bumping the MSRV to 1.51.0
 * `lockin-internal` and `lockin-external` have been merged into `lockin`
+* Default target CPU is cortex-m7, effective bumping the MSRV to 1.52.0
 
 ### Fixed
 
