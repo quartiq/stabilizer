@@ -42,6 +42,11 @@ to implement different use cases. Several applications are provides by default
   The added error checking code and missing optimizations may lead to the code
   missing deadlines and panicing.
 
+### Using probe-run
+
+* Install `probe-run`: `cargo install probe-run`
+* Run it: `probe-run --chip STM32H743ZITx target/thumbv7em-none-eabihf/release/dual-iir`
+
 ### Using Cargo-embed
 
 * Install `cargo-embed`: `cargo install cargo-embed`
@@ -59,19 +64,18 @@ to implement different use cases. Several applications are provides by default
 
 ### Using USB-DFU
 
+* Get [cargo-binutils](https://github.com/rust-embedded/cargo-binutils/)
+* `cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin` or `arm-none-eabi-objcopy -O binary target/thumbv7em-none-eabihf/release/dual-iir dual-iir.bin`
 * Install the DFU USB tool (`dfu-util`)
 * Connect to the Micro USB connector below the RJ45
 * Short JC2/BOOT
-* Get [cargo-binutils](https://github.com/rust-embedded/cargo-binutils/)
-* `cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin` or `arm-none-eabi-objcopy -O binary target/thumbv7em-none-eabihf/release/dual-iir dual-iir.bin`
 * `dfu-util -a 0 -s 0x08000000:leave -D dual-iir.bin`
 
 ### Using ST-Link virtual mass storage
 
-* Get [cargo-binutils](https://github.com/rust-embedded/cargo-binutils/)
-* `cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin` or `arm-none-eabi-objcopy -O binary target/thumbv7em-none-eabihf/release/dual-iir dual-iir.bin`
+* Prepare `dual-iir.bin` like above
 * Connect the ST-Link debugger
-* copy `dual-iir.bin` to the `NODE_H743ZI` USB disk
+* Copy `dual-iir.bin` to the `NODE_H743ZI` virtual mass storage device
 
 ## Protocol
 
