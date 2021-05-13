@@ -9,15 +9,16 @@
 
 # Enable shell operating mode flags.
 set -eux
+trap "kill 0" EXIT
 
 # Set up python for testing
 python3 -m venv --system-site-packages py
 . py/bin/activate
 python3 -m pip install -r requirements.txt
 
-cargo flash --elf target/thumbv7em-none-eabihf/release/dual-iir --chip STM32H743ZITx
+probe-run --chip STM32H743ZITx target/thumbv7em-none-eabihf/release/dual-iir &
 
-# Before attempting to ping the device, sleep to allow Stabilizer to boot.
+# Sleep to allow flashing, booting, DHCP, MQTT
 sleep 30
 
 # Test pinging Stabilizer. This exercises that:
