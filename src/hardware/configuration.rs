@@ -153,7 +153,7 @@ pub fn setup(
         use rtt_logger::RTTLogger;
 
         static LOGGER: RTTLogger = RTTLogger::new(log::LevelFilter::Info);
-        rtt_target::rtt_init_print!(NoBlockSkip, 1024);
+        rtt_target::rtt_init_print!();
         log::set_logger(&LOGGER)
             .map(|()| log::set_max_level(log::LevelFilter::Trace))
             .unwrap();

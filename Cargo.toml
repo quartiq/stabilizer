@@ -28,11 +28,10 @@ default-target = "thumbv7em-none-eabihf"
 members = ["ad9959", "dsp"]
 
 [dependencies]
-cortex-m = { version = "0.6", features = ["const-fn"] }
+cortex-m = { version = "0.7" }
 cortex-m-rt = { version = "0.6", features = ["device"] }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
-rtt-target = { version = "0.3.1", features = ["cortex-m"] }
-rtt-logger = { version = "0.1" }
+rtt-target = { version = "0.3", features = ["cortex-m"] }
 serde = { version = "1.0", features = ["derive"], default-features = false }
 heapless = { version = "0.6", features = ["serde"] }
 cortex-m-rtic = "0.5.6"
@@ -46,6 +45,10 @@ ad9959 = { path = "ad9959" }
 miniconf = "0.1.0"
 shared-bus = {version = "0.2.2", features = ["cortex-m"] }
 serde-json-core = "0.3"
+
+[dependencies.rtt-logger]
+git = "https://github.com/quartiq/rtt-logger.git"
+rev = "70b0eb5"
 
 [dependencies.mcp23017]
 git = "https://github.com/mrd0ll4r/mcp23017.git"
@@ -68,7 +71,6 @@ git = "https://github.com/quartiq/minimq.git"
 rev = "d2ec3e8"
 
 [features]
-bkpt = [ ]
 nightly = ["cortex-m/inline-asm", "dsp/nightly"]
 pounder_v1_1 = [ ]
 
