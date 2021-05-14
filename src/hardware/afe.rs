@@ -2,11 +2,12 @@ use miniconf::Miniconf;
 use serde::{Deserialize, Serialize};
 
 use core::convert::TryFrom;
-use enum_iterator::IntoEnumIterator;
+use num_enum::TryFromPrimitive;
 
 #[derive(
-    Copy, Clone, Debug, Serialize, Deserialize, IntoEnumIterator, Miniconf,
+    Copy, Clone, Debug, Serialize, Deserialize, TryFromPrimitive, Miniconf,
 )]
+#[repr(u8)]
 pub enum Gain {
     G1 = 0b00,
     G2 = 0b01,
@@ -29,20 +30,6 @@ impl Gain {
             Gain::G5 => 5.0,
             Gain::G10 => 10.0,
         }
-    }
-}
-
-impl TryFrom<u8> for Gain {
-    type Error = ();
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        for gain in Gain::into_enum_iter() {
-            if value == gain as u8 {
-                return Ok(gain);
-            }
-        }
-
-        Err(())
     }
 }
 
@@ -82,7 +69,7 @@ where
     }
 
     /// Get the programmed gain of the analog front-end.
-    pub fn get_gain(&self) -> Result<Gain, ()> {
+    pub fn get_gain(&self) -> Gain {
         let mut code: u8 = 0;
         if self.a0.is_set_high().unwrap() {
             code |= 0b1;
@@ -91,6 +78,7 @@ where
             code |= 0b10;
         }
 
-        Gain::try_from(code)
+        // NOTE(unwrap): All possibilities covered.
+        Gain::try_from(code).unwrap()
     }
 }
