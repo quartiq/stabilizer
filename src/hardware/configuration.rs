@@ -105,6 +105,32 @@ pub struct PounderDevices {
 /// Static storage for the ethernet DMA descriptor ring.
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 
+/// Setup ITCM and load its code from flash
+unsafe fn setup_itcm() {
+    extern "C" {
+        static mut __sitcm: u32;
+        static mut __eitcm: u32;
+        static mut __siitcm: u32;
+    }
+    use core::{ptr, slice, sync::atomic};
+
+    // ITCM is enabled on reset on our CPU but might not be on others.
+    // Keep for completeness.
+    const ITCMCR: *mut u32 = 0xE000_EF90usize as _;
+    ptr::write_volatile(ITCMCR, ptr::read_volatile(ITCMCR) | 1);
+    atomic::fence(atomic::Ordering::SeqCst);
+
+    let len =
+        (&__eitcm as *const u32).offset_from(&__sitcm as *const _) as usize;
+    let dst = slice::from_raw_parts_mut(&mut __sitcm as *mut _, len);
+    let src = slice::from_raw_parts(&__siitcm as *const _, len);
+    dst.copy_from_slice(src);
+
+    atomic::fence(atomic::Ordering::SeqCst);
+    cortex_m::asm::dsb();
+    cortex_m::asm::isb();
+}
+
 /// Configure the stabilizer hardware for operation.
 ///
 /// # Args
@@ -158,6 +184,10 @@ pub fn setup(
             .map(|()| log::set_max_level(log::LevelFilter::Trace))
             .unwrap();
         log::info!("starting...");
+    }
+
+    unsafe {
+        setup_itcm();
     }
 
     // Set up the system timer for RTIC scheduling.

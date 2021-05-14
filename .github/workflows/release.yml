@@ -12,7 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - run: sudo apt install gcc-arm-none-eabi
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable

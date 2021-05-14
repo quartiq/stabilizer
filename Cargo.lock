@@ -103,12 +103,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cc"
-version = "1.0.67"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3c69b077ad434294d3ce9f1f6143a2a4b89a8a2d54ef813d85003a4fd1137fd"
-
-[[package]]
 name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -756,7 +750,6 @@ version = "0.5.0"
 dependencies = [
  "ad9959",
  "asm-delay",
- "cc",
  "cortex-m 0.7.2",
  "cortex-m-rt",
  "cortex-m-rtic",
