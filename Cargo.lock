@@ -643,22 +643,11 @@ dependencies = [
 
 [[package]]
 name = "rtt-logger"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d082d3a20a5d4f69ad509720de1777fe5aa2092ea1af51b254ff79113d46d2ea"
+version = "0.1.1"
+source = "git+https://github.com/quartiq/rtt-logger.git?rev=70b0eb5#70b0eb587fa43902aaf58296fe866418a1f4e920"
 dependencies = [
  "log",
- "rtt-target 0.2.2",
-]
-
-[[package]]
-name = "rtt-target"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0869b4c5b6a6d8c5583fc473f9eb3423a170f77626b8c8a7fb18eddcda5770e2"
-dependencies = [
- "cortex-m 0.6.7",
- "ufmt-write",
+ "rtt-target",
 ]
 
 [[package]]
@@ -770,7 +759,7 @@ version = "0.5.0"
 dependencies = [
  "ad9959",
  "asm-delay",
- "cortex-m 0.6.7",
+ "cortex-m 0.7.2",
  "cortex-m-rt",
  "cortex-m-rtic",
  "dsp",
@@ -784,7 +773,7 @@ dependencies = [
  "num_enum",
  "paste",
  "rtt-logger",
- "rtt-target 0.3.1",
+ "rtt-target",
  "serde",
  "serde-json-core",
  "shared-bus",
