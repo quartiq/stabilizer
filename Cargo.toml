@@ -45,6 +45,7 @@ ad9959 = { path = "ad9959" }
 miniconf = "0.1.0"
 shared-bus = {version = "0.2.2", features = ["cortex-m"] }
 serde-json-core = "0.3"
+postcard = "0.6"
 
 [dependencies.rtt-logger]
 git = "https://github.com/quartiq/rtt-logger.git"

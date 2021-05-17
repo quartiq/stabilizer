@@ -13,7 +13,9 @@ use hardware::{
     DigitalInput0, DigitalInput1, InputPin, SystemTimer, AFE0, AFE1,
 };
 
-use net::{NetworkUsers, Telemetry, TelemetryBuffer, UpdateState};
+use net::{
+    BlockGenerator, NetworkUsers, Telemetry, TelemetryBuffer, UpdateState,
+};
 
 const SCALE: f32 = i16::MAX as _;
 
@@ -58,6 +60,7 @@ const APP: () = {
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         network: NetworkUsers<Settings, Telemetry>,
+        generator: BlockGenerator,
 
         settings: Settings,
         telemetry: TelemetryBuffer,
@@ -71,13 +74,18 @@ const APP: () = {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
 
-        let network = NetworkUsers::new(
+        let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
             stabilizer.cycle_counter,
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
         );
+
+        // TODO: Remove unwrap.
+        let remote: smoltcp_nal::embedded_nal::SocketAddr =
+            "10.35.16.10:1111".parse().unwrap();
+        let generator = network.enable_streaming(remote.into());
 
         // Spawn a settings update for default settings.
         c.spawn.settings_update().unwrap();
@@ -96,6 +104,7 @@ const APP: () = {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
+            generator,
             network,
             digital_inputs: stabilizer.digital_inputs,
             telemetry: net::TelemetryBuffer::default(),
@@ -119,7 +128,7 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adcs, digital_inputs, dacs, iir_state, settings, telemetry], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, digital_inputs, dacs, iir_state, settings, telemetry, generator], priority=2)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -156,6 +165,9 @@ const APP: () = {
                 dac_samples[channel][sample] = DacCode::from(y).0;
             }
         }
+
+        // Stream the data.
+        c.resources.generator.send(&adc_samples, &dac_samples);
 
         // Update telemetry measurements.
         c.resources.telemetry.adcs =

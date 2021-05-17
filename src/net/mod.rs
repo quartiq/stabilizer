@@ -11,18 +11,23 @@ use serde::Serialize;
 
 use core::fmt::Write;
 
+mod data_stream;
 mod messages;
 mod miniconf_client;
 mod network_processor;
 mod shared;
 mod telemetry;
 
+pub use data_stream::BlockGenerator;
+
 use crate::hardware::{CycleCounter, EthernetPhy, NetworkStack};
+use data_stream::DataStream;
 use messages::{MqttMessage, SettingsResponse};
 
 pub use miniconf_client::MiniconfClient;
 pub use network_processor::NetworkProcessor;
 pub use shared::NetworkManager;
+use smoltcp_nal::embedded_nal::SocketAddr;
 pub use telemetry::{Telemetry, TelemetryBuffer, TelemetryClient};
 
 pub type NetworkReference = shared::NetworkStackProxy<'static, NetworkStack>;
@@ -36,7 +41,9 @@ pub enum UpdateState {
 /// A structure of Stabilizer's default network users.
 pub struct NetworkUsers<S: Default + Clone + Miniconf, T: Serialize> {
     pub miniconf: MiniconfClient<S>,
-    pub processor: NetworkProcessor,
+    processor: NetworkProcessor,
+    stream: DataStream,
+    generator: Option<BlockGenerator>,
     pub telemetry: TelemetryClient<T>,
 }
 
@@ -87,10 +94,27 @@ where
             &prefix,
         );
 
+        let (generator, stream) =
+            data_stream::setup_streaming(stack_manager.acquire_stack());
+
         NetworkUsers {
             miniconf: settings,
             processor,
             telemetry,
+            stream,
+            generator: Some(generator),
+        }
+    }
+
+    /// Enable live data streaming.
+    pub fn enable_streaming(&mut self, remote: SocketAddr) -> BlockGenerator {
+        self.stream.set_remote(remote);
+        self.generator.take().unwrap()
+    }
+
+    pub fn direct_stream(&mut self, remote: SocketAddr) {
+        if self.generator.is_none() {
+            self.stream.set_remote(remote);
         }
     }
 
@@ -104,6 +128,11 @@ where
 
         // Update the MQTT clients.
         self.telemetry.update();
+
+        // Update the data stream.
+        if self.generator.is_none() {
+            self.stream.process();
+        }
 
         match self.miniconf.update() {
             UpdateState::Updated => UpdateState::Updated,
