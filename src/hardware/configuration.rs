@@ -7,7 +7,7 @@ use stm32h7xx_hal::{
     prelude::*,
 };
 
-const NUM_SOCKETS: usize = 4;
+const NUM_SOCKETS: usize = 5;
 
 use heapless::{consts, Vec};
 use smoltcp_nal::smoltcp;
@@ -62,7 +62,7 @@ impl NetStorage {
             )],
             neighbor_cache: [None; 8],
             routes_cache: [None; 8],
-            sockets: [None, None, None, None, None],
+            sockets: [None, None, None, None, None, None],
             socket_storage: [SocketStorage::new(); NUM_SOCKETS],
             dhcp_tx_storage: [0; 600],
             dhcp_rx_storage: [0; 600],
