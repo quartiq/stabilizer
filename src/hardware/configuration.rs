@@ -833,7 +833,7 @@ pub fn setup(
                     .set_speed(hal::gpio::Speed::VeryHigh);
 
                 // Configure the IO_Update signal for the DDS.
-                let mut hrtimer = pounder::hrtimer::HighResTimerE::new(
+                let mut hrtimer = pounder::HighResTimerE::new(
                     device.HRTIM_TIME,
                     device.HRTIM_MASTER,
                     device.HRTIM_COMMON,
@@ -845,7 +845,7 @@ pub fn setup(
                 // is triggered after the QSPI write, which can take approximately 120nS, so
                 // there is additional margin.
                 hrtimer.configure_single_shot(
-                    pounder::hrtimer::Channel::Two,
+                    pounder::HRTimerChannel::Two,
                     design_parameters::POUNDER_IO_UPDATE_DURATION,
                     design_parameters::POUNDER_IO_UPDATE_DELAY,
                 );

@@ -5,11 +5,10 @@
 ///! telemetry (via MQTT), configuration of run-time settings (via MQTT + Miniconf), and live data
 ///! streaming over raw UDP/TCP sockets. This module encompasses the main processing routines
 ///! related to Stabilizer networking operations.
-use heapless::{consts, String};
-use miniconf::Miniconf;
-use serde::Serialize;
-
 use core::fmt::Write;
+use heapless::{consts, String};
+pub use miniconf::Miniconf;
+use serde::Serialize;
 
 mod messages;
 mod miniconf_client;
@@ -20,10 +19,10 @@ mod telemetry;
 use crate::hardware::{CycleCounter, EthernetPhy, NetworkStack};
 use messages::{MqttMessage, SettingsResponse};
 
-pub use miniconf_client::MiniconfClient;
-pub use network_processor::NetworkProcessor;
-pub use shared::NetworkManager;
-pub use telemetry::{Telemetry, TelemetryBuffer, TelemetryClient};
+pub use miniconf_client::*;
+pub use network_processor::*;
+pub use shared::*;
+pub use telemetry::*;
 
 pub type NetworkReference = shared::NetworkStackProxy<'static, NetworkStack>;
 

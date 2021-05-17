@@ -2,22 +2,17 @@
 #![no_std]
 #![no_main]
 
-use embedded_hal::digital::v2::InputPin;
-
 use serde::Deserialize;
 
 use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
-
-use stabilizer::net;
-
-use stabilizer::hardware::{
-    design_parameters, setup, Adc0Input, Adc1Input, AdcCode, AfeGain,
-    Dac0Output, Dac1Output, DacCode, DigitalInput0, DigitalInput1,
-    InputStamper, SystemTimer, AFE0, AFE1,
+use stabilizer::{
+    hardware::{
+        design_parameters, hal, setup, Adc0Input, Adc1Input, AdcCode, AfeGain,
+        Dac0Output, Dac1Output, DacCode, DigitalInput0, DigitalInput1,
+        InputPin, InputStamper, SystemTimer, AFE0, AFE1,
+    },
+    net::{Miniconf, NetworkUsers, Telemetry, TelemetryBuffer, UpdateState},
 };
-
-use miniconf::Miniconf;
-use net::{NetworkUsers, Telemetry, TelemetryBuffer, UpdateState};
 
 // A constant sinusoid to send on the DAC output.
 // Full-scale gives a +/- 10.24V amplitude waveform. Scale it down to give +/- 1V.
@@ -78,7 +73,7 @@ impl Default for Settings {
     }
 }
 
-#[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = stabilizer::hardware::SystemTimer)]
+#[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, monotonic = stabilizer::hardware::SystemTimer)]
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
@@ -140,7 +135,7 @@ const APP: () = {
             network,
             digital_inputs: stabilizer.digital_inputs,
             timestamper: stabilizer.timestamper,
-            telemetry: net::TelemetryBuffer::default(),
+            telemetry: TelemetryBuffer::default(),
 
             settings,
 
@@ -295,7 +290,7 @@ const APP: () = {
 
     #[task(binds = ETH, priority = 1)]
     fn eth(_: eth::Context) {
-        unsafe { stm32h7xx_hal::ethernet::interrupt_handler() }
+        unsafe { hal::ethernet::interrupt_handler() }
     }
 
     #[task(binds = SPI2, priority = 3)]

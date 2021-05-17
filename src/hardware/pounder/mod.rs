@@ -1,21 +1,19 @@
+use super::hal;
+use embedded_hal::{adc::OneShot, blocking::spi::Transfer};
 use serde::{Deserialize, Serialize};
 
-pub mod attenuators;
+mod attenuators;
 mod dds_output;
-pub mod hrtimer;
+mod hrtimer;
 mod rf_power;
 
 #[cfg(feature = "pounder_v1_1")]
 pub mod timestamp;
 
-pub use dds_output::DdsOutput;
-
-use super::hal;
-
-use attenuators::AttenuatorInterface;
-use rf_power::PowerMeasurementInterface;
-
-use embedded_hal::{adc::OneShot, blocking::spi::Transfer};
+pub use attenuators::*;
+pub use dds_output::*;
+pub use hrtimer::{Channel as HRTimerChannel, *};
+pub use rf_power::*;
 
 const EXT_CLK_SEL_PIN: u8 = 8 + 7;
 #[allow(dead_code)]

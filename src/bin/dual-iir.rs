@@ -2,18 +2,17 @@
 #![no_std]
 #![no_main]
 
-use stabilizer::{hardware, net};
-
-use miniconf::Miniconf;
 use serde::Deserialize;
 
 use dsp::iir;
-use hardware::{
-    Adc0Input, Adc1Input, AdcCode, AfeGain, Dac0Output, Dac1Output, DacCode,
-    DigitalInput0, DigitalInput1, InputPin, SystemTimer, AFE0, AFE1,
+use stabilizer::{
+    hardware::{
+        hal, setup, Adc0Input, Adc1Input, AdcCode, AfeGain, Dac0Output,
+        Dac1Output, DacCode, DigitalInput0, DigitalInput1, InputPin,
+        SystemTimer, AFE0, AFE1,
+    },
+    net::{Miniconf, NetworkUsers, Telemetry, TelemetryBuffer, UpdateState},
 };
-
-use net::{NetworkUsers, Telemetry, TelemetryBuffer, UpdateState};
 
 const SCALE: f32 = i16::MAX as _;
 
@@ -50,7 +49,7 @@ impl Default for Settings {
     }
 }
 
-#[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = stabilizer::hardware::SystemTimer)]
+#[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, monotonic = stabilizer::hardware::SystemTimer)]
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
@@ -69,7 +68,7 @@ const APP: () = {
     #[init(spawn=[telemetry, settings_update])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
+        let (mut stabilizer, _pounder) = setup(c.core, c.device);
 
         let network = NetworkUsers::new(
             stabilizer.net.stack,
@@ -98,7 +97,7 @@ const APP: () = {
             dacs: stabilizer.dacs,
             network,
             digital_inputs: stabilizer.digital_inputs,
-            telemetry: net::TelemetryBuffer::default(),
+            telemetry: TelemetryBuffer::default(),
             settings: Settings::default(),
         }
     }
@@ -214,7 +213,7 @@ const APP: () = {
 
     #[task(binds = ETH, priority = 1)]
     fn eth(_: eth::Context) {
-        unsafe { stm32h7xx_hal::ethernet::interrupt_handler() }
+        unsafe { hal::ethernet::interrupt_handler() }
     }
 
     #[task(binds = SPI2, priority = 3)]

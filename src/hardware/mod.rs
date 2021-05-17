@@ -1,5 +1,5 @@
 ///! Module for all hardware-specific setup of Stabilizer
-use stm32h7xx_hal as hal;
+pub use stm32h7xx_hal as hal;
 
 // Re-export for the DigitalInputs below:
 pub use embedded_hal::digital::v2::InputPin;
@@ -16,13 +16,13 @@ pub mod pounder;
 mod system_timer;
 mod timers;
 
-pub use adc::{Adc0Input, Adc1Input, AdcCode};
-pub use afe::Gain as AfeGain;
-pub use cycle_counter::CycleCounter;
-pub use dac::{Dac0Output, Dac1Output, DacCode};
-pub use digital_input_stamper::InputStamper;
-pub use pounder::DdsOutput;
-pub use system_timer::SystemTimer;
+pub use adc::*;
+pub use afe::{Gain as AfeGain, *};
+pub use cycle_counter::*;
+pub use dac::*;
+pub use digital_input_stamper::*;
+pub use pounder::*;
+pub use system_timer::*;
 
 // Type alias for the analog front-end (AFE) for ADC0.
 pub type AFE0 = afe::ProgrammableGainAmplifier<
