@@ -33,7 +33,7 @@ cortex-m-rt = { version = "0.6", features = ["device"] }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
 rtt-target = { version = "0.3", features = ["cortex-m"] }
 serde = { version = "1.0", features = ["derive"], default-features = false }
-heapless = { version = "0.6", features = ["serde"] }
+heapless = { version = "0.7", features = ["serde"] }
 cortex-m-rtic = "0.5.6"
 embedded-hal = "0.2.5"
 nb = "1.0.0"

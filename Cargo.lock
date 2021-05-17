@@ -43,6 +43,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomic-polyfill"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30302dda7a66f8c55932ebf208f7def840743ff64d495e9ceffcd97c18f11d39"
+dependencies = [
+ "cortex-m 0.7.2",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -318,6 +327,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hash32"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0c35f58762feb77d74ebe43bdbc3210f09be9fe6742234d573bacc26ed92b67"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -331,7 +349,7 @@ checksum = "74911a68a1658cfcfb61bc0ccfbd536e3b6e906f8c2f7883ee50157e3e2184f1"
 dependencies = [
  "as-slice",
  "generic-array 0.13.3",
- "hash32",
+ "hash32 0.1.1",
  "stable_deref_trait",
 ]
 
@@ -343,7 +361,18 @@ checksum = "634bd4d29cbf24424d0a4bfcbf80c6960129dc24424752a7d1d1390607023422"
 dependencies = [
  "as-slice",
  "generic-array 0.14.4",
- "hash32",
+ "hash32 0.1.1",
+ "stable_deref_trait",
+]
+
+[[package]]
+name = "heapless"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e94c13b78b595d2adbd708bce276664f1047f98fc32ddbf463b4c191158334a6"
+dependencies = [
+ "atomic-polyfill",
+ "hash32 0.2.1",
  "serde",
  "stable_deref_trait",
 ]
@@ -764,7 +793,7 @@ dependencies = [
  "cortex-m-rtic",
  "dsp",
  "embedded-hal",
- "heapless 0.6.1",
+ "heapless 0.7.0",
  "log",
  "mcp23017",
  "miniconf",
