@@ -5,15 +5,23 @@
 use stabilizer::{hardware, net};
 
 use miniconf::Miniconf;
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 
 use dsp::iir;
 use hardware::{
     Adc0Input, Adc1Input, AdcCode, AfeGain, Dac0Output, Dac1Output, DacCode,
-    DigitalInput0, DigitalInput1, InputPin, SystemTimer, AFE0, AFE1,
+    DigitalInput0, DigitalInput1, InputPin, SystemTimer, AFE0, AFE1, TaskTimer, TaskInfo,
 };
 
 use net::{NetworkUsers, Telemetry, TelemetryBuffer, UpdateState};
+
+#[derive(Serialize)]
+pub struct TimedTelemetry {
+    basic: Telemetry,
+    tlm: TaskInfo,
+    dsp: TaskInfo,
+    settings: TaskInfo,
+}
 
 const SCALE: f32 = i16::MAX as _;
 
@@ -57,7 +65,12 @@ const APP: () = {
         digital_inputs: (DigitalInput0, DigitalInput1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        network: NetworkUsers<Settings, Telemetry>,
+        network: NetworkUsers<Settings, TimedTelemetry>,
+
+        telemetry_timer: TaskTimer,
+        process_timer: TaskTimer,
+        settings_timer: TaskTimer,
+
 
         settings: Settings,
         telemetry: TelemetryBuffer,
@@ -100,6 +113,10 @@ const APP: () = {
             digital_inputs: stabilizer.digital_inputs,
             telemetry: net::TelemetryBuffer::default(),
             settings: Settings::default(),
+
+            settings_timer: TaskTimer::new(),
+            process_timer: TaskTimer::new(),
+            telemetry_timer: TaskTimer::new(),
         }
     }
 
@@ -119,8 +136,10 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adcs, digital_inputs, dacs, iir_state, settings, telemetry], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, digital_inputs, dacs, iir_state, settings, telemetry,
+            process_timer], priority=2)]
     fn process(c: process::Context) {
+        c.resources.process_timer.enter();
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
             c.resources.adcs.1.acquire_buffer(),
@@ -165,6 +184,8 @@ const APP: () = {
             [DacCode(dac_samples[0][0]), DacCode(dac_samples[1][0])];
 
         c.resources.telemetry.digital_inputs = digital_inputs;
+
+        c.resources.process_timer.exit();
     }
 
     #[idle(resources=[network], spawn=[settings_update])]
@@ -177,8 +198,10 @@ const APP: () = {
         }
     }
 
-    #[task(priority = 1, resources=[network, afes, settings])]
+    #[task(priority = 1, resources=[network, afes, settings, settings_timer])]
     fn settings_update(mut c: settings_update::Context) {
+        c.resources.settings_timer.enter();
+
         // Update the IIR channels.
         let settings = c.resources.network.miniconf.settings();
         c.resources.settings.lock(|current| *current = *settings);
@@ -186,10 +209,14 @@ const APP: () = {
         // Update AFEs
         c.resources.afes.0.set_gain(settings.afe[0]);
         c.resources.afes.1.set_gain(settings.afe[1]);
+
+        c.resources.settings_timer.exit();
     }
 
-    #[task(priority = 1, resources=[network, settings, telemetry], schedule=[telemetry])]
+    #[task(priority = 1, resources=[network, settings, telemetry, telemetry_timer, process_timer, settings_timer], schedule=[telemetry])]
     fn telemetry(mut c: telemetry::Context) {
+        c.resources.telemetry_timer.enter();
+
         let telemetry: TelemetryBuffer =
             c.resources.telemetry.lock(|telemetry| *telemetry);
 
@@ -198,10 +225,14 @@ const APP: () = {
             .settings
             .lock(|settings| (settings.afe, settings.telemetry_period));
 
-        c.resources
-            .network
-            .telemetry
-            .publish(&telemetry.finalize(gains[0], gains[1]));
+        let telemetry = TimedTelemetry {
+            basic: telemetry.finalize(gains[0], gains[1]),
+            tlm: c.resources.telemetry_timer.get_info(400_000_000.),
+            settings: c.resources.settings_timer.get_info(400_000_000.),
+            dsp: c.resources.process_timer.lock(|tmr| tmr.get_info(400_000_000.)),
+        };
+
+        c.resources.network.telemetry.publish(&telemetry);
 
         // Schedule the telemetry task in the future.
         c.schedule
@@ -210,6 +241,8 @@ const APP: () = {
                     + SystemTimer::ticks_from_secs(telemetry_period as u32),
             )
             .unwrap();
+
+        c.resources.telemetry_timer.exit();
     }
 
     #[task(binds = ETH, priority = 1)]

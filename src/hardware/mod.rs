@@ -15,6 +15,9 @@ mod eeprom;
 pub mod pounder;
 mod system_timer;
 mod timers;
+mod task_timer;
+
+pub use task_timer::{TaskInfo, TaskTimer};
 
 pub use adc::{Adc0Input, Adc1Input, AdcCode};
 pub use afe::Gain as AfeGain;
