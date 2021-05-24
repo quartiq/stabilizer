@@ -123,26 +123,30 @@ const APP: () = {
     /// the same time bounds, meeting one also means the other is also met.
     #[task(binds=DMA1_STR4, resources=[adcs, digital_inputs, dacs, iir_state, settings, telemetry], priority=2)]
     fn process(mut c: process::Context) {
-        let adc0 = &mut c.resources.adcs.0;
-        let adc1 = &mut c.resources.adcs.1;
-        let dac0 = &mut c.resources.dacs.0;
-        let dac1 = &mut c.resources.dacs.1;
-        let di = &c.resources.digital_inputs;
-        let settings = &c.resources.settings;
-        let iir_state = &mut c.resources.iir_state;
-        let telemetry = &mut c.resources.telemetry;
+        let process::Resources {
+            adcs: (ref mut adc0, ref mut adc1),
+            dacs: (ref mut dac0, ref mut dac1),
+            ref digital_inputs,
+            ref settings,
+            ref mut iir_state,
+            ref mut telemetry,
+        } = c.resources;
+
+        let digital_inputs = [
+            digital_inputs.0.is_high().unwrap(),
+            digital_inputs.1.is_high().unwrap(),
+        ];
+        telemetry.digital_inputs = digital_inputs;
+
+        let hold =
+            settings.force_hold || (digital_inputs[1] && settings.allow_hold);
+
         adc0.with_buffer(|a0| {
             adc1.with_buffer(|a1| {
                 dac0.with_buffer(|d0| {
                     dac1.with_buffer(|d1| {
                         let adc_samples = [a0, a1];
                         let dac_samples = [d0, d1];
-
-                        let digital_inputs =
-                            [di.0.is_high().unwrap(), di.1.is_high().unwrap()];
-
-                        let hold = settings.force_hold
-                            || (digital_inputs[1] && settings.allow_hold);
 
                         // Preserve instruction and data ordering w.r.t. DMA flag access.
                         fence(Ordering::SeqCst);
@@ -180,8 +184,6 @@ const APP: () = {
                             DacCode(dac_samples[0][0]),
                             DacCode(dac_samples[1][0]),
                         ];
-
-                        telemetry.digital_inputs = digital_inputs;
 
                         // Preserve instruction and data ordering w.r.t. DMA flag access.
                         fence(Ordering::SeqCst);
