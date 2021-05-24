@@ -52,7 +52,7 @@
 ///! served promptly after the transfer completes.
 use stm32h7xx_hal as hal;
 
-use super::design_parameters::SAMPLE_BUFFER_SIZE;
+use super::design_parameters::{SampleBuffer, SAMPLE_BUFFER_SIZE};
 use super::timers;
 
 use hal::dma::{
@@ -66,8 +66,7 @@ use hal::dma::{
 // processed). Note that the contents of AXI SRAM is uninitialized, so the buffer contents on
 // startup are undefined. The dimensions are `ADC_BUF[adc_index][ping_pong_index][sample_index]`.
 #[link_section = ".axisram.buffers"]
-static mut DAC_BUF: [[[u16; SAMPLE_BUFFER_SIZE]; 3]; 2] =
-    [[[0; SAMPLE_BUFFER_SIZE]; 3]; 2];
+static mut DAC_BUF: [[SampleBuffer; 2]; 2] = [[[0; SAMPLE_BUFFER_SIZE]; 2]; 2];
 
 /// Custom type for referencing DAC output codes.
 /// The internal integer is the raw code written to the DAC output register.
@@ -137,13 +136,12 @@ macro_rules! dac_output {
 
         /// Represents data associated with DAC.
         pub struct $name {
-            next_buffer: Option<&'static mut [u16; SAMPLE_BUFFER_SIZE]>,
             // Note: SPI TX functionality may not be used from this structure to ensure safety with DMA.
             transfer: Transfer<
                 hal::dma::dma::$data_stream<hal::stm32::DMA1>,
                 $spi,
                 MemoryToPeripheral,
-                &'static mut [u16; SAMPLE_BUFFER_SIZE],
+                &'static mut SampleBuffer,
                 hal::dma::DBTransfer,
             >,
         }
@@ -198,33 +196,26 @@ macro_rules! dac_output {
                         trigger_config,
                     );
 
-                Self {
-                    transfer,
-                    // Note(unsafe): This buffer is only used once and provided for the next DMA transfer.
-                    next_buffer: unsafe { Some(&mut DAC_BUF[$index][2]) },
-                }
+                Self { transfer }
             }
 
             pub fn start(&mut self) {
                 self.transfer.start(|spi| spi.start_dma());
             }
 
-            /// Acquire the next output buffer to populate it with DAC codes.
-            pub fn acquire_buffer(&mut self) -> &mut [u16; SAMPLE_BUFFER_SIZE] {
-                // Note: If a device hangs up, check that this conditional is passing correctly, as
-                // there is no time-out checks here in the interest of execution speed.
-                while !self.transfer.get_transfer_complete_flag() {}
-
-                let next_buffer = self.next_buffer.take().unwrap();
-
-                // Start the next transfer.
-                let (prev_buffer, _, _) =
-                    self.transfer.next_transfer(next_buffer).unwrap();
-
-                // .unwrap_none() https://github.com/rust-lang/rust/issues/62633
-                self.next_buffer.replace(prev_buffer);
-
-                self.next_buffer.as_mut().unwrap()
+            /// Wait for the transfer of the currently active buffer to complete,
+            /// then call a function on the now inactive buffer and acknowledge the
+            /// transfer complete flag.
+            ///
+            /// NOTE(unsafe): Memory safety and access ordering is not guaranteed
+            /// (see the HAL DMA docs).
+            pub fn with_buffer<F, R>(&mut self, f: F) -> R
+            where
+                F: FnOnce(&mut SampleBuffer) -> R,
+            {
+                unsafe {
+                    self.transfer.next_dbm_transfer_with(|buf, _current| f(buf))
+                }
             }
         }
     };

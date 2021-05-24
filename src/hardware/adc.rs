@@ -29,15 +29,9 @@
 ///! available. When enough samples have been collected, a transfer-complete interrupt is generated
 ///! and the ADC samples are available for processing.
 ///!
-///! The SPI peripheral internally has an 8- or 16-byte TX and RX FIFO, which corresponds to a 4- or
-///! 8-sample buffer for incoming ADC samples. During the handling of the DMA transfer completion,
-///! there is a small window where buffers are swapped over where it's possible that a sample could
-///! be lost. In order to avoid this, the SPI RX FIFO is effectively used as a "sample overflow"
-///! region and can buffer a number of samples until the next DMA transfer is configured. If a DMA
-///! transfer is still not set in time, the SPI peripheral will generate an input-overrun interrupt.
-///! This interrupt then serves as a means of detecting if samples have been lost, which will occur
-///! whenever data processing takes longer than the collection period.
-///!
+///! After a complete transfer of a batch of samples, the inactive buffer is available to the
+///! user for processing. The processing must complete before the DMA transfer of the next batch
+///! completes.
 ///!
 ///! ## Starting Data Collection
 ///!
@@ -68,13 +62,12 @@
 ///! sample DMA requests, which can be completed by setting e.g. ADC0's comparison to a counter
 ///! value of 0 and ADC1's comparison to a counter value of 1.
 ///!
-///! In this implementation, single buffer mode DMA transfers are used because the SPI RX FIFO can
-///! be used as a means to both detect and buffer ADC samples during the buffer swap-over. Because
-///! of this, double-buffered mode does not offer any advantages over single-buffered mode (unless
-///! double-buffered mode offers less overhead due to the DMA disable/enable procedure).
+///! In this implementation, double buffer mode DMA transfers are used because the SPI RX FIFOs
+///! have finite depth, FIFO access is slower than AXISRAM access, and because the single
+///! buffer mode DMA disable/enable and buffer update sequence is slow.
 use stm32h7xx_hal as hal;
 
-use super::design_parameters::SAMPLE_BUFFER_SIZE;
+use super::design_parameters::{SampleBuffer, SAMPLE_BUFFER_SIZE};
 use super::timers;
 
 use hal::dma::{
@@ -119,8 +112,7 @@ static mut SPI_EOT_CLEAR: [u32; 1] = [0x00];
 // processed). Note that the contents of AXI SRAM is uninitialized, so the buffer contents on
 // startup are undefined. The dimensions are `ADC_BUF[adc_index][ping_pong_index][sample_index]`.
 #[link_section = ".axisram.buffers"]
-static mut ADC_BUF: [[[u16; SAMPLE_BUFFER_SIZE]; 2]; 2] =
-    [[[0; SAMPLE_BUFFER_SIZE]; 2]; 2];
+static mut ADC_BUF: [[SampleBuffer; 2]; 2] = [[[0; SAMPLE_BUFFER_SIZE]; 2]; 2];
 
 macro_rules! adc_input {
     ($name:ident, $index:literal, $trigger_stream:ident, $data_stream:ident, $clear_stream:ident,
@@ -192,12 +184,11 @@ macro_rules! adc_input {
 
             /// Represents data associated with ADC.
             pub struct $name {
-                next_buffer: Option<&'static mut [u16; SAMPLE_BUFFER_SIZE]>,
                 transfer: Transfer<
                     hal::dma::dma::$data_stream<hal::stm32::DMA1>,
                     hal::spi::Spi<hal::stm32::$spi, hal::spi::Disabled, u16>,
                     PeripheralToMemory,
-                    &'static mut [u16; SAMPLE_BUFFER_SIZE],
+                    &'static mut SampleBuffer,
                     hal::dma::DBTransfer,
                 >,
                 trigger_transfer: Transfer<
@@ -316,6 +307,7 @@ macro_rules! adc_input {
                     // data stream is used to trigger a transfer completion interrupt.
                     let data_config = DmaConfig::default()
                         .memory_increment(true)
+                        .double_buffer(true)
                         .transfer_complete_interrupt($index == 1)
                         .priority(Priority::VeryHigh);
 
@@ -333,17 +325,14 @@ macro_rules! adc_input {
                         Transfer::init(
                             data_stream,
                             spi,
-                            // Note(unsafe): The ADC_BUF[$index][0] is "owned" by this peripheral.
+                            // Note(unsafe): The ADC_BUF[$index] is "owned" by this peripheral.
                             // It shall not be used anywhere else in the module.
                             unsafe { &mut ADC_BUF[$index][0] },
-                            None,
+                            unsafe { Some(&mut ADC_BUF[$index][1]) },
                             data_config,
                         );
 
                     Self {
-                        // Note(unsafe): The ADC_BUF[$index][1] is "owned" by this peripheral. It
-                        // shall not be used anywhere else in the module.
-                        next_buffer: unsafe { Some(&mut ADC_BUF[$index][1]) },
                         transfer: data_transfer,
                         trigger_transfer,
                         clear_transfer,
@@ -364,27 +353,17 @@ macro_rules! adc_input {
 
                 }
 
-                /// Obtain a buffer filled with ADC samples.
+                /// Wait for the transfer of the currently active buffer to complete,
+                /// then call a function on the now inactive buffer and acknowledge the
+                /// transfer complete flag.
                 ///
-                /// # Returns
-                /// A reference to the underlying buffer that has been filled with ADC samples.
-                pub fn acquire_buffer(&mut self) -> &[u16; SAMPLE_BUFFER_SIZE] {
-                    // Wait for the transfer to fully complete before continuing.  Note: If a device
-                    // hangs up, check that this conditional is passing correctly, as there is no
-                    // time-out checks here in the interest of execution speed.
-                    while !self.transfer.get_transfer_complete_flag() {}
-
-                    let next_buffer = self.next_buffer.take().unwrap();
-
-                    // Start the next transfer.
-                    self.transfer.clear_interrupts();
-                    let (prev_buffer, _, _) =
-                        self.transfer.next_transfer(next_buffer).unwrap();
-
-                     // .unwrap_none() https://github.com/rust-lang/rust/issues/62633
-                    self.next_buffer.replace(prev_buffer);
-
-                    self.next_buffer.as_ref().unwrap()
+                /// NOTE(unsafe): Memory safety and access ordering is not guaranteed
+                /// (see the HAL DMA docs).
+                pub fn with_buffer<F, R>(&mut self, f: F) -> R
+                    where
+                F: FnOnce(&mut SampleBuffer) -> R,
+                {
+                    unsafe { self.transfer.next_dbm_transfer_with(|buf, _current| f(buf)) }
                 }
             }
         }

@@ -2,6 +2,8 @@
 #![no_std]
 #![no_main]
 
+use core::sync::atomic::{fence, Ordering};
+
 use stabilizer::{hardware, net};
 
 use miniconf::Miniconf;
@@ -120,51 +122,73 @@ const APP: () = {
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
     #[task(binds=DMA1_STR4, resources=[adcs, digital_inputs, dacs, iir_state, settings, telemetry], priority=2)]
-    fn process(c: process::Context) {
-        let adc_samples = [
-            c.resources.adcs.0.acquire_buffer(),
-            c.resources.adcs.1.acquire_buffer(),
-        ];
+    fn process(mut c: process::Context) {
+        let adc0 = &mut c.resources.adcs.0;
+        let adc1 = &mut c.resources.adcs.1;
+        let dac0 = &mut c.resources.dacs.0;
+        let dac1 = &mut c.resources.dacs.1;
+        let di = &c.resources.digital_inputs;
+        let settings = &c.resources.settings;
+        let iir_state = &mut c.resources.iir_state;
+        let telemetry = &mut c.resources.telemetry;
+        adc0.with_buffer(|a0| {
+            adc1.with_buffer(|a1| {
+                dac0.with_buffer(|d0| {
+                    dac1.with_buffer(|d1| {
+                        let adc_samples = [a0, a1];
+                        let dac_samples = [d0, d1];
 
-        let dac_samples = [
-            c.resources.dacs.0.acquire_buffer(),
-            c.resources.dacs.1.acquire_buffer(),
-        ];
+                        let digital_inputs =
+                            [di.0.is_high().unwrap(), di.1.is_high().unwrap()];
 
-        let digital_inputs = [
-            c.resources.digital_inputs.0.is_high().unwrap(),
-            c.resources.digital_inputs.1.is_high().unwrap(),
-        ];
+                        let hold = settings.force_hold
+                            || (digital_inputs[1] && settings.allow_hold);
 
-        let hold = c.resources.settings.force_hold
-            || (digital_inputs[1] && c.resources.settings.allow_hold);
+                        // Preserve instruction and data ordering w.r.t. DMA flag access.
+                        fence(Ordering::SeqCst);
 
-        for channel in 0..adc_samples.len() {
-            for sample in 0..adc_samples[0].len() {
-                let mut y = f32::from(adc_samples[channel][sample] as i16);
-                for i in 0..c.resources.iir_state[channel].len() {
-                    y = c.resources.settings.iir_ch[channel][i].update(
-                        &mut c.resources.iir_state[channel][i],
-                        y,
-                        hold,
-                    );
-                }
-                // Note(unsafe): The filter limits ensure that the value is in range.
-                // The truncation introduces 1/2 LSB distortion.
-                let y = unsafe { y.to_int_unchecked::<i16>() };
-                // Convert to DAC code
-                dac_samples[channel][sample] = DacCode::from(y).0;
-            }
-        }
+                        for channel in 0..adc_samples.len() {
+                            adc_samples[channel]
+                                .iter()
+                                .zip(dac_samples[channel].iter_mut())
+                                .map(|(ai, di)| {
+                                    let x = f32::from(*ai as i16);
+                                    let y = settings.iir_ch[channel]
+                                        .iter()
+                                        .zip(iir_state[channel].iter_mut())
+                                        .fold(x, |yi, (ch, state)| {
+                                            ch.update(state, yi, hold)
+                                        });
+                                    // Note(unsafe): The filter limits must ensure that
+                                    // the value is in range.
+                                    // The truncation introduces 1/2 LSB distortion.
+                                    let y: i16 =
+                                        unsafe { y.to_int_unchecked() };
+                                    // Convert to DAC code
+                                    *di = DacCode::from(y).0;
+                                })
+                                .last();
+                        }
 
-        // Update telemetry measurements.
-        c.resources.telemetry.adcs =
-            [AdcCode(adc_samples[0][0]), AdcCode(adc_samples[1][0])];
+                        // Update telemetry measurements.
+                        telemetry.adcs = [
+                            AdcCode(adc_samples[0][0]),
+                            AdcCode(adc_samples[1][0]),
+                        ];
 
-        c.resources.telemetry.dacs =
-            [DacCode(dac_samples[0][0]), DacCode(dac_samples[1][0])];
+                        telemetry.dacs = [
+                            DacCode(dac_samples[0][0]),
+                            DacCode(dac_samples[1][0]),
+                        ];
 
-        c.resources.telemetry.digital_inputs = digital_inputs;
+                        telemetry.digital_inputs = digital_inputs;
+
+                        // Preserve instruction and data ordering w.r.t. DMA flag access.
+                        fence(Ordering::SeqCst);
+                    })
+                })
+            })
+        });
     }
 
     #[idle(resources=[network], spawn=[settings_update])]
