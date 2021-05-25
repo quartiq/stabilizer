@@ -313,12 +313,7 @@ impl PounderDevices {
             .map_err(|_| Error::I2c)?;
         devices
             .mcp23017
-            .write_gpio(mcp23017::Port::GPIOB, 1 << 5)
-            .map_err(|_| Error::I2c)?;
-
-        devices
-            .mcp23017
-            .digital_write(EXT_CLK_SEL_PIN, false)
+            .write_gpio(mcp23017::Port::GPIOB, 0x2F)
             .map_err(|_| Error::I2c)?;
 
         Ok(devices)
@@ -351,23 +346,25 @@ impl AttenuatorInterface for PounderDevices {
             Channel::Out0 => ATT_LE1_PIN,
             Channel::Out1 => ATT_LE3_PIN,
         };
-
         self.mcp23017
-            .digital_write(pin, true)
+            .digital_write(pin, false)
+            .map_err(|_| Error::I2c)?;
+        self.mcp23017
+            .digital_write(pin, false)
             .map_err(|_| Error::I2c)?;
         // TODO: Measure the I2C transaction speed to the RST pin to ensure that the delay is
         // sufficient. Document the delay here.
         self.mcp23017
-            .digital_write(pin, false)
+            .digital_write(pin, true)
             .map_err(|_| Error::I2c)?;
-
         Ok(())
     }
 
     /// Read the raw attenuation codes stored in the attenuator shift registers.
     ///
     /// Args:
-    /// * `channels` - A slice to store the channel readings into.
+    /// * `channels` - A 4 byte slice to be shifted into the
+    ///     attenuators and to contain the data shifted out.
     fn transfer_attenuators(
         &mut self,
         channels: &mut [u8; 4],
