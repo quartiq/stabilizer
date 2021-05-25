@@ -52,6 +52,15 @@ impl Default for Settings {
     }
 }
 
+macro_rules! flatten_closures {
+    ($fn:ident, $e:ident, $fun:block) => {
+        $e.$fn(|$e| $fun )
+    };
+    ($fn:ident, $e:ident, $($es:ident),+, $fun:block) => {
+        $e.$fn(|$e| flatten_closures!($fn, $($es),*, $fun))
+    };
+}
+
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = stabilizer::hardware::SystemTimer)]
 const APP: () = {
     struct Resources {
@@ -141,55 +150,43 @@ const APP: () = {
         let hold =
             settings.force_hold || (digital_inputs[1] && settings.allow_hold);
 
-        adc0.with_buffer(|a0| {
-            adc1.with_buffer(|a1| {
-                dac0.with_buffer(|d0| {
-                    dac1.with_buffer(|d1| {
-                        let adc_samples = [a0, a1];
-                        let dac_samples = [d0, d1];
+        flatten_closures!(with_buffer, adc0, adc1, dac0, dac1, {
+            let adc_samples = [adc0, adc1];
+            let dac_samples = [dac0, dac1];
 
-                        // Preserve instruction and data ordering w.r.t. DMA flag access.
-                        fence(Ordering::SeqCst);
+            // Preserve instruction and data ordering w.r.t. DMA flag access.
+            fence(Ordering::SeqCst);
 
-                        for channel in 0..adc_samples.len() {
-                            adc_samples[channel]
-                                .iter()
-                                .zip(dac_samples[channel].iter_mut())
-                                .map(|(ai, di)| {
-                                    let x = f32::from(*ai as i16);
-                                    let y = settings.iir_ch[channel]
-                                        .iter()
-                                        .zip(iir_state[channel].iter_mut())
-                                        .fold(x, |yi, (ch, state)| {
-                                            ch.update(state, yi, hold)
-                                        });
-                                    // Note(unsafe): The filter limits must ensure that
-                                    // the value is in range.
-                                    // The truncation introduces 1/2 LSB distortion.
-                                    let y: i16 =
-                                        unsafe { y.to_int_unchecked() };
-                                    // Convert to DAC code
-                                    *di = DacCode::from(y).0;
-                                })
-                                .last();
-                        }
-
-                        // Update telemetry measurements.
-                        telemetry.adcs = [
-                            AdcCode(adc_samples[0][0]),
-                            AdcCode(adc_samples[1][0]),
-                        ];
-
-                        telemetry.dacs = [
-                            DacCode(dac_samples[0][0]),
-                            DacCode(dac_samples[1][0]),
-                        ];
-
-                        // Preserve instruction and data ordering w.r.t. DMA flag access.
-                        fence(Ordering::SeqCst);
+            for channel in 0..adc_samples.len() {
+                adc_samples[channel]
+                    .iter()
+                    .zip(dac_samples[channel].iter_mut())
+                    .map(|(ai, di)| {
+                        let x = f32::from(*ai as i16);
+                        let y = settings.iir_ch[channel]
+                            .iter()
+                            .zip(iir_state[channel].iter_mut())
+                            .fold(x, |yi, (ch, state)| {
+                                ch.update(state, yi, hold)
+                            });
+                        // Note(unsafe): The filter limits must ensure that the value is in range.
+                        // The truncation introduces 1/2 LSB distortion.
+                        let y: i16 = unsafe { y.to_int_unchecked() };
+                        // Convert to DAC code
+                        *di = DacCode::from(y).0;
                     })
-                })
-            })
+                    .last();
+            }
+
+            // Update telemetry measurements.
+            telemetry.adcs =
+                [AdcCode(adc_samples[0][0]), AdcCode(adc_samples[1][0])];
+
+            telemetry.dacs =
+                [DacCode(dac_samples[0][0]), DacCode(dac_samples[1][0])];
+
+            // Preserve instruction and data ordering w.r.t. DMA flag access.
+            fence(Ordering::SeqCst);
         });
     }
 
