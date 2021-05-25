@@ -344,7 +344,7 @@ impl AttenuatorInterface for PounderDevices {
     ///
     /// Args:
     /// * `channel` - The attenuator channel to latch.
-    fn latch_attenuators(&mut self, channel: Channel) -> Result<(), Error> {
+    fn latch_attenuator(&mut self, channel: Channel) -> Result<(), Error> {
         let pin = match channel {
             Channel::In0 => ATT_LE0_PIN,
             Channel::In1 => ATT_LE2_PIN,
@@ -368,29 +368,12 @@ impl AttenuatorInterface for PounderDevices {
     ///
     /// Args:
     /// * `channels` - A slice to store the channel readings into.
-    fn read_all_attenuators(
+    fn transfer_attenuators(
         &mut self,
         channels: &mut [u8; 4],
     ) -> Result<(), Error> {
         self.attenuator_spi
             .transfer(channels)
-            .map_err(|_| Error::Spi)?;
-
-        Ok(())
-    }
-
-    /// Write the attenuator shift registers.
-    ///
-    /// Args:
-    /// * `channels` - The data to write into the attenuators.
-    fn write_all_attenuators(
-        &mut self,
-        channels: &[u8; 4],
-    ) -> Result<(), Error> {
-        let mut result = [0_u8; 4];
-        result.clone_from_slice(channels);
-        self.attenuator_spi
-            .transfer(&mut result)
             .map_err(|_| Error::Spi)?;
 
         Ok(())
