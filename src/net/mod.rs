@@ -38,6 +38,12 @@ pub enum UpdateState {
     Updated,
 }
 
+#[derive(Copy, Clone, PartialEq)]
+pub enum NetworkState {
+    SettingsChanged,
+    Updated,
+    NoChange,
+}
 /// A structure of Stabilizer's default network users.
 pub struct NetworkUsers<S: Default + Clone + Miniconf, T: Serialize> {
     pub miniconf: MiniconfClient<S>,
@@ -136,9 +142,12 @@ where
     ///
     /// # Returns
     /// An indication if any of the network users indicated a state change.
-    pub fn update(&mut self) -> UpdateState {
+    pub fn update(&mut self) -> NetworkState {
         // Poll for incoming data.
-        let poll_result = self.processor.update();
+        let poll_result = match self.processor.update() {
+            UpdateState::NoChange => NetworkState::NoChange,
+            UpdateState::Updated => NetworkState::Updated,
+        };
 
         // Update the MQTT clients.
         self.telemetry.update();
@@ -147,7 +156,7 @@ where
         self.update_stream();
 
         match self.miniconf.update() {
-            UpdateState::Updated => UpdateState::Updated,
+            UpdateState::Updated => NetworkState::SettingsChanged,
             UpdateState::NoChange => poll_result,
         }
     }

@@ -17,7 +17,7 @@ use stabilizer::hardware::{
 };
 
 use miniconf::Miniconf;
-use net::{NetworkUsers, Telemetry, TelemetryBuffer, UpdateState};
+use net::{NetworkState, NetworkUsers, Telemetry, TelemetryBuffer};
 
 // A constant sinusoid to send on the DAC output.
 // Full-scale gives a +/- 10.24V amplitude waveform. Scale it down to give +/- 1V.
@@ -248,8 +248,11 @@ const APP: () = {
     fn idle(mut c: idle::Context) -> ! {
         loop {
             match c.resources.network.lock(|net| net.update()) {
-                UpdateState::Updated => c.spawn.settings_update().unwrap(),
-                UpdateState::NoChange => cortex_m::asm::wfi(),
+                NetworkState::SettingsChanged => {
+                    c.spawn.settings_update().unwrap()
+                }
+                NetworkState::Updated => {}
+                NetworkState::NoChange => cortex_m::asm::wfi(),
             }
         }
     }

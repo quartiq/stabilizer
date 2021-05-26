@@ -14,7 +14,7 @@ use hardware::{
 };
 
 use net::{
-    BlockGenerator, NetworkUsers, Telemetry, TelemetryBuffer, UpdateState,
+    BlockGenerator, NetworkUsers, Telemetry, TelemetryBuffer, NetworkState,
 };
 
 const SCALE: f32 = i16::MAX as _;
@@ -192,8 +192,11 @@ const APP: () = {
     fn idle(mut c: idle::Context) -> ! {
         loop {
             match c.resources.network.lock(|net| net.update()) {
-                UpdateState::Updated => c.spawn.settings_update().unwrap(),
-                UpdateState::NoChange => cortex_m::asm::wfi(),
+                NetworkState::SettingsChanged => {
+                    c.spawn.settings_update().unwrap()
+                }
+                NetworkState::Updated => {}
+                NetworkState::NoChange => cortex_m::asm::wfi(),
             }
         }
     }
