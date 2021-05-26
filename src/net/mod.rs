@@ -124,41 +124,34 @@ where
         }
     }
 
-    pub fn update_stream(&mut self) {
-        // Update the data stream.
-        if self.generator.is_none() {
-            loop {
-                // Process egress of the stack.
-                self.processor.egress();
-
-                if !self.stream.process() {
-                    return
-                }
-            }
-        }
-    }
-
     /// Update and process all of the network users state.
     ///
     /// # Returns
     /// An indication if any of the network users indicated a state change.
     pub fn update(&mut self) -> NetworkState {
+        super::debug::high();
+        // Update the MQTT clients.
+        self.telemetry.update();
+
+        // Update the data stream.
+        if self.generator.is_none() {
+            while self.stream.process() {}
+        }
+
         // Poll for incoming data.
         let poll_result = match self.processor.update() {
             UpdateState::NoChange => NetworkState::NoChange,
             UpdateState::Updated => NetworkState::Updated,
         };
 
-        // Update the MQTT clients.
-        self.telemetry.update();
-
-        // Update the data stream.
-        self.update_stream();
-
-        match self.miniconf.update() {
+        let result = match self.miniconf.update() {
             UpdateState::Updated => NetworkState::SettingsChanged,
             UpdateState::NoChange => poll_result,
-        }
+        };
+
+        super::debug::low();
+
+        result
     }
 }
 

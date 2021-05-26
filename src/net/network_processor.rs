@@ -65,17 +65,19 @@ impl NetworkProcessor {
 
         // If the PHY indicates there's no more ethernet link, reset the DHCP server in the network
         // stack.
-        match self.phy.poll_link() {
-            true => self.network_was_reset = false,
+        // TODO: Poll the link state in a task and handle resets. Polling this often is slow and
+        // uses necessary CPU time.
+        //match self.phy.poll_link() {
+        //    true => self.network_was_reset = false,
 
-            // Only reset the network stack once per link reconnection. This prevents us from
-            // sending an excessive number of DHCP requests.
-            false if !self.network_was_reset => {
-                self.network_was_reset = true;
-                self.stack.lock(|stack| stack.handle_link_reset());
-            }
-            _ => {}
-        };
+        //    // Only reset the network stack once per link reconnection. This prevents us from
+        //    // sending an excessive number of DHCP requests.
+        //    false if !self.network_was_reset => {
+        //        self.network_was_reset = true;
+        //        self.stack.lock(|stack| stack.handle_link_reset());
+        //    }
+        //    _ => {}
+        //};
 
         result
     }

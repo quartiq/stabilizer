@@ -156,7 +156,7 @@ where
     }
 
     /// Get the current settings from miniconf.
-    pub fn settings(&self) -> S {
-        self.settings.clone()
+    pub fn settings(&self) -> &S {
+        &self.settings
     }
 }

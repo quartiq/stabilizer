@@ -25,6 +25,7 @@ pub fn setup_streaming(
     (generator, stream)
 }
 
+#[derive(Debug)]
 pub struct AdcDacData {
     block_id: u32,
     adcs: [[u16; SAMPLE_BUFFER_SIZE]; 2],
@@ -57,8 +58,9 @@ impl BlockGenerator {
 
         self.current_id = self.current_id.wrapping_add(1);
 
-        // We perform best-effort enqueueing of the data block.
-        self.queue.enqueue(block).ok();
+        // Note(unwrap): The buffering of the queue and processing of blocks must be fast enough
+        // such that blocks will never be silently dropped.
+        self.queue.enqueue(block).unwrap();
     }
 }
 
@@ -173,6 +175,11 @@ impl DataStream {
         if self.socket.is_none() && self.remote.is_some() {
             // If we still can't open the remote, continue.
             if self.open(self.remote.unwrap()).is_err() {
+
+                // Clear the queue out.
+                while self.queue.ready() {
+                    self.queue.dequeue();
+                }
                 return false;
             }
         }
@@ -188,6 +195,9 @@ impl DataStream {
         // TODO: Clean up magic numbers.
         if capacity < 72 {
             // We cannot send a full data block. Abort now.
+            while self.queue.ready() {
+                self.queue.dequeue();
+            }
             return false;
         }
 
