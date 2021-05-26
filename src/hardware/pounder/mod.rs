@@ -17,15 +17,21 @@ use rf_power::PowerMeasurementInterface;
 
 use embedded_hal::{adc::OneShot, blocking::spi::Transfer};
 
-#[allow(dead_code)]
-const EXT_CLK_SEL_PIN: u8 = 8 + 7;
-#[allow(dead_code)]
-const OSC_EN_N_PIN: u8 = 8 + 6;
-const ATT_RST_N_PIN: u8 = 8 + 5;
-const ATT_LE3_PIN: u8 = 8 + 3;
-const ATT_LE2_PIN: u8 = 8 + 2;
-const ATT_LE1_PIN: u8 = 8 + 1;
-const ATT_LE0_PIN: u8 = 8;
+pub enum GpioPin {
+    Led4Green = 0,
+    Led5Red = 1,
+    Led6Green = 2,
+    Led7Red = 3,
+    Led8Green = 4,
+    Led9Red = 5,
+    AttLe0 = 8 + 0,
+    AttLe1 = 8 + 1,
+    AttLe2 = 8 + 2,
+    AttLe3 = 8 + 3,
+    AttRstN = 8 + 5,
+    OscEnN = 8 + 6,
+    ExtClkSel = 8 + 7,
+}
 
 #[derive(Debug, Copy, Clone)]
 pub enum Error {
