@@ -37,6 +37,11 @@ impl NetworkProcessor {
         }
     }
 
+    pub fn egress(&mut self) {
+        let now = self.clock.current_ms();
+        self.stack.lock(|stack| stack.poll(now)).ok();
+    }
+
     /// Process and update the state of the network.
     ///
     /// # Note

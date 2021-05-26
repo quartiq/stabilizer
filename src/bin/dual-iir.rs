@@ -128,7 +128,7 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adcs, digital_inputs, dacs, iir_state, settings, telemetry, generator], priority=2)]
+    #[task(binds=DMA1_STR4, spawn=[stream], resources=[adcs, digital_inputs, dacs, iir_state, settings, telemetry, generator], priority=3)]
     fn process(c: process::Context) {
         let adc_samples = [
             c.resources.adcs.0.acquire_buffer(),
@@ -177,6 +177,15 @@ const APP: () = {
             [DacCode(dac_samples[0][0]), DacCode(dac_samples[1][0])];
 
         c.resources.telemetry.digital_inputs = digital_inputs;
+
+        // Make a best effort to start data stream processing. It may be blocked by someone else
+        // using the network stack.
+        c.spawn.stream().ok();
+    }
+
+    #[task(priority = 2, resources=[network])]
+    fn stream(c: stream::Context) {
+        c.resources.network.update_stream()
     }
 
     #[idle(resources=[network], spawn=[settings_update])]
@@ -192,8 +201,8 @@ const APP: () = {
     #[task(priority = 1, resources=[network, afes, settings])]
     fn settings_update(mut c: settings_update::Context) {
         // Update the IIR channels.
-        let settings = c.resources.network.miniconf.settings();
-        c.resources.settings.lock(|current| *current = *settings);
+        let settings = c.resources.network.lock(|net| net.miniconf.settings());
+        c.resources.settings.lock(|current| *current = settings);
 
         // Update AFEs
         c.resources.afes.0.set_gain(settings.afe[0]);
@@ -210,10 +219,8 @@ const APP: () = {
             .settings
             .lock(|settings| (settings.afe, settings.telemetry_period));
 
-        c.resources
-            .network
-            .telemetry
-            .publish(&telemetry.finalize(gains[0], gains[1]));
+        c.resources.network.lock(|net| net.telemetry
+            .publish(&telemetry.finalize(gains[0], gains[1])));
 
         // Schedule the telemetry task in the future.
         c.schedule
@@ -229,22 +236,22 @@ const APP: () = {
         unsafe { stm32h7xx_hal::ethernet::interrupt_handler() }
     }
 
-    #[task(binds = SPI2, priority = 3)]
+    #[task(binds = SPI2, priority = 4)]
     fn spi2(_: spi2::Context) {
         panic!("ADC0 input overrun");
     }
 
-    #[task(binds = SPI3, priority = 3)]
+    #[task(binds = SPI3, priority = 4)]
     fn spi3(_: spi3::Context) {
         panic!("ADC1 input overrun");
     }
 
-    #[task(binds = SPI4, priority = 3)]
+    #[task(binds = SPI4, priority = 4)]
     fn spi4(_: spi4::Context) {
         panic!("DAC0 output error");
     }
 
-    #[task(binds = SPI5, priority = 3)]
+    #[task(binds = SPI5, priority = 4)]
     fn spi5(_: spi5::Context) {
         panic!("DAC1 output error");
     }

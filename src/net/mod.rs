@@ -118,6 +118,20 @@ where
         }
     }
 
+    pub fn update_stream(&mut self) {
+        // Update the data stream.
+        if self.generator.is_none() {
+            loop {
+                // Process egress of the stack.
+                self.processor.egress();
+
+                if !self.stream.process() {
+                    return
+                }
+            }
+        }
+    }
+
     /// Update and process all of the network users state.
     ///
     /// # Returns
@@ -130,9 +144,7 @@ where
         self.telemetry.update();
 
         // Update the data stream.
-        if self.generator.is_none() {
-            self.stream.process();
-        }
+        self.update_stream();
 
         match self.miniconf.update() {
             UpdateState::Updated => UpdateState::Updated,

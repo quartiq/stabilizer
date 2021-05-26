@@ -3,14 +3,13 @@ use heapless::{
     spsc::{Consumer, Producer, Queue},
     Vec,
 };
-use serde::Serialize;
-use smoltcp_nal::embedded_nal::{Mode, SocketAddr, TcpStack};
+use smoltcp_nal::{smoltcp, embedded_nal::{Mode, SocketAddr, TcpStack}};
 
 use super::NetworkReference;
 use crate::hardware::design_parameters::SAMPLE_BUFFER_SIZE;
 
 // The number of data blocks that we will buffer in the queue.
-type BlockBufferSize = heapless::consts::U10;
+type BlockBufferSize = heapless::consts::U30;
 
 pub fn setup_streaming(
     stack: NetworkReference,
@@ -132,7 +131,7 @@ impl DataStream {
         // TODO: How should we handle a connection failure?
         let socket = self.stack.connect(socket, remote).unwrap();
 
-        log::info!("Stream connecting to {:?}", remote);
+        //log::info!("Stream connecting to {:?}", remote);
 
         // Note(unwrap): The socket will be empty before we replace it.
         self.socket.replace(socket);
@@ -169,16 +168,30 @@ impl DataStream {
         }
     }
 
-    pub fn process(&mut self) {
-        if let Some(data) = self.queue.dequeue() {
-
-            // If there's no socket available, try to connect to our remote.
-            if self.socket.is_none() && self.remote.is_some() {
-                // If we still can't open the remote, continue.
-                if self.open(self.remote.unwrap()).is_err() {
-                    return;
-                }
+    pub fn process(&mut self) -> bool {
+        // If there's no socket available, try to connect to our remote.
+        if self.socket.is_none() && self.remote.is_some() {
+            // If we still can't open the remote, continue.
+            if self.open(self.remote.unwrap()).is_err() {
+                return false;
             }
+        }
+
+        let mut handle = self.socket.borrow_mut().unwrap();
+
+        let capacity = self.stack.lock(|stack| {
+            let mut all_sockets = stack.sockets.borrow_mut();
+            let socket: &mut smoltcp::socket::TcpSocket = &mut *all_sockets.get(handle);
+            socket.send_capacity() - socket.send_queue()
+        });
+
+        // TODO: Clean up magic numbers.
+        if capacity < 72 {
+            // We cannot send a full data block. Abort now.
+            return false;
+        }
+
+        if let Some(data) = self.queue.dequeue() {
 
             // Reconnect the socket if we're no longer connected.
             self.manage_reconnection();
@@ -191,23 +204,20 @@ impl DataStream {
             };
 
             // Serialize the datablock.
-            // TODO: Do we want to packetize the data block as well?
             let data: Vec<u8, heapless::consts::U256> = block.serialize();
 
-            let mut socket = self.socket.borrow_mut().unwrap();
-
             // Transmit the data block.
-            // TODO: How should we handle partial packet transmission?
             // TODO: Should we measure how many packets get dropped as telemetry?
-            match self.stack.write(&mut socket, &data) {
+            match self.stack.write(&mut handle, &data) {
                 Ok(len) => {
                     if len != data.len() {
-                        log::warn!("Short message: {} {}", len, data.len());
-                        //self.close();
+                        log::error!("Short message: {} {}", len, data.len());
                     }
                 },
                 _ => {},
             }
         }
+
+        self.queue.ready()
     }
 }

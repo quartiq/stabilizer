@@ -64,8 +64,9 @@ git = "https://github.com/quartiq/miniconf.git"
 rev = "c6f2b28"
 
 [dependencies.smoltcp-nal]
-git = "https://github.com/quartiq/smoltcp-nal.git"
-rev = "4a1711c"
+path = "../smoltcp-nal"
+# git = "https://github.com/quartiq/smoltcp-nal.git"
+# rev = "4a1711c"
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq.git"
