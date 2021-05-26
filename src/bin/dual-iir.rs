@@ -11,8 +11,9 @@ use stabilizer::{
         Dac1Output, DacCode, DigitalInput0, DigitalInput1, InputPin,
         SystemTimer, AFE0, AFE1,
     },
-    net::{Miniconf, NetworkUsers, Telemetry, TelemetryBuffer, UpdateState},
+    net::{Miniconf, NetworkState, NetworkUsers, Telemetry, TelemetryBuffer},
 };
+
 
 const SCALE: f32 = i16::MAX as _;
 
@@ -170,8 +171,11 @@ const APP: () = {
     fn idle(mut c: idle::Context) -> ! {
         loop {
             match c.resources.network.lock(|net| net.update()) {
-                UpdateState::Updated => c.spawn.settings_update().unwrap(),
-                UpdateState::NoChange => cortex_m::asm::wfi(),
+                NetworkState::SettingsChanged => {
+                    c.spawn.settings_update().unwrap()
+                }
+                NetworkState::Updated => {}
+                NetworkState::NoChange => cortex_m::asm::wfi(),
             }
         }
     }
