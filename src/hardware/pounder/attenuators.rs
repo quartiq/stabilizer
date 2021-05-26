@@ -35,7 +35,7 @@ pub trait AttenuatorInterface {
         // The lowest 2 bits of the 8-bit shift register on the attenuator are ignored. Shift the
         // attenuator code into the upper 6 bits of the register value. Note that the attenuator
         // treats inputs as active-low, so the code is inverted before writing.
-        channels[channel as usize] = (!attenuation_code) << 2;
+        channels[channel as usize] = !(attenuation_code << 2);
         self.transfer_attenuators(&mut channels)?;
 
         // Finally, latch the output of the updated channel to force it into an active state.

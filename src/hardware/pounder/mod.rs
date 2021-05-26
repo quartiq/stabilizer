@@ -41,10 +41,10 @@ pub enum Error {
 #[derive(Debug, Copy, Clone)]
 #[allow(dead_code)]
 pub enum Channel {
-    In0,
-    In1,
-    Out0,
-    Out1,
+    In0 = 0,
+    Out0 = 1,
+    In1 = 2,
+    Out1 = 3,
 }
 
 #[derive(Serialize, Deserialize, Copy, Clone, Debug)]
@@ -340,12 +340,7 @@ impl AttenuatorInterface for PounderDevices {
     /// Args:
     /// * `channel` - The attenuator channel to latch.
     fn latch_attenuator(&mut self, channel: Channel) -> Result<(), Error> {
-        let pin = match channel {
-            Channel::In0 => 0,
-            Channel::Out0 => 1,
-            Channel::In1 => 2,
-            Channel::Out1 => 3,
-        };
+        let pin = channel as u8;
         self.mcp23017
             .write_gpio(mcp23017::Port::GPIOB, 0x2f & !(1 << pin))
             .map_err(|_| Error::I2c)?;
