@@ -17,6 +17,7 @@ use rf_power::PowerMeasurementInterface;
 
 use embedded_hal::{adc::OneShot, blocking::spi::Transfer};
 
+#[allow(dead_code)]
 const EXT_CLK_SEL_PIN: u8 = 8 + 7;
 #[allow(dead_code)]
 const OSC_EN_N_PIN: u8 = 8 + 6;
@@ -300,16 +301,16 @@ impl PounderDevices {
             adc2_in_p,
         };
 
-        // Configure power-on-default state for pounder. All LEDs are on, on-board oscillator
-        // selected, attenuators out of reset. Note that testing indicates the output state needs to
-        // be set first to properly update the output registers.
+        // Configure power-on-default state for pounder. All LEDs are off, on-board oscillator
+        // selected and enabled, attenuators out of reset. Note that testing indicates the
+        // output state needs to be set first to properly update the output registers.
         devices
             .mcp23017
             .all_pin_mode(mcp23017::PinMode::OUTPUT)
             .map_err(|_| Error::I2c)?;
         devices
             .mcp23017
-            .write_gpio(mcp23017::Port::GPIOA, 0x3F)
+            .write_gpio(mcp23017::Port::GPIOA, 0x00)
             .map_err(|_| Error::I2c)?;
         devices
             .mcp23017
@@ -324,12 +325,11 @@ impl AttenuatorInterface for PounderDevices {
     /// Reset all of the attenuators to a power-on default state.
     fn reset_attenuators(&mut self) -> Result<(), Error> {
         self.mcp23017
-            .digital_write(ATT_RST_N_PIN, false)
+            .write_gpio(mcp23017::Port::GPIOB, 0x0f)
             .map_err(|_| Error::I2c)?;
-        // TODO: Measure the I2C transaction speed to the RST pin to ensure that the delay is
-        // sufficient. Document the delay here.
+        // Duration of one I2C transaction is sufficiently long.
         self.mcp23017
-            .digital_write(ATT_RST_N_PIN, true)
+            .write_gpio(mcp23017::Port::GPIOB, 0x2f)
             .map_err(|_| Error::I2c)?;
 
         Ok(())
@@ -341,21 +341,17 @@ impl AttenuatorInterface for PounderDevices {
     /// * `channel` - The attenuator channel to latch.
     fn latch_attenuator(&mut self, channel: Channel) -> Result<(), Error> {
         let pin = match channel {
-            Channel::In0 => ATT_LE0_PIN,
-            Channel::In1 => ATT_LE2_PIN,
-            Channel::Out0 => ATT_LE1_PIN,
-            Channel::Out1 => ATT_LE3_PIN,
+            Channel::In0 => 0,
+            Channel::Out0 => 1,
+            Channel::In1 => 2,
+            Channel::Out1 => 3,
         };
         self.mcp23017
-            .digital_write(pin, false)
+            .write_gpio(mcp23017::Port::GPIOB, 0x2f & !(1 << pin))
             .map_err(|_| Error::I2c)?;
+        // Duration of one I2C transaction is sufficiently long.
         self.mcp23017
-            .digital_write(pin, false)
-            .map_err(|_| Error::I2c)?;
-        // TODO: Measure the I2C transaction speed to the RST pin to ensure that the delay is
-        // sufficient. Document the delay here.
-        self.mcp23017
-            .digital_write(pin, true)
+            .write_gpio(mcp23017::Port::GPIOB, 0x2f)
             .map_err(|_| Error::I2c)?;
         Ok(())
     }
