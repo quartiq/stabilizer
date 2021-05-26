@@ -14,7 +14,6 @@ use stabilizer::{
     net::{Miniconf, NetworkState, NetworkUsers, Telemetry, TelemetryBuffer},
 };
 
-
 const SCALE: f32 = i16::MAX as _;
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
