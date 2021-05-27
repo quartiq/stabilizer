@@ -64,13 +64,12 @@ git = "https://github.com/quartiq/miniconf.git"
 rev = "c6f2b28"
 
 [dependencies.smoltcp-nal]
-path = "../smoltcp-nal"
-# git = "https://github.com/quartiq/smoltcp-nal.git"
-# rev = "4a1711c"
+git = "https://github.com/quartiq/smoltcp-nal.git"
+branch = "feature/udp-support"
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq.git"
-rev = "d2ec3e8"
+branch = "feature/nal-update"
 
 [features]
 nightly = ["cortex-m/inline-asm", "dsp/nightly"]

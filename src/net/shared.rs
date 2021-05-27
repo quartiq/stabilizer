@@ -47,25 +47,25 @@ impl<'a, S> NetworkStackProxy<'a, S> {
 // proxy structure.
 macro_rules! forward {
     ($func:ident($($v:ident: $IT:ty),*) -> $T:ty) => {
-        fn $func(&self, $($v: $IT),*) -> $T {
+        fn $func(&mut self, $($v: $IT),*) -> $T {
             self.mutex.lock(|stack| stack.$func($($v),*))
         }
     }
 }
 
 // Implement a TCP stack for the proxy if the underlying network stack implements it.
-impl<'a, S> embedded_nal::TcpStack for NetworkStackProxy<'a, S>
+impl<'a, S> embedded_nal::TcpClientStack for NetworkStackProxy<'a, S>
 where
-    S: embedded_nal::TcpStack,
+    S: embedded_nal::TcpClientStack,
 {
     type TcpSocket = S::TcpSocket;
     type Error = S::Error;
 
-    forward! {open(mode: embedded_nal::Mode) -> Result<S::TcpSocket, S::Error>}
-    forward! {connect(socket: S::TcpSocket, remote: embedded_nal::SocketAddr) -> Result<S::TcpSocket, S::Error>}
+    forward! {socket() -> Result<S::TcpSocket, S::Error>}
+    forward! {connect(socket: &mut S::TcpSocket, remote: embedded_nal::SocketAddr) -> embedded_nal::nb::Result<(), S::Error>}
     forward! {is_connected(socket: &S::TcpSocket) -> Result<bool, S::Error>}
-    forward! {write(socket: &mut S::TcpSocket, buffer: &[u8]) -> embedded_nal::nb::Result<usize, S::Error>}
-    forward! {read(socket: &mut S::TcpSocket, buffer: &mut [u8]) -> embedded_nal::nb::Result<usize, S::Error>}
+    forward! {send(socket: &mut S::TcpSocket, buffer: &[u8]) -> embedded_nal::nb::Result<usize, S::Error>}
+    forward! {receive(socket: &mut S::TcpSocket, buffer: &mut [u8]) -> embedded_nal::nb::Result<usize, S::Error>}
     forward! {close(socket: S::TcpSocket) -> Result<(), S::Error>}
 }
 
