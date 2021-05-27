@@ -38,8 +38,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9a69a963b70ddacfcd382524f72a4576f359af9334b3bf48a79566590bb8bfa"
 dependencies = [
  "bitrate",
- "cortex-m 0.7.2",
+ "cortex-m 0.6.7",
  "embedded-hal",
+]
+
+[[package]]
+name = "atomic-polyfill"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30302dda7a66f8c55932ebf208f7def840743ff64d495e9ceffcd97c18f11d39"
+dependencies = [
+ "cortex-m 0.7.2",
 ]
 
 [[package]]
@@ -240,11 +249,11 @@ dependencies = [
 
 [[package]]
 name = "embedded-nal"
-version = "0.1.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae46eb1b02de5a76d9d0ea21d657ff5b0ad2cc47f3a7723608227b1dd1b3eb18"
+checksum = "db9efecb57ab54fa918730f2874d7d37647169c50fa1357fecb81abee840b113"
 dependencies = [
- "heapless 0.5.6",
+ "heapless 0.7.1",
  "nb 1.0.0",
  "no-std-net",
 ]
@@ -318,22 +327,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "hash32"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0c35f58762feb77d74ebe43bdbc3210f09be9fe6742234d573bacc26ed92b67"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
-
-[[package]]
-name = "heapless"
-version = "0.5.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74911a68a1658cfcfb61bc0ccfbd536e3b6e906f8c2f7883ee50157e3e2184f1"
-dependencies = [
- "as-slice",
- "generic-array 0.13.3",
- "hash32",
- "stable_deref_trait",
-]
 
 [[package]]
 name = "heapless"
@@ -343,8 +349,19 @@ checksum = "634bd4d29cbf24424d0a4bfcbf80c6960129dc24424752a7d1d1390607023422"
 dependencies = [
  "as-slice",
  "generic-array 0.14.4",
- "hash32",
+ "hash32 0.1.1",
  "serde",
+ "stable_deref_trait",
+]
+
+[[package]]
+name = "heapless"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7ee8a997d259962217f40279f34201fdf06e669bafa69d7c1f4c7ff1893b5f6"
+dependencies = [
+ "atomic-polyfill",
+ "hash32 0.2.1",
  "stable_deref_trait",
 ]
 
@@ -409,13 +426,12 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.2.0"
-source = "git+https://github.com/quartiq/minimq.git?rev=d2ec3e8#d2ec3e8351fa403ea96defd98c0b4410cbaa18a4"
+source = "git+https://github.com/quartiq/minimq.git?rev=dbdbec0#dbdbec0b77d2e134dc6c025018a82c14cbdfbe34"
 dependencies = [
  "bit_field",
  "embedded-nal",
  "enum-iterator",
- "generic-array 0.14.4",
- "heapless 0.6.1",
+ "heapless 0.7.1",
 ]
 
 [[package]]
@@ -454,9 +470,9 @@ dependencies = [
 
 [[package]]
 name = "no-std-net"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2178127478ae4ee9be7180bc9c3bffb6354dd7238400db567102f98c413a9f35"
+checksum = "1bcece43b12349917e096cddfa66107277f123e6c96a5aea78711dc601a47152"
 
 [[package]]
 name = "num"
@@ -745,10 +761,10 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/smoltcp-nal.git?rev=4a1711c#4a1711c54cdf79f5ee8c1c99a1e8984f5944270c"
+source = "git+https://github.com/quartiq/smoltcp-nal.git?rev=5e56576#5e56576fbbc594f0a0e1df9222a20eb35c8e7511"
 dependencies = [
  "embedded-nal",
- "heapless 0.6.1",
+ "heapless 0.7.1",
  "nanorand",
  "smoltcp",
 ]
@@ -794,7 +810,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b672c837e0ee8158ecc7fce0f9a948dd0693a9c588338e728d14b73307a0b7d"
 dependencies = [
  "bare-metal 0.2.5",
- "cortex-m 0.7.2",
+ "cortex-m 0.6.7",
  "cortex-m-rt",
  "vcell",
 ]

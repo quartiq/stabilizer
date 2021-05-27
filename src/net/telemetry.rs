@@ -21,7 +21,7 @@ use crate::hardware::{
 
 /// The telemetry client for reporting telemetry data over MQTT.
 pub struct TelemetryClient<T: Serialize> {
-    mqtt: minimq::MqttClient<minimq::consts::U256, NetworkReference>,
+    mqtt: minimq::Minimq<NetworkReference, 256>,
     telemetry_topic: String<consts::U128>,
     _telemetry: core::marker::PhantomData<T>,
 }
@@ -97,8 +97,7 @@ impl<T: Serialize> TelemetryClient<T> {
     /// A new telemetry client.
     pub fn new(stack: NetworkReference, client_id: &str, prefix: &str) -> Self {
         let mqtt =
-            minimq::MqttClient::new(MQTT_BROKER.into(), client_id, stack)
-                .unwrap();
+            minimq::Minimq::new(MQTT_BROKER.into(), client_id, stack).unwrap();
 
         let mut telemetry_topic: String<consts::U128> = String::from(prefix);
         telemetry_topic.push_str("/telemetry").unwrap();
@@ -122,6 +121,7 @@ impl<T: Serialize> TelemetryClient<T> {
         let telemetry: Vec<u8, consts::U256> =
             serde_json_core::to_vec(telemetry).unwrap();
         self.mqtt
+            .client
             .publish(&self.telemetry_topic, &telemetry, QoS::AtMostOnce, &[])
             .ok();
     }
