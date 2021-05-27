@@ -21,7 +21,7 @@ where
     S: miniconf::Miniconf + Default + Clone,
 {
     default_response_topic: String<consts::U128>,
-    mqtt: minimq::MqttClient<minimq::consts::U256, NetworkReference>,
+    mqtt: minimq::Minimq<NetworkReference, 256>,
     settings: S,
     subscribed: bool,
     settings_prefix: String<consts::U64>,
@@ -39,8 +39,7 @@ where
     /// * `prefix` - The MQTT device prefix to use for this device.
     pub fn new(stack: NetworkReference, client_id: &str, prefix: &str) -> Self {
         let mqtt =
-            minimq::MqttClient::new(MQTT_BROKER.into(), client_id, stack)
-                .unwrap();
+            minimq::Minimq::new(MQTT_BROKER.into(), client_id, stack).unwrap();
 
         let mut response_topic: String<consts::U128> = String::from(prefix);
         response_topic.push_str("/log").unwrap();
@@ -62,7 +61,7 @@ where
     /// # Returns
     /// An option containing an action that should be completed as a result of network servicing.
     pub fn update(&mut self) -> UpdateState {
-        let mqtt_connected = match self.mqtt.is_connected() {
+        let mqtt_connected = match self.mqtt.client.is_connected() {
             Ok(connected) => connected,
             Err(minimq::Error::Network(
                 smoltcp_nal::NetworkError::NoIpAddress,
@@ -88,7 +87,7 @@ where
 
             // We do not currently handle or process potential subscription failures. Instead, this
             // failure will be logged through the stabilizer logging interface.
-            self.mqtt.subscribe(&settings_topic, &[]).unwrap();
+            self.mqtt.client.subscribe(&settings_topic, &[]).unwrap();
             self.subscribed = true;
         }
 
