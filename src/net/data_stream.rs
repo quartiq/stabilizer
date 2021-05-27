@@ -3,7 +3,7 @@ use heapless::{
     spsc::{Consumer, Producer, Queue},
     Vec,
 };
-use smoltcp_nal::embedded_nal::{SocketAddr, TcpClientStack};
+use smoltcp_nal::embedded_nal::{SocketAddr, UdpClientStack};
 
 use super::NetworkReference;
 use crate::hardware::design_parameters::SAMPLE_BUFFER_SIZE;
@@ -66,7 +66,7 @@ impl BlockGenerator {
 
 pub struct DataStream {
     stack: NetworkReference,
-    socket: Option<<NetworkReference as TcpClientStack>::TcpSocket>,
+    socket: Option<<NetworkReference as UdpClientStack>::UdpSocket>,
     queue: Consumer<'static, AdcDacData, BlockBufferSize>,
     remote: Option<SocketAddr>,
 }
@@ -126,7 +126,7 @@ impl DataStream {
             self.stack
                 .socket()
                 .map_err(|err| match err {
-                    <NetworkReference as TcpClientStack>::Error::NoIpAddress => (),
+                    <NetworkReference as UdpClientStack>::Error::NoIpAddress => (),
                     _ => ()
                 })?;
 
@@ -154,22 +154,6 @@ impl DataStream {
         self.remote = Some(remote);
     }
 
-    fn manage_reconnection(&mut self) {
-        if self.socket.is_none() || self.remote.is_none() {
-            return
-        }
-
-        let mut socket = self.socket.borrow_mut().unwrap();
-        let connected = match self.stack.is_connected(&mut socket) {
-            Ok(connected) => connected,
-            _ => return,
-        };
-
-        if !connected {
-            self.stack.connect(&mut socket, self.remote.unwrap()).unwrap();
-        }
-    }
-
     pub fn process(&mut self) -> bool {
         // If there's no socket available, try to connect to our remote.
         if self.socket.is_none() && self.remote.is_some() {
@@ -185,7 +169,7 @@ impl DataStream {
         }
 
         let mut handle = self.socket.borrow_mut().unwrap();
-        let capacity = self.stack.lock(|stack| stack.get_remaining_send_buffer(handle)).unwrap();
+        let capacity = self.stack.lock(|stack| stack.get_remaining_send_buffer(handle.handle)).unwrap();
 
         // TODO: Clean up magic numbers.
         if capacity < 72 {
@@ -197,9 +181,6 @@ impl DataStream {
         }
 
         if let Some(data) = self.queue.dequeue() {
-
-            // Reconnect the socket if we're no longer connected.
-            self.manage_reconnection();
 
             let block = DataBlock {
                 adcs: data.adcs,
@@ -213,14 +194,7 @@ impl DataStream {
 
             // Transmit the data block.
             // TODO: Should we measure how many packets get dropped as telemetry?
-            match self.stack.send(&mut handle, &data) {
-                Ok(len) => {
-                    if len != data.len() {
-                        log::error!("Short message: {} {}", len, data.len());
-                    }
-                },
-                _ => {},
-            }
+            self.stack.send(&mut handle, &data).ok();
         }
 
         self.queue.ready()

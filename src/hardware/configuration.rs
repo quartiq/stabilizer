@@ -7,8 +7,6 @@ use stm32h7xx_hal::{
     prelude::*,
 };
 
-const NUM_SOCKETS: usize = 5;
-
 use smoltcp_nal::smoltcp;
 
 use embedded_hal::digital::v2::{InputPin, OutputPin};
@@ -19,13 +17,18 @@ use super::{
     DigitalInput0, DigitalInput1, EthernetPhy, NetworkStack, AFE0, AFE1,
 };
 
+const NUM_TCP_SOCKETS: usize = 5;
+const NUM_UDP_SOCKETS: usize = 1;
+const NUM_SOCKETS: usize = NUM_UDP_SOCKETS + NUM_TCP_SOCKETS;
+
 pub struct NetStorage {
     pub ip_addrs: [smoltcp::wire::IpCidr; 1],
 
     // Note: There is an additional socket set item required for the DHCP socket.
     pub sockets:
         [Option<smoltcp::socket::SocketSetItem<'static>>; NUM_SOCKETS + 1],
-    pub socket_storage: [SocketStorage; NUM_SOCKETS],
+    pub tcp_socket_storage: [TcpSocketStorage; NUM_TCP_SOCKETS],
+    pub udp_socket_storage: [UdpSocketStorage; NUM_UDP_SOCKETS],
     pub neighbor_cache:
         [Option<(smoltcp::wire::IpAddress, smoltcp::iface::Neighbor)>; 8],
     pub routes_cache:
@@ -37,17 +40,35 @@ pub struct NetStorage {
     pub dhcp_rx_storage: [u8; 600],
 }
 
-#[derive(Copy, Clone)]
-pub struct SocketStorage {
+pub struct UdpSocketStorage {
     rx_storage: [u8; 1024],
-    tx_storage: [u8; 1024 * 3],
+    tx_storage: [u8; 1024],
+    tx_metadata: [smoltcp::storage::PacketMetadata<smoltcp::wire::IpEndpoint>; 10],
+    rx_metadata: [smoltcp::storage::PacketMetadata<smoltcp::wire::IpEndpoint>; 10],
 }
 
-impl SocketStorage {
+impl UdpSocketStorage {
     const fn new() -> Self {
         Self {
             rx_storage: [0; 1024],
-            tx_storage: [0; 1024 * 3],
+            tx_storage: [0; 1024],
+            tx_metadata: [smoltcp::storage::PacketMetadata::<smoltcp::wire::IpEndpoint>::EMPTY; 10],
+            rx_metadata: [smoltcp::storage::PacketMetadata::<smoltcp::wire::IpEndpoint>::EMPTY; 10],
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct TcpSocketStorage {
+    rx_storage: [u8; 1024],
+    tx_storage: [u8; 1024],
+}
+
+impl TcpSocketStorage {
+    const fn new() -> Self {
+        Self {
+            rx_storage: [0; 1024],
+            tx_storage: [0; 1024],
         }
     }
 }
@@ -61,8 +82,9 @@ impl NetStorage {
             )],
             neighbor_cache: [None; 8],
             routes_cache: [None; 8],
-            sockets: [None, None, None, None, None, None],
-            socket_storage: [SocketStorage::new(); NUM_SOCKETS],
+            sockets: [None, None, None, None, None, None, None],
+            tcp_socket_storage: [TcpSocketStorage::new(); NUM_TCP_SOCKETS],
+            udp_socket_storage: [UdpSocketStorage::new(); NUM_UDP_SOCKETS],
             dhcp_tx_storage: [0; 600],
             dhcp_rx_storage: [0; 600],
             dhcp_rx_metadata: [smoltcp::socket::RawPacketMetadata::EMPTY; 1],
@@ -594,7 +616,7 @@ pub fn setup(
             let mut sockets =
                 smoltcp::socket::SocketSet::new(&mut store.sockets[..]);
 
-            for storage in store.socket_storage.iter_mut() {
+            for storage in store.tcp_socket_storage[..].iter_mut() {
                 let tcp_socket = {
                     let rx_buffer = smoltcp::socket::TcpSocketBuffer::new(
                         &mut storage.rx_storage[..],
@@ -606,6 +628,22 @@ pub fn setup(
                     smoltcp::socket::TcpSocket::new(rx_buffer, tx_buffer)
                 };
                 sockets.add(tcp_socket);
+            }
+
+            for storage in store.udp_socket_storage[..].iter_mut() {
+                let udp_socket = {
+                    let rx_buffer = smoltcp::socket::UdpSocketBuffer::new(
+                        &mut storage.rx_metadata[..],
+                        &mut storage.rx_storage[..],
+                    );
+                    let tx_buffer = smoltcp::socket::UdpSocketBuffer::new(
+                        &mut storage.tx_metadata[..],
+                        &mut storage.tx_storage[..],
+                    );
+
+                    smoltcp::socket::UdpSocket::new(rx_buffer, tx_buffer)
+                };
+                sockets.add(udp_socket);
             }
 
             sockets
