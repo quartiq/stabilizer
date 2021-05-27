@@ -64,11 +64,11 @@ rev = "c6f2b28"
 
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
-branch = "feature/nal-update"
+rev = "5e56576"
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq.git"
-branch = "feature/nal-update"
+rev = "dbdbec0"
 
 [features]
 nightly = ["cortex-m/inline-asm", "dsp/nightly"]
