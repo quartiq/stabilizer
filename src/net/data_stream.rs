@@ -3,7 +3,7 @@ use heapless::{
     spsc::{Consumer, Producer, Queue},
     Vec,
 };
-use smoltcp_nal::{smoltcp, embedded_nal::{Mode, SocketAddr, TcpStack}};
+use smoltcp_nal::embedded_nal::{SocketAddr, TcpClientStack};
 
 use super::NetworkReference;
 use crate::hardware::design_parameters::SAMPLE_BUFFER_SIZE;
@@ -66,7 +66,7 @@ impl BlockGenerator {
 
 pub struct DataStream {
     stack: NetworkReference,
-    socket: Option<<NetworkReference as TcpStack>::TcpSocket>,
+    socket: Option<<NetworkReference as TcpClientStack>::TcpSocket>,
     queue: Consumer<'static, AdcDacData, BlockBufferSize>,
     remote: Option<SocketAddr>,
 }
@@ -122,18 +122,18 @@ impl DataStream {
             self.close();
         }
 
-        let socket =
+        let mut socket =
             self.stack
-                .open(Mode::NonBlocking)
+                .socket()
                 .map_err(|err| match err {
-                    <NetworkReference as TcpStack>::Error::NoIpAddress => (),
+                    <NetworkReference as TcpClientStack>::Error::NoIpAddress => (),
                     _ => ()
                 })?;
 
         // TODO: How should we handle a connection failure?
-        let socket = self.stack.connect(socket, remote).unwrap();
+        self.stack.connect(&mut socket, remote).unwrap();
 
-        //log::info!("Stream connecting to {:?}", remote);
+        log::info!("Stream connecting to {:?}", remote);
 
         // Note(unwrap): The socket will be empty before we replace it.
         self.socket.replace(socket);
@@ -166,7 +166,7 @@ impl DataStream {
         };
 
         if !connected {
-            self.socket.replace(self.stack.connect(socket, self.remote.unwrap()).unwrap());
+            self.stack.connect(&mut socket, self.remote.unwrap()).unwrap();
         }
     }
 
@@ -185,12 +185,7 @@ impl DataStream {
         }
 
         let mut handle = self.socket.borrow_mut().unwrap();
-
-        let capacity = self.stack.lock(|stack| {
-            let mut all_sockets = stack.sockets.borrow_mut();
-            let socket: &mut smoltcp::socket::TcpSocket = &mut *all_sockets.get(handle);
-            socket.send_capacity() - socket.send_queue()
-        });
+        let capacity = self.stack.lock(|stack| stack.get_remaining_send_buffer(handle)).unwrap();
 
         // TODO: Clean up magic numbers.
         if capacity < 72 {
@@ -218,7 +213,7 @@ impl DataStream {
 
             // Transmit the data block.
             // TODO: Should we measure how many packets get dropped as telemetry?
-            match self.stack.write(&mut handle, &data) {
+            match self.stack.send(&mut handle, &data) {
                 Ok(len) => {
                     if len != data.len() {
                         log::error!("Short message: {} {}", len, data.len());

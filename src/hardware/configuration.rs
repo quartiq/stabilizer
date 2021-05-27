@@ -9,7 +9,6 @@ use stm32h7xx_hal::{
 
 const NUM_SOCKETS: usize = 5;
 
-use heapless::{consts, Vec};
 use smoltcp_nal::smoltcp;
 
 use embedded_hal::digital::v2::{InputPin, OutputPin};
@@ -41,14 +40,14 @@ pub struct NetStorage {
 #[derive(Copy, Clone)]
 pub struct SocketStorage {
     rx_storage: [u8; 1024],
-    tx_storage: [u8; 1024],
+    tx_storage: [u8; 1024 * 3],
 }
 
 impl SocketStorage {
     const fn new() -> Self {
         Self {
             rx_storage: [0; 1024],
-            tx_storage: [0; 1024],
+            tx_storage: [0; 1024 * 3],
         }
     }
 }
@@ -180,6 +179,8 @@ pub fn setup(
     let gpioe = device.GPIOE.split(ccdr.peripheral.GPIOE);
     let gpiof = device.GPIOF.split(ccdr.peripheral.GPIOF);
     let mut gpiog = device.GPIOG.split(ccdr.peripheral.GPIOG);
+
+    let _uart_tx = gpiod.pd8.into_push_pull_output().set_speed(hal::gpio::Speed::VeryHigh);
 
     let dma_streams =
         hal::dma::dma::StreamsTuple::new(device.DMA1, ccdr.peripheral.DMA1);
@@ -589,12 +590,10 @@ pub fn setup(
             .routes(routes)
             .finalize();
 
-        let (mut sockets, handles) = {
+        let mut sockets = {
             let mut sockets =
                 smoltcp::socket::SocketSet::new(&mut store.sockets[..]);
 
-            let mut handles: Vec<smoltcp::socket::SocketHandle, consts::U64> =
-                Vec::new();
             for storage in store.socket_storage.iter_mut() {
                 let tcp_socket = {
                     let rx_buffer = smoltcp::socket::TcpSocketBuffer::new(
@@ -606,12 +605,10 @@ pub fn setup(
 
                     smoltcp::socket::TcpSocket::new(rx_buffer, tx_buffer)
                 };
-                let handle = sockets.add(tcp_socket);
-
-                handles.push(handle).unwrap();
+                sockets.add(tcp_socket);
             }
 
-            (sockets, handles)
+            sockets
         };
 
         let dhcp_client = {
@@ -647,7 +644,6 @@ pub fn setup(
         let mut stack = smoltcp_nal::NetworkStack::new(
             interface,
             sockets,
-            &handles,
             Some(dhcp_client),
         );
 
