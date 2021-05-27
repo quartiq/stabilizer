@@ -13,7 +13,7 @@ use hardware::{
     DigitalInput0, DigitalInput1, InputPin, SystemTimer, AFE0, AFE1,
 };
 
-use net::{NetworkUsers, Telemetry, TelemetryBuffer, UpdateState};
+use net::{NetworkState, NetworkUsers, Telemetry, TelemetryBuffer};
 
 const SCALE: f32 = i16::MAX as _;
 
@@ -173,8 +173,11 @@ const APP: () = {
     fn idle(mut c: idle::Context) -> ! {
         loop {
             match c.resources.network.lock(|net| net.update()) {
-                UpdateState::Updated => c.spawn.settings_update().unwrap(),
-                UpdateState::NoChange => cortex_m::asm::wfi(),
+                NetworkState::SettingsChanged => {
+                    c.spawn.settings_update().unwrap()
+                }
+                NetworkState::Updated => {}
+                NetworkState::NoChange => cortex_m::asm::wfi(),
             }
         }
     }

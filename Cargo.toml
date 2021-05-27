@@ -53,8 +53,8 @@ rev = "70b0eb5"
 
 # rewrite
 [dependencies.mcp23017]
-git = "https://github.com/mrd0ll4r/mcp23017.git"
-rev = "61933f857a"
+git = "https://github.com/lucazulian/mcp23017.git"
+rev = "523d71d"
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]
@@ -71,11 +71,11 @@ rev = "c6f2b28"
 
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
-rev = "4a1711c"
+rev = "5e56576"
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq.git"
-rev = "d2ec3e8"
+rev = "dbdbec0"
 
 [features]
 nightly = ["cortex-m/inline-asm", "dsp/nightly"]
