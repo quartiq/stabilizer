@@ -778,6 +778,7 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.1.0"
+source = "git+https://github.com/quartiq/smoltcp-nal.git?branch=feature/udp-support#d387c79df56ba61af233846dbae3ae3bff601309"
 dependencies = [
  "embedded-nal",
  "heapless 0.7.1",
