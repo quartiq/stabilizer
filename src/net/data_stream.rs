@@ -10,6 +10,8 @@ use crate::hardware::design_parameters::SAMPLE_BUFFER_SIZE;
 // The number of data blocks that we will buffer in the queue.
 const BLOCK_BUFFER_SIZE: usize = 30;
 
+const SUBSAMPLE_RATE: usize = 2;
+
 pub fn setup_streaming(
     stack: NetworkReference,
 ) -> (BlockGenerator, DataStream) {
@@ -28,7 +30,7 @@ pub fn serialize_blocks<'a>(buffer: &'a mut [u8], max_buffer_size: usize, queue:
         AdcDacData, BLOCK_BUFFER_SIZE>) -> &'a [u8] {
     // While there is space in the buffer, serialize into it.
 
-    let block_size = (SAMPLE_BUFFER_SIZE * 2) * 2 * 2 + 8;
+    let block_size = (SAMPLE_BUFFER_SIZE / SUBSAMPLE_RATE * 2) * 2 * 2 + 8;
 
     // Truncate the buffer to the maximum buffer size.
     let buffer: &mut [u8] = if buffer.len() > max_buffer_size {
@@ -54,7 +56,7 @@ pub fn serialize_blocks<'a>(buffer: &'a mut [u8], max_buffer_size: usize, queue:
         };
 
         enqueued_blocks += 1;
-        let length = block.to_slice(buf);
+        let length = block.to_slice(buf, SUBSAMPLE_RATE);
         assert!(length == block_size);
     }
 
@@ -116,14 +118,15 @@ struct DataBlock {
 }
 
 impl DataBlock {
-    pub fn to_slice(self, buf: &mut [u8]) -> usize {
+    pub fn to_slice(self, buf: &mut [u8], subsample: usize) -> usize {
+        let block_size = self.block_size / subsample;
         buf[0..4].copy_from_slice(&self.block_id.to_be_bytes());
-        buf[4..8].copy_from_slice(&self.block_size.to_be_bytes());
+        buf[4..8].copy_from_slice(&block_size.to_be_bytes());
 
         let mut offset: usize = 8;
         for device in &[self.adcs, self.dacs] {
             for channel in device {
-                for sample in channel {
+                for sample in channel.iter().step_by(subsample) {
                     buf[offset..offset+2].copy_from_slice(&sample.to_be_bytes());
                     offset += 2;
                 }
