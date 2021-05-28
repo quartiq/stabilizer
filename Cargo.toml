@@ -67,7 +67,7 @@ rev = "a2e3ad5"
 
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf.git"
-rev = "c6f2b28"
+rev = "2750533"
 
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
