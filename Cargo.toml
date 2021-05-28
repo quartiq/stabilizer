@@ -69,7 +69,7 @@ branch = "feature/udp-support"
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq.git"
-branch = "feature/nal-update"
+rev = "dbdbec0"
 
 [features]
 nightly = ["cortex-m/inline-asm", "dsp/nightly"]
