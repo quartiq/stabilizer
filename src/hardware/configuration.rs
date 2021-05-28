@@ -9,7 +9,7 @@ use stm32h7xx_hal::{
 
 const NUM_SOCKETS: usize = 4;
 
-use heapless::{consts, Vec};
+use heapless::Vec;
 use smoltcp_nal::smoltcp;
 
 use embedded_hal::digital::v2::{InputPin, OutputPin};
@@ -642,7 +642,7 @@ pub fn setup(
             let mut sockets =
                 smoltcp::socket::SocketSet::new(&mut store.sockets[..]);
 
-            let mut handles: Vec<smoltcp::socket::SocketHandle, consts::U64> =
+            let mut handles: Vec<smoltcp::socket::SocketHandle, 64> =
                 Vec::new();
             for storage in store.socket_storage.iter_mut() {
                 let tcp_socket = {

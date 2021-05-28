@@ -10,7 +10,7 @@
 ///!
 ///! Respones to settings updates are sent without quality-of-service guarantees, so there's no
 ///! guarantee that the requestee will be informed that settings have been applied.
-use heapless::{consts, String};
+use heapless::String;
 
 use super::{MqttMessage, NetworkReference, SettingsResponse, UpdateState};
 use crate::hardware::design_parameters::MQTT_BROKER;
@@ -20,11 +20,11 @@ pub struct MiniconfClient<S>
 where
     S: miniconf::Miniconf + Default + Clone,
 {
-    default_response_topic: String<consts::U128>,
+    default_response_topic: String<128>,
     mqtt: minimq::Minimq<NetworkReference, 256>,
     settings: S,
     subscribed: bool,
-    settings_prefix: String<consts::U64>,
+    settings_prefix: String<64>,
 }
 
 impl<S> MiniconfClient<S>
@@ -41,10 +41,10 @@ where
         let mqtt =
             minimq::Minimq::new(MQTT_BROKER.into(), client_id, stack).unwrap();
 
-        let mut response_topic: String<consts::U128> = String::from(prefix);
+        let mut response_topic: String<128> = String::from(prefix);
         response_topic.push_str("/log").unwrap();
 
-        let mut settings_prefix: String<consts::U64> = String::from(prefix);
+        let mut settings_prefix: String<64> = String::from(prefix);
         settings_prefix.push_str("/settings").unwrap();
 
         Self {
@@ -81,7 +81,7 @@ where
         if !self.subscribed && mqtt_connected {
             // Note(unwrap): We construct a string with two more characters than the prefix
             // strucutre, so we are guaranteed to have space for storage.
-            let mut settings_topic: String<consts::U66> =
+            let mut settings_topic: String<66> =
                 String::from(self.settings_prefix.as_str());
             settings_topic.push_str("/#").unwrap();
 
