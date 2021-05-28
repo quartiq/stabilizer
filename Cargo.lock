@@ -417,7 +417,7 @@ source = "git+https://github.com/quartiq/miniconf.git?rev=c6f2b28#c6f2b28f735e27
 dependencies = [
  "derive_miniconf",
  "serde",
- "serde-json-core",
+ "serde-json-core 0.3.0",
 ]
 
 [[package]]
@@ -718,6 +718,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-json-core"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8014aeea272bca0f0779778d43253f2f3375b414185b30e6ecc4d3e4a9994781"
+dependencies = [
+ "heapless 0.7.1",
+ "ryu",
+ "serde",
+]
+
+[[package]]
 name = "serde_derive"
 version = "1.0.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -782,7 +793,7 @@ dependencies = [
  "rtt-logger",
  "rtt-target",
  "serde",
- "serde-json-core",
+ "serde-json-core 0.4.0",
  "shared-bus",
  "smoltcp-nal",
  "stm32h7xx-hal",
