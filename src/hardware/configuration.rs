@@ -207,7 +207,6 @@ pub fn setup(
     }
 
     // Before being able to call any code in ITCM, load that code from flash.
-    log::info!("Loading ITCM");
     load_itcm();
 
     // Set up the system timer for RTIC scheduling.
@@ -922,7 +921,7 @@ pub fn setup(
 
         #[cfg(feature = "pounder_v1_1")]
         let pounder_stamper = {
-            logger::info!("Pounder v1.1 or later");
+            log::info!("Assuming Pounder v1.1 or later");
             let etr_pin = gpioa.pa0.into_alternate_af3();
 
             // The frequency in the constructor is dont-care, as we will modify the period + clock
@@ -985,13 +984,13 @@ pub fn setup(
         digital_inputs,
     };
 
+    // Enable the instruction cache.
+    core.SCB.enable_icache();
+
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
     // info!("Built on {}", build_info::BUILT_TIME_UTC);
     // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
     log::info!("setup() complete");
-
-    // Enable the instruction cache.
-    core.SCB.enable_icache();
 
     (stabilizer, pounder)
 }
