@@ -9,7 +9,7 @@ use stm32h7xx_hal::{
 
 const NUM_SOCKETS: usize = 4;
 
-use heapless::{consts, Vec};
+use heapless::Vec;
 use smoltcp_nal::smoltcp;
 
 use embedded_hal::digital::v2::{InputPin, OutputPin};
@@ -105,6 +105,52 @@ pub struct PounderDevices {
 /// Static storage for the ethernet DMA descriptor ring.
 static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
 
+/// Setup ITCM and load its code from flash.
+///
+/// For portability and maintainability this is implemented in Rust.
+/// Since this is implemented in Rust the compiler may assume that bss and data are set
+/// up already. There is no easy way to ensure this implementation will never need bss
+/// or data. Hence we can't safely run this as the cortex-m-rt `pre_init` hook before
+/// bss/data is setup.
+///
+/// Calling (through IRQ or directly) any code in ITCM before having called
+/// this method is undefined.
+fn load_itcm() {
+    extern "C" {
+        static mut __sitcm: u32;
+        static mut __eitcm: u32;
+        static mut __siitcm: u32;
+    }
+    use core::{ptr, slice, sync::atomic};
+
+    // NOTE(unsafe): Assuming the address symbols from the linker as well as
+    // the source instruction data are all valid, this is safe as it only
+    // copies linker-prepared data to where the code expects it to be.
+    // Calling it multiple times is safe as well.
+
+    unsafe {
+        // ITCM is enabled on reset on our CPU but might not be on others.
+        // Keep for completeness.
+        const ITCMCR: *mut u32 = 0xE000_EF90usize as _;
+        ptr::write_volatile(ITCMCR, ptr::read_volatile(ITCMCR) | 1);
+
+        // Ensure ITCM is enabled before loading.
+        atomic::fence(atomic::Ordering::SeqCst);
+
+        let len =
+            (&__eitcm as *const u32).offset_from(&__sitcm as *const _) as usize;
+        let dst = slice::from_raw_parts_mut(&mut __sitcm as *mut _, len);
+        let src = slice::from_raw_parts(&__siitcm as *const _, len);
+        // Load code into ITCM.
+        dst.copy_from_slice(src);
+    }
+
+    // Ensure ITCM is loaded before potentially executing any instructions from it.
+    atomic::fence(atomic::Ordering::SeqCst);
+    cortex_m::asm::dsb();
+    cortex_m::asm::isb();
+}
+
 /// Configure the stabilizer hardware for operation.
 ///
 /// # Args
@@ -157,8 +203,11 @@ pub fn setup(
         log::set_logger(&LOGGER)
             .map(|()| log::set_max_level(log::LevelFilter::Trace))
             .unwrap();
-        log::info!("starting...");
+        log::info!("Starting");
     }
+
+    // Before being able to call any code in ITCM, load that code from flash.
+    load_itcm();
 
     // Set up the system timer for RTIC scheduling.
     {
@@ -593,7 +642,7 @@ pub fn setup(
             let mut sockets =
                 smoltcp::socket::SocketSet::new(&mut store.sockets[..]);
 
-            let mut handles: Vec<smoltcp::socket::SocketHandle, consts::U64> =
+            let mut handles: Vec<smoltcp::socket::SocketHandle, 64> =
                 Vec::new();
             for storage in store.socket_storage.iter_mut() {
                 let tcp_socket = {
@@ -872,6 +921,7 @@ pub fn setup(
 
         #[cfg(feature = "pounder_v1_1")]
         let pounder_stamper = {
+            log::info!("Assuming Pounder v1.1 or later");
             let etr_pin = gpioa.pa0.into_alternate_af3();
 
             // The frequency in the constructor is dont-care, as we will modify the period + clock
@@ -934,13 +984,13 @@ pub fn setup(
         digital_inputs,
     };
 
+    // Enable the instruction cache.
+    core.SCB.enable_icache();
+
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
     // info!("Built on {}", build_info::BUILT_TIME_UTC);
     // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
     log::info!("setup() complete");
-
-    // Enable the instruction cache.
-    core.SCB.enable_icache();
 
     (stabilizer, pounder)
 }

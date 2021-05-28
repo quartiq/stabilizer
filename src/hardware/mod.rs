@@ -90,11 +90,11 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 }
 
 #[cortex_m_rt::exception]
-fn HardFault(ef: &cortex_m_rt::ExceptionFrame) -> ! {
+unsafe fn HardFault(ef: &cortex_m_rt::ExceptionFrame) -> ! {
     panic!("HardFault at {:#?}", ef);
 }
 
 #[cortex_m_rt::exception]
-fn DefaultHandler(irqn: i16) {
+unsafe fn DefaultHandler(irqn: i16) {
     panic!("Unhandled exception (IRQn = {})", irqn);
 }
