@@ -1,4 +1,4 @@
-use heapless::{consts, String, Vec};
+use heapless::{String, Vec};
 use serde::Serialize;
 
 use core::fmt::Write;
@@ -12,15 +12,15 @@ pub enum SettingsResponseCode {
 /// Represents a generic MQTT message.
 pub struct MqttMessage<'a> {
     pub topic: &'a str,
-    pub message: Vec<u8, consts::U128>,
-    pub properties: Vec<minimq::Property<'a>, consts::U1>,
+    pub message: Vec<u8, 128>,
+    pub properties: Vec<minimq::Property<'a>, 1>,
 }
 
 /// The payload of the MQTT response message to a settings update request.
 #[derive(Serialize)]
 pub struct SettingsResponse {
     code: u8,
-    msg: String<heapless::consts::U64>,
+    msg: String<64>,
 }
 
 impl<'a> MqttMessage<'a> {
@@ -48,8 +48,7 @@ impl<'a> MqttMessage<'a> {
             .unwrap_or(&default_response);
 
         // Associate any provided correlation data with the response.
-        let mut correlation_data: Vec<minimq::Property<'a>, consts::U1> =
-            Vec::new();
+        let mut correlation_data: Vec<minimq::Property<'a>, 1> = Vec::new();
         if let Some(data) = properties
             .iter()
             .find(|prop| matches!(prop, minimq::Property::CorrelationData(_)))

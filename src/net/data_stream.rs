@@ -8,12 +8,12 @@ use super::NetworkReference;
 use crate::hardware::design_parameters::SAMPLE_BUFFER_SIZE;
 
 // The number of data blocks that we will buffer in the queue.
-type BlockBufferSize = heapless::consts::U30;
+const BLOCK_BUFFER_SIZE: usize = 30;
 
 pub fn setup_streaming(
     stack: NetworkReference,
 ) -> (BlockGenerator, DataStream) {
-    let queue = cortex_m::singleton!(: Queue<AdcDacData, BlockBufferSize> = Queue::new()).unwrap();
+    let queue = cortex_m::singleton!(: Queue<AdcDacData, BLOCK_BUFFER_SIZE> = Queue::new()).unwrap();
 
     let (producer, consumer) = queue.split();
 
@@ -25,7 +25,7 @@ pub fn setup_streaming(
 }
 
 pub fn serialize_blocks<'a>(buffer: &'a mut [u8], max_buffer_size: usize, queue: &mut Consumer<'static,
-        AdcDacData, BlockBufferSize>) -> &'a [u8] {
+        AdcDacData, BLOCK_BUFFER_SIZE>) -> &'a [u8] {
     // While there is space in the buffer, serialize into it.
 
     let block_size = (SAMPLE_BUFFER_SIZE * 2) * 2 * 2 + 8;
@@ -69,12 +69,12 @@ pub struct AdcDacData {
 }
 
 pub struct BlockGenerator {
-    queue: Producer<'static, AdcDacData, BlockBufferSize>,
+    queue: Producer<'static, AdcDacData, BLOCK_BUFFER_SIZE>,
     current_id: u32,
 }
 
 impl BlockGenerator {
-    pub fn new(queue: Producer<'static, AdcDacData, BlockBufferSize>) -> Self {
+    pub fn new(queue: Producer<'static, AdcDacData, BLOCK_BUFFER_SIZE>) -> Self {
         Self {
             queue,
             current_id: 0,
@@ -103,7 +103,7 @@ impl BlockGenerator {
 pub struct DataStream {
     stack: NetworkReference,
     socket: Option<<NetworkReference as UdpClientStack>::UdpSocket>,
-    queue: Consumer<'static, AdcDacData, BlockBufferSize>,
+    queue: Consumer<'static, AdcDacData, BLOCK_BUFFER_SIZE>,
     remote: Option<SocketAddr>,
     buffer: [u8; 1024],
 }
@@ -138,7 +138,7 @@ impl DataBlock {
 impl DataStream {
     pub fn new(
         stack: NetworkReference,
-        consumer: Consumer<'static, AdcDacData, BlockBufferSize>,
+        consumer: Consumer<'static, AdcDacData, BLOCK_BUFFER_SIZE>,
     ) -> Self {
         Self {
             stack,

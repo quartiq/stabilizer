@@ -5,7 +5,7 @@
 ///! telemetry (via MQTT), configuration of run-time settings (via MQTT + Miniconf), and live data
 ///! streaming over raw UDP/TCP sockets. This module encompasses the main processing routines
 ///! related to Stabilizer networking operations.
-use heapless::{consts, String};
+use heapless::String;
 use miniconf::Miniconf;
 use serde::Serialize;
 
@@ -129,7 +129,6 @@ where
     /// # Returns
     /// An indication if any of the network users indicated a state change.
     pub fn update(&mut self) -> NetworkState {
-        super::debug::high();
         // Update the MQTT clients.
         self.telemetry.update();
 
@@ -149,8 +148,6 @@ where
             UpdateState::NoChange => poll_result,
         };
 
-        super::debug::low();
-
         result
     }
 }
@@ -168,7 +165,7 @@ fn get_client_id(
     app: &str,
     client: &str,
     mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
-) -> String<consts::U64> {
+) -> String<64> {
     let mut identifier = String::new();
     write!(&mut identifier, "{}-{}-{}", app, mac, client).unwrap();
     identifier
@@ -185,10 +182,10 @@ fn get_client_id(
 pub fn get_device_prefix(
     app: &str,
     mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
-) -> String<consts::U128> {
+) -> String<128> {
     // Note(unwrap): The mac address + binary name must be short enough to fit into this string. If
     // they are defined too long, this will panic and the device will fail to boot.
-    let mut prefix: String<consts::U128> = String::new();
+    let mut prefix: String<128> = String::new();
     write!(&mut prefix, "dt/sinara/{}/{}", app, mac).unwrap();
 
     prefix

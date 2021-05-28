@@ -13,10 +13,6 @@ MEMORY
 }
 
 SECTIONS {
-  .itcm : ALIGN(8) {
-    *(.itcm .itcm.*);
-    . = ALIGN(8);
-    } > ITCM
   .axisram (NOLOAD) : ALIGN(8) {
     *(.axisram .axisram.*);
     . = ALIGN(8);
@@ -33,4 +29,18 @@ SECTIONS {
     *(.sram3 .sram3.*);
     . = ALIGN(4);
     } > SRAM3
-} INSERT AFTER .bss;
+  .itcm : ALIGN(8) {
+    . = ALIGN(8);
+    __sitcm = .;
+    *(.itcm .itcm.*);
+    . = ALIGN(8);
+    __eitcm = .;
+  } > ITCM AT>FLASH
+  __siitcm = LOADADDR(.itcm);
+} INSERT AFTER .uninit;
+
+ASSERT(__sitcm % 8 == 0 && __eitcm % 8 == 0, "
+BUG(cortex-m-rt): .itcm is not 8-byte aligned");
+
+ASSERT(__siitcm % 4 == 0, "
+BUG(cortex-m-rt): the LMA of .itcm is not 4-byte aligned");

@@ -33,7 +33,7 @@ cortex-m-rt = { version = "0.6", features = ["device"] }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
 rtt-target = { version = "0.3", features = ["cortex-m"] }
 serde = { version = "1.0", features = ["derive"], default-features = false }
-heapless = { version = "0.6", features = ["serde"] }
+heapless = { version = "0.7", features = ["serde"] }
 cortex-m-rtic = "0.5.6"
 embedded-hal = "0.2.5"
 nb = "1.0.0"
@@ -44,13 +44,14 @@ dsp = { path = "dsp" }
 ad9959 = { path = "ad9959" }
 miniconf = "0.1.0"
 shared-bus = {version = "0.2.2", features = ["cortex-m"] }
-serde-json-core = "0.3"
-postcard = "0.6"
+serde-json-core = "0.4"
 
+# rtt-target bump
 [dependencies.rtt-logger]
 git = "https://github.com/quartiq/rtt-logger.git"
 rev = "70b0eb5"
 
+# rewrite
 [dependencies.mcp23017]
 git = "https://github.com/lucazulian/mcp23017.git"
 rev = "523d71d"
@@ -59,9 +60,14 @@ rev = "523d71d"
 features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]
 version = "0.9.0"
 
+# link.x section start/end
+[patch.crates-io.cortex-m-rt]
+git = "https://github.com/rust-embedded/cortex-m-rt.git"
+rev = "a2e3ad5"
+
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf.git"
-rev = "c6f2b28"
+rev = "2750533"
 
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
