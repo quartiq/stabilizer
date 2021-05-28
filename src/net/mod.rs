@@ -135,7 +135,7 @@ where
 
         // Update the data stream.
         if self.generator.is_none() {
-            while self.stream.process() {}
+            self.stream.process();
         }
 
         // Poll for incoming data.
