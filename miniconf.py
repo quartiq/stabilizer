@@ -16,6 +16,7 @@ from gmqtt import Client as MqttClient
 
 LOGGER = logging.getLogger(__name__)
 
+
 class Miniconf:
     """An asynchronous API for controlling Miniconf devices using MQTT."""
 
@@ -51,22 +52,21 @@ class Miniconf:
             _qos: The quality-of-service level of the received packet
             properties: A dictionary of properties associated with the message.
         """
-        # Extract corrleation data from the properties
-        correlation_data = json.loads(properties['correlation_data'][0].decode('ascii'))
-
-        # Get the request ID from the correlation data
-        request_id = correlation_data['request_id']
+        # Extract request_id corrleation data from the properties
+        request_id = int.from_bytes(
+            properties['correlation_data'][0], 'big')
 
         self.inflight[request_id].set_result(json.loads(payload))
         del self.inflight[request_id]
 
-
-    async def command(self, path, value):
+    async def command(self, path, value, retain=True):
         """Write the provided data to the specified path.
 
         Args:
             path: The path to write the message to.
             value: The value to write to the path.
+            retain: Retain the MQTT message changing the setting
+                by the broker.
 
         Returns:
             The response to the command as a dictionary.
@@ -79,16 +79,14 @@ class Miniconf:
         self.request_id += 1
         assert request_id not in self.inflight, 'Invalid ID encountered'
 
-        correlation_data = json.dumps({
-            'request_id': request_id,
-        }).encode('ascii')
+        correlation_data = request_id.to_bytes(4, 'big')
 
         value = json.dumps(value)
         LOGGER.info('Sending %s to "%s"', value, setting_topic)
         fut = asyncio.get_running_loop().create_future()
 
         self.inflight[request_id] = fut
-        self.client.publish(setting_topic, payload=value, qos=0, retain=True,
+        self.client.publish(setting_topic, payload=value, qos=0, retain=retain,
                             response_topic=response_topic,
                             correlation_data=correlation_data)
         return await fut
@@ -107,6 +105,9 @@ def main():
                         help='Increase logging verbosity')
     parser.add_argument('--broker', '-b', default='mqtt', type=str,
                         help='The MQTT broker address')
+    parser.add_argument('--no-retain', '-n', default=False,
+                        action='store_true',
+                        help='Do not retain the affected settings')
     parser.add_argument('prefix', type=str,
                         help='The MQTT topic prefix of the target')
     parser.add_argument('settings', metavar="KEY=VALUE", nargs='+',
@@ -124,7 +125,8 @@ def main():
         interface = await Miniconf.create(args.prefix, args.broker)
         for key_value in args.settings:
             path, value = key_value.split("=", 1)
-            response = await interface.command(path, json.loads(value))
+            response = await interface.command(path, json.loads(value),
+                                               not args.no_retain)
             print(f'{path}: {response}')
             if response['code'] != 0:
                 return response['code']
