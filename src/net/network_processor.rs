@@ -37,9 +37,25 @@ impl NetworkProcessor {
         }
     }
 
-    pub fn egress(&mut self) {
-        let now = self.clock.current_ms();
-        self.stack.lock(|stack| stack.poll(now)).ok();
+    /// Handle ethernet link connection status.
+    ///
+    /// # Note
+    /// This may take non-trivial amounts of time to communicate with the PHY. As such, this should
+    /// only be called as often as necessary (e.g. once per second or so).
+    pub fn handle_link(&mut self) {
+        // If the PHY indicates there's no more ethernet link, reset the DHCP server in the network
+        // stack.
+        match self.phy.poll_link() {
+            true => self.network_was_reset = false,
+
+            // Only reset the network stack once per link reconnection. This prevents us from
+            // sending an excessive number of DHCP requests.
+            false if !self.network_was_reset => {
+                self.network_was_reset = true;
+                self.stack.lock(|stack| stack.handle_link_reset());
+            }
+            _ => {}
+        };
     }
 
     /// Process and update the state of the network.
@@ -62,22 +78,6 @@ impl NetworkProcessor {
                 UpdateState::Updated
             }
         };
-
-        // If the PHY indicates there's no more ethernet link, reset the DHCP server in the network
-        // stack.
-        // TODO: Poll the link state in a task and handle resets. Polling this often is slow and
-        // uses necessary CPU time.
-        //match self.phy.poll_link() {
-        //    true => self.network_was_reset = false,
-
-        //    // Only reset the network stack once per link reconnection. This prevents us from
-        //    // sending an excessive number of DHCP requests.
-        //    false if !self.network_was_reset => {
-        //        self.network_was_reset = true;
-        //        self.stack.lock(|stack| stack.handle_link_reset());
-        //    }
-        //    _ => {}
-        //};
 
         result
     }

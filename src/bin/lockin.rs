@@ -94,7 +94,7 @@ const APP: () = {
         lockin: Lockin<4>,
     }
 
-    #[init(spawn=[settings_update, telemetry])]
+    #[init(spawn=[settings_update, telemetry, ethernet_link])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = setup(c.core, c.device);
@@ -117,6 +117,9 @@ const APP: () = {
         // Spawn a settings and telemetry update for default settings.
         c.spawn.settings_update().unwrap();
         c.spawn.telemetry().unwrap();
+
+        // Spawn the ethernet link servicing task.
+        c.spawn.ethernet_link().unwrap();
 
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();
@@ -296,6 +299,12 @@ const APP: () = {
                     + SystemTimer::ticks_from_secs(telemetry_period as u32),
             )
             .unwrap();
+    }
+
+    #[task(priority = 1, resources=[network], schedule=[ethernet_link])]
+    fn ethernet_link(c: ethernet_link::Context) {
+        c.resources.network.processor.handle_link();
+        c.schedule.ethernet_link(c.scheduled + SystemTimer::ticks_from_secs(1)).unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]

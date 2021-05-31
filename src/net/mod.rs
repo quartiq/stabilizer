@@ -47,7 +47,7 @@ pub enum NetworkState {
 /// A structure of Stabilizer's default network users.
 pub struct NetworkUsers<S: Default + Clone + Miniconf, T: Serialize> {
     pub miniconf: MiniconfClient<S>,
-    processor: NetworkProcessor,
+    pub processor: NetworkProcessor,
     stream: DataStream,
     generator: Option<BlockGenerator>,
     pub telemetry: TelemetryClient<T>,
@@ -143,12 +143,10 @@ where
             UpdateState::Updated => NetworkState::Updated,
         };
 
-        let result = match self.miniconf.update() {
+        match self.miniconf.update() {
             UpdateState::Updated => NetworkState::SettingsChanged,
             UpdateState::NoChange => poll_result,
-        };
-
-        result
+        }
     }
 }
 

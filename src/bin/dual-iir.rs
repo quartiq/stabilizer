@@ -69,7 +69,7 @@ const APP: () = {
         iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
     }
 
-    #[init(spawn=[telemetry, settings_update])]
+    #[init(spawn=[telemetry, settings_update, ethernet_link])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
@@ -90,6 +90,9 @@ const APP: () = {
         // Spawn a settings update for default settings.
         c.spawn.settings_update().unwrap();
         c.spawn.telemetry().unwrap();
+
+        // Spawn the ethernet link period check task.
+        c.spawn.ethernet_link().unwrap();
 
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();
@@ -225,6 +228,12 @@ const APP: () = {
                     + SystemTimer::ticks_from_secs(telemetry_period as u32),
             )
             .unwrap();
+    }
+
+    #[task(priority = 1, resources=[network], schedule=[ethernet_link])]
+    fn ethernet_link(c: ethernet_link::Context) {
+        c.resources.network.processor.handle_link();
+        c.schedule.ethernet_link(c.scheduled + SystemTimer::ticks_from_secs(1)).unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]
