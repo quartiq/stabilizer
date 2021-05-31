@@ -44,6 +44,8 @@ pub enum Error {
     Adc,
 }
 
+/// The numerical value (discriminant) of the Channel enum is the index in the attenuator shift
+/// register as well as the attenuator latch enable signal index on the GPIO extender.
 #[derive(Debug, Copy, Clone)]
 #[allow(dead_code)]
 pub enum Channel {
