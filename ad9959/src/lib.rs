@@ -43,6 +43,7 @@ pub enum Mode {
 
 /// The configuration registers within the AD9959 DDS device. The values of each register are
 /// equivalent to the address.
+#[allow(clippy::upper_case_acronyms)]
 pub enum Register {
     CSR = 0x00,
     FR1 = 0x01,
@@ -596,6 +597,22 @@ impl ProfileSerializer {
         self.index += value.len() + 1;
     }
 
+    fn pad(&mut self) {
+        // Pad the buffer to 32-bit (4 byte) alignment by adding dummy writes to CSR and LSRR.
+        match self.index & 3 {
+            3 => {
+                // For a level of 3, we have to pad with 5 bytes to align things.
+                self.add_write(Register::CSR, &[(self.mode as u8) << 1]);
+                self.add_write(Register::LSRR, &[0, 0]);
+            }
+            2 => self.add_write(Register::CSR, &[(self.mode as u8) << 1]),
+            1 => self.add_write(Register::LSRR, &[0, 0]),
+            0 => {}
+
+            _ => unreachable!(),
+        }
+    }
+
     /// Get the serialized profile as a slice of 32-bit words.
     ///
     /// # Note
@@ -604,21 +621,8 @@ impl ProfileSerializer {
     ///
     /// # Returns
     /// A slice of `u32` words representing the serialized profile.
-    pub fn finalize<'a>(&'a mut self) -> &[u32] {
-        // Pad the buffer to 32-bit alignment by adding dummy writes to CSR and LSRR.
-        let padding = 4 - (self.index % 4);
-        match padding {
-            1 => {
-                // For a pad size of 1, we have to pad with 5 bytes to align things.
-                self.add_write(Register::CSR, &[(self.mode as u8) << 1]);
-                self.add_write(Register::LSRR, &[0, 0]);
-            }
-            2 => self.add_write(Register::CSR, &[(self.mode as u8) << 1]),
-            3 => self.add_write(Register::LSRR, &[0, 0]),
-            4 => {}
-
-            _ => unreachable!(),
-        }
+    pub fn finalize<'a>(&'a mut self) -> &'a [u32] {
+        self.pad();
         unsafe {
             core::slice::from_raw_parts::<'a, u32>(
                 &self.data as *const _ as *const u32,
