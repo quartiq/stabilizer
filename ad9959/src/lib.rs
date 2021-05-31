@@ -43,6 +43,7 @@ pub enum Mode {
 
 /// The configuration registers within the AD9959 DDS device. The values of each register are
 /// equivalent to the address.
+#[allow(clippy::upper_case_acronyms)]
 pub enum Register {
     CSR = 0x00,
     FR1 = 0x01,

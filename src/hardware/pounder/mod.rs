@@ -24,7 +24,7 @@ pub enum GpioPin {
     Led7Red = 3,
     Led8Green = 4,
     Led9Red = 5,
-    AttLe0 = 8 + 0,
+    AttLe0 = 8,
     AttLe1 = 8 + 1,
     AttLe2 = 8 + 2,
     AttLe3 = 8 + 3,
@@ -89,14 +89,14 @@ pub struct DdsClockConfig {
     pub external_clock: bool,
 }
 
-impl Into<ad9959::Channel> for Channel {
+impl From<Channel> for ad9959::Channel {
     /// Translate pounder channels to DDS output channels.
-    fn into(self) -> ad9959::Channel {
-        match self {
-            Channel::In0 => ad9959::Channel::Two,
-            Channel::In1 => ad9959::Channel::Four,
-            Channel::Out0 => ad9959::Channel::One,
-            Channel::Out1 => ad9959::Channel::Three,
+    fn from(other: Channel) -> Self {
+        match other {
+            Channel::In0 => Self::Two,
+            Channel::In1 => Self::Four,
+            Channel::Out0 => Self::One,
+            Channel::Out1 => Self::Three,
         }
     }
 }
