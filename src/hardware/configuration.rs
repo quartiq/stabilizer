@@ -17,7 +17,7 @@ use super::{
     DigitalInput0, DigitalInput1, EthernetPhy, NetworkStack, AFE0, AFE1,
 };
 
-const NUM_TCP_SOCKETS: usize = 5;
+const NUM_TCP_SOCKETS: usize = 4;
 const NUM_UDP_SOCKETS: usize = 1;
 const NUM_SOCKETS: usize = NUM_UDP_SOCKETS + NUM_TCP_SOCKETS;
 
@@ -42,7 +42,7 @@ pub struct NetStorage {
 
 pub struct UdpSocketStorage {
     rx_storage: [u8; 1024],
-    tx_storage: [u8; 1024],
+    tx_storage: [u8; 2048],
     tx_metadata: [smoltcp::storage::PacketMetadata<smoltcp::wire::IpEndpoint>; 10],
     rx_metadata: [smoltcp::storage::PacketMetadata<smoltcp::wire::IpEndpoint>; 10],
 }
@@ -51,7 +51,7 @@ impl UdpSocketStorage {
     const fn new() -> Self {
         Self {
             rx_storage: [0; 1024],
-            tx_storage: [0; 1024],
+            tx_storage: [0; 2048],
             tx_metadata: [smoltcp::storage::PacketMetadata::<smoltcp::wire::IpEndpoint>::EMPTY; 10],
             rx_metadata: [smoltcp::storage::PacketMetadata::<smoltcp::wire::IpEndpoint>::EMPTY; 10],
         }
@@ -82,7 +82,7 @@ impl NetStorage {
             )],
             neighbor_cache: [None; 8],
             routes_cache: [None; 8],
-            sockets: [None, None, None, None, None, None, None],
+            sockets: [None, None, None, None, None, None],
             tcp_socket_storage: [TcpSocketStorage::new(); NUM_TCP_SOCKETS],
             udp_socket_storage: [UdpSocketStorage::new(); NUM_UDP_SOCKETS],
             dhcp_tx_storage: [0; 600],

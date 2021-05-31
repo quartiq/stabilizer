@@ -10,7 +10,7 @@ use crate::hardware::design_parameters::SAMPLE_BUFFER_SIZE;
 // The number of data blocks that we will buffer in the queue.
 const BLOCK_BUFFER_SIZE: usize = 30;
 
-const SUBSAMPLE_RATE: usize = 2;
+const SUBSAMPLE_RATE: usize = 1;
 
 pub fn setup_streaming(
     stack: NetworkReference,
@@ -96,9 +96,9 @@ impl BlockGenerator {
 
         self.current_id = self.current_id.wrapping_add(1);
 
-        // Note(unwrap): The buffering of the queue and processing of blocks must be fast enough
-        // such that blocks will never be silently dropped.
-        self.queue.enqueue(block).unwrap();
+        // Note: We silently ignore dropped blocks here. The queue can fill up if the service
+        // routing isn't being called often enough.
+        self.queue.enqueue(block).ok();
     }
 }
 
@@ -173,7 +173,6 @@ impl DataStream {
                     _ => ()
                 })?;
 
-        // TODO: How should we handle a connection failure?
         self.stack.connect(&mut socket, remote).unwrap();
 
         // Note(unwrap): The socket will be empty before we replace it.
@@ -211,7 +210,9 @@ impl DataStream {
 
         if self.queue.ready() {
             let mut handle = self.socket.borrow_mut().unwrap();
-            let capacity = self.stack.lock(|stack| stack.get_remaining_send_buffer(handle.handle)).unwrap();
+            let capacity = self.stack.lock(|stack| stack.with_udp_socket(handle, |socket| {
+                socket.payload_send_capacity()
+            })).unwrap();
 
             let data = serialize_blocks(&mut self.buffer, capacity, &mut self.queue);
 
