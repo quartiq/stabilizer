@@ -78,6 +78,15 @@ impl Default for Settings {
     }
 }
 
+macro_rules! flatten_closures {
+    ($fn:ident, $e:ident, $fun:block) => {
+        $e.$fn(|$e| $fun ).unwrap()
+    };
+    ($fn:ident, $e:ident, $($es:ident),+, $fun:block) => {
+        $e.$fn(|$e| flatten_closures!($fn, $($es),*, $fun)).unwrap()
+    };
+}
+
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = stabilizer::hardware::SystemTimer)]
 const APP: () = {
     struct Resources {
@@ -159,26 +168,22 @@ const APP: () = {
     #[task(binds=DMA1_STR4, resources=[adcs, dacs, lockin, timestamper, pll, settings, telemetry], priority=2)]
     #[inline(never)]
     #[link_section = ".itcm.process"]
-    fn process(c: process::Context) {
-        let adc_samples = [
-            c.resources.adcs.0.acquire_buffer(),
-            c.resources.adcs.1.acquire_buffer(),
-        ];
-
-        let mut dac_samples = [
-            c.resources.dacs.0.acquire_buffer(),
-            c.resources.dacs.1.acquire_buffer(),
-        ];
-
-        let lockin = c.resources.lockin;
-        let settings = c.resources.settings;
+    fn process(mut c: process::Context) {
+        let process::Resources {
+            adcs: (ref mut adc0, ref mut adc1),
+            dacs: (ref mut dac0, ref mut dac1),
+            ref settings,
+            ref mut telemetry,
+            ref mut lockin,
+            ref mut pll,
+            ref mut timestamper,
+        } = c.resources;
 
         let (reference_phase, reference_frequency) = match settings.lockin_mode
         {
             LockinMode::External => {
-                let timestamp =
-                    c.resources.timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
-                let (pll_phase, pll_frequency) = c.resources.pll.update(
+                let timestamp = timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
+                let (pll_phase, pll_frequency) = pll.update(
                     timestamp.map(|t| t as i32),
                     settings.pll_tc[0],
                     settings.pll_tc[1],
@@ -205,45 +210,49 @@ const APP: () = {
             reference_phase.wrapping_mul(settings.lockin_harmonic),
         );
 
-        let output: Complex<i32> = adc_samples[0]
-            .iter()
-            // Zip in the LO phase.
-            .zip(Accu::new(sample_phase, sample_frequency))
-            // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
-            .map(|(&sample, phase)| {
-                let s = (sample as i16 as i32) << 16;
-                lockin.update(s, phase, settings.lockin_tc)
-            })
-            // Decimate
-            .last()
-            .unwrap()
-            * 2; // Full scale assuming the 2f component is gone.
+        flatten_closures!(with_buffer, adc0, adc1, dac0, dac1, {
+            let adc_samples = [adc0, adc1];
+            let mut dac_samples = [dac0, dac1];
 
-        // Convert to DAC data.
-        for (channel, samples) in dac_samples.iter_mut().enumerate() {
-            for (i, sample) in samples.iter_mut().enumerate() {
-                let value = match settings.output_conf[channel] {
-                    Conf::Magnitude => output.abs_sqr() as i32 >> 16,
-                    Conf::Phase => output.arg() >> 16,
-                    Conf::LogPower => (output.log2() << 24) as i32 >> 16,
-                    Conf::ReferenceFrequency => {
-                        reference_frequency as i32 >> 16
-                    }
-                    Conf::InPhase => output.re >> 16,
-                    Conf::Quadrature => output.im >> 16,
-                    Conf::Modulation => DAC_SEQUENCE[i] as i32,
-                };
+            let output: Complex<i32> = adc_samples[0]
+                .iter()
+                // Zip in the LO phase.
+                .zip(Accu::new(sample_phase, sample_frequency))
+                // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
+                .map(|(&sample, phase)| {
+                    let s = (sample as i16 as i32) << 16;
+                    lockin.update(s, phase, settings.lockin_tc)
+                })
+                // Decimate
+                .last()
+                .unwrap()
+                * 2; // Full scale assuming the 2f component is gone.
 
-                *sample = DacCode::from(value as i16).0;
+            // Convert to DAC data.
+            for (channel, samples) in dac_samples.iter_mut().enumerate() {
+                for (i, sample) in samples.iter_mut().enumerate() {
+                    let value = match settings.output_conf[channel] {
+                        Conf::Magnitude => output.abs_sqr() as i32 >> 16,
+                        Conf::Phase => output.arg() >> 16,
+                        Conf::LogPower => (output.log2() << 24) as i32 >> 16,
+                        Conf::ReferenceFrequency => {
+                            reference_frequency as i32 >> 16
+                        }
+                        Conf::InPhase => output.re >> 16,
+                        Conf::Quadrature => output.im >> 16,
+                        Conf::Modulation => DAC_SEQUENCE[i] as i32,
+                    };
+
+                    *sample = DacCode::from(value as i16).0;
+                }
             }
-        }
+            // Update telemetry measurements.
+            telemetry.adcs =
+                [AdcCode(adc_samples[0][0]), AdcCode(adc_samples[1][0])];
 
-        // Update telemetry measurements.
-        c.resources.telemetry.adcs =
-            [AdcCode(adc_samples[0][0]), AdcCode(adc_samples[1][0])];
-
-        c.resources.telemetry.dacs =
-            [DacCode(dac_samples[0][0]), DacCode(dac_samples[1][0])];
+            telemetry.dacs =
+                [DacCode(dac_samples[0][0]), DacCode(dac_samples[1][0])];
+        });
     }
 
     #[idle(resources=[network], spawn=[settings_update])]
