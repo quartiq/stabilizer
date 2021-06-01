@@ -45,16 +45,12 @@ ad9959 = { path = "ad9959" }
 miniconf = "0.1.0"
 shared-bus = {version = "0.2.2", features = ["cortex-m"] }
 serde-json-core = "0.4"
+mcp23017 = "1.0"
 
 # rtt-target bump
 [dependencies.rtt-logger]
 git = "https://github.com/quartiq/rtt-logger.git"
 rev = "70b0eb5"
-
-# rewrite
-[dependencies.mcp23017]
-git = "https://github.com/lucazulian/mcp23017.git"
-rev = "523d71d"
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]

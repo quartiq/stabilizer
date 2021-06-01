@@ -1,20 +1,22 @@
 use super::{Channel, Error};
 
-/// Provide an interface to measure RF input power in dB.
+/// Provide an interface to measure RF input power in dBm.
 pub trait PowerMeasurementInterface {
     fn sample_converter(&mut self, channel: Channel) -> Result<f32, Error>;
 
     /// Measure the power of an input channel in dBm.
     ///
-    /// Note: This function assumes the input channel is connected to an AD8363 output.
-    ///
     /// Args:
-    /// * `channel` - The pounder channel to measure the power of in dBm.
+    /// * `channel` - The pounder input channel to measure the power of.
+    ///
+    /// Returns:
+    /// Power in dBm after the digitally controlled attenuator before the amplifier.
     fn measure_power(&mut self, channel: Channel) -> Result<f32, Error> {
         let analog_measurement = self.sample_converter(channel)?;
 
-        // The AD8363 with VSET connected to VOUT provides an output voltage of 51.7mV / dB at
-        // 100MHz. It also indicates  a y-intercept of -58dBm.
-        Ok(analog_measurement / 0.0517 - 58.0)
+        // The AD8363 with VSET connected to VOUT provides an output voltage of 51.7 mV/dB at
+        // 100MHz with an intercept of -58 dBm.
+        // It is placed behind a 20 dB tap.
+        Ok(analog_measurement * (1. / 0.0517) + (-58. + 20.))
     }
 }
