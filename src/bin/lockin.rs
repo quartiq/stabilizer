@@ -2,6 +2,8 @@
 #![no_std]
 #![no_main]
 
+use core::sync::atomic::{fence, Ordering};
+
 use embedded_hal::digital::v2::InputPin;
 
 use serde::Deserialize;
@@ -214,6 +216,9 @@ const APP: () = {
             let adc_samples = [adc0, adc1];
             let mut dac_samples = [dac0, dac1];
 
+            // Preserve instruction and data ordering w.r.t. DMA flag access.
+            fence(Ordering::SeqCst);
+
             let output: Complex<i32> = adc_samples[0]
                 .iter()
                 // Zip in the LO phase.
@@ -252,6 +257,9 @@ const APP: () = {
 
             telemetry.dacs =
                 [DacCode(dac_samples[0][0]), DacCode(dac_samples[1][0])];
+
+            // Preserve instruction and data ordering w.r.t. DMA flag access.
+            fence(Ordering::SeqCst);
         });
     }
 
