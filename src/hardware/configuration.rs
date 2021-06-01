@@ -802,7 +802,7 @@ pub fn setup(
             let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
             let i2c1 = device.I2C1.i2c(
                 (scl, sda),
-                100.khz(),
+                400.khz(),
                 ccdr.peripheral.I2C1,
                 &ccdr.clocks,
             );

@@ -30,16 +30,16 @@ pub trait AttenuatorInterface {
         // Read all the channels, modify the channel of interest, and write all the channels back.
         // This ensures the staging register and the output register are always in sync.
         let mut channels = [0_u8; 4];
-        self.read_all_attenuators(&mut channels)?;
+        self.transfer_attenuators(&mut channels)?;
 
         // The lowest 2 bits of the 8-bit shift register on the attenuator are ignored. Shift the
         // attenuator code into the upper 6 bits of the register value. Note that the attenuator
         // treats inputs as active-low, so the code is inverted before writing.
-        channels[channel as usize] = (!attenuation_code) << 2;
-        self.write_all_attenuators(&channels)?;
+        channels[channel as usize] = !(attenuation_code << 2);
+        self.transfer_attenuators(&mut channels)?;
 
         // Finally, latch the output of the updated channel to force it into an active state.
-        self.latch_attenuators(channel)?;
+        self.latch_attenuator(channel)?;
 
         Ok(attenuation_code as f32 / 2.0)
     }
@@ -57,8 +57,8 @@ pub trait AttenuatorInterface {
         // Reading the data always shifts data out of the staging registers, so we perform a
         // duplicate write-back to ensure the staging register is always equal to the output
         // register.
-        self.read_all_attenuators(&mut channels)?;
-        self.write_all_attenuators(&channels)?;
+        self.transfer_attenuators(&mut channels)?;
+        self.transfer_attenuators(&mut channels)?;
 
         // The attenuation code is stored in the upper 6 bits of the register, where each LSB
         // represents 0.5 dB. The attenuator stores the code as active-low, so inverting the result
@@ -74,13 +74,10 @@ pub trait AttenuatorInterface {
 
     fn reset_attenuators(&mut self) -> Result<(), Error>;
 
-    fn latch_attenuators(&mut self, channel: Channel) -> Result<(), Error>;
-    fn read_all_attenuators(
+    fn latch_attenuator(&mut self, channel: Channel) -> Result<(), Error>;
+
+    fn transfer_attenuators(
         &mut self,
         channels: &mut [u8; 4],
-    ) -> Result<(), Error>;
-    fn write_all_attenuators(
-        &mut self,
-        channels: &[u8; 4],
     ) -> Result<(), Error>;
 }
