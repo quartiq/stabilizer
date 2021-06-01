@@ -10,9 +10,9 @@ use serde::Deserialize;
 
 use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
 
-use stabilizer::net;
+use stabilizer::{flatten_closures, hardware, net};
 
-use stabilizer::hardware::{
+use hardware::{
     design_parameters, setup, Adc0Input, Adc1Input, AdcCode, AfeGain,
     Dac0Output, Dac1Output, DacCode, DigitalInput0, DigitalInput1,
     InputStamper, SystemTimer, AFE0, AFE1,
@@ -78,15 +78,6 @@ impl Default for Settings {
             telemetry_period: 10,
         }
     }
-}
-
-macro_rules! flatten_closures {
-    ($fn:ident, $e:ident, $fun:block) => {
-        $e.$fn(|$e| $fun ).unwrap()
-    };
-    ($fn:ident, $e:ident, $($es:ident),+, $fun:block) => {
-        $e.$fn(|$e| flatten_closures!($fn, $($es),*, $fun)).unwrap()
-    };
 }
 
 #[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = stabilizer::hardware::SystemTimer)]
