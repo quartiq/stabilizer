@@ -54,10 +54,10 @@ impl Default for Settings {
 
 macro_rules! flatten_closures {
     ($fn:ident, $e:ident, $fun:block) => {
-        $e.$fn(|$e| $fun )
+        $e.$fn(|$e| $fun ).unwrap()
     };
     ($fn:ident, $e:ident, $($es:ident),+, $fun:block) => {
-        $e.$fn(|$e| flatten_closures!($fn, $($es),*, $fun))
+        $e.$fn(|$e| flatten_closures!($fn, $($es),*, $fun)).unwrap()
     };
 }
 

@@ -58,7 +58,7 @@ use super::timers;
 use hal::dma::{
     dma::{DMAReq, DmaConfig},
     traits::TargetAddress,
-    MemoryToPeripheral, Transfer,
+    DMAError, MemoryToPeripheral, Transfer,
 };
 
 // The following global buffers are used for the DAC code DMA transfers. Two buffers are used for
@@ -209,7 +209,7 @@ macro_rules! dac_output {
             ///
             /// NOTE(unsafe): Memory safety and access ordering is not guaranteed
             /// (see the HAL DMA docs).
-            pub fn with_buffer<F, R>(&mut self, f: F) -> R
+            pub fn with_buffer<F, R>(&mut self, f: F) -> Result<R, DMAError>
             where
                 F: FnOnce(&mut SampleBuffer) -> R,
             {

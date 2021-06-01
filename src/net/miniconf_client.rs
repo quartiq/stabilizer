@@ -11,6 +11,7 @@
 ///! Respones to settings updates are sent without quality-of-service guarantees, so there's no
 ///! guarantee that the requestee will be informed that settings have been applied.
 use heapless::String;
+use log::info;
 
 use super::{MqttMessage, NetworkReference, SettingsResponse, UpdateState};
 use crate::hardware::design_parameters::MQTT_BROKER;

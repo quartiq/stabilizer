@@ -74,7 +74,7 @@ use hal::dma::{
     config::Priority,
     dma::{DMAReq, DmaConfig},
     traits::TargetAddress,
-    MemoryToPeripheral, PeripheralToMemory, Transfer,
+    DMAError, MemoryToPeripheral, PeripheralToMemory, Transfer,
 };
 
 /// A type representing an ADC sample.
@@ -359,7 +359,7 @@ macro_rules! adc_input {
                 ///
                 /// NOTE(unsafe): Memory safety and access ordering is not guaranteed
                 /// (see the HAL DMA docs).
-                pub fn with_buffer<F, R>(&mut self, f: F) -> R
+                pub fn with_buffer<F, R>(&mut self, f: F) -> Result<R, DMAError>
                     where
                 F: FnOnce(&mut SampleBuffer) -> R,
                 {
