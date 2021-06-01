@@ -103,7 +103,7 @@ where
             let path = match topic.strip_prefix(prefix) {
                 // For paths, we do not want to include the leading slash.
                 Some(path) => {
-                    if path.len() > 0 {
+                    if !path.is_empty() {
                         &path[1..]
                     } else {
                         path
@@ -117,9 +117,9 @@ where
 
             let message: SettingsResponse = settings
                 .string_set(path.split('/').peekable(), message)
-                .and_then(|_| {
+                .map(|_| {
                     update = true;
-                    Ok(())
+                    ()
                 })
                 .into();
 

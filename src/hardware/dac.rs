@@ -73,6 +73,7 @@ static mut DAC_BUF: [[SampleBuffer; 2]; 2] = [[[0; SAMPLE_BUFFER_SIZE]; 2]; 2];
 #[derive(Copy, Clone)]
 pub struct DacCode(pub u16);
 
+#[allow(clippy::from_over_into)]
 impl Into<f32> for DacCode {
     fn into(self) -> f32 {
         // The DAC output range in bipolar mode (including the external output op-amp) is +/- 4.096
@@ -104,7 +105,7 @@ macro_rules! dac_output {
                 _channel: timers::tim2::$trigger_channel,
                 spi: hal::spi::Spi<hal::stm32::$spi, hal::spi::Disabled, u16>,
             ) -> Self {
-                Self { _channel, spi }
+                Self { spi, _channel }
             }
 
             /// Start the SPI and begin operating in a DMA-driven transfer mode.

@@ -81,6 +81,7 @@ use hal::dma::{
 #[derive(Copy, Clone)]
 pub struct AdcCode(pub u16);
 
+#[allow(clippy::from_over_into)]
 impl Into<f32> for AdcCode {
     /// Convert raw ADC codes to/from voltage levels.
     ///
