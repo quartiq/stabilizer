@@ -10,7 +10,7 @@
 ///! sampling frequency. Instead, the raw codes are stored and the telemetry is generated as
 ///! required immediately before transmission. This ensures that any slower computation required
 ///! for unit conversion can be off-loaded to lower priority tasks.
-use heapless::{consts, String, Vec};
+use heapless::{String, Vec};
 use minimq::QoS;
 use serde::Serialize;
 
@@ -21,8 +21,8 @@ use crate::hardware::{
 
 /// The telemetry client for reporting telemetry data over MQTT.
 pub struct TelemetryClient<T: Serialize> {
-    mqtt: minimq::MqttClient<minimq::consts::U256, NetworkReference>,
-    telemetry_topic: String<consts::U128>,
+    mqtt: minimq::Minimq<NetworkReference, 256>,
+    telemetry_topic: String<128>,
     _telemetry: core::marker::PhantomData<T>,
 }
 
@@ -97,10 +97,9 @@ impl<T: Serialize> TelemetryClient<T> {
     /// A new telemetry client.
     pub fn new(stack: NetworkReference, client_id: &str, prefix: &str) -> Self {
         let mqtt =
-            minimq::MqttClient::new(MQTT_BROKER.into(), client_id, stack)
-                .unwrap();
+            minimq::Minimq::new(MQTT_BROKER.into(), client_id, stack).unwrap();
 
-        let mut telemetry_topic: String<consts::U128> = String::from(prefix);
+        let mut telemetry_topic: String<128> = String::from(prefix);
         telemetry_topic.push_str("/telemetry").unwrap();
 
         Self {
@@ -119,9 +118,10 @@ impl<T: Serialize> TelemetryClient<T> {
     /// # Args
     /// * `telemetry` - The telemetry to report
     pub fn publish(&mut self, telemetry: &T) {
-        let telemetry: Vec<u8, consts::U256> =
+        let telemetry: Vec<u8, 256> =
             serde_json_core::to_vec(telemetry).unwrap();
         self.mqtt
+            .client
             .publish(&self.telemetry_topic, &telemetry, QoS::AtMostOnce, &[])
             .ok();
     }

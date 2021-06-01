@@ -15,7 +15,7 @@ use hardware::{
     DigitalInput0, DigitalInput1, InputPin, SystemTimer, AFE0, AFE1,
 };
 
-use net::{NetworkUsers, Telemetry, TelemetryBuffer, UpdateState};
+use net::{NetworkState, NetworkUsers, Telemetry, TelemetryBuffer};
 
 const SCALE: f32 = i16::MAX as _;
 
@@ -131,6 +131,8 @@ const APP: () = {
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
     #[task(binds=DMA1_STR4, resources=[adcs, digital_inputs, dacs, iir_state, settings, telemetry], priority=2)]
+    #[inline(never)]
+    #[link_section = ".itcm.process"]
     fn process(mut c: process::Context) {
         let process::Resources {
             adcs: (ref mut adc0, ref mut adc1),
@@ -194,8 +196,11 @@ const APP: () = {
     fn idle(mut c: idle::Context) -> ! {
         loop {
             match c.resources.network.lock(|net| net.update()) {
-                UpdateState::Updated => c.spawn.settings_update().unwrap(),
-                UpdateState::NoChange => cortex_m::asm::wfi(),
+                NetworkState::SettingsChanged => {
+                    c.spawn.settings_update().unwrap()
+                }
+                NetworkState::Updated => {}
+                NetworkState::NoChange => cortex_m::asm::wfi(),
             }
         }
     }
