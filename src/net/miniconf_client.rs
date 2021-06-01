@@ -119,7 +119,6 @@ where
                 .string_set(path.split('/').peekable(), message)
                 .map(|_| {
                     update = true;
-                    ()
                 })
                 .into();
 
