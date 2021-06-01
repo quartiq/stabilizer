@@ -24,12 +24,27 @@
 ///! schedule.
 use stm32h7xx_hal as hal;
 
-use crate::hardware::timers;
+use hal::dma::{dma::DmaConfig, PeripheralToMemory, Transfer};
+
+use crate::hardware::{design_parameters::SAMPLE_BUFFER_SIZE, timers};
+
+// Three buffers are required for double buffered mode - 2 are owned by the DMA stream and 1 is the
+// working data provided to the application. These buffers must exist in a DMA-accessible memory
+// region. Note that AXISRAM is not initialized on boot, so their initial contents are undefined.
+#[link_section = ".axisram.buffers"]
+static mut BUF: [[u16; SAMPLE_BUFFER_SIZE]; 3] = [[0; SAMPLE_BUFFER_SIZE]; 3];
 
 /// Software unit to timestamp stabilizer ADC samples using an external pounder reference clock.
 pub struct Timestamper {
+    next_buffer: Option<&'static mut [u16; SAMPLE_BUFFER_SIZE]>,
     timer: timers::PounderTimestampTimer,
-    capture_channel: timers::tim8::Channel1InputCapture,
+    transfer: Transfer<
+        hal::dma::dma::Stream0<hal::stm32::DMA2>,
+        timers::tim8::Channel1InputCapture,
+        PeripheralToMemory,
+        &'static mut [u16; SAMPLE_BUFFER_SIZE],
+        hal::dma::DBTransfer,
+    >,
 }
 
 impl Timestamper {
@@ -50,12 +65,18 @@ impl Timestamper {
     /// The new pounder timestamper in an operational state.
     pub fn new(
         mut timestamp_timer: timers::PounderTimestampTimer,
+        stream: hal::dma::dma::Stream0<hal::stm32::DMA2>,
         capture_channel: timers::tim8::Channel1,
         sampling_timer: &mut timers::SamplingTimer,
         _clock_input: hal::gpio::gpioa::PA0<
             hal::gpio::Alternate<hal::gpio::AF3>,
         >,
     ) -> Self {
+        let config = DmaConfig::default()
+            .memory_increment(true)
+            .circular_buffer(true)
+            .double_buffer(true);
+
         // The sampling timer should generate a trigger output when CH1 comparison occurs.
         sampling_timer.generate_trigger(timers::TriggerGenerator::ComparePulse);
 
@@ -66,29 +87,62 @@ impl Timestamper {
         // The capture channel should capture whenever the trigger input occurs.
         let input_capture = capture_channel
             .into_input_capture(timers::tim8::CaptureSource1::TRC);
+        input_capture.listen_dma();
+
+        // The data transfer is always a transfer of data from the peripheral to a RAM buffer.
+        let data_transfer: Transfer<_, _, PeripheralToMemory, _, _> =
+            Transfer::init(
+                stream,
+                input_capture,
+                // Note(unsafe): BUF[0] and BUF[1] are "owned" by this peripheral.
+                // They shall not be used anywhere else in the module.
+                unsafe { &mut BUF[0] },
+                unsafe { Some(&mut BUF[1]) },
+                config,
+            );
 
         Self {
             timer: timestamp_timer,
-            capture_channel: input_capture,
+            transfer: data_transfer,
+
+            // Note(unsafe): BUF[2] is "owned" by this peripheral. It shall not be used anywhere
+            // else in the module.
+            next_buffer: unsafe { Some(&mut BUF[2]) },
         }
     }
 
-    /// Start collecting timestamps.
+    /// Start the DMA transfer for collecting timestamps.
+    #[allow(dead_code)]
     pub fn start(&mut self) {
-        self.capture_channel.enable();
+        self.transfer
+            .start(|capture_channel| capture_channel.enable());
     }
 
     /// Update the period of the underlying timestamp timer.
+    #[allow(dead_code)]
     pub fn update_period(&mut self, period: u16) {
         self.timer.set_period_ticks(period);
     }
 
-    /// Obtain a timestamp.
+    /// Obtain a buffer filled with timestamps.
     ///
     /// # Returns
-    /// A `Result` potentially indicating capture overflow and containing a `Option` of a captured
-    /// timestamp.
-    pub fn latest_timestamp(&mut self) -> Result<Option<u16>, Option<u16>> {
-        self.capture_channel.latest_capture()
+    /// A reference to the underlying buffer that has been filled with timestamps.
+    #[allow(dead_code)]
+    pub fn acquire_buffer(&mut self) -> &[u16; SAMPLE_BUFFER_SIZE] {
+        // Wait for the transfer to fully complete before continuing.
+        // Note: If a device hangs up, check that this conditional is passing correctly, as there is
+        // no time-out checks here in the interest of execution speed.
+        while !self.transfer.get_transfer_complete_flag() {}
+
+        let next_buffer = self.next_buffer.take().unwrap();
+
+        // Start the next transfer.
+        let (prev_buffer, _, _) =
+            self.transfer.next_transfer(next_buffer).unwrap();
+
+        self.next_buffer.replace(prev_buffer); // .unwrap_none() https://github.com/rust-lang/rust/issues/62633
+
+        self.next_buffer.as_ref().unwrap()
     }
 }
