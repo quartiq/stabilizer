@@ -45,7 +45,7 @@ impl PLL {
     /// The signal's phase/frequency is reconstructed relative to the sampling period.
     ///
     /// Args:
-    /// * `x`: New input phase sample.
+    /// * `x`: New input phase sample or None if a sample has been missed.
     /// * `shift_frequency`: Frequency error scaling. The frequency gain per update is
     ///   `1/(1 << shift_frequency)`.
     /// * `shift_phase`: Phase error scaling. The phase gain is `1/(1 << shift_phase)`
@@ -55,35 +55,33 @@ impl PLL {
     /// A tuple of instantaneous phase and frequency (the current phase increment).
     pub fn update(
         &mut self,
-        x: i32,
+        x: Option<i32>,
         shift_frequency: u8,
         shift_phase: u8,
     ) -> (i32, i32) {
         debug_assert!((1..=30).contains(&shift_frequency));
         debug_assert!((1..=30).contains(&shift_phase));
-        let e = x.wrapping_sub(self.f);
-        self.f = self.f.wrapping_add(
-            (1i32 << (shift_frequency - 1))
-                .wrapping_add(e)
-                .wrapping_sub(self.x)
-                >> shift_frequency,
-        );
-        self.x = x;
-        let f = self.f.wrapping_add(
-            (1i32 << (shift_phase - 1))
-                .wrapping_add(e)
-                .wrapping_sub(self.y)
-                >> shift_phase,
-        );
+        let f = if let Some(x) = x {
+            let e = x.wrapping_sub(self.f);
+            self.f = self.f.wrapping_add(
+                (1i32 << (shift_frequency - 1))
+                    .wrapping_add(e)
+                    .wrapping_sub(self.x)
+                    >> shift_frequency,
+            );
+            self.x = x;
+            self.f.wrapping_add(
+                (1i32 << (shift_phase - 1))
+                    .wrapping_add(e)
+                    .wrapping_sub(self.y)
+                    >> shift_phase,
+            )
+        } else {
+            self.x = self.x.wrapping_add(self.f);
+            self.f
+        };
         self.y = self.y.wrapping_add(f);
         (self.y, f)
-    }
-
-    /// Advance the PLL without providing a new timestamp.
-    pub fn advance(&mut self) -> (i32, i32) {
-        self.x = self.x.wrapping_add(self.f);
-        self.y = self.y.wrapping_add(self.f);
-        (self.y, self.f)
     }
 }
 
