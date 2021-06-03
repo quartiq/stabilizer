@@ -78,6 +78,13 @@ impl PLL {
         self.y = self.y.wrapping_add(f);
         (self.y, f)
     }
+
+    /// Advance the PLL without providing a new timestamp.
+    pub fn advance(&mut self) -> (i32, i32) {
+        self.x = self.x.wrapping_add(self.f);
+        self.y = self.y.wrapping_add(self.f);
+        (self.y, self.f)
+    }
 }
 
 #[cfg(test)]
