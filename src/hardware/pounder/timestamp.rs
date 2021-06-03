@@ -22,9 +22,9 @@
 ///! mode. As soon as the DMA transfer completes, the hardware automatically swaps over to a second
 ///! buffer to continue capturing. This alleviates timing sensitivities of the DMA transfer
 ///! schedule.
+use crate::hardware::{design_parameters, timers};
+use core::convert::TryFrom;
 use stm32h7xx_hal as hal;
-
-use crate::hardware::timers;
 
 /// Software unit to timestamp stabilizer ADC samples using an external pounder reference clock.
 pub struct Timestamper {
@@ -64,8 +64,16 @@ impl Timestamper {
         timestamp_timer.set_trigger_source(timers::TriggerSource::Trigger1);
 
         // The capture channel should capture whenever the trigger input occurs.
-        let input_capture = capture_channel
+        let mut input_capture = capture_channel
             .into_input_capture(timers::tim8::CaptureSource1::TRC);
+
+        // Capture at the batch period.
+        input_capture.configure_prescaler(
+            timers::Prescaler::try_from(
+                design_parameters::SAMPLE_BUFFER_SIZE_LOG2,
+            )
+            .unwrap(),
+        );
 
         Self {
             timer: timestamp_timer,
