@@ -91,7 +91,7 @@ mod tests {
     #[test]
     fn mini() {
         let mut p = PLL::default();
-        let (y, f) = p.update(0x10000, 8, 4);
+        let (y, f) = p.update(Some(0x10000), 8, 4);
         assert_eq!(y, 0x1100);
         assert_eq!(f, y);
     }
@@ -105,7 +105,7 @@ mod tests {
         let mut x = 0i32;
         for i in 0..n {
             x = x.wrapping_add(f0);
-            let (y, f) = p.update(x, shift.0, shift.1);
+            let (y, f) = p.update(Some(x), shift.0, shift.1);
             if i > n / 4 {
                 assert_eq!(f.wrapping_sub(f0).abs() <= 1, true);
             }
