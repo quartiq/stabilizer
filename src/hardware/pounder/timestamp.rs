@@ -13,15 +13,9 @@
 ///! Once the timer is configured, an input capture is configured to record the timer count
 ///! register. The input capture is configured to utilize an internal trigger for the input capture.
 ///! The internal trigger is selected such that when a sample is generated on ADC0, the input
-///! capture is simultaneously triggered. This results in the input capture triggering identically
-///! to when the ADC samples the input.
-///!
-///! Once the input capture is properly configured, a DMA transfer is configured to collect all of
-///! timestamps. The DMA transfer collects 1 timestamp for each ADC sample collected. In order to
-///! avoid potentially losing a timestamp for a sample, the DMA transfer operates in double-buffer
-///! mode. As soon as the DMA transfer completes, the hardware automatically swaps over to a second
-///! buffer to continue capturing. This alleviates timing sensitivities of the DMA transfer
-///! schedule.
+///! capture is simultaneously triggered. That trigger is prescaled (its rate is divided) by the
+///! batch size. This results in the input capture triggering identically to when the ADC samples
+///! the last sample of the batch. That sample is then available for processing by the user.
 use crate::hardware::{design_parameters, timers};
 use core::convert::TryFrom;
 use stm32h7xx_hal as hal;
@@ -35,13 +29,8 @@ pub struct Timestamper {
 impl Timestamper {
     /// Construct the pounder sample timestamper.
     ///
-    /// # Note
-    /// The DMA is immediately configured after instantiation. It will not collect any samples
-    /// until the sample timer begins to cause input capture triggers.
-    ///
     /// # Args
     /// * `timestamp_timer` - The timer peripheral used for capturing timestamps from.
-    /// * `stream` - The DMA stream to use for collecting timestamps.
     /// * `capture_channel` - The input capture channel for collecting timestamps.
     /// * `sampling_timer` - The stabilizer ADC sampling timer.
     /// * `_clock_input` - The input pin for the external clock from Pounder.
