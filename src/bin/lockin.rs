@@ -3,18 +3,28 @@
 #![no_main]
 
 use core::sync::atomic::{fence, Ordering};
-use miniconf::Miniconf;
-use serde::Deserialize;
 
 use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
 use stabilizer::{
     flatten_closures,
     hardware::{
-        design_parameters, hal, setup, Adc0Input, Adc1Input, AdcCode, AfeGain,
-        Dac0Output, Dac1Output, DacCode, DigitalInput0, DigitalInput1,
-        InputPin, InputStamper, SystemTimer, AFE0, AFE1,
+        self,
+        adc::{Adc0Input, Adc1Input, AdcCode},
+        afe::Gain,
+        dac::{Dac0Output, Dac1Output, DacCode},
+        design_parameters,
+        embedded_hal::digital::v2::InputPin,
+        hal,
+        input_stamper::InputStamper,
+        system_timer::SystemTimer,
+        DigitalInput0, DigitalInput1, AFE0, AFE1,
     },
-    net::{NetworkState, NetworkUsers, Telemetry, TelemetryBuffer},
+    net::{
+        miniconf::Miniconf,
+        serde::Deserialize,
+        telemetry::{Telemetry, TelemetryBuffer},
+        NetworkState, NetworkUsers,
+    },
 };
 
 // A constant sinusoid to send on the DAC output.
@@ -43,7 +53,7 @@ enum LockinMode {
 
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 pub struct Settings {
-    afe: [AfeGain; 2],
+    afe: [Gain; 2],
     lockin_mode: LockinMode,
 
     pll_tc: [u8; 2],
@@ -59,7 +69,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            afe: [AfeGain::G1; 2],
+            afe: [Gain::G1; 2],
 
             lockin_mode: LockinMode::External,
 
@@ -76,7 +86,7 @@ impl Default for Settings {
     }
 }
 
-#[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, monotonic = stabilizer::hardware::SystemTimer)]
+#[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, monotonic = stabilizer::hardware::system_timer::SystemTimer)]
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
@@ -95,7 +105,8 @@ const APP: () = {
     #[init(spawn=[settings_update, telemetry])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) = setup(c.core, c.device);
+        let (mut stabilizer, _pounder) =
+            hardware::setup::setup(c.core, c.device);
 
         let network = NetworkUsers::new(
             stabilizer.net.stack,

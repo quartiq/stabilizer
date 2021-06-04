@@ -16,7 +16,7 @@ use serde::Serialize;
 
 use super::NetworkReference;
 use crate::hardware::{
-    design_parameters::MQTT_BROKER, AdcCode, AfeGain, DacCode,
+    adc::AdcCode, afe::Gain, dac::DacCode, design_parameters::MQTT_BROKER,
 };
 
 /// The telemetry client for reporting telemetry data over MQTT.
@@ -73,7 +73,7 @@ impl TelemetryBuffer {
     ///
     /// # Returns
     /// The finalized telemetry structure that can be serialized and reported.
-    pub fn finalize(self, afe0: AfeGain, afe1: AfeGain) -> Telemetry {
+    pub fn finalize(self, afe0: Gain, afe1: Gain) -> Telemetry {
         let in0_volts = Into::<f32>::into(self.adcs[0]) / afe0.as_multiplier();
         let in1_volts = Into::<f32>::into(self.adcs[1]) / afe1.as_multiplier();
 

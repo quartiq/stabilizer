@@ -2,18 +2,13 @@ use super::hal;
 use embedded_hal::{adc::OneShot, blocking::spi::Transfer};
 use serde::{Deserialize, Serialize};
 
-mod attenuators;
-mod dds_output;
-mod hrtimer;
-mod rf_power;
+pub mod attenuators;
+pub mod dds_output;
+pub mod hrtimer;
+pub mod rf_power;
 
 #[cfg(feature = "pounder_v1_1")]
 pub mod timestamp;
-
-pub use attenuators::*;
-pub use dds_output::*;
-pub use hrtimer::{Channel as HRTimerChannel, *};
-pub use rf_power::*;
 
 pub enum GpioPin {
     Led4Green = 0,
@@ -327,7 +322,7 @@ impl PounderDevices {
     }
 }
 
-impl AttenuatorInterface for PounderDevices {
+impl attenuators::AttenuatorInterface for PounderDevices {
     /// Reset all of the attenuators to a power-on default state.
     fn reset_attenuators(&mut self) -> Result<(), Error> {
         self.mcp23017
@@ -374,7 +369,7 @@ impl AttenuatorInterface for PounderDevices {
     }
 }
 
-impl PowerMeasurementInterface for PounderDevices {
+impl rf_power::PowerMeasurementInterface for PounderDevices {
     /// Sample an ADC channel.
     ///
     /// Args:

@@ -15,9 +15,10 @@ use smoltcp_nal::smoltcp;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use super::{
-    adc, afe, cycle_counter::CycleCounter, dac, design_parameters,
-    digital_input_stamper, eeprom, pounder, system_timer, timers, DdsOutput,
-    DigitalInput0, DigitalInput1, EthernetPhy, NetworkStack, AFE0, AFE1,
+    adc, afe, cycle_counter::CycleCounter, dac, design_parameters, eeprom,
+    input_stamper::InputStamper, pounder, pounder::dds_output::DdsOutput,
+    system_timer, timers, DigitalInput0, DigitalInput1, EthernetPhy,
+    NetworkStack, AFE0, AFE1,
 };
 
 pub struct NetStorage {
@@ -84,7 +85,7 @@ pub struct StabilizerDevices {
     pub afes: (AFE0, AFE1),
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
     pub dacs: (dac::Dac0Output, dac::Dac1Output),
-    pub timestamper: digital_input_stamper::InputStamper,
+    pub timestamper: InputStamper,
     pub adc_dac_timer: timers::SamplingTimer,
     pub timestamp_timer: timers::TimestampTimer,
     pub net: NetworkDevices,
@@ -509,10 +510,7 @@ pub fn setup(
 
     let input_stamper = {
         let trigger = gpioa.pa3.into_alternate_af2();
-        digital_input_stamper::InputStamper::new(
-            trigger,
-            timestamp_timer_channels.ch4,
-        )
+        InputStamper::new(trigger, timestamp_timer_channels.ch4)
     };
 
     let digital_inputs = {
@@ -877,7 +875,7 @@ pub fn setup(
                     .set_speed(hal::gpio::Speed::VeryHigh);
 
                 // Configure the IO_Update signal for the DDS.
-                let mut hrtimer = pounder::HighResTimerE::new(
+                let mut hrtimer = pounder::hrtimer::HighResTimerE::new(
                     device.HRTIM_TIME,
                     device.HRTIM_MASTER,
                     device.HRTIM_COMMON,
@@ -889,7 +887,7 @@ pub fn setup(
                 // is triggered after the QSPI write, which can take approximately 120nS, so
                 // there is additional margin.
                 hrtimer.configure_single_shot(
-                    pounder::HRTimerChannel::Two,
+                    pounder::hrtimer::Channel::Two,
                     design_parameters::POUNDER_IO_UPDATE_DURATION,
                     design_parameters::POUNDER_IO_UPDATE_DELAY,
                 );

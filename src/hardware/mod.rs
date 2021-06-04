@@ -1,28 +1,19 @@
+pub use embedded_hal;
 ///! Module for all hardware-specific setup of Stabilizer
 pub use stm32h7xx_hal as hal;
 
-// Re-export for the DigitalInputs below:
-pub use embedded_hal::digital::v2::InputPin;
-
-mod adc;
-mod afe;
-mod configuration;
-mod cycle_counter;
-mod dac;
+pub mod adc;
+pub mod afe;
+pub mod cycle_counter;
+pub mod dac;
 pub mod design_parameters;
-mod digital_input_stamper;
-mod eeprom;
+pub mod input_stamper;
 pub mod pounder;
-mod system_timer;
-mod timers;
+pub mod setup;
+pub mod system_timer;
 
-pub use adc::*;
-pub use afe::{Gain as AfeGain, *};
-pub use cycle_counter::*;
-pub use dac::*;
-pub use digital_input_stamper::*;
-pub use pounder::*;
-pub use system_timer::*;
+mod eeprom;
+mod timers;
 
 // Type alias for the analog front-end (AFE) for ADC0.
 pub type AFE0 = afe::ProgrammableGainAmplifier<
@@ -51,8 +42,6 @@ pub type NetworkStack = smoltcp_nal::NetworkStack<
 >;
 
 pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
-
-pub use configuration::{setup, PounderDevices, StabilizerDevices};
 
 #[inline(never)]
 #[panic_handler]
