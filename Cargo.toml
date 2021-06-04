@@ -52,9 +52,12 @@ mcp23017 = "1.0"
 git = "https://github.com/quartiq/rtt-logger.git"
 rev = "70b0eb5"
 
+# fast double buffered DMA without poisoning and buffer swapping
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]
-version = "0.9.0"
+# version = "0.9.0"
+git = "https://github.com/quartiq/stm32h7xx-hal.git"
+rev = "b0b8a93"
 
 # link.x section start/end
 [patch.crates-io.cortex-m-rt]
