@@ -101,8 +101,9 @@ def main():
         description='Miniconf command line interface.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''Examples:
-%(prog)s dt/sinara/stabilizer/00-11-22-33-aa-bb afe/0='"G2"' iir_ch/0/0=\
-'{"y_min": -32767, "y_max": 32767, "y_offset": 0, "ba": [1.0, 0, 0, 0, 0]}'
+%(prog)s dt/sinara/dual-iir/00-11-22-33-aa-bb iir_ch/0/0=\
+'{"y_min":-32767,"y_max":32767,"y_offset":0,"ba":[1.0,0,0,0,0]}'
+%(prog)s dt/sinara/lockin/00-11-22-33-aa-bb afe/0='"G2"'\
 ''')
     parser.add_argument('-v', '--verbose', action='count', default=0,
                         help='Increase logging verbosity')
