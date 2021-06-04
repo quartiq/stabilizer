@@ -16,6 +16,27 @@ pub fn overflowing_sub(y: i32, x: i32) -> (i32, i8) {
     (delta, wrap)
 }
 
+/// Combine high and low i32 into a single downscaled i32, saturating monotonically.
+///
+/// Args:
+/// `lo`: LSB i32 to scale down by `shift` and range-extend with `hi`
+/// `hi`: MSB i32 to scale up and extend `lo` with. Output will be clipped if
+///     `hi` exceeds the output i32 range.
+/// `shift`: Downscale `lo` by that many bits. Values from 1 to 32 inclusive
+///     are valid.
+pub fn saturating_scale(lo: i32, hi: i32, shift: u32) -> i32 {
+    debug_assert!(shift > 0);
+    debug_assert!(shift <= 32);
+    let hi_range = -1 << (shift - 1);
+    if hi <= hi_range {
+        i32::MIN - hi_range
+    } else if -hi <= hi_range {
+        hi_range - i32::MIN
+    } else {
+        (lo >> shift) + (hi << (32 - shift))
+    }
+}
+
 /// Overflow unwrapper.
 ///
 /// This is unwrapping as in the phase and overflow unwrapping context, not

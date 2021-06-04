@@ -404,8 +404,9 @@ dependencies = [
 
 [[package]]
 name = "mcp23017"
-version = "0.1.1"
-source = "git+https://github.com/lucazulian/mcp23017.git?rev=523d71d#523d71dcb11fc0ea4bd9385ef2527ae7a7eee987"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c32fd6627e73f1cfa95c00ddcdcb5a6a6ddbd10b308d08588a502c018b6e12c"
 dependencies = [
  "embedded-hal",
 ]
@@ -775,8 +776,7 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67034b80041bc33a48df1c1c435b6ae3bb18c35e42aa7e702ce8363b96793398"
+source = "git+https://github.com/quartiq/stm32h7xx-hal.git?rev=b0b8a93#b0b8a930b2c3bc5fcebc2e905b4c5e13360111a5"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",

@@ -233,11 +233,6 @@ pub fn setup(
     let dma_streams =
         hal::dma::dma::StreamsTuple::new(device.DMA1, ccdr.peripheral.DMA1);
 
-    // Early, before the DMA1 peripherals (#272)
-    #[cfg(feature = "pounder_v1_1")]
-    let dma2_streams =
-        hal::dma::dma::StreamsTuple::new(device.DMA2, ccdr.peripheral.DMA2);
-
     // Configure timer 2 to trigger conversions for the ADC
     let mut sampling_timer = {
         // The timer frequency is manually adjusted below, so the 1KHz setting here is a
@@ -802,7 +797,7 @@ pub fn setup(
             let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
             let i2c1 = device.I2C1.i2c(
                 (scl, sda),
-                100.khz(),
+                400.khz(),
                 ccdr.peripheral.I2C1,
                 &ccdr.clocks,
             );
@@ -946,7 +941,6 @@ pub fn setup(
 
             pounder::timestamp::Timestamper::new(
                 timestamp_timer,
-                dma2_streams.0,
                 tim8_channels.ch1,
                 &mut sampling_timer,
                 etr_pin,

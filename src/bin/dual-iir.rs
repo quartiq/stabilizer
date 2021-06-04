@@ -2,16 +2,19 @@
 #![no_std]
 #![no_main]
 
+use core::sync::atomic::{fence, Ordering};
+use miniconf::Miniconf;
 use serde::Deserialize;
 
 use dsp::iir;
 use stabilizer::{
+    flatten_closures,
     hardware::{
         hal, setup, Adc0Input, Adc1Input, AdcCode, AfeGain, Dac0Output,
         Dac1Output, DacCode, DigitalInput0, DigitalInput1, InputPin,
         SystemTimer, AFE0, AFE1,
     },
-    net::{Miniconf, NetworkState, NetworkUsers, Telemetry, TelemetryBuffer},
+    net::{NetworkState, NetworkUsers, Telemetry, TelemetryBuffer},
 };
 
 const SCALE: f32 = i16::MAX as _;
@@ -121,51 +124,63 @@ const APP: () = {
     #[task(binds=DMA1_STR4, resources=[adcs, digital_inputs, dacs, iir_state, settings, telemetry], priority=2)]
     #[inline(never)]
     #[link_section = ".itcm.process"]
-    fn process(c: process::Context) {
-        let adc_samples = [
-            c.resources.adcs.0.acquire_buffer(),
-            c.resources.adcs.1.acquire_buffer(),
-        ];
-
-        let dac_samples = [
-            c.resources.dacs.0.acquire_buffer(),
-            c.resources.dacs.1.acquire_buffer(),
-        ];
+    fn process(mut c: process::Context) {
+        let process::Resources {
+            adcs: (ref mut adc0, ref mut adc1),
+            dacs: (ref mut dac0, ref mut dac1),
+            ref digital_inputs,
+            ref settings,
+            ref mut iir_state,
+            ref mut telemetry,
+        } = c.resources;
 
         let digital_inputs = [
-            c.resources.digital_inputs.0.is_high().unwrap(),
-            c.resources.digital_inputs.1.is_high().unwrap(),
+            digital_inputs.0.is_high().unwrap(),
+            digital_inputs.1.is_high().unwrap(),
         ];
+        telemetry.digital_inputs = digital_inputs;
 
-        let hold = c.resources.settings.force_hold
-            || (digital_inputs[1] && c.resources.settings.allow_hold);
+        let hold =
+            settings.force_hold || (digital_inputs[1] && settings.allow_hold);
 
-        for channel in 0..adc_samples.len() {
-            for sample in 0..adc_samples[0].len() {
-                let mut y = f32::from(adc_samples[channel][sample] as i16);
-                for i in 0..c.resources.iir_state[channel].len() {
-                    y = c.resources.settings.iir_ch[channel][i].update(
-                        &mut c.resources.iir_state[channel][i],
-                        y,
-                        hold,
-                    );
-                }
-                // Note(unsafe): The filter limits ensure that the value is in range.
-                // The truncation introduces 1/2 LSB distortion.
-                let y = unsafe { y.to_int_unchecked::<i16>() };
-                // Convert to DAC code
-                dac_samples[channel][sample] = DacCode::from(y).0;
+        flatten_closures!(with_buffer, adc0, adc1, dac0, dac1, {
+            let adc_samples = [adc0, adc1];
+            let dac_samples = [dac0, dac1];
+
+            // Preserve instruction and data ordering w.r.t. DMA flag access.
+            fence(Ordering::SeqCst);
+
+            for channel in 0..adc_samples.len() {
+                adc_samples[channel]
+                    .iter()
+                    .zip(dac_samples[channel].iter_mut())
+                    .map(|(ai, di)| {
+                        let x = f32::from(*ai as i16);
+                        let y = settings.iir_ch[channel]
+                            .iter()
+                            .zip(iir_state[channel].iter_mut())
+                            .fold(x, |yi, (ch, state)| {
+                                ch.update(state, yi, hold)
+                            });
+                        // Note(unsafe): The filter limits must ensure that the value is in range.
+                        // The truncation introduces 1/2 LSB distortion.
+                        let y: i16 = unsafe { y.to_int_unchecked() };
+                        // Convert to DAC code
+                        *di = DacCode::from(y).0;
+                    })
+                    .last();
             }
-        }
 
-        // Update telemetry measurements.
-        c.resources.telemetry.adcs =
-            [AdcCode(adc_samples[0][0]), AdcCode(adc_samples[1][0])];
+            // Update telemetry measurements.
+            telemetry.adcs =
+                [AdcCode(adc_samples[0][0]), AdcCode(adc_samples[1][0])];
 
-        c.resources.telemetry.dacs =
-            [DacCode(dac_samples[0][0]), DacCode(dac_samples[1][0])];
+            telemetry.dacs =
+                [DacCode(dac_samples[0][0]), DacCode(dac_samples[1][0])];
 
-        c.resources.telemetry.digital_inputs = digital_inputs;
+            // Preserve instruction and data ordering w.r.t. DMA flag access.
+            fence(Ordering::SeqCst);
+        });
     }
 
     #[idle(resources=[network], spawn=[settings_update])]
@@ -223,22 +238,22 @@ const APP: () = {
 
     #[task(binds = SPI2, priority = 3)]
     fn spi2(_: spi2::Context) {
-        panic!("ADC0 input overrun");
+        panic!("ADC0 SPI error");
     }
 
     #[task(binds = SPI3, priority = 3)]
     fn spi3(_: spi3::Context) {
-        panic!("ADC1 input overrun");
+        panic!("ADC1 SPI error");
     }
 
     #[task(binds = SPI4, priority = 3)]
     fn spi4(_: spi4::Context) {
-        panic!("DAC0 output error");
+        panic!("DAC0 SPI error");
     }
 
     #[task(binds = SPI5, priority = 3)]
     fn spi5(_: spi5::Context) {
-        panic!("DAC1 output error");
+        panic!("DAC1 SPI error");
     }
 
     extern "C" {
