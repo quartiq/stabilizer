@@ -4,7 +4,7 @@
 ///! The network processir is a small taks to regularly process incoming data over ethernet, handle
 ///! the ethernet PHY state, and reset the network as appropriate.
 use super::{NetworkReference, UpdateState};
-use crate::hardware::{CycleCounter, EthernetPhy};
+use crate::hardware::{cycle_counter::CycleCounter, EthernetPhy};
 
 /// Processor for managing network hardware.
 pub struct NetworkProcessor {

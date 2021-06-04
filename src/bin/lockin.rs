@@ -4,22 +4,28 @@
 
 use core::sync::atomic::{fence, Ordering};
 
-use embedded_hal::digital::v2::InputPin;
-
-use serde::Deserialize;
-
 use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
-
-use stabilizer::{flatten_closures, hardware, net};
-
-use hardware::{
-    design_parameters, setup, Adc0Input, Adc1Input, AdcCode, AfeGain,
-    Dac0Output, Dac1Output, DacCode, DigitalInput0, DigitalInput1,
-    InputStamper, SystemTimer, AFE0, AFE1,
+use stabilizer::{
+    flatten_closures,
+    hardware::{
+        self,
+        adc::{Adc0Input, Adc1Input, AdcCode},
+        afe::Gain,
+        dac::{Dac0Output, Dac1Output, DacCode},
+        design_parameters,
+        embedded_hal::digital::v2::InputPin,
+        hal,
+        input_stamper::InputStamper,
+        system_timer::SystemTimer,
+        DigitalInput0, DigitalInput1, AFE0, AFE1,
+    },
+    net::{
+        miniconf::Miniconf,
+        serde::Deserialize,
+        telemetry::{Telemetry, TelemetryBuffer},
+        NetworkState, NetworkUsers,
+    },
 };
-
-use miniconf::Miniconf;
-use net::{NetworkState, NetworkUsers, Telemetry, TelemetryBuffer};
 
 // A constant sinusoid to send on the DAC output.
 // Full-scale gives a +/- 10.24V amplitude waveform. Scale it down to give +/- 1V.
@@ -47,7 +53,7 @@ enum LockinMode {
 
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 pub struct Settings {
-    afe: [AfeGain; 2],
+    afe: [Gain; 2],
     lockin_mode: LockinMode,
 
     pll_tc: [u8; 2],
@@ -63,7 +69,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            afe: [AfeGain::G1; 2],
+            afe: [Gain::G1; 2],
 
             lockin_mode: LockinMode::External,
 
@@ -80,7 +86,7 @@ impl Default for Settings {
     }
 }
 
-#[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = stabilizer::hardware::SystemTimer)]
+#[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, monotonic = stabilizer::hardware::system_timer::SystemTimer)]
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
@@ -99,7 +105,8 @@ const APP: () = {
     #[init(spawn=[settings_update, telemetry])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) = setup(c.core, c.device);
+        let (mut stabilizer, _pounder) =
+            hardware::setup::setup(c.core, c.device);
 
         let network = NetworkUsers::new(
             stabilizer.net.stack,
@@ -142,7 +149,7 @@ const APP: () = {
             network,
             digital_inputs: stabilizer.digital_inputs,
             timestamper: stabilizer.timestamper,
-            telemetry: net::TelemetryBuffer::default(),
+            telemetry: TelemetryBuffer::default(),
 
             settings,
 
@@ -308,27 +315,7 @@ const APP: () = {
 
     #[task(binds = ETH, priority = 1)]
     fn eth(_: eth::Context) {
-        unsafe { stm32h7xx_hal::ethernet::interrupt_handler() }
-    }
-
-    #[task(binds = SPI2, priority = 3)]
-    fn spi2(_: spi2::Context) {
-        panic!("ADC0 SPI error");
-    }
-
-    #[task(binds = SPI3, priority = 3)]
-    fn spi3(_: spi3::Context) {
-        panic!("ADC1 SPI error");
-    }
-
-    #[task(binds = SPI4, priority = 3)]
-    fn spi4(_: spi4::Context) {
-        panic!("DAC0 SPI error");
-    }
-
-    #[task(binds = SPI5, priority = 3)]
-    fn spi5(_: spi5::Context) {
-        panic!("DAC1 SPI error");
+        unsafe { hal::ethernet::interrupt_handler() }
     }
 
     extern "C" {

@@ -4,18 +4,26 @@
 
 use core::sync::atomic::{fence, Ordering};
 
-use stabilizer::{flatten_closures, hardware, net};
-
-use miniconf::Miniconf;
-use serde::Deserialize;
-
 use dsp::iir;
-use hardware::{
-    Adc0Input, Adc1Input, AdcCode, AfeGain, Dac0Output, Dac1Output, DacCode,
-    DigitalInput0, DigitalInput1, InputPin, SystemTimer, AFE0, AFE1,
+use stabilizer::{
+    flatten_closures,
+    hardware::{
+        self,
+        adc::{Adc0Input, Adc1Input, AdcCode},
+        afe::Gain,
+        dac::{Dac0Output, Dac1Output, DacCode},
+        embedded_hal::digital::v2::InputPin,
+        hal,
+        system_timer::SystemTimer,
+        DigitalInput0, DigitalInput1, AFE0, AFE1,
+    },
+    net::{
+        miniconf::Miniconf,
+        serde::Deserialize,
+        telemetry::{Telemetry, TelemetryBuffer},
+        NetworkState, NetworkUsers,
+    },
 };
-
-use net::{NetworkState, NetworkUsers, Telemetry, TelemetryBuffer};
 
 const SCALE: f32 = i16::MAX as _;
 
@@ -24,7 +32,7 @@ const IIR_CASCADE_LENGTH: usize = 1;
 
 #[derive(Clone, Copy, Debug, Deserialize, Miniconf)]
 pub struct Settings {
-    afe: [AfeGain; 2],
+    afe: [Gain; 2],
     iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
     allow_hold: bool,
     force_hold: bool,
@@ -35,7 +43,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             // Analog frontend programmable gain amplifier gains (G1, G2, G5, G10)
-            afe: [AfeGain::G1, AfeGain::G1],
+            afe: [Gain::G1, Gain::G1],
             // IIR filter tap gains are an array `[b0, b1, b2, a1, a2]` such that the
             // new output is computed as `y0 = a1*y1 + a2*y2 + b0*x0 + b1*x1 + b2*x2`.
             // The array is `iir_state[channel-index][cascade-index][coeff-index]`.
@@ -52,7 +60,7 @@ impl Default for Settings {
     }
 }
 
-#[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = stabilizer::hardware::SystemTimer)]
+#[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, monotonic = stabilizer::hardware::system_timer::SystemTimer)]
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
@@ -71,7 +79,8 @@ const APP: () = {
     #[init(spawn=[telemetry, settings_update])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) = hardware::setup(c.core, c.device);
+        let (mut stabilizer, _pounder) =
+            hardware::setup::setup(c.core, c.device);
 
         let network = NetworkUsers::new(
             stabilizer.net.stack,
@@ -100,7 +109,7 @@ const APP: () = {
             dacs: stabilizer.dacs,
             network,
             digital_inputs: stabilizer.digital_inputs,
-            telemetry: net::TelemetryBuffer::default(),
+            telemetry: TelemetryBuffer::default(),
             settings: Settings::default(),
         }
     }
@@ -233,7 +242,7 @@ const APP: () = {
 
     #[task(binds = ETH, priority = 1)]
     fn eth(_: eth::Context) {
-        unsafe { stm32h7xx_hal::ethernet::interrupt_handler() }
+        unsafe { hal::ethernet::interrupt_handler() }
     }
 
     #[task(binds = SPI2, priority = 3)]
