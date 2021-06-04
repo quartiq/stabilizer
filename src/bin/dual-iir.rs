@@ -238,22 +238,22 @@ const APP: () = {
 
     #[task(binds = SPI2, priority = 3)]
     fn spi2(_: spi2::Context) {
-        panic!("ADC0 input overrun");
+        panic!("ADC0 SPI error");
     }
 
     #[task(binds = SPI3, priority = 3)]
     fn spi3(_: spi3::Context) {
-        panic!("ADC1 input overrun");
+        panic!("ADC1 SPI error");
     }
 
     #[task(binds = SPI4, priority = 3)]
     fn spi4(_: spi4::Context) {
-        panic!("DAC0 output error");
+        panic!("DAC0 SPI error");
     }
 
     #[task(binds = SPI5, priority = 3)]
     fn spi5(_: spi5::Context) {
-        panic!("DAC1 output error");
+        panic!("DAC1 SPI error");
     }
 
     extern "C" {
