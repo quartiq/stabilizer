@@ -95,7 +95,8 @@ const APP: () = {
             stabilizer.net.mac_address,
         );
 
-        let generator = network.enable_streaming(StreamTarget::default().into());
+        let generator =
+            network.enable_streaming(StreamTarget::default().into());
 
         // Spawn a settings update for default settings.
         c.spawn.settings_update().unwrap();
