@@ -22,11 +22,13 @@ use miniconf_client::MiniconfClient;
 use network_processor::NetworkProcessor;
 use shared::NetworkManager;
 use telemetry::TelemetryClient;
+use data_stream::{DataStream, BlockGenerator};
 
 use core::fmt::Write;
 use heapless::String;
 use miniconf::Miniconf;
 use serde::Serialize;
+use smoltcp_nal::embedded_nal::SocketAddr;
 
 pub type NetworkReference = shared::NetworkStackProxy<'static, NetworkStack>;
 

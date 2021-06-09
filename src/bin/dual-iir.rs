@@ -152,6 +152,7 @@ const APP: () = {
             ref settings,
             ref mut iir_state,
             ref mut telemetry,
+            ref mut generator,
         } = c.resources;
 
         let digital_inputs = [
@@ -192,7 +193,7 @@ const APP: () = {
             }
 
             // Stream the data.
-            c.resources.generator.send(&adc_samples, &dac_samples);
+            generator.send(&adc_samples, &dac_samples);
 
             // Update telemetry measurements.
             telemetry.adcs =

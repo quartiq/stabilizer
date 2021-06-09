@@ -85,7 +85,7 @@ impl BlockGenerator {
 
     pub fn send(
         &mut self,
-        adcs: &[&[u16; SAMPLE_BUFFER_SIZE]; 2],
+        adcs: &[&mut [u16; SAMPLE_BUFFER_SIZE]; 2],
         dacs: &[&mut [u16; SAMPLE_BUFFER_SIZE]; 2],
     ) {
         let block = AdcDacData {
