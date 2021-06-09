@@ -258,11 +258,6 @@ pub fn setup(
     let gpiof = device.GPIOF.split(ccdr.peripheral.GPIOF);
     let mut gpiog = device.GPIOG.split(ccdr.peripheral.GPIOG);
 
-    let _uart_tx = gpiod
-        .pd8
-        .into_push_pull_output()
-        .set_speed(hal::gpio::Speed::VeryHigh);
-
     let dma_streams =
         hal::dma::dma::StreamsTuple::new(device.DMA1, ccdr.peripheral.DMA1);
 

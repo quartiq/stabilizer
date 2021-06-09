@@ -95,12 +95,7 @@ const APP: () = {
             stabilizer.net.mac_address,
         );
 
-        let generator = {
-            use smoltcp_nal::embedded_nal::{IpAddr, Ipv4Addr, SocketAddr};
-            let remote =
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::unspecified()), 0);
-            network.enable_streaming(remote.into())
-        };
+        let generator = network.enable_streaming(StreamTarget::default().into());
 
         // Spawn a settings update for default settings.
         c.spawn.settings_update().unwrap();
@@ -220,7 +215,7 @@ const APP: () = {
                     c.spawn.settings_update().unwrap()
                 }
                 NetworkState::Updated => {}
-                NetworkState::NoChange => {}
+                NetworkState::NoChange => cortex_m::asm::wfi(),
             }
         }
     }
