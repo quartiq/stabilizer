@@ -1,6 +1,8 @@
 use core::borrow::BorrowMut;
 use heapless::spsc::{Consumer, Producer, Queue};
-use smoltcp_nal::embedded_nal::{SocketAddr, UdpClientStack};
+use miniconf::MiniconfAtomic;
+use serde::Deserialize;
+use smoltcp_nal::embedded_nal::{IpAddr, Ipv4Addr, SocketAddr, UdpClientStack};
 
 use super::NetworkReference;
 use crate::hardware::design_parameters::SAMPLE_BUFFER_SIZE;
@@ -13,6 +15,32 @@ const BLOCK_SAMPLE_SIZE: usize = 50;
 const BLOCK_BUFFER_SIZE: usize = 30;
 
 const SUBSAMPLE_RATE: usize = 1;
+
+#[derive(Copy, Clone, Debug, MiniconfAtomic, Deserialize)]
+pub struct StreamTarget {
+    pub ip: [u8; 4],
+    pub port: u16,
+}
+
+impl Default for StreamTarget {
+    fn default() -> Self {
+        Self {
+            ip: [0; 4],
+            port: 0,
+        }
+    }
+}
+
+impl Into<SocketAddr> for StreamTarget {
+    fn into(self) -> SocketAddr {
+        SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::new(
+                self.ip[0], self.ip[1], self.ip[2], self.ip[3],
+            )),
+            self.port,
+        )
+    }
+}
 
 pub fn setup_streaming(
     stack: NetworkReference,
@@ -206,6 +234,15 @@ impl DataStream {
     fn open(&mut self, remote: SocketAddr) -> Result<(), ()> {
         if self.socket.is_some() {
             self.close();
+        }
+
+        // If the remote address is unspecified, just close the existing socket.
+        if remote.ip().is_unspecified() {
+            if self.socket.is_some() {
+                self.close();
+            }
+
+            return Err(());
         }
 
         let mut socket = self.stack.socket().map_err(|err| match err {

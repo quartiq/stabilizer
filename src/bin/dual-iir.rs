@@ -18,7 +18,7 @@ use stabilizer::{
         DigitalInput0, DigitalInput1, AFE0, AFE1,
     },
     net::{
-        data_stream::BlockGenerator,
+        data_stream::{BlockGenerator, StreamTarget},
         miniconf::Miniconf,
         serde::Deserialize,
         telemetry::{Telemetry, TelemetryBuffer},
@@ -38,6 +38,7 @@ pub struct Settings {
     allow_hold: bool,
     force_hold: bool,
     telemetry_period: u16,
+    stream_target: StreamTarget,
 }
 
 impl Default for Settings {
@@ -57,6 +58,8 @@ impl Default for Settings {
             force_hold: false,
             // The default telemetry period in seconds.
             telemetry_period: 10,
+
+            stream_target: StreamTarget::default(),
         }
     }
 }
@@ -92,10 +95,12 @@ const APP: () = {
             stabilizer.net.mac_address,
         );
 
-        // TODO: Remove unwrap.
-        let remote: smoltcp_nal::embedded_nal::SocketAddr =
-            "10.35.16.10:1111".parse().unwrap();
-        let generator = network.enable_streaming(remote.into());
+        let generator = {
+            use smoltcp_nal::embedded_nal::{IpAddr, Ipv4Addr, SocketAddr};
+            let remote =
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::unspecified()), 0);
+            network.enable_streaming(remote.into())
+        };
 
         // Spawn a settings update for default settings.
         c.spawn.settings_update().unwrap();
@@ -229,6 +234,9 @@ const APP: () = {
         // Update AFEs
         c.resources.afes.0.set_gain(settings.afe[0]);
         c.resources.afes.1.set_gain(settings.afe[1]);
+
+        let target = settings.stream_target.into();
+        c.resources.network.direct_stream(target);
     }
 
     #[task(priority = 1, resources=[network, settings, telemetry], schedule=[telemetry])]
