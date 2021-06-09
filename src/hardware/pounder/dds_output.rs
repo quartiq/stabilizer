@@ -52,9 +52,11 @@
 ///! compile-time-known register update sequence needed for the application, the serialization
 ///! process can be done once and then register values can be written into a pre-computed serialized
 ///! buffer to avoid the software overhead of much of the serialization process.
+use log::warn;
+use stm32h7xx_hal as hal;
+
 use super::{hrtimer::HighResTimerE, QspiInterface};
 use ad9959::{Channel, DdsConfig, ProfileSerializer};
-use stm32h7xx_hal as hal;
 
 /// The DDS profile update stream.
 pub struct DdsOutput {

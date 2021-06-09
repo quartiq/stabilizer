@@ -12,9 +12,10 @@ use smoltcp_nal::smoltcp;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use super::{
-    adc, afe, cycle_counter::CycleCounter, dac, design_parameters,
-    digital_input_stamper, eeprom, pounder, system_timer, timers, DdsOutput,
-    DigitalInput0, DigitalInput1, EthernetPhy, NetworkStack, AFE0, AFE1,
+    adc, afe, cycle_counter::CycleCounter, dac, design_parameters, eeprom,
+    input_stamper::InputStamper, pounder, pounder::dds_output::DdsOutput,
+    system_timer, timers, DigitalInput0, DigitalInput1, EthernetPhy,
+    NetworkStack, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -105,7 +106,7 @@ pub struct StabilizerDevices {
     pub afes: (AFE0, AFE1),
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
     pub dacs: (dac::Dac0Output, dac::Dac1Output),
-    pub timestamper: digital_input_stamper::InputStamper,
+    pub timestamper: InputStamper,
     pub adc_dac_timer: timers::SamplingTimer,
     pub timestamp_timer: timers::TimestampTimer,
     pub net: NetworkDevices,
@@ -255,11 +256,6 @@ pub fn setup(
 
     let dma_streams =
         hal::dma::dma::StreamsTuple::new(device.DMA1, ccdr.peripheral.DMA1);
-
-    // Early, before the DMA1 peripherals (#272)
-    #[cfg(feature = "pounder_v1_1")]
-    let dma2_streams =
-        hal::dma::dma::StreamsTuple::new(device.DMA2, ccdr.peripheral.DMA2);
 
     // Configure timer 2 to trigger conversions for the ADC
     let mut sampling_timer = {
@@ -537,10 +533,7 @@ pub fn setup(
 
     let input_stamper = {
         let trigger = gpioa.pa3.into_alternate_af2();
-        digital_input_stamper::InputStamper::new(
-            trigger,
-            timestamp_timer_channels.ch4,
-        )
+        InputStamper::new(trigger, timestamp_timer_channels.ch4)
     };
 
     let digital_inputs = {
@@ -836,7 +829,7 @@ pub fn setup(
             let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
             let i2c1 = device.I2C1.i2c(
                 (scl, sda),
-                100.khz(),
+                400.khz(),
                 ccdr.peripheral.I2C1,
                 &ccdr.clocks,
             );
@@ -980,7 +973,6 @@ pub fn setup(
 
             pounder::timestamp::Timestamper::new(
                 timestamp_timer,
-                dma2_streams.0,
                 tim8_channels.ch1,
                 &mut sampling_timer,
                 etr_pin,

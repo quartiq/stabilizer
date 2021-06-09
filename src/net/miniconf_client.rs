@@ -11,6 +11,7 @@
 ///! Respones to settings updates are sent without quality-of-service guarantees, so there's no
 ///! guarantee that the requestee will be informed that settings have been applied.
 use heapless::String;
+use log::info;
 
 use super::{MqttMessage, NetworkReference, SettingsResponse, UpdateState};
 use crate::hardware::design_parameters::MQTT_BROKER;
@@ -102,7 +103,7 @@ where
             let path = match topic.strip_prefix(prefix) {
                 // For paths, we do not want to include the leading slash.
                 Some(path) => {
-                    if path.len() > 0 {
+                    if !path.is_empty() {
                         &path[1..]
                     } else {
                         path
@@ -116,9 +117,8 @@ where
 
             let message: SettingsResponse = settings
                 .string_set(path.split('/').peekable(), message)
-                .and_then(|_| {
+                .map(|_| {
                     update = true;
-                    Ok(())
                 })
                 .into();
 

@@ -1,5 +1,6 @@
 ///! The sampling timer is used for managing ADC sampling and external reference timestamping.
 use super::hal;
+use num_enum::TryFromPrimitive;
 
 use hal::stm32::{
     // TIM1 and TIM8 have identical registers.
@@ -34,6 +35,8 @@ pub enum TriggerSource {
 
 /// Prescalers for externally-supplied reference clocks.
 #[allow(dead_code)]
+#[derive(TryFromPrimitive)]
+#[repr(u8)]
 pub enum Prescaler {
     Div1 = 0b00,
     Div2 = 0b01,
@@ -352,6 +355,21 @@ macro_rules! timer_channels {
                     // Only atomic operations on completed on the timer registers.
                     let regs = unsafe { &*<$TY>::ptr() };
                     regs.[< $ccmrx _input >]().modify(|_, w| w.[< ic $index f >]().bits(filter as u8));
+                }
+
+                /// Configure the input capture prescaler.
+                ///
+                /// # Args
+                /// * `psc` - Prescaler exponent.
+                #[allow(dead_code)]
+                pub fn configure_prescaler(&mut self, prescaler: super::Prescaler) {
+                    // Note(unsafe): This channel owns all access to the specific timer channel.
+                    // Only atomic operations on completed on the timer registers.
+                    let regs = unsafe { &*<$TY>::ptr() };
+                    // Note(unsafe): Enum values are all valid.
+                    #[allow(unused_unsafe)]
+                    regs.[< $ccmrx _input >]().modify(|_, w| unsafe {
+                        w.[< ic $index psc >]().bits(prescaler as u8)});
                 }
             }
 

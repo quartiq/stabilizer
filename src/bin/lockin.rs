@@ -2,22 +2,30 @@
 #![no_std]
 #![no_main]
 
-use embedded_hal::digital::v2::InputPin;
-
-use serde::Deserialize;
+use core::sync::atomic::{fence, Ordering};
 
 use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
-
-use stabilizer::net;
-
-use stabilizer::hardware::{
-    design_parameters, setup, Adc0Input, Adc1Input, AdcCode, AfeGain,
-    Dac0Output, Dac1Output, DacCode, DigitalInput0, DigitalInput1,
-    InputStamper, SystemTimer, AFE0, AFE1,
+use stabilizer::{
+    flatten_closures,
+    hardware::{
+        self,
+        adc::{Adc0Input, Adc1Input, AdcCode},
+        afe::Gain,
+        dac::{Dac0Output, Dac1Output, DacCode},
+        design_parameters,
+        embedded_hal::digital::v2::InputPin,
+        hal,
+        input_stamper::InputStamper,
+        system_timer::SystemTimer,
+        DigitalInput0, DigitalInput1, AFE0, AFE1,
+    },
+    net::{
+        miniconf::Miniconf,
+        serde::Deserialize,
+        telemetry::{Telemetry, TelemetryBuffer},
+        NetworkState, NetworkUsers,
+    },
 };
-
-use miniconf::Miniconf;
-use net::{NetworkState, NetworkUsers, Telemetry, TelemetryBuffer};
 
 // A constant sinusoid to send on the DAC output.
 // Full-scale gives a +/- 10.24V amplitude waveform. Scale it down to give +/- 1V.
@@ -45,7 +53,7 @@ enum LockinMode {
 
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 pub struct Settings {
-    afe: [AfeGain; 2],
+    afe: [Gain; 2],
     lockin_mode: LockinMode,
 
     pll_tc: [u8; 2],
@@ -61,7 +69,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            afe: [AfeGain::G1; 2],
+            afe: [Gain::G1; 2],
 
             lockin_mode: LockinMode::External,
 
@@ -78,7 +86,7 @@ impl Default for Settings {
     }
 }
 
-#[rtic::app(device = stm32h7xx_hal::stm32, peripherals = true, monotonic = stabilizer::hardware::SystemTimer)]
+#[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, monotonic = stabilizer::hardware::system_timer::SystemTimer)]
 const APP: () = {
     struct Resources {
         afes: (AFE0, AFE1),
@@ -97,7 +105,8 @@ const APP: () = {
     #[init(spawn=[settings_update, telemetry, ethernet_link])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) = setup(c.core, c.device);
+        let (mut stabilizer, _pounder) =
+            hardware::setup::setup(c.core, c.device);
 
         let network = NetworkUsers::new(
             stabilizer.net.stack,
@@ -143,7 +152,7 @@ const APP: () = {
             network,
             digital_inputs: stabilizer.digital_inputs,
             timestamper: stabilizer.timestamper,
-            telemetry: net::TelemetryBuffer::default(),
+            telemetry: TelemetryBuffer::default(),
 
             settings,
 
@@ -162,26 +171,22 @@ const APP: () = {
     #[task(binds=DMA1_STR4, resources=[adcs, dacs, lockin, timestamper, pll, settings, telemetry], priority=2)]
     #[inline(never)]
     #[link_section = ".itcm.process"]
-    fn process(c: process::Context) {
-        let adc_samples = [
-            c.resources.adcs.0.acquire_buffer(),
-            c.resources.adcs.1.acquire_buffer(),
-        ];
-
-        let mut dac_samples = [
-            c.resources.dacs.0.acquire_buffer(),
-            c.resources.dacs.1.acquire_buffer(),
-        ];
-
-        let lockin = c.resources.lockin;
-        let settings = c.resources.settings;
+    fn process(mut c: process::Context) {
+        let process::Resources {
+            adcs: (ref mut adc0, ref mut adc1),
+            dacs: (ref mut dac0, ref mut dac1),
+            ref settings,
+            ref mut telemetry,
+            ref mut lockin,
+            ref mut pll,
+            ref mut timestamper,
+        } = c.resources;
 
         let (reference_phase, reference_frequency) = match settings.lockin_mode
         {
             LockinMode::External => {
-                let timestamp =
-                    c.resources.timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
-                let (pll_phase, pll_frequency) = c.resources.pll.update(
+                let timestamp = timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
+                let (pll_phase, pll_frequency) = pll.update(
                     timestamp.map(|t| t as i32),
                     settings.pll_tc[0],
                     settings.pll_tc[1],
@@ -208,45 +213,55 @@ const APP: () = {
             reference_phase.wrapping_mul(settings.lockin_harmonic),
         );
 
-        let output: Complex<i32> = adc_samples[0]
-            .iter()
-            // Zip in the LO phase.
-            .zip(Accu::new(sample_phase, sample_frequency))
-            // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
-            .map(|(&sample, phase)| {
-                let s = (sample as i16 as i32) << 16;
-                lockin.update(s, phase, settings.lockin_tc)
-            })
-            // Decimate
-            .last()
-            .unwrap()
-            * 2; // Full scale assuming the 2f component is gone.
+        flatten_closures!(with_buffer, adc0, adc1, dac0, dac1, {
+            let adc_samples = [adc0, adc1];
+            let mut dac_samples = [dac0, dac1];
 
-        // Convert to DAC data.
-        for (channel, samples) in dac_samples.iter_mut().enumerate() {
-            for (i, sample) in samples.iter_mut().enumerate() {
-                let value = match settings.output_conf[channel] {
-                    Conf::Magnitude => output.abs_sqr() as i32 >> 16,
-                    Conf::Phase => output.arg() >> 16,
-                    Conf::LogPower => (output.log2() << 24) as i32 >> 16,
-                    Conf::ReferenceFrequency => {
-                        reference_frequency as i32 >> 16
-                    }
-                    Conf::InPhase => output.re >> 16,
-                    Conf::Quadrature => output.im >> 16,
-                    Conf::Modulation => DAC_SEQUENCE[i] as i32,
-                };
+            // Preserve instruction and data ordering w.r.t. DMA flag access.
+            fence(Ordering::SeqCst);
 
-                *sample = DacCode::from(value as i16).0;
+            let output: Complex<i32> = adc_samples[0]
+                .iter()
+                // Zip in the LO phase.
+                .zip(Accu::new(sample_phase, sample_frequency))
+                // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
+                .map(|(&sample, phase)| {
+                    let s = (sample as i16 as i32) << 16;
+                    lockin.update(s, phase, settings.lockin_tc)
+                })
+                // Decimate
+                .last()
+                .unwrap()
+                * 2; // Full scale assuming the 2f component is gone.
+
+            // Convert to DAC data.
+            for (channel, samples) in dac_samples.iter_mut().enumerate() {
+                for (i, sample) in samples.iter_mut().enumerate() {
+                    let value = match settings.output_conf[channel] {
+                        Conf::Magnitude => output.abs_sqr() as i32 >> 16,
+                        Conf::Phase => output.arg() >> 16,
+                        Conf::LogPower => (output.log2() << 24) as i32 >> 16,
+                        Conf::ReferenceFrequency => {
+                            reference_frequency as i32 >> 16
+                        }
+                        Conf::InPhase => output.re >> 16,
+                        Conf::Quadrature => output.im >> 16,
+                        Conf::Modulation => DAC_SEQUENCE[i] as i32,
+                    };
+
+                    *sample = DacCode::from(value as i16).0;
+                }
             }
-        }
+            // Update telemetry measurements.
+            telemetry.adcs =
+                [AdcCode(adc_samples[0][0]), AdcCode(adc_samples[1][0])];
 
-        // Update telemetry measurements.
-        c.resources.telemetry.adcs =
-            [AdcCode(adc_samples[0][0]), AdcCode(adc_samples[1][0])];
+            telemetry.dacs =
+                [DacCode(dac_samples[0][0]), DacCode(dac_samples[1][0])];
 
-        c.resources.telemetry.dacs =
-            [DacCode(dac_samples[0][0]), DacCode(dac_samples[1][0])];
+            // Preserve instruction and data ordering w.r.t. DMA flag access.
+            fence(Ordering::SeqCst);
+        });
     }
 
     #[idle(resources=[network], spawn=[settings_update])]
@@ -309,27 +324,7 @@ const APP: () = {
 
     #[task(binds = ETH, priority = 1)]
     fn eth(_: eth::Context) {
-        unsafe { stm32h7xx_hal::ethernet::interrupt_handler() }
-    }
-
-    #[task(binds = SPI2, priority = 3)]
-    fn spi2(_: spi2::Context) {
-        panic!("ADC0 input overrun");
-    }
-
-    #[task(binds = SPI3, priority = 3)]
-    fn spi3(_: spi3::Context) {
-        panic!("ADC1 input overrun");
-    }
-
-    #[task(binds = SPI4, priority = 3)]
-    fn spi4(_: spi4::Context) {
-        panic!("DAC0 output error");
-    }
-
-    #[task(binds = SPI5, priority = 3)]
-    fn spi5(_: spi5::Context) {
-        panic!("DAC1 output error");
+        unsafe { hal::ethernet::interrupt_handler() }
     }
 
     extern "C" {

@@ -1,30 +1,30 @@
+use super::hal;
+use embedded_hal::{adc::OneShot, blocking::spi::Transfer};
 use serde::{Deserialize, Serialize};
 
 pub mod attenuators;
-mod dds_output;
+pub mod dds_output;
 pub mod hrtimer;
-mod rf_power;
+pub mod rf_power;
 
 #[cfg(feature = "pounder_v1_1")]
 pub mod timestamp;
 
-pub use dds_output::DdsOutput;
-
-use super::hal;
-
-use attenuators::AttenuatorInterface;
-use rf_power::PowerMeasurementInterface;
-
-use embedded_hal::{adc::OneShot, blocking::spi::Transfer};
-
-const EXT_CLK_SEL_PIN: u8 = 8 + 7;
-#[allow(dead_code)]
-const OSC_EN_N_PIN: u8 = 8 + 6;
-const ATT_RST_N_PIN: u8 = 8 + 5;
-const ATT_LE3_PIN: u8 = 8 + 3;
-const ATT_LE2_PIN: u8 = 8 + 2;
-const ATT_LE1_PIN: u8 = 8 + 1;
-const ATT_LE0_PIN: u8 = 8;
+pub enum GpioPin {
+    Led4Green = 0,
+    Led5Red = 1,
+    Led6Green = 2,
+    Led7Red = 3,
+    Led8Green = 4,
+    Led9Red = 5,
+    AttLe0 = 8,
+    AttLe1 = 8 + 1,
+    AttLe2 = 8 + 2,
+    AttLe3 = 8 + 3,
+    AttRstN = 8 + 5,
+    OscEnN = 8 + 6,
+    ExtClkSel = 8 + 7,
+}
 
 #[derive(Debug, Copy, Clone)]
 pub enum Error {
@@ -37,13 +37,15 @@ pub enum Error {
     Adc,
 }
 
+/// The numerical value (discriminant) of the Channel enum is the index in the attenuator shift
+/// register as well as the attenuator latch enable signal index on the GPIO extender.
 #[derive(Debug, Copy, Clone)]
 #[allow(dead_code)]
 pub enum Channel {
-    In0,
-    In1,
-    Out0,
-    Out1,
+    In0 = 0,
+    Out0 = 1,
+    In1 = 2,
+    Out1 = 3,
 }
 
 #[derive(Serialize, Deserialize, Copy, Clone, Debug)]
@@ -80,14 +82,14 @@ pub struct DdsClockConfig {
     pub external_clock: bool,
 }
 
-impl Into<ad9959::Channel> for Channel {
+impl From<Channel> for ad9959::Channel {
     /// Translate pounder channels to DDS output channels.
-    fn into(self) -> ad9959::Channel {
-        match self {
-            Channel::In0 => ad9959::Channel::Two,
-            Channel::In1 => ad9959::Channel::Four,
-            Channel::Out0 => ad9959::Channel::One,
-            Channel::Out1 => ad9959::Channel::Three,
+    fn from(other: Channel) -> Self {
+        match other {
+            Channel::In0 => Self::Two,
+            Channel::In1 => Self::Four,
+            Channel::Out0 => Self::One,
+            Channel::Out1 => Self::Three,
         }
     }
 }
@@ -300,41 +302,35 @@ impl PounderDevices {
             adc2_in_p,
         };
 
-        // Configure power-on-default state for pounder. All LEDs are on, on-board oscillator
-        // selected, attenuators out of reset. Note that testing indicates the output state needs to
-        // be set first to properly update the output registers.
+        // Configure power-on-default state for pounder. All LEDs are off, on-board oscillator
+        // selected and enabled, attenuators out of reset. Note that testing indicates the
+        // output state needs to be set first to properly update the output registers.
         devices
             .mcp23017
             .all_pin_mode(mcp23017::PinMode::OUTPUT)
             .map_err(|_| Error::I2c)?;
         devices
             .mcp23017
-            .write_gpio(mcp23017::Port::GPIOA, 0x3F)
+            .write_gpio(mcp23017::Port::GPIOA, 0x00)
             .map_err(|_| Error::I2c)?;
         devices
             .mcp23017
-            .write_gpio(mcp23017::Port::GPIOB, 1 << 5)
-            .map_err(|_| Error::I2c)?;
-
-        devices
-            .mcp23017
-            .digital_write(EXT_CLK_SEL_PIN, false)
+            .write_gpio(mcp23017::Port::GPIOB, 0x2F)
             .map_err(|_| Error::I2c)?;
 
         Ok(devices)
     }
 }
 
-impl AttenuatorInterface for PounderDevices {
+impl attenuators::AttenuatorInterface for PounderDevices {
     /// Reset all of the attenuators to a power-on default state.
     fn reset_attenuators(&mut self) -> Result<(), Error> {
         self.mcp23017
-            .digital_write(ATT_RST_N_PIN, false)
+            .write_gpio(mcp23017::Port::GPIOB, 0x0f)
             .map_err(|_| Error::I2c)?;
-        // TODO: Measure the I2C transaction speed to the RST pin to ensure that the delay is
-        // sufficient. Document the delay here.
+        // Duration of one I2C transaction is sufficiently long.
         self.mcp23017
-            .digital_write(ATT_RST_N_PIN, true)
+            .write_gpio(mcp23017::Port::GPIOB, 0x2f)
             .map_err(|_| Error::I2c)?;
 
         Ok(())
@@ -344,31 +340,24 @@ impl AttenuatorInterface for PounderDevices {
     ///
     /// Args:
     /// * `channel` - The attenuator channel to latch.
-    fn latch_attenuators(&mut self, channel: Channel) -> Result<(), Error> {
-        let pin = match channel {
-            Channel::In0 => ATT_LE0_PIN,
-            Channel::In1 => ATT_LE2_PIN,
-            Channel::Out0 => ATT_LE1_PIN,
-            Channel::Out1 => ATT_LE3_PIN,
-        };
-
+    fn latch_attenuator(&mut self, channel: Channel) -> Result<(), Error> {
+        let pin = channel as u8;
         self.mcp23017
-            .digital_write(pin, true)
+            .write_gpio(mcp23017::Port::GPIOB, 0x2f & !(1 << pin))
             .map_err(|_| Error::I2c)?;
-        // TODO: Measure the I2C transaction speed to the RST pin to ensure that the delay is
-        // sufficient. Document the delay here.
+        // Duration of one I2C transaction is sufficiently long.
         self.mcp23017
-            .digital_write(pin, false)
+            .write_gpio(mcp23017::Port::GPIOB, 0x2f)
             .map_err(|_| Error::I2c)?;
-
         Ok(())
     }
 
     /// Read the raw attenuation codes stored in the attenuator shift registers.
     ///
     /// Args:
-    /// * `channels` - A slice to store the channel readings into.
-    fn read_all_attenuators(
+    /// * `channels` - A 4 byte slice to be shifted into the
+    ///     attenuators and to contain the data shifted out.
+    fn transfer_attenuators(
         &mut self,
         channels: &mut [u8; 4],
     ) -> Result<(), Error> {
@@ -378,26 +367,9 @@ impl AttenuatorInterface for PounderDevices {
 
         Ok(())
     }
-
-    /// Write the attenuator shift registers.
-    ///
-    /// Args:
-    /// * `channels` - The data to write into the attenuators.
-    fn write_all_attenuators(
-        &mut self,
-        channels: &[u8; 4],
-    ) -> Result<(), Error> {
-        let mut result = [0_u8; 4];
-        result.clone_from_slice(channels);
-        self.attenuator_spi
-            .transfer(&mut result)
-            .map_err(|_| Error::Spi)?;
-
-        Ok(())
-    }
 }
 
-impl PowerMeasurementInterface for PounderDevices {
+impl rf_power::PowerMeasurementInterface for PounderDevices {
     /// Sample an ADC channel.
     ///
     /// Args:

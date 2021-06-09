@@ -1,4 +1,4 @@
-pub use num::Complex;
+pub use num_complex::Complex;
 
 use super::{atan2, cossin};
 
