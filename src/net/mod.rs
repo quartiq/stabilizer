@@ -9,20 +9,20 @@ pub use heapless;
 pub use miniconf;
 pub use serde;
 
+pub mod data_stream;
 pub mod messages;
 pub mod miniconf_client;
 pub mod network_processor;
 pub mod shared;
 pub mod telemetry;
-pub mod data_stream;
 
 use crate::hardware::{cycle_counter::CycleCounter, EthernetPhy, NetworkStack};
+use data_stream::{BlockGenerator, DataStream};
 use messages::{MqttMessage, SettingsResponse};
 use miniconf_client::MiniconfClient;
 use network_processor::NetworkProcessor;
 use shared::NetworkManager;
 use telemetry::TelemetryClient;
-use data_stream::{DataStream, BlockGenerator};
 
 use core::fmt::Write;
 use heapless::String;

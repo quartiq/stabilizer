@@ -319,7 +319,9 @@ const APP: () = {
     #[task(priority = 1, resources=[network], schedule=[ethernet_link])]
     fn ethernet_link(c: ethernet_link::Context) {
         c.resources.network.processor.handle_link();
-        c.schedule.ethernet_link(c.scheduled + SystemTimer::ticks_from_secs(1)).unwrap();
+        c.schedule
+            .ethernet_link(c.scheduled + SystemTimer::ticks_from_secs(1))
+            .unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]

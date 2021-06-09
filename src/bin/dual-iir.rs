@@ -18,11 +18,11 @@ use stabilizer::{
         DigitalInput0, DigitalInput1, AFE0, AFE1,
     },
     net::{
+        data_stream::BlockGenerator,
         miniconf::Miniconf,
         serde::Deserialize,
         telemetry::{Telemetry, TelemetryBuffer},
         NetworkState, NetworkUsers,
-        data_stream::BlockGenerator,
     },
 };
 
@@ -215,7 +215,7 @@ const APP: () = {
                     c.spawn.settings_update().unwrap()
                 }
                 NetworkState::Updated => {}
-                NetworkState::NoChange => {},
+                NetworkState::NoChange => {}
             }
         }
     }
@@ -241,7 +241,9 @@ const APP: () = {
             .settings
             .lock(|settings| (settings.afe, settings.telemetry_period));
 
-        c.resources.network.telemetry
+        c.resources
+            .network
+            .telemetry
             .publish(&telemetry.finalize(gains[0], gains[1]));
 
         // Schedule the telemetry task in the future.
@@ -256,7 +258,9 @@ const APP: () = {
     #[task(priority = 1, resources=[network], schedule=[ethernet_link])]
     fn ethernet_link(c: ethernet_link::Context) {
         c.resources.network.processor.handle_link();
-        c.schedule.ethernet_link(c.scheduled + SystemTimer::ticks_from_secs(1)).unwrap();
+        c.schedule
+            .ethernet_link(c.scheduled + SystemTimer::ticks_from_secs(1))
+            .unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]

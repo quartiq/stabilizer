@@ -44,8 +44,10 @@ pub struct NetStorage {
 pub struct UdpSocketStorage {
     rx_storage: [u8; 1024],
     tx_storage: [u8; 2048],
-    tx_metadata: [smoltcp::storage::PacketMetadata<smoltcp::wire::IpEndpoint>; 10],
-    rx_metadata: [smoltcp::storage::PacketMetadata<smoltcp::wire::IpEndpoint>; 10],
+    tx_metadata:
+        [smoltcp::storage::PacketMetadata<smoltcp::wire::IpEndpoint>; 10],
+    rx_metadata:
+        [smoltcp::storage::PacketMetadata<smoltcp::wire::IpEndpoint>; 10],
 }
 
 impl UdpSocketStorage {
@@ -53,8 +55,12 @@ impl UdpSocketStorage {
         Self {
             rx_storage: [0; 1024],
             tx_storage: [0; 2048],
-            tx_metadata: [smoltcp::storage::PacketMetadata::<smoltcp::wire::IpEndpoint>::EMPTY; 10],
-            rx_metadata: [smoltcp::storage::PacketMetadata::<smoltcp::wire::IpEndpoint>::EMPTY; 10],
+            tx_metadata: [smoltcp::storage::PacketMetadata::<
+                smoltcp::wire::IpEndpoint,
+            >::EMPTY; 10],
+            rx_metadata: [smoltcp::storage::PacketMetadata::<
+                smoltcp::wire::IpEndpoint,
+            >::EMPTY; 10],
         }
     }
 }
@@ -252,7 +258,10 @@ pub fn setup(
     let gpiof = device.GPIOF.split(ccdr.peripheral.GPIOF);
     let mut gpiog = device.GPIOG.split(ccdr.peripheral.GPIOG);
 
-    let _uart_tx = gpiod.pd8.into_push_pull_output().set_speed(hal::gpio::Speed::VeryHigh);
+    let _uart_tx = gpiod
+        .pd8
+        .into_push_pull_output()
+        .set_speed(hal::gpio::Speed::VeryHigh);
 
     let dma_streams =
         hal::dma::dma::StreamsTuple::new(device.DMA1, ccdr.peripheral.DMA1);
