@@ -73,10 +73,7 @@ impl NetworkProcessor {
         let result = match self.stack.lock(|stack| stack.poll(now)) {
             Ok(true) => UpdateState::Updated,
             Ok(false) => UpdateState::NoChange,
-            Err(err) => {
-                log::info!("Network error: {:?}", err);
-                UpdateState::Updated
-            }
+            Err(_) => UpdateState::Updated,
         };
 
         result

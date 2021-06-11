@@ -157,6 +157,8 @@ impl<'a> DataPacket<'a> {
             }
         }
 
+        self.num_blocks += 1;
+
         Ok(())
     }
 
@@ -199,8 +201,6 @@ impl DataStream {
         // Note(unwrap): We guarantee that the socket is available above.
         let socket = self.socket.take().unwrap();
         self.stack.close(socket).unwrap();
-
-        log::info!("Stream Disconnecting");
     }
 
     fn open(&mut self, remote: SocketAddr) -> Result<(), ()> {
