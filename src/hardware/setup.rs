@@ -343,7 +343,7 @@ pub fn setup(
             })
             .inter_word_delay(design_parameters::ADC_SETUP_TIME)
             .hardware_cs(hal::spi::HardwareCS {
-                mode: hal::spi::HardwareCSMode::EndlessTransaction,
+                mode: hal::spi::HardwareCSMode::WordTransaction,
                 assertion_delay: design_parameters::ADC_SETUP_TIME,
                 polarity: hal::spi::Polarity::IdleHigh,
             })
@@ -387,7 +387,7 @@ pub fn setup(
             })
             .inter_word_delay(design_parameters::ADC_SETUP_TIME)
             .hardware_cs(hal::spi::HardwareCS {
-                mode: hal::spi::HardwareCSMode::EndlessTransaction,
+                mode: hal::spi::HardwareCSMode::WordTransaction,
                 assertion_delay: design_parameters::ADC_SETUP_TIME,
                 polarity: hal::spi::Polarity::IdleHigh,
             })
@@ -440,7 +440,7 @@ pub fn setup(
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
             .hardware_cs(hal::spi::HardwareCS {
-                mode: hal::spi::HardwareCSMode::EndlessTransaction,
+                mode: hal::spi::HardwareCSMode::WordTransaction,
                 assertion_delay: 0.0,
                 polarity: hal::spi::Polarity::IdleHigh,
             })
@@ -475,7 +475,7 @@ pub fn setup(
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
             .hardware_cs(hal::spi::HardwareCS {
-                mode: hal::spi::HardwareCSMode::EndlessTransaction,
+                mode: hal::spi::HardwareCSMode::WordTransaction,
                 assertion_delay: 0.0,
                 polarity: hal::spi::Polarity::IdleHigh,
             })
