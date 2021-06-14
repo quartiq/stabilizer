@@ -341,10 +341,13 @@ pub fn setup(
                 polarity: hal::spi::Polarity::IdleHigh,
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
-            .manage_cs()
-            .suspend_when_inactive()
-            .communication_mode(hal::spi::CommunicationMode::Receiver)
-            .cs_delay(design_parameters::ADC_SETUP_TIME);
+            .inter_word_delay(design_parameters::ADC_SETUP_TIME)
+            .hardware_cs(hal::spi::HardwareCS {
+                mode: hal::spi::HardwareCSMode::EndlessTransaction,
+                assertion_delay: design_parameters::ADC_SETUP_TIME,
+                polarity: hal::spi::Polarity::IdleHigh,
+            })
+            .communication_mode(hal::spi::CommunicationMode::Receiver);
 
             let spi: hal::spi::Spi<_, _, u16> = device.SPI2.spi(
                 (spi_sck, spi_miso, hal::spi::NoMosi),
@@ -382,10 +385,13 @@ pub fn setup(
                 polarity: hal::spi::Polarity::IdleHigh,
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
-            .manage_cs()
-            .suspend_when_inactive()
-            .communication_mode(hal::spi::CommunicationMode::Receiver)
-            .cs_delay(design_parameters::ADC_SETUP_TIME);
+            .inter_word_delay(design_parameters::ADC_SETUP_TIME)
+            .hardware_cs(hal::spi::HardwareCS {
+                mode: hal::spi::HardwareCSMode::EndlessTransaction,
+                assertion_delay: design_parameters::ADC_SETUP_TIME,
+                polarity: hal::spi::Polarity::IdleHigh,
+            })
+            .communication_mode(hal::spi::CommunicationMode::Receiver);
 
             let spi: hal::spi::Spi<_, _, u16> = device.SPI3.spi(
                 (spi_sck, spi_miso, hal::spi::NoMosi),
@@ -433,8 +439,11 @@ pub fn setup(
                 polarity: hal::spi::Polarity::IdleHigh,
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
-            .manage_cs()
-            .suspend_when_inactive()
+            .hardware_cs(hal::spi::HardwareCS {
+                mode: hal::spi::HardwareCSMode::EndlessTransaction,
+                assertion_delay: 0.0,
+                polarity: hal::spi::Polarity::IdleHigh,
+            })
             .communication_mode(hal::spi::CommunicationMode::Transmitter)
             .swap_mosi_miso();
 
@@ -465,9 +474,12 @@ pub fn setup(
                 polarity: hal::spi::Polarity::IdleHigh,
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
-            .manage_cs()
+            .hardware_cs(hal::spi::HardwareCS {
+                mode: hal::spi::HardwareCSMode::EndlessTransaction,
+                assertion_delay: 0.0,
+                polarity: hal::spi::Polarity::IdleHigh,
+            })
             .communication_mode(hal::spi::CommunicationMode::Transmitter)
-            .suspend_when_inactive()
             .swap_mosi_miso();
 
             device.SPI5.spi(
