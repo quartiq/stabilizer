@@ -811,7 +811,7 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.9.0"
-source = "git+https://github.com/quartiq/stm32h7xx-hal.git?branch=feature/smoltcp-update#191b1d50a8a4d956492649630efaf563f59e35bf"
+source = "git+https://github.com/quartiq/stm32h7xx-hal.git?rev=33aa67d#33aa67d74790cb9f680a4f281b72df0664bcf03c"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",

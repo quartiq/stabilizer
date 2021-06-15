@@ -1,3 +1,20 @@
+///! Stabilizer data stream capabilities
+///!
+///! # Design
+///! Stabilizer data streamining utilizes UDP packets to send live data streams at high throughput.
+///! Packets are always sent in a best-effort fashion, and data may be dropped. Each packet contains
+///! an identifier that can be used to detect any dropped data.
+///!
+///! The current implementation utilizes an single-producer, single-consumer queue to send data
+///! between a high priority task and the UDP transmitter.
+///!
+///! A "batch" of data is defined to be a single item in the SPSC queue sent to the UDP transmitter
+///! thread. The transmitter thread then serializes as many sequential "batches" into a single UDP
+///! packet as possible. The UDP packet is also given a header indicating the starting batch
+///! sequence number and the number of batches present. If the UDP transmitter encounters a
+///! non-sequential batch, it does not enqueue it into the packet and instead transmits any staged
+///! data. The non-sequential batch is then transmitted in a new UDP packet. This method allows a
+///! receiver to detect dropped batches (e.g. due to processing overhead).
 use core::borrow::BorrowMut;
 use heapless::spsc::{Consumer, Producer, Queue};
 use miniconf::MiniconfAtomic;
@@ -10,8 +27,10 @@ use crate::hardware::design_parameters::SAMPLE_BUFFER_SIZE;
 // The number of data blocks that we will buffer in the queue.
 const BLOCK_BUFFER_SIZE: usize = 30;
 
+// A factor that data may be subsampled at.
 const SUBSAMPLE_RATE: usize = 1;
 
+/// Represents the destination for the UDP stream to send data to.
 #[derive(Copy, Clone, Debug, MiniconfAtomic, Deserialize)]
 pub struct StreamTarget {
     pub ip: [u8; 4],
@@ -38,6 +57,23 @@ impl Into<SocketAddr> for StreamTarget {
     }
 }
 
+/// A basic "batch" of data.
+// Note: In the future, the stream may be generic over this type.
+#[derive(Debug, Copy, Clone)]
+pub struct AdcDacData {
+    block_id: u16,
+    adcs: [[u16; SAMPLE_BUFFER_SIZE]; 2],
+    dacs: [[u16; SAMPLE_BUFFER_SIZE]; 2],
+}
+
+/// Configure streaming on a device.
+///
+/// # Args
+/// * `stack` - A reference to the shared network stack.
+///
+/// # Returns
+/// (generator, stream) where `generator` can be used to enqueue "batches" for transmission. The
+/// `stream` is the logically consumer (UDP transmitter) of the enqueued data.
 pub fn setup_streaming(
     stack: NetworkReference,
 ) -> (BlockGenerator, DataStream) {
@@ -52,28 +88,34 @@ pub fn setup_streaming(
     (generator, stream)
 }
 
-#[derive(Debug, Copy, Clone)]
-pub struct AdcDacData {
-    block_id: u16,
-    adcs: [[u16; SAMPLE_BUFFER_SIZE]; 2],
-    dacs: [[u16; SAMPLE_BUFFER_SIZE]; 2],
-}
-
+/// The data generator for a stream.
 pub struct BlockGenerator {
     queue: Producer<'static, AdcDacData, BLOCK_BUFFER_SIZE>,
     current_id: u16,
 }
 
 impl BlockGenerator {
-    pub fn new(
-        queue: Producer<'static, AdcDacData, BLOCK_BUFFER_SIZE>,
-    ) -> Self {
+    /// Construct a new generator.
+    /// # Args
+    /// * `queue` - The producer portion of the SPSC queue to enqueue data into.
+    ///
+    /// # Returns
+    /// The generator to use.
+    fn new(queue: Producer<'static, AdcDacData, BLOCK_BUFFER_SIZE>) -> Self {
         Self {
             queue,
             current_id: 0,
         }
     }
 
+    /// Schedule data to be sent by the generator.
+    ///
+    /// # Note
+    /// If no space is available, the data batch may be silently dropped.
+    ///
+    /// # Args
+    /// * `adcs` - The ADC data to transmit.
+    /// * `dacs` - The DAC data to transmit.
     pub fn send(
         &mut self,
         adcs: &[&mut [u16; SAMPLE_BUFFER_SIZE]; 2],
@@ -90,26 +132,21 @@ impl BlockGenerator {
     }
 }
 
-pub struct DataStream {
-    stack: NetworkReference,
-    socket: Option<<NetworkReference as UdpClientStack>::UdpSocket>,
-    queue: Consumer<'static, AdcDacData, BLOCK_BUFFER_SIZE>,
-    remote: Option<SocketAddr>,
-    buffer: [u8; 1024],
-}
-
-// Datapacket format:
-//
-// Header:
-// [0..2]: Start block ID (u16)
-// [2..3]: Num Blocks present (u8) <N>
-// [3..4]: Batch Size (u8) <BS>
-//
-// Following the header, batches are added sequentially. Each batch takes the form of:
-// [<BS>*0..<BS>*2]: ADC0
-// [<BS>*2..<BS>*4]: ADC1
-// [<BS>*4..<BS>*6]: DAC0
-// [<BS>*6..<BS>*8]: DAC1
+/// Represents a single UDP packet sent by the stream.
+///
+/// # Packet Format
+/// All data is sent in network-endian format. The format is as follows
+///
+/// Header:
+/// [0..2]: Start block ID (u16)
+/// [2..3]: Num Blocks present (u8) <N>
+/// [3..4]: Batch Size (u8) <BS>
+///
+/// Following the header, batches are added sequentially. Each batch takes the form of:
+/// [<BS>*0..<BS>*2]: ADC0
+/// [<BS>*2..<BS>*4]: ADC1
+/// [<BS>*4..<BS>*6]: DAC0
+/// [<BS>*6..<BS>*8]: DAC1
 struct DataPacket<'a> {
     buf: &'a mut [u8],
     subsample_rate: usize,
@@ -119,6 +156,11 @@ struct DataPacket<'a> {
 }
 
 impl<'a> DataPacket<'a> {
+    /// Construct a new packet.
+    ///
+    /// # Args
+    /// * `buf` - The location to serialize the data packet into.
+    /// * `subsample_rate` - The factor at which to subsample data from batches.
     pub fn new(buf: &'a mut [u8], subsample_rate: usize) -> Self {
         Self {
             buf,
@@ -129,6 +171,13 @@ impl<'a> DataPacket<'a> {
         }
     }
 
+    /// Add a batch of data to the packet.
+    ///
+    /// # Note
+    /// Serialization occurs as the packet is added.
+    ///
+    /// # Args
+    /// * `batch` - The batch to add to the packet.
     pub fn add_batch(&mut self, batch: &AdcDacData) -> Result<(), ()> {
         // Check that the block is sequential.
         if let Some(id) = &self.start_id {
@@ -170,6 +219,11 @@ impl<'a> DataPacket<'a> {
         block_size_bytes * self.num_blocks as usize + header_length
     }
 
+    /// Complete the packet and prepare it for transmission.
+    ///
+    /// # Returns
+    /// The size of the packet. The user should utilize the original buffer provided for packet
+    /// construction to access the packet.
     pub fn finish(self) -> usize {
         let block_sample_size = SAMPLE_BUFFER_SIZE / self.subsample_rate;
 
@@ -183,15 +237,32 @@ impl<'a> DataPacket<'a> {
     }
 }
 
+/// The "consumer" portion of the data stream.
+///
+/// # Note
+/// This is responsible for consuming data and sending it over UDP.
+pub struct DataStream {
+    stack: NetworkReference,
+    socket: Option<<NetworkReference as UdpClientStack>::UdpSocket>,
+    queue: Consumer<'static, AdcDacData, BLOCK_BUFFER_SIZE>,
+    remote: SocketAddr,
+    buffer: [u8; 1024],
+}
+
 impl DataStream {
-    pub fn new(
+    /// Construct a new data streamer.
+    ///
+    /// # Args
+    /// * `stack` - A reference to the shared network stack.
+    /// * `consumer` - The read side of the queue containing data to transmit.
+    fn new(
         stack: NetworkReference,
         consumer: Consumer<'static, AdcDacData, BLOCK_BUFFER_SIZE>,
     ) -> Self {
         Self {
             stack,
             socket: None,
-            remote: None,
+            remote: StreamTarget::default().into(),
             queue: consumer,
             buffer: [0; 1024],
         }
@@ -230,24 +301,27 @@ impl DataStream {
         Ok(())
     }
 
+    /// Configure the remote endpoint of the stream.
+    ///
+    /// # Args
+    /// * `remote` - The destination to send stream data to.
     pub fn set_remote(&mut self, remote: SocketAddr) {
         // If the remote is identical to what we already have, do nothing.
-        if let Some(current_remote) = self.remote {
-            if current_remote == remote {
-                return;
-            }
+        if remote == self.remote {
+            return;
         }
 
         // Open the new remote connection.
         self.open(remote).ok();
-        self.remote = Some(remote);
+        self.remote = remote;
     }
 
+    /// Process any data for transmission.
     pub fn process(&mut self) {
         // If there's no socket available, try to connect to our remote.
-        if self.socket.is_none() && self.remote.is_some() {
+        if self.socket.is_none() {
             // If we still can't open the remote, continue.
-            if self.open(self.remote.unwrap()).is_err() {
+            if self.open(self.remote).is_err() {
                 // Clear the queue out.
                 while self.queue.ready() {
                     self.queue.dequeue();

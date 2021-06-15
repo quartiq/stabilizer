@@ -113,11 +113,14 @@ where
     }
 
     /// Enable live data streaming.
-    pub fn enable_streaming(&mut self, remote: SocketAddr) -> BlockGenerator {
-        self.stream.set_remote(remote);
+    pub fn enable_streaming(&mut self) -> BlockGenerator {
         self.generator.take().unwrap()
     }
 
+    /// Direct the stream to the provided remote target.
+    ///
+    /// # Args
+    /// * `remote` - The destination for the streamed data.
     pub fn direct_stream(&mut self, remote: SocketAddr) {
         if self.generator.is_none() {
             self.stream.set_remote(remote);
