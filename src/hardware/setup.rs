@@ -663,14 +663,14 @@ pub fn setup(
         let neighbor_cache =
             smoltcp::iface::NeighborCache::new(&mut store.neighbor_cache[..]);
 
-        let interface = smoltcp::iface::EthernetInterfaceBuilder::new(eth_dma)
+        let interface = smoltcp::iface::InterfaceBuilder::new(eth_dma)
             .ethernet_addr(mac_addr)
             .neighbor_cache(neighbor_cache)
             .ip_addrs(&mut store.ip_addrs[..])
             .routes(routes)
             .finalize();
 
-        let mut sockets = {
+        let sockets = {
             let mut sockets =
                 smoltcp::socket::SocketSet::new(&mut store.sockets[..]);
 
@@ -704,29 +704,9 @@ pub fn setup(
                 sockets.add(udp_socket);
             }
 
+            sockets.add(smoltcp::socket::Dhcpv4Socket::new());
+
             sockets
-        };
-
-        let dhcp_client = {
-            let dhcp_rx_buffer = smoltcp::socket::RawSocketBuffer::new(
-                &mut store.dhcp_rx_metadata[..],
-                &mut store.dhcp_rx_storage[..],
-            );
-
-            let dhcp_tx_buffer = smoltcp::socket::RawSocketBuffer::new(
-                &mut store.dhcp_tx_metadata[..],
-                &mut store.dhcp_tx_storage[..],
-            );
-
-            smoltcp::dhcp::Dhcpv4Client::new(
-                &mut sockets,
-                dhcp_rx_buffer,
-                dhcp_tx_buffer,
-                // Smoltcp indicates that an instant with a negative time is indicative that time is
-                // not yet available. We can't get the current instant yet, so indicate an invalid
-                // time value.
-                smoltcp::time::Instant::from_millis(-1),
-            )
         };
 
         let random_seed = {
@@ -737,11 +717,7 @@ pub fn setup(
             data
         };
 
-        let mut stack = smoltcp_nal::NetworkStack::new(
-            interface,
-            sockets,
-            Some(dhcp_client),
-        );
+        let mut stack = smoltcp_nal::NetworkStack::new(interface, sockets);
 
         stack.seed_random_port(&random_seed);
 
