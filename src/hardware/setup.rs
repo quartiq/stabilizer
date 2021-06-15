@@ -341,7 +341,6 @@ pub fn setup(
                 polarity: hal::spi::Polarity::IdleHigh,
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
-            .inter_word_delay(design_parameters::ADC_SETUP_TIME)
             .hardware_cs(hal::spi::HardwareCS {
                 mode: hal::spi::HardwareCSMode::WordTransaction,
                 assertion_delay: design_parameters::ADC_SETUP_TIME,
@@ -385,7 +384,6 @@ pub fn setup(
                 polarity: hal::spi::Polarity::IdleHigh,
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
-            .inter_word_delay(design_parameters::ADC_SETUP_TIME)
             .hardware_cs(hal::spi::HardwareCS {
                 mode: hal::spi::HardwareCSMode::WordTransaction,
                 assertion_delay: design_parameters::ADC_SETUP_TIME,
