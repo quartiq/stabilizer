@@ -291,10 +291,7 @@ impl DataStream {
             return Err(());
         }
 
-        let mut socket = self.stack.socket().map_err(|err| match err {
-            <NetworkReference as UdpClientStack>::Error::NoIpAddress => (),
-            _ => (),
-        })?;
+        let mut socket = self.stack.socket().map_err(|_| ())?;
 
         self.stack.connect(&mut socket, remote).unwrap();
 
