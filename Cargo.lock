@@ -812,7 +812,7 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.9.0"
-source = "git+https://github.com/quartiq/stm32h7xx-hal.git?rev=b0b8a93#b0b8a930b2c3bc5fcebc2e905b4c5e13360111a5"
+source = "git+https://github.com/quartiq/stm32h7xx-hal.git?rev=acd47be#acd47beb4b84b4dc46da3a8b68688bc8c5984604"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",
