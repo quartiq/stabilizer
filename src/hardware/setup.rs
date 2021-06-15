@@ -359,7 +359,7 @@ pub fn setup(
                 .pb10
                 .into_alternate_af5()
                 .set_speed(hal::gpio::Speed::VeryHigh);
-            let _spi_nss = gpiob
+            let spi_nss = gpiob
                 .pb9
                 .into_alternate_af5()
                 .set_speed(hal::gpio::Speed::VeryHigh);
@@ -368,13 +368,16 @@ pub fn setup(
                 polarity: hal::spi::Polarity::IdleHigh,
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
-            .manage_cs()
-            .suspend_when_inactive()
-            .communication_mode(hal::spi::CommunicationMode::Receiver)
-            .cs_delay(design_parameters::ADC_SETUP_TIME);
+            .inter_word_delay(design_parameters::ADC_SETUP_TIME)
+            .hardware_cs(hal::spi::HardwareCS {
+                mode: hal::spi::HardwareCSMode::WordTransaction,
+                assertion_delay: design_parameters::ADC_SETUP_TIME,
+                polarity: hal::spi::Polarity::IdleHigh,
+            })
+            .communication_mode(hal::spi::CommunicationMode::Receiver);
 
             let spi: hal::spi::Spi<_, _, u16> = device.SPI2.spi(
-                (spi_sck, spi_miso, hal::spi::NoMosi),
+                (spi_sck, spi_miso, hal::spi::NoMosi, spi_nss),
                 config,
                 design_parameters::ADC_DAC_SCK_MAX,
                 ccdr.peripheral.SPI2,
@@ -400,7 +403,7 @@ pub fn setup(
                 .pc10
                 .into_alternate_af6()
                 .set_speed(hal::gpio::Speed::VeryHigh);
-            let _spi_nss = gpioa
+            let spi_nss = gpioa
                 .pa15
                 .into_alternate_af6()
                 .set_speed(hal::gpio::Speed::VeryHigh);
@@ -409,13 +412,16 @@ pub fn setup(
                 polarity: hal::spi::Polarity::IdleHigh,
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
-            .manage_cs()
-            .suspend_when_inactive()
-            .communication_mode(hal::spi::CommunicationMode::Receiver)
-            .cs_delay(design_parameters::ADC_SETUP_TIME);
+            .inter_word_delay(design_parameters::ADC_SETUP_TIME)
+            .hardware_cs(hal::spi::HardwareCS {
+                mode: hal::spi::HardwareCSMode::WordTransaction,
+                assertion_delay: design_parameters::ADC_SETUP_TIME,
+                polarity: hal::spi::Polarity::IdleHigh,
+            })
+            .communication_mode(hal::spi::CommunicationMode::Receiver);
 
             let spi: hal::spi::Spi<_, _, u16> = device.SPI3.spi(
-                (spi_sck, spi_miso, hal::spi::NoMosi),
+                (spi_sck, spi_miso, hal::spi::NoMosi, spi_nss),
                 config,
                 design_parameters::ADC_DAC_SCK_MAX,
                 ccdr.peripheral.SPI3,
@@ -451,7 +457,7 @@ pub fn setup(
                 .pe2
                 .into_alternate_af5()
                 .set_speed(hal::gpio::Speed::VeryHigh);
-            let _spi_nss = gpioe
+            let spi_nss = gpioe
                 .pe4
                 .into_alternate_af5()
                 .set_speed(hal::gpio::Speed::VeryHigh);
@@ -460,13 +466,16 @@ pub fn setup(
                 polarity: hal::spi::Polarity::IdleHigh,
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
-            .manage_cs()
-            .suspend_when_inactive()
+            .hardware_cs(hal::spi::HardwareCS {
+                mode: hal::spi::HardwareCSMode::WordTransaction,
+                assertion_delay: 0.0,
+                polarity: hal::spi::Polarity::IdleHigh,
+            })
             .communication_mode(hal::spi::CommunicationMode::Transmitter)
             .swap_mosi_miso();
 
             device.SPI4.spi(
-                (spi_sck, spi_miso, hal::spi::NoMosi),
+                (spi_sck, spi_miso, hal::spi::NoMosi, spi_nss),
                 config,
                 design_parameters::ADC_DAC_SCK_MAX,
                 ccdr.peripheral.SPI4,
@@ -483,7 +492,7 @@ pub fn setup(
                 .pf7
                 .into_alternate_af5()
                 .set_speed(hal::gpio::Speed::VeryHigh);
-            let _spi_nss = gpiof
+            let spi_nss = gpiof
                 .pf6
                 .into_alternate_af5()
                 .set_speed(hal::gpio::Speed::VeryHigh);
@@ -492,13 +501,16 @@ pub fn setup(
                 polarity: hal::spi::Polarity::IdleHigh,
                 phase: hal::spi::Phase::CaptureOnSecondTransition,
             })
-            .manage_cs()
+            .hardware_cs(hal::spi::HardwareCS {
+                mode: hal::spi::HardwareCSMode::WordTransaction,
+                assertion_delay: 0.0,
+                polarity: hal::spi::Polarity::IdleHigh,
+            })
             .communication_mode(hal::spi::CommunicationMode::Transmitter)
-            .suspend_when_inactive()
             .swap_mosi_miso();
 
             device.SPI5.spi(
-                (spi_sck, spi_miso, hal::spi::NoMosi),
+                (spi_sck, spi_miso, hal::spi::NoMosi, spi_nss),
                 config,
                 design_parameters::ADC_DAC_SCK_MAX,
                 ccdr.peripheral.SPI5,
