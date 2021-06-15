@@ -293,9 +293,10 @@ impl DataStream {
 
         let mut socket = self.stack.socket().map_err(|_| ())?;
 
+        // Note(unwrap): We only connect with a new socket, so it is guaranteed to not already be
+        // bound.
         self.stack.connect(&mut socket, remote).unwrap();
 
-        // Note(unwrap): The socket will be empty before we replace it.
         self.socket.replace(socket);
 
         Ok(())
@@ -320,9 +321,9 @@ impl DataStream {
     pub fn process(&mut self) {
         // If there's no socket available, try to connect to our remote.
         if self.socket.is_none() {
-            // If we still can't open the remote, continue.
+            // If we can't open the socket (e.g. we do not have an IP address yet), clear data from
+            // the queue.
             if self.open(self.remote).is_err() {
-                // Clear the queue out.
                 while self.queue.ready() {
                     self.queue.dequeue();
                 }
