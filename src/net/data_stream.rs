@@ -46,13 +46,16 @@ impl Default for StreamTarget {
     }
 }
 
-impl Into<SocketAddr> for StreamTarget {
-    fn into(self) -> SocketAddr {
+impl From<StreamTarget> for SocketAddr {
+    fn from(target: StreamTarget) -> SocketAddr {
         SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(
-                self.ip[0], self.ip[1], self.ip[2], self.ip[3],
+                target.ip[0],
+                target.ip[1],
+                target.ip[2],
+                target.ip[3],
             )),
-            self.port,
+            target.port,
         )
     }
 }
