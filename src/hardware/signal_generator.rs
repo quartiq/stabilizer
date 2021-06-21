@@ -46,7 +46,8 @@ impl Into<InternalConf> for Config {
             signal: self.signal,
             period: self.period,
             amplitude: ((amplitude / 10.24) * i16::MAX as f32) as i16,
-            phase_symmetry: ((symmetry - 0.5) * i32::MAX as f32) as i32,
+            phase_symmetry: (2.0 * (symmetry - 0.5) * i32::MAX as f32) as i32,
+            phase_step: ((u32::MAX as u64 + 1u64) / self.period as u64) as u32,
         }
     }
 }
@@ -60,6 +61,8 @@ struct InternalConf {
     // The 32-bit representation of the phase symmetry. That is, with a 50% symmetry, this is equal
     // to 0.
     phase_symmetry: i32,
+
+    phase_step: u32,
 }
 
 #[derive(Debug)]
@@ -112,11 +115,7 @@ impl Generator {
             self.config = self.pending_config.take().unwrap();
         }
 
-        let phase_step = u32::MAX / self.config.period;
-
-        // Note: We allow phase to silently wrap here intentionally, as it will wrap to negative.
-        // This is acceptable with phase, since it is perfectly periodic.
-        let phase = (self.index * phase_step) as i32;
+        let phase = (self.index * self.config.phase_step) as i32;
 
         let amplitude = match self.config.signal {
             Signal::Sine => (dsp::cossin(phase).1 >> 16) as i16,
@@ -129,37 +128,32 @@ impl Generator {
             }
             Signal::Triangle => {
                 if phase < self.config.phase_symmetry {
-                    let rise_period: u32 =
-                        (self.config.phase_symmetry - i32::MIN) as u32
-                            / phase_step;
+                    let duration_of_phase = (self.config.phase_symmetry.wrapping_sub(i32::MIN) >> 16) as u16;
+                    let phase_progress = (phase.wrapping_sub(i32::MIN) >> 16) as u16;
 
-                    if rise_period == 0 {
+                    if duration_of_phase == 0 {
                         i16::MIN
                     } else {
-                        i16::MIN
-                            + (self.index * u16::MAX as u32 / rise_period)
-                                as i16
+                        i16::MIN.wrapping_add((u16::MAX as u32 * phase_progress as u32 /
+                                duration_of_phase as u32) as i16)
                     }
                 } else {
-                    let fall_period: u32 = (i32::MAX as u32
-                        - self.config.phase_symmetry as u32)
-                        / phase_step;
-                    let index: u32 = (phase - self.config.phase_symmetry)
-                        as u32
-                        / phase_step;
 
-                    if fall_period == 0 {
+                    let duration_of_phase = (i32::MAX.wrapping_sub(self.config.phase_symmetry) >> 16) as u16;
+                    let phase_progress = (phase.wrapping_sub(self.config.phase_symmetry) >> 16) as
+                        u16;
+
+                    if duration_of_phase == 0 {
                         i16::MAX
                     } else {
-                        i16::MAX
-                            - (index * u16::MAX as u32 / fall_period) as i16
+                        i16::MAX.wrapping_sub((u16::MAX as u32 * phase_progress as u32 / duration_of_phase as u32) as i16)
                     }
                 }
             }
         };
 
         // Update the current index.
-        self.index = (self.index + 1) % self.config.period;
+        self.index = self.index.wrapping_add(1) % self.config.period;
 
         // Calculate the final output result as an i16.
         let result = amplitude as i32 * self.config.amplitude as i32;
