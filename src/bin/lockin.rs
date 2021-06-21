@@ -16,6 +16,7 @@ use stabilizer::{
         embedded_hal::digital::v2::InputPin,
         hal,
         input_stamper::InputStamper,
+        signal_generator,
         system_timer::SystemTimer,
         DigitalInput0, DigitalInput1, AFE0, AFE1,
     },
@@ -27,13 +28,6 @@ use stabilizer::{
         NetworkState, NetworkUsers,
     },
 };
-
-// A constant sinusoid to send on the DAC output.
-// Full-scale gives a +/- 10.24V amplitude waveform. Scale it down to give +/- 1V.
-const ONE: i16 = ((1.0 / 10.24) * i16::MAX as f32) as _;
-const SQRT2: i16 = (ONE as f32 * 0.707) as _;
-const DAC_SEQUENCE: [i16; design_parameters::SAMPLE_BUFFER_SIZE] =
-    [ONE, SQRT2, 0, -SQRT2, -ONE, -SQRT2, 0, SQRT2];
 
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 enum Conf {
@@ -102,6 +96,7 @@ const APP: () = {
         telemetry: TelemetryBuffer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         generator: BlockGenerator,
+        signal_generator: signal_generator::Generator,
 
         timestamper: InputStamper,
         pll: RPLL,
@@ -161,6 +156,14 @@ const APP: () = {
             digital_inputs: stabilizer.digital_inputs,
             timestamper: stabilizer.timestamper,
             telemetry: TelemetryBuffer::default(),
+            signal_generator: signal_generator::Generator::new(
+                signal_generator::Config {
+                    period: design_parameters::SAMPLE_BUFFER_SIZE as u32,
+                    symmetry: 0.5,
+                    amplitude: 1.0,
+                    signal: signal_generator::Signal::Triangle,
+                },
+            ),
 
             settings,
             generator,
@@ -177,7 +180,7 @@ const APP: () = {
     /// This is an implementation of a externally (DI0) referenced PLL lockin on the ADC0 signal.
     /// It outputs either I/Q or power/phase on DAC0/DAC1. Data is normalized to full scale.
     /// PLL bandwidth, filter bandwidth, slope, and x/y or power/phase post-filters are available.
-    #[task(binds=DMA1_STR4, resources=[adcs, dacs, lockin, timestamper, pll, settings, telemetry, generator], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, dacs, lockin, timestamper, pll, settings, telemetry, generator, signal_generator], priority=2)]
     #[inline(never)]
     #[link_section = ".itcm.process"]
     fn process(mut c: process::Context) {
@@ -190,6 +193,7 @@ const APP: () = {
             ref mut pll,
             ref mut timestamper,
             ref mut generator,
+            ref mut signal_generator,
         } = c.resources;
 
         let (reference_phase, reference_frequency) = match settings.lockin_mode
@@ -246,7 +250,7 @@ const APP: () = {
 
             // Convert to DAC data.
             for (channel, samples) in dac_samples.iter_mut().enumerate() {
-                for (i, sample) in samples.iter_mut().enumerate() {
+                for sample in samples.iter_mut() {
                     let value = match settings.output_conf[channel] {
                         Conf::Magnitude => output.abs_sqr() as i32 >> 16,
                         Conf::Phase => output.arg() >> 16,
@@ -256,7 +260,11 @@ const APP: () = {
                         }
                         Conf::InPhase => output.re >> 16,
                         Conf::Quadrature => output.im >> 16,
-                        Conf::Modulation => DAC_SEQUENCE[i] as i32,
+
+                        // Note: Because the signal generator has a period equal to one batch size,
+                        // it's okay to only update it when outputting the modulation waveform, as
+                        // it will perfectly wrap back to zero phase for each batch.
+                        Conf::Modulation => signal_generator.next() as i32,
                     };
 
                     *sample = DacCode::from(value as i16).0;
