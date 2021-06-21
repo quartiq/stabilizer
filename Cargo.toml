@@ -73,7 +73,7 @@ rev = "2750533"
 
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
-rev = "2967c6e"
+rev = "5baf55f"
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq.git"

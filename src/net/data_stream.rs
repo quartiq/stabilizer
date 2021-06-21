@@ -15,7 +15,6 @@
 ///! non-sequential batch, it does not enqueue it into the packet and instead transmits any staged
 ///! data. The non-sequential batch is then transmitted in a new UDP packet. This method allows a
 ///! receiver to detect dropped batches (e.g. due to processing overhead).
-use core::borrow::BorrowMut;
 use heapless::spsc::{Consumer, Producer, Queue};
 use miniconf::MiniconfAtomic;
 use serde::Deserialize;
@@ -346,7 +345,7 @@ impl DataStream {
             }
 
             // Transmit the data block.
-            let mut handle = self.socket.borrow_mut().unwrap();
+            let mut handle = self.socket.as_mut().unwrap();
             let size = packet.finish();
             self.stack.send(&mut handle, &self.buffer[..size]).ok();
         }
