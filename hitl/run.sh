@@ -15,7 +15,7 @@ python3 -m venv --system-site-packages py
 . py/bin/activate
 python3 -m pip install -r requirements.txt
 
-probe-run --chip STM32H743ZITx target/thumbv7em-none-eabihf/release/dual-iir &
+cargo flash --chip STM32H743ZITx --elf target/thumbv7em-none-eabihf/release/dual-iir
 
 # Sleep to allow flashing, booting, DHCP, MQTT
 sleep 30
@@ -30,6 +30,3 @@ ping -c 5 -w 20 stabilizer-hitl
 python3 miniconf.py dt/sinara/dual-iir/04-91-62-d9-7e-5f afe/0='"G2"'
 python3 miniconf.py dt/sinara/dual-iir/04-91-62-d9-7e-5f afe/0='"G1"' iir_ch/0/0=\
 '{"y_min": -32767, "y_max": 32767, "y_offset": 0, "ba": [1.0, 0, 0, 0, 0]}'
-
-kill $(jobs -p)
-wait || true
