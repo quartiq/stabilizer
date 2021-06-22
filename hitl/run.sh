@@ -15,7 +15,7 @@ python3 -m venv --system-site-packages py
 . py/bin/activate
 python3 -m pip install -r requirements.txt
 
-cargo embed --bin target/thumbv7em-none-eabihf/release/dual-iir
+cargo flash --chip STM32H743ZITx --elf target/thumbv7em-none-eabihf/release/dual-iir
 
 # Sleep to allow flashing, booting, DHCP, MQTT
 sleep 30
