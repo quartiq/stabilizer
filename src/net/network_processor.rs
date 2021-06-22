@@ -37,6 +37,27 @@ impl NetworkProcessor {
         }
     }
 
+    /// Handle ethernet link connection status.
+    ///
+    /// # Note
+    /// This may take non-trivial amounts of time to communicate with the PHY. As such, this should
+    /// only be called as often as necessary (e.g. once per second or so).
+    pub fn handle_link(&mut self) {
+        // If the PHY indicates there's no more ethernet link, reset the DHCP server in the network
+        // stack.
+        match self.phy.poll_link() {
+            true => self.network_was_reset = false,
+
+            // Only reset the network stack once per link reconnection. This prevents us from
+            // sending an excessive number of DHCP requests.
+            false if !self.network_was_reset => {
+                self.network_was_reset = true;
+                self.stack.lock(|stack| stack.handle_link_reset());
+            }
+            _ => {}
+        };
+    }
+
     /// Process and update the state of the network.
     ///
     /// # Note
@@ -52,24 +73,7 @@ impl NetworkProcessor {
         let result = match self.stack.lock(|stack| stack.poll(now)) {
             Ok(true) => UpdateState::Updated,
             Ok(false) => UpdateState::NoChange,
-            Err(err) => {
-                log::info!("Network error: {:?}", err);
-                UpdateState::Updated
-            }
-        };
-
-        // If the PHY indicates there's no more ethernet link, reset the DHCP server in the network
-        // stack.
-        match self.phy.poll_link() {
-            true => self.network_was_reset = false,
-
-            // Only reset the network stack once per link reconnection. This prevents us from
-            // sending an excessive number of DHCP requests.
-            false if !self.network_was_reset => {
-                self.network_was_reset = true;
-                self.stack.lock(|stack| stack.handle_link_reset());
-            }
-            _ => {}
+            Err(_) => UpdateState::Updated,
         };
 
         result

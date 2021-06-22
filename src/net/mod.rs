@@ -9,6 +9,7 @@ pub use heapless;
 pub use miniconf;
 pub use serde;
 
+pub mod data_stream;
 pub mod messages;
 pub mod miniconf_client;
 pub mod network_processor;
@@ -16,6 +17,7 @@ pub mod shared;
 pub mod telemetry;
 
 use crate::hardware::{cycle_counter::CycleCounter, EthernetPhy, NetworkStack};
+use data_stream::{BlockGenerator, DataStream};
 use messages::{MqttMessage, SettingsResponse};
 use miniconf_client::MiniconfClient;
 use network_processor::NetworkProcessor;
@@ -26,6 +28,7 @@ use core::fmt::Write;
 use heapless::String;
 use miniconf::Miniconf;
 use serde::Serialize;
+use smoltcp_nal::embedded_nal::SocketAddr;
 
 pub type NetworkReference = shared::NetworkStackProxy<'static, NetworkStack>;
 
@@ -45,6 +48,8 @@ pub enum NetworkState {
 pub struct NetworkUsers<S: Default + Clone + Miniconf, T: Serialize> {
     pub miniconf: MiniconfClient<S>,
     pub processor: NetworkProcessor,
+    stream: DataStream,
+    generator: Option<BlockGenerator>,
     pub telemetry: TelemetryClient<T>,
 }
 
@@ -95,10 +100,30 @@ where
             &prefix,
         );
 
+        let (generator, stream) =
+            data_stream::setup_streaming(stack_manager.acquire_stack());
+
         NetworkUsers {
             miniconf: settings,
             processor,
             telemetry,
+            stream,
+            generator: Some(generator),
+        }
+    }
+
+    /// Enable live data streaming.
+    pub fn enable_streaming(&mut self) -> BlockGenerator {
+        self.generator.take().unwrap()
+    }
+
+    /// Direct the stream to the provided remote target.
+    ///
+    /// # Args
+    /// * `remote` - The destination for the streamed data.
+    pub fn direct_stream(&mut self, remote: SocketAddr) {
+        if self.generator.is_none() {
+            self.stream.set_remote(remote);
         }
     }
 
@@ -107,14 +132,19 @@ where
     /// # Returns
     /// An indication if any of the network users indicated a state change.
     pub fn update(&mut self) -> NetworkState {
+        // Update the MQTT clients.
+        self.telemetry.update();
+
+        // Update the data stream.
+        if self.generator.is_none() {
+            self.stream.process();
+        }
+
         // Poll for incoming data.
         let poll_result = match self.processor.update() {
             UpdateState::NoChange => NetworkState::NoChange,
             UpdateState::Updated => NetworkState::Updated,
         };
-
-        // Update the MQTT clients.
-        self.telemetry.update();
 
         match self.miniconf.update() {
             UpdateState::Updated => NetworkState::SettingsChanged,

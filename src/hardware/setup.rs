@@ -7,9 +7,6 @@ use stm32h7xx_hal::{
     prelude::*,
 };
 
-const NUM_SOCKETS: usize = 4;
-
-use heapless::Vec;
 use smoltcp_nal::smoltcp;
 
 use embedded_hal::digital::v2::{InputPin, OutputPin};
@@ -21,13 +18,18 @@ use super::{
     NetworkStack, AFE0, AFE1,
 };
 
+const NUM_TCP_SOCKETS: usize = 4;
+const NUM_UDP_SOCKETS: usize = 1;
+const NUM_SOCKETS: usize = NUM_UDP_SOCKETS + NUM_TCP_SOCKETS;
+
 pub struct NetStorage {
     pub ip_addrs: [smoltcp::wire::IpCidr; 1],
 
     // Note: There is an additional socket set item required for the DHCP socket.
     pub sockets:
         [Option<smoltcp::socket::SocketSetItem<'static>>; NUM_SOCKETS + 1],
-    pub socket_storage: [SocketStorage; NUM_SOCKETS],
+    pub tcp_socket_storage: [TcpSocketStorage; NUM_TCP_SOCKETS],
+    pub udp_socket_storage: [UdpSocketStorage; NUM_UDP_SOCKETS],
     pub neighbor_cache:
         [Option<(smoltcp::wire::IpAddress, smoltcp::iface::Neighbor)>; 8],
     pub routes_cache:
@@ -39,13 +41,37 @@ pub struct NetStorage {
     pub dhcp_rx_storage: [u8; 600],
 }
 
+pub struct UdpSocketStorage {
+    rx_storage: [u8; 1024],
+    tx_storage: [u8; 2048],
+    tx_metadata:
+        [smoltcp::storage::PacketMetadata<smoltcp::wire::IpEndpoint>; 10],
+    rx_metadata:
+        [smoltcp::storage::PacketMetadata<smoltcp::wire::IpEndpoint>; 10],
+}
+
+impl UdpSocketStorage {
+    const fn new() -> Self {
+        Self {
+            rx_storage: [0; 1024],
+            tx_storage: [0; 2048],
+            tx_metadata: [smoltcp::storage::PacketMetadata::<
+                smoltcp::wire::IpEndpoint,
+            >::EMPTY; 10],
+            rx_metadata: [smoltcp::storage::PacketMetadata::<
+                smoltcp::wire::IpEndpoint,
+            >::EMPTY; 10],
+        }
+    }
+}
+
 #[derive(Copy, Clone)]
-pub struct SocketStorage {
+pub struct TcpSocketStorage {
     rx_storage: [u8; 1024],
     tx_storage: [u8; 1024],
 }
 
-impl SocketStorage {
+impl TcpSocketStorage {
     const fn new() -> Self {
         Self {
             rx_storage: [0; 1024],
@@ -63,8 +89,9 @@ impl NetStorage {
             )],
             neighbor_cache: [None; 8],
             routes_cache: [None; 8],
-            sockets: [None, None, None, None, None],
-            socket_storage: [SocketStorage::new(); NUM_SOCKETS],
+            sockets: [None, None, None, None, None, None],
+            tcp_socket_storage: [TcpSocketStorage::new(); NUM_TCP_SOCKETS],
+            udp_socket_storage: [UdpSocketStorage::new(); NUM_UDP_SOCKETS],
             dhcp_tx_storage: [0; 600],
             dhcp_rx_storage: [0; 600],
             dhcp_rx_metadata: [smoltcp::socket::RawPacketMetadata::EMPTY; 1],
@@ -634,20 +661,18 @@ pub fn setup(
         let neighbor_cache =
             smoltcp::iface::NeighborCache::new(&mut store.neighbor_cache[..]);
 
-        let interface = smoltcp::iface::EthernetInterfaceBuilder::new(eth_dma)
+        let interface = smoltcp::iface::InterfaceBuilder::new(eth_dma)
             .ethernet_addr(mac_addr)
             .neighbor_cache(neighbor_cache)
             .ip_addrs(&mut store.ip_addrs[..])
             .routes(routes)
             .finalize();
 
-        let (mut sockets, handles) = {
+        let sockets = {
             let mut sockets =
                 smoltcp::socket::SocketSet::new(&mut store.sockets[..]);
 
-            let mut handles: Vec<smoltcp::socket::SocketHandle, 64> =
-                Vec::new();
-            for storage in store.socket_storage.iter_mut() {
+            for storage in store.tcp_socket_storage[..].iter_mut() {
                 let tcp_socket = {
                     let rx_buffer = smoltcp::socket::TcpSocketBuffer::new(
                         &mut storage.rx_storage[..],
@@ -658,34 +683,28 @@ pub fn setup(
 
                     smoltcp::socket::TcpSocket::new(rx_buffer, tx_buffer)
                 };
-                let handle = sockets.add(tcp_socket);
-
-                handles.push(handle).unwrap();
+                sockets.add(tcp_socket);
             }
 
-            (sockets, handles)
-        };
+            for storage in store.udp_socket_storage[..].iter_mut() {
+                let udp_socket = {
+                    let rx_buffer = smoltcp::socket::UdpSocketBuffer::new(
+                        &mut storage.rx_metadata[..],
+                        &mut storage.rx_storage[..],
+                    );
+                    let tx_buffer = smoltcp::socket::UdpSocketBuffer::new(
+                        &mut storage.tx_metadata[..],
+                        &mut storage.tx_storage[..],
+                    );
 
-        let dhcp_client = {
-            let dhcp_rx_buffer = smoltcp::socket::RawSocketBuffer::new(
-                &mut store.dhcp_rx_metadata[..],
-                &mut store.dhcp_rx_storage[..],
-            );
+                    smoltcp::socket::UdpSocket::new(rx_buffer, tx_buffer)
+                };
+                sockets.add(udp_socket);
+            }
 
-            let dhcp_tx_buffer = smoltcp::socket::RawSocketBuffer::new(
-                &mut store.dhcp_tx_metadata[..],
-                &mut store.dhcp_tx_storage[..],
-            );
+            sockets.add(smoltcp::socket::Dhcpv4Socket::new());
 
-            smoltcp::dhcp::Dhcpv4Client::new(
-                &mut sockets,
-                dhcp_rx_buffer,
-                dhcp_tx_buffer,
-                // Smoltcp indicates that an instant with a negative time is indicative that time is
-                // not yet available. We can't get the current instant yet, so indicate an invalid
-                // time value.
-                smoltcp::time::Instant::from_millis(-1),
-            )
+            sockets
         };
 
         let random_seed = {
@@ -696,12 +715,7 @@ pub fn setup(
             data
         };
 
-        let mut stack = smoltcp_nal::NetworkStack::new(
-            interface,
-            sockets,
-            &handles,
-            Some(dhcp_client),
-        );
+        let mut stack = smoltcp_nal::NetworkStack::new(interface, sockets);
 
         stack.seed_random_port(&random_seed);
 

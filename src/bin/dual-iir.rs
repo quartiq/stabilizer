@@ -18,6 +18,7 @@ use stabilizer::{
         DigitalInput0, DigitalInput1, AFE0, AFE1,
     },
     net::{
+        data_stream::{BlockGenerator, StreamTarget},
         miniconf::Miniconf,
         serde::Deserialize,
         telemetry::{Telemetry, TelemetryBuffer},
@@ -37,6 +38,7 @@ pub struct Settings {
     allow_hold: bool,
     force_hold: bool,
     telemetry_period: u16,
+    stream_target: StreamTarget,
 }
 
 impl Default for Settings {
@@ -56,6 +58,8 @@ impl Default for Settings {
             force_hold: false,
             // The default telemetry period in seconds.
             telemetry_period: 10,
+
+            stream_target: StreamTarget::default(),
         }
     }
 }
@@ -68,6 +72,7 @@ const APP: () = {
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         network: NetworkUsers<Settings, Telemetry>,
+        generator: BlockGenerator,
 
         settings: Settings,
         telemetry: TelemetryBuffer,
@@ -76,13 +81,13 @@ const APP: () = {
         iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
     }
 
-    #[init(spawn=[telemetry, settings_update])]
+    #[init(spawn=[telemetry, settings_update, ethernet_link])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) =
             hardware::setup::setup(c.core, c.device);
 
-        let network = NetworkUsers::new(
+        let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
             stabilizer.cycle_counter,
@@ -90,9 +95,14 @@ const APP: () = {
             stabilizer.net.mac_address,
         );
 
+        let generator = network.enable_streaming();
+
         // Spawn a settings update for default settings.
         c.spawn.settings_update().unwrap();
         c.spawn.telemetry().unwrap();
+
+        // Spawn the ethernet link period check task.
+        c.spawn.ethernet_link().unwrap();
 
         // Enable ADC/DAC events
         stabilizer.adcs.0.start();
@@ -107,6 +117,7 @@ const APP: () = {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
+            generator,
             network,
             digital_inputs: stabilizer.digital_inputs,
             telemetry: TelemetryBuffer::default(),
@@ -130,7 +141,7 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adcs, digital_inputs, dacs, iir_state, settings, telemetry], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, digital_inputs, dacs, iir_state, settings, telemetry, generator], priority=2)]
     #[inline(never)]
     #[link_section = ".itcm.process"]
     fn process(mut c: process::Context) {
@@ -141,6 +152,7 @@ const APP: () = {
             ref settings,
             ref mut iir_state,
             ref mut telemetry,
+            ref mut generator,
         } = c.resources;
 
         let digital_inputs = [
@@ -180,6 +192,9 @@ const APP: () = {
                     .last();
             }
 
+            // Stream the data.
+            generator.send(&adc_samples, &dac_samples);
+
             // Update telemetry measurements.
             telemetry.adcs =
                 [AdcCode(adc_samples[0][0]), AdcCode(adc_samples[1][0])];
@@ -214,6 +229,9 @@ const APP: () = {
         // Update AFEs
         c.resources.afes.0.set_gain(settings.afe[0]);
         c.resources.afes.1.set_gain(settings.afe[1]);
+
+        let target = settings.stream_target.into();
+        c.resources.network.direct_stream(target);
     }
 
     #[task(priority = 1, resources=[network, settings, telemetry], schedule=[telemetry])]
@@ -237,6 +255,14 @@ const APP: () = {
                 c.scheduled
                     + SystemTimer::ticks_from_secs(telemetry_period as u32),
             )
+            .unwrap();
+    }
+
+    #[task(priority = 1, resources=[network], schedule=[ethernet_link])]
+    fn ethernet_link(c: ethernet_link::Context) {
+        c.resources.network.processor.handle_link();
+        c.schedule
+            .ethernet_link(c.scheduled + SystemTimer::ticks_from_secs(1))
             .unwrap();
     }
 

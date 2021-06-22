@@ -69,6 +69,21 @@ where
     forward! {close(socket: S::TcpSocket) -> Result<(), S::Error>}
 }
 
+impl<'a, S> embedded_nal::UdpClientStack for NetworkStackProxy<'a, S>
+where
+    S: embedded_nal::UdpClientStack,
+{
+    type UdpSocket = S::UdpSocket;
+    type Error = S::Error;
+
+    forward! {socket() -> Result<S::UdpSocket, S::Error>}
+    forward! {connect(socket: &mut S::UdpSocket, remote: embedded_nal::SocketAddr) -> Result<(), S::Error>}
+
+    forward! {send(socket: &mut S::UdpSocket, buffer: &[u8]) -> embedded_nal::nb::Result<(), S::Error>}
+    forward! {receive(socket: &mut S::UdpSocket, buffer: &mut [u8]) -> embedded_nal::nb::Result<(usize, embedded_nal::SocketAddr), S::Error>}
+    forward! {close(socket: S::UdpSocket) -> Result<(), S::Error>}
+}
+
 impl NetworkManager {
     /// Construct a new manager for a shared network stack
     ///

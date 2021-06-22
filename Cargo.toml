@@ -60,7 +60,7 @@ rev = "70b0eb5"
 features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]
 # version = "0.9.0"
 git = "https://github.com/quartiq/stm32h7xx-hal.git"
-rev = "acd47be"
+rev = "33aa67d"
 
 # link.x section start/end
 [patch.crates-io.cortex-m-rt]
@@ -73,7 +73,7 @@ rev = "2750533"
 
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
-rev = "5e56576"
+rev = "5baf55f"
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq.git"
