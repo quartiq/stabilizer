@@ -67,6 +67,8 @@
 ///! buffer mode DMA disable/enable and buffer update sequence is slow.
 use stm32h7xx_hal as hal;
 
+use mutex_trait::Mutex;
+
 use super::design_parameters::{SampleBuffer, SAMPLE_BUFFER_SIZE};
 use super::timers;
 
@@ -365,6 +367,15 @@ macro_rules! adc_input {
                 F: FnOnce(&mut SampleBuffer) -> R,
                 {
                     unsafe { self.transfer.next_dbm_transfer_with(|buf, _current| f(buf)) }
+                }
+            }
+
+            // This is not actually a Mutex. It only re-uses the semantics and macros of mutex-trait
+            // to reduce rightward drift when jointly calling `with_buffer(f)` on multiple DAC/ADCs.
+            impl Mutex for $name {
+                type Data = SampleBuffer;
+                fn lock<R>(&mut self, f: impl FnOnce(&mut Self::Data) -> R) -> R {
+                    self.with_buffer(f).unwrap()
                 }
             }
         }
