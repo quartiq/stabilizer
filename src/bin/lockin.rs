@@ -4,9 +4,10 @@
 
 use core::sync::atomic::{fence, Ordering};
 
+use mutex_trait::prelude::*;
+
 use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
 use stabilizer::{
-    flatten_closures,
     hardware::{
         self,
         adc::{Adc0Input, Adc1Input, AdcCode},
@@ -223,7 +224,7 @@ const APP: () = {
             reference_phase.wrapping_mul(settings.lockin_harmonic),
         );
 
-        flatten_closures!(with_buffer, adc0, adc1, dac0, dac1, {
+        (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
             let adc_samples = [adc0, adc1];
             let mut dac_samples = [dac0, dac1];
 
