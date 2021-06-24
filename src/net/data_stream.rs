@@ -30,19 +30,10 @@ const BLOCK_BUFFER_SIZE: usize = 30;
 const SUBSAMPLE_RATE: usize = 1;
 
 /// Represents the destination for the UDP stream to send data to.
-#[derive(Copy, Clone, Debug, MiniconfAtomic, Deserialize)]
+#[derive(Copy, Clone, Debug, MiniconfAtomic, Deserialize, Default)]
 pub struct StreamTarget {
     pub ip: [u8; 4],
     pub port: u16,
-}
-
-impl Default for StreamTarget {
-    fn default() -> Self {
-        Self {
-            ip: [0; 4],
-            port: 0,
-        }
-    }
 }
 
 impl From<StreamTarget> for SocketAddr {
