@@ -45,12 +45,16 @@ impl NetworkProcessor {
     pub fn handle_link(&mut self) {
         // If the PHY indicates there's no more ethernet link, reset the DHCP server in the network
         // stack.
-        match self.phy.poll_link() {
-            true => self.network_was_reset = false,
-
+        let link_up = self.phy.poll_link();
+        match (link_up, self.network_was_reset) {
+            (true, true) => {
+                log::warn!("Network link UP");
+                self.network_was_reset = false;
+            }
             // Only reset the network stack once per link reconnection. This prevents us from
             // sending an excessive number of DHCP requests.
-            false if !self.network_was_reset => {
+            (false, false) => {
+                log::warn!("Network link DOWN");
                 self.network_was_reset = true;
                 self.stack.lock(|stack| stack.handle_link_reset());
             }
