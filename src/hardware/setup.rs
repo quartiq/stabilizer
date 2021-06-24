@@ -234,13 +234,13 @@ pub fn setup(
 
         let channels = rtt_target::rtt_init_default!();
         // Note(unsafe): The closure we pass does not establish a critical section
-        // as demanded but it ensure synchronization and implements a lock.
+        // as demanded but it does ensure synchronization and implements a lock.
         unsafe {
             rtt_target::set_print_channel_cs(
                 channels.up.0,
                 &((|arg, f| {
-                    static LOGGER_LOCK: AtomicBool = AtomicBool::new(false);
-                    if LOGGER_LOCK.compare_exchange_weak(
+                    static LOCKED: AtomicBool = AtomicBool::new(false);
+                    if LOCKED.compare_exchange_weak(
                         false,
                         true,
                         Ordering::Acquire,
@@ -248,7 +248,7 @@ pub fn setup(
                     ) == Ok(false)
                     {
                         f(arg);
-                        LOGGER_LOCK.store(false, Ordering::Release);
+                        LOCKED.store(false, Ordering::Release);
                     }
                 }) as rtt_target::CriticalSectionFunc),
             );
