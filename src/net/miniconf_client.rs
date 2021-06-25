@@ -80,6 +80,7 @@ where
         // If we're no longer subscribed to the settings topic, but we are connected to the broker,
         // resubscribe.
         if !self.subscribed && mqtt_connected {
+            log::info!("MQTT connected, subscribing to settings");
             // Note(unwrap): We construct a string with two more characters than the prefix
             // strucutre, so we are guaranteed to have space for storage.
             let mut settings_topic: String<66> =
@@ -115,6 +116,8 @@ where
                 }
             };
 
+            log::info!("Settings update: `{}`", path);
+
             let message: SettingsResponse = settings
                 .string_set(path.split('/').peekable(), message)
                 .map(|_| {
@@ -140,13 +143,13 @@ where
             Ok(_) if update => UpdateState::Updated,
             Ok(_) => UpdateState::NoChange,
             Err(minimq::Error::SessionReset) => {
+                log::warn!("Settings MQTT session reset");
                 self.subscribed = false;
                 UpdateState::NoChange
             }
             Err(minimq::Error::Network(
                 smoltcp_nal::NetworkError::NoIpAddress,
             )) => UpdateState::NoChange,
-
             Err(error) => {
                 log::info!("Unexpected error: {:?}", error);
                 UpdateState::NoChange

@@ -271,6 +271,7 @@ impl DataStream {
     }
 
     fn close(&mut self) {
+        log::info!("Closing stream");
         // Note(unwrap): We guarantee that the socket is available above.
         let socket = self.socket.take().unwrap();
         self.stack.close(socket).unwrap();
@@ -281,17 +282,14 @@ impl DataStream {
             self.close();
         }
 
-        // If the remote address is unspecified, just close the existing socket.
+        // If the remote address is unspecified, don't open a new socket.
         if remote.ip().is_unspecified() {
-            if self.socket.is_some() {
-                self.close();
-            }
-
             return Err(());
         }
 
         let mut socket = self.stack.socket().map_err(|_| ())?;
 
+        log::info!("Opening stream");
         // Note(unwrap): We only connect with a new socket, so it is guaranteed to not already be
         // bound.
         self.stack.connect(&mut socket, remote).unwrap();
