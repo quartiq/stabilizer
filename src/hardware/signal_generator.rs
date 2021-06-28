@@ -66,13 +66,13 @@ struct InternalConf {
 }
 
 #[derive(Debug)]
-pub struct Generator {
+pub struct SignalGenerator {
     index: u32,
     config: InternalConf,
     pending_config: Option<InternalConf>,
 }
 
-impl Default for Generator {
+impl Default for SignalGenerator {
     fn default() -> Self {
         Self {
             config: Config::default().into(),
@@ -82,7 +82,7 @@ impl Default for Generator {
     }
 }
 
-impl Generator {
+impl SignalGenerator {
     /// Construct a new signal generator with some specific config.
     ///
     /// # Args
@@ -106,6 +106,18 @@ impl Generator {
         for sample in samples.iter_mut() {
             *sample = self.next();
         }
+    }
+
+    /// Skip `count` elements of the generator
+    pub fn skip(&mut self, count: usize) {
+        let index = self.index.wrapping_add(count);
+
+        // If we skip past the period of the signal, apply any pending config.
+        if index > self.config.period && let Some(config) = self.pendig_config.take() {
+            self.config = config;
+        }
+
+        self.index = index % self.config.period;
     }
 
     /// Get the next value in the generator sequence.

@@ -16,6 +16,7 @@ use stabilizer::{
         hal,
         system_timer::SystemTimer,
         DigitalInput0, DigitalInput1, AFE0, AFE1,
+        signal_generator::SignalGenerator,
     },
     net::{
         data_stream::{BlockGenerator, StreamTarget},
@@ -39,6 +40,13 @@ pub struct Settings {
     force_hold: bool,
     telemetry_period: u16,
     stream_target: StreamTarget,
+    signal_generator: signal_generator::Config;
+    output_mode: [OutputMode; 2],
+}
+
+pub struct OutputMode {
+    IirFilter,
+    SignalGenerator,
 }
 
 impl Default for Settings {
@@ -58,6 +66,8 @@ impl Default for Settings {
             force_hold: false,
             // The default telemetry period in seconds.
             telemetry_period: 10,
+
+            signal_generator: signal_generator::Config::default(),
 
             stream_target: StreamTarget::default(),
         }
@@ -172,24 +182,42 @@ const APP: () = {
             fence(Ordering::SeqCst);
 
             for channel in 0..adc_samples.len() {
-                adc_samples[channel]
-                    .iter()
-                    .zip(dac_samples[channel].iter_mut())
-                    .map(|(ai, di)| {
-                        let x = f32::from(*ai as i16);
-                        let y = settings.iir_ch[channel]
+                match settings.output_mode[channel] {
+                    OutputMode::IirFilter => {
+                        adc_samples[channel]
                             .iter()
-                            .zip(iir_state[channel].iter_mut())
-                            .fold(x, |yi, (ch, state)| {
-                                ch.update(state, yi, hold)
-                            });
-                        // Note(unsafe): The filter limits must ensure that the value is in range.
-                        // The truncation introduces 1/2 LSB distortion.
-                        let y: i16 = unsafe { y.to_int_unchecked() };
-                        // Convert to DAC code
-                        *di = DacCode::from(y).0;
-                    })
-                    .last();
+                            .zip(dac_samples[channel].iter_mut())
+                            .map(|(ai, di)| {
+                                let x = f32::from(*ai as i16);
+                                let y = settings.iir_ch[channel]
+                                    .iter()
+                                    .zip(iir_state[channel].iter_mut())
+                                    .fold(x, |yi, (ch, state)| {
+                                        ch.update(state, yi, hold)
+                                    });
+                                // Note(unsafe): The filter limits must ensure that the value is in range.
+                                // The truncation introduces 1/2 LSB distortion.
+                                let y: i16 = unsafe { y.to_int_unchecked() };
+                                // Convert to DAC code
+                                *di = DacCode::from(y).0;
+                            })
+                            .last();
+                    }
+                    OutputMode::SignalGenerator => {
+                        // Do not generate the samples twice, or we may mess up phasing of the
+                        // signal generator. Instead, copy the previously-generated signal.
+                        // TODO: Is there a nicer way we can handle this edge case?
+                        if (channel == 1) && settings.output_mode[0] == OutputMode::SignalGenerator {
+                            adc_samples[1].copy_from_slice(adc_samples[0]);
+                        } else {
+                            signal_generator.generate(&mut adc_samples[channel]);
+                        }
+                    }
+                }
+            }
+
+            if !settings.output_mode.iter().any(|&mode| mode == OutputMode::SignalGenerator) {
+                signal_generator.skip(adc_samples[0].len());
             }
 
             // Stream the data.
@@ -229,6 +257,9 @@ const APP: () = {
         // Update AFEs
         c.resources.afes.0.set_gain(settings.afe[0]);
         c.resources.afes.1.set_gain(settings.afe[1]);
+
+        // Update the signal generator
+        c.resources.signal_generator.update_waveform(settings.signal_generator);
 
         let target = settings.stream_target.into();
         c.resources.network.direct_stream(target);
