@@ -1,6 +1,8 @@
 ///! Stabilizer hardware configuration
 ///!
 ///! This file contains all of the hardware-specific configuration of Stabilizer.
+use core::sync::atomic::{self, AtomicBool, Ordering};
+use core::{ptr, slice};
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
@@ -149,8 +151,6 @@ fn load_itcm() {
         static mut __eitcm: u32;
         static mut __siitcm: u32;
     }
-    use core::{ptr, slice, sync::atomic};
-
     // NOTE(unsafe): Assuming the address symbols from the linker as well as
     // the source instruction data are all valid, this is safe as it only
     // copies linker-prepared data to where the code expects it to be.
@@ -163,7 +163,7 @@ fn load_itcm() {
         ptr::write_volatile(ITCMCR, ptr::read_volatile(ITCMCR) | 1);
 
         // Ensure ITCM is enabled before loading.
-        atomic::fence(atomic::Ordering::SeqCst);
+        atomic::fence(Ordering::SeqCst);
 
         let len =
             (&__eitcm as *const u32).offset_from(&__sitcm as *const _) as usize;
@@ -174,7 +174,7 @@ fn load_itcm() {
     }
 
     // Ensure ITCM is loaded before potentially executing any instructions from it.
-    atomic::fence(atomic::Ordering::SeqCst);
+    atomic::fence(Ordering::SeqCst);
     cortex_m::asm::dsb();
     cortex_m::asm::isb();
 }
@@ -224,10 +224,38 @@ pub fn setup(
         // Enable debug during WFE/WFI-induced sleep
         device.DBGMCU.cr.modify(|_, w| w.dbgsleep_d1().set_bit());
 
-        use rtt_logger::RTTLogger;
+        // Set up RTT channel to use for `rprintln!()` as "best effort".
+        // This removes a critical section around the logging and thus allows
+        // high-prio tasks to always interrupt at low latency.
+        // It comes at a cost:
+        // If a high-priority tasks preempts while we are logging something,
+        // and if we then also want to log from within that high-preiority task,
+        // the high-prio log message will be lost.
 
-        static LOGGER: RTTLogger = RTTLogger::new(log::LevelFilter::Info);
-        rtt_target::rtt_init_print!();
+        let channels = rtt_target::rtt_init_default!();
+        // Note(unsafe): The closure we pass does not establish a critical section
+        // as demanded but it does ensure synchronization and implements a lock.
+        unsafe {
+            rtt_target::set_print_channel_cs(
+                channels.up.0,
+                &((|arg, f| {
+                    static LOCKED: AtomicBool = AtomicBool::new(false);
+                    if LOCKED.compare_exchange_weak(
+                        false,
+                        true,
+                        Ordering::Acquire,
+                        Ordering::Relaxed,
+                    ) == Ok(false)
+                    {
+                        f(arg);
+                        LOCKED.store(false, Ordering::Release);
+                    }
+                }) as rtt_target::CriticalSectionFunc),
+            );
+        }
+
+        static LOGGER: rtt_logger::RTTLogger =
+            rtt_logger::RTTLogger::new(log::LevelFilter::Info);
         log::set_logger(&LOGGER)
             .map(|()| log::set_max_level(log::LevelFilter::Trace))
             .unwrap();

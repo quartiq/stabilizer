@@ -4,9 +4,10 @@
 
 use core::sync::atomic::{fence, Ordering};
 
+use mutex_trait::prelude::*;
+
 use dsp::iir;
 use stabilizer::{
-    flatten_closures,
     hardware::{
         self,
         adc::{Adc0Input, Adc1Input, AdcCode},
@@ -181,7 +182,7 @@ const APP: () = {
         let hold =
             settings.force_hold || (digital_inputs[1] && settings.allow_hold);
 
-        flatten_closures!(with_buffer, adc0, adc1, dac0, dac1, {
+        (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
             let adc_samples = [adc0, adc1];
             let dac_samples = [dac0, dac1];
 
