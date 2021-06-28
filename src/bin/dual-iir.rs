@@ -14,9 +14,9 @@ use stabilizer::{
         dac::{Dac0Output, Dac1Output, DacCode},
         embedded_hal::digital::v2::InputPin,
         hal,
+        signal_generator::{self, SignalGenerator},
         system_timer::SystemTimer,
         DigitalInput0, DigitalInput1, AFE0, AFE1,
-        signal_generator::SignalGenerator,
     },
     net::{
         data_stream::{BlockGenerator, StreamTarget},
@@ -40,11 +40,12 @@ pub struct Settings {
     force_hold: bool,
     telemetry_period: u16,
     stream_target: StreamTarget,
-    signal_generator: signal_generator::Config;
+    signal_generator: signal_generator::Config,
     output_mode: [OutputMode; 2],
 }
 
-pub struct OutputMode {
+#[derive(Copy, Clone, Debug, PartialEq, Deserialize, Miniconf)]
+pub enum OutputMode {
     IirFilter,
     SignalGenerator,
 }
@@ -70,6 +71,7 @@ impl Default for Settings {
             signal_generator: signal_generator::Config::default(),
 
             stream_target: StreamTarget::default(),
+            output_mode: [OutputMode::IirFilter, OutputMode::IirFilter],
         }
     }
 }
@@ -83,6 +85,7 @@ const APP: () = {
         dacs: (Dac0Output, Dac1Output),
         network: NetworkUsers<Settings, Telemetry>,
         generator: BlockGenerator,
+        signal_generator: SignalGenerator,
 
         settings: Settings,
         telemetry: TelemetryBuffer,
@@ -123,6 +126,8 @@ const APP: () = {
         // Start sampling ADCs.
         stabilizer.adc_dac_timer.start();
 
+        let settings = Settings::default();
+
         init::LateResources {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
@@ -131,7 +136,8 @@ const APP: () = {
             network,
             digital_inputs: stabilizer.digital_inputs,
             telemetry: TelemetryBuffer::default(),
-            settings: Settings::default(),
+            settings,
+            signal_generator: SignalGenerator::new(settings.signal_generator),
         }
     }
 
@@ -151,7 +157,7 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adcs, digital_inputs, dacs, iir_state, settings, telemetry, generator], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, digital_inputs, dacs, iir_state, settings, signal_generator, telemetry, generator], priority=2)]
     #[inline(never)]
     #[link_section = ".itcm.process"]
     fn process(mut c: process::Context) {
@@ -163,6 +169,7 @@ const APP: () = {
             ref mut iir_state,
             ref mut telemetry,
             ref mut generator,
+            ref mut signal_generator,
         } = c.resources;
 
         let digital_inputs = [
@@ -207,17 +214,25 @@ const APP: () = {
                         // Do not generate the samples twice, or we may mess up phasing of the
                         // signal generator. Instead, copy the previously-generated signal.
                         // TODO: Is there a nicer way we can handle this edge case?
-                        if (channel == 1) && settings.output_mode[0] == OutputMode::SignalGenerator {
-                            adc_samples[1].copy_from_slice(adc_samples[0]);
+                        if (channel == 1)
+                            && settings.output_mode[0]
+                                == OutputMode::SignalGenerator
+                        {
+                            *dac_samples[1] = *dac_samples[0];
                         } else {
-                            signal_generator.generate(&mut adc_samples[channel]);
+                            signal_generator
+                                .generate(&mut dac_samples[channel][..]);
                         }
                     }
                 }
             }
 
-            if !settings.output_mode.iter().any(|&mode| mode == OutputMode::SignalGenerator) {
-                signal_generator.skip(adc_samples[0].len());
+            if !settings
+                .output_mode
+                .iter()
+                .any(|&mode| mode == OutputMode::SignalGenerator)
+            {
+                signal_generator.skip(adc_samples[0].len() as u32);
             }
 
             // Stream the data.
@@ -248,7 +263,7 @@ const APP: () = {
         }
     }
 
-    #[task(priority = 1, resources=[network, afes, settings])]
+    #[task(priority = 1, resources=[network, afes, settings, signal_generator])]
     fn settings_update(mut c: settings_update::Context) {
         // Update the IIR channels.
         let settings = c.resources.network.miniconf.settings();
@@ -259,7 +274,9 @@ const APP: () = {
         c.resources.afes.1.set_gain(settings.afe[1]);
 
         // Update the signal generator
-        c.resources.signal_generator.update_waveform(settings.signal_generator);
+        c.resources.signal_generator.lock(|generator| {
+            generator.update_waveform(settings.signal_generator)
+        });
 
         let target = settings.stream_target.into();
         c.resources.network.direct_stream(target);

@@ -1,11 +1,15 @@
-#[derive(Copy, Clone, Debug)]
+use crate::hardware::dac::DacCode;
+use miniconf::Miniconf;
+use serde::Deserialize;
+
+#[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 pub enum Signal {
     Sine,
     Square,
     Triangle,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Miniconf, Deserialize)]
 pub struct Config {
     // TODO: Should period be specified in Hz?
     pub period: u32,
@@ -102,19 +106,21 @@ impl SignalGenerator {
     ///
     /// # Args
     /// * `samples` - The location to store generated values into.
-    pub fn generate(&mut self, samples: &mut [i16]) {
+    pub fn generate(&mut self, samples: &mut [u16]) {
         for sample in samples.iter_mut() {
-            *sample = self.next();
+            *sample = DacCode::from(self.next()).0;
         }
     }
 
     /// Skip `count` elements of the generator
-    pub fn skip(&mut self, count: usize) {
+    pub fn skip(&mut self, count: u32) {
         let index = self.index.wrapping_add(count);
 
         // If we skip past the period of the signal, apply any pending config.
-        if index > self.config.period && let Some(config) = self.pendig_config.take() {
-            self.config = config;
+        if index > self.config.period {
+            if let Some(config) = self.pending_config.take() {
+                self.config = config;
+            }
         }
 
         self.index = index % self.config.period;
@@ -140,25 +146,37 @@ impl SignalGenerator {
             }
             Signal::Triangle => {
                 if phase < self.config.phase_symmetry {
-                    let duration_of_phase = (self.config.phase_symmetry.wrapping_sub(i32::MIN) >> 16) as u16;
-                    let phase_progress = (phase.wrapping_sub(i32::MIN) >> 16) as u16;
+                    let duration_of_phase =
+                        (self.config.phase_symmetry.wrapping_sub(i32::MIN)
+                            >> 16) as u16;
+                    let phase_progress =
+                        (phase.wrapping_sub(i32::MIN) >> 16) as u16;
 
                     if duration_of_phase == 0 {
                         i16::MIN
                     } else {
-                        i16::MIN.wrapping_add((u16::MAX as u32 * phase_progress as u32 /
-                                duration_of_phase as u32) as i16)
+                        i16::MIN.wrapping_add(
+                            (u16::MAX as u32 * phase_progress as u32
+                                / duration_of_phase as u32)
+                                as i16,
+                        )
                     }
                 } else {
-
-                    let duration_of_phase = (i32::MAX.wrapping_sub(self.config.phase_symmetry) >> 16) as u16;
-                    let phase_progress = (phase.wrapping_sub(self.config.phase_symmetry) >> 16) as
-                        u16;
+                    let duration_of_phase =
+                        (i32::MAX.wrapping_sub(self.config.phase_symmetry)
+                            >> 16) as u16;
+                    let phase_progress = (phase
+                        .wrapping_sub(self.config.phase_symmetry)
+                        >> 16) as u16;
 
                     if duration_of_phase == 0 {
                         i16::MAX
                     } else {
-                        i16::MAX.wrapping_sub((u16::MAX as u32 * phase_progress as u32 / duration_of_phase as u32) as i16)
+                        i16::MAX.wrapping_sub(
+                            (u16::MAX as u32 * phase_progress as u32
+                                / duration_of_phase as u32)
+                                as i16,
+                        )
                     }
                 }
             }

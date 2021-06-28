@@ -96,7 +96,7 @@ const APP: () = {
         telemetry: TelemetryBuffer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         generator: BlockGenerator,
-        signal_generator: signal_generator::Generator,
+        signal_generator: signal_generator::SignalGenerator,
 
         timestamper: InputStamper,
         pll: RPLL,
@@ -156,7 +156,7 @@ const APP: () = {
             digital_inputs: stabilizer.digital_inputs,
             timestamper: stabilizer.timestamper,
             telemetry: TelemetryBuffer::default(),
-            signal_generator: signal_generator::Generator::new(
+            signal_generator: signal_generator::SignalGenerator::new(
                 signal_generator::Config {
                     period: design_parameters::SAMPLE_BUFFER_SIZE as u32,
                     symmetry: 0.5,
