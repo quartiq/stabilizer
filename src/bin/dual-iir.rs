@@ -40,7 +40,7 @@ pub struct Settings {
     force_hold: bool,
     telemetry_period: u16,
     stream_target: StreamTarget,
-    signal_generator: signal_generator::Config,
+    signal_generator: signal_generator::BasicConfig,
     output_mode: [OutputMode; 2],
 }
 
@@ -68,7 +68,7 @@ impl Default for Settings {
             // The default telemetry period in seconds.
             telemetry_period: 10,
 
-            signal_generator: signal_generator::Config::default(),
+            signal_generator: signal_generator::BasicConfig::default(),
 
             stream_target: StreamTarget::default(),
             output_mode: [OutputMode::IirFilter, OutputMode::IirFilter],

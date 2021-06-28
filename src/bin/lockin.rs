@@ -158,9 +158,16 @@ const APP: () = {
             telemetry: TelemetryBuffer::default(),
             signal_generator: signal_generator::SignalGenerator::new(
                 signal_generator::Config {
-                    period: design_parameters::SAMPLE_BUFFER_SIZE as u32,
-                    symmetry: 0.5,
-                    amplitude: 1.0,
+                    // Same frequency as batch size.
+                    // TODO: Is this off-by-one?
+                    frequency_tuning_word: u32::MAX
+                        / design_parameters::SAMPLE_BUFFER_SIZE as u32,
+
+                    // Equal symmetry
+                    phase_symmetry: 0,
+
+                    // 1V Amplitude
+                    amplitude: ((1.0 / 10.24) * i16::MAX as f32) as i16,
                     signal: signal_generator::Signal::Triangle,
                 },
             ),

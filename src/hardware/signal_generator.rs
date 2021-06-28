@@ -1,4 +1,4 @@
-use crate::hardware::dac::DacCode;
+use crate::hardware::{dac::DacCode, design_parameters::ADC_SAMPLE_TICKS};
 use miniconf::Miniconf;
 use serde::Deserialize;
 
@@ -10,18 +10,17 @@ pub enum Signal {
 }
 
 #[derive(Copy, Clone, Debug, Miniconf, Deserialize)]
-pub struct Config {
-    // TODO: Should period be specified in Hz?
-    pub period: u32,
+pub struct BasicConfig {
+    pub frequency: f32,
     pub symmetry: f32,
     pub signal: Signal,
     pub amplitude: f32,
 }
 
-impl Default for Config {
+impl Default for BasicConfig {
     fn default() -> Self {
         Self {
-            period: 10,
+            frequency: 1.0e3,
             symmetry: 0.5,
             signal: Signal::Sine,
             amplitude: 1.0,
@@ -29,8 +28,12 @@ impl Default for Config {
     }
 }
 
-impl Into<InternalConf> for Config {
-    fn into(self) -> InternalConf {
+impl Into<Config> for BasicConfig {
+    fn into(self) -> Config {
+        // Calculate the number of output codes in the signal period.
+        let period =
+            (100.0_e6 / (self.frequency * ADC_SAMPLE_TICKS as f32)) as u32;
+
         // Clamp amplitude and symmetry.
         let amplitude = if self.amplitude > 10.24 {
             10.24
@@ -46,41 +49,44 @@ impl Into<InternalConf> for Config {
             self.symmetry
         };
 
-        InternalConf {
+        Config {
             signal: self.signal,
-            period: self.period,
             amplitude: ((amplitude / 10.24) * i16::MAX as f32) as i16,
             phase_symmetry: (2.0 * (symmetry - 0.5) * i32::MAX as f32) as i32,
-            phase_step: ((u32::MAX as u64 + 1u64) / self.period as u64) as u32,
+            frequency_tuning_word: ((u32::MAX as u64 + 1u64) / period as u64)
+                as u32,
         }
     }
 }
 
 #[derive(Copy, Clone, Debug)]
-struct InternalConf {
-    period: u32,
-    signal: Signal,
-    amplitude: i16,
+pub struct Config {
+    // The type of signal being generated
+    pub signal: Signal,
+
+    // The full-scale output code of the signal
+    pub amplitude: i16,
 
     // The 32-bit representation of the phase symmetry. That is, with a 50% symmetry, this is equal
     // to 0.
-    phase_symmetry: i32,
+    pub phase_symmetry: i32,
 
-    phase_step: u32,
+    // The frequency tuning word of the signal. Phase is incremented by this amount
+    pub frequency_tuning_word: u32,
 }
 
 #[derive(Debug)]
 pub struct SignalGenerator {
-    index: u32,
-    config: InternalConf,
-    pending_config: Option<InternalConf>,
+    phase_accumulator: u32,
+    config: Config,
+    pending_config: Option<Config>,
 }
 
 impl Default for SignalGenerator {
     fn default() -> Self {
         Self {
-            config: Config::default().into(),
-            index: 0,
+            config: BasicConfig::default().into(),
+            phase_accumulator: 0,
             pending_config: None,
         }
     }
@@ -94,11 +100,11 @@ impl SignalGenerator {
     ///
     /// # Returns
     /// The generator
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: impl Into<Config>) -> Self {
         Self {
             config: config.into(),
             pending_config: None,
-            index: 0,
+            phase_accumulator: 0,
         }
     }
 
@@ -112,28 +118,42 @@ impl SignalGenerator {
         }
     }
 
-    /// Skip `count` elements of the generator
-    pub fn skip(&mut self, count: u32) {
-        let index = self.index.wrapping_add(count);
+    // Increment the phase of the signal.
+    //
+    // # Note
+    // This handles automatically applying pending configurations on phase wrap.
+    //
+    // # Returns
+    // The new phase to use
+    fn increment(&mut self) -> i32 {
+        let (phase, overflow) = self
+            .phase_accumulator
+            .overflowing_add(self.config.frequency_tuning_word);
 
-        // If we skip past the period of the signal, apply any pending config.
-        if index > self.config.period {
+        self.phase_accumulator = phase;
+
+        // Special case: If the FTW is specified as zero, we would otherwise never update the
+        // settings. Perform a check here for this corner case.
+        if overflow || self.config.frequency_tuning_word == 0 {
             if let Some(config) = self.pending_config.take() {
                 self.config = config;
+                self.phase_accumulator = 0;
             }
         }
 
-        self.index = index % self.config.period;
+        self.phase_accumulator as i32
+    }
+
+    /// Skip `count` elements of the generator
+    pub fn skip(&mut self, count: u32) {
+        for _ in 0..count {
+            self.increment();
+        }
     }
 
     /// Get the next value in the generator sequence.
     pub fn next(&mut self) -> i16 {
-        // When phase wraps, apply any new settings.
-        if self.pending_config.is_some() && self.index == 0 {
-            self.config = self.pending_config.take().unwrap();
-        }
-
-        let phase = (self.index * self.config.phase_step) as i32;
+        let phase = self.increment();
 
         let amplitude = match self.config.signal {
             Signal::Sine => (dsp::cossin(phase).1 >> 16) as i16,
@@ -182,9 +202,6 @@ impl SignalGenerator {
             }
         };
 
-        // Update the current index.
-        self.index = self.index.wrapping_add(1) % self.config.period;
-
         // Calculate the final output result as an i16.
         let result = amplitude as i32 * self.config.amplitude as i32;
 
@@ -196,7 +213,7 @@ impl SignalGenerator {
     ///
     /// # Note
     /// Changes will not take effect until the current waveform period elapses.
-    pub fn update_waveform(&mut self, new_config: Config) {
+    pub fn update_waveform(&mut self, new_config: impl Into<Config>) {
         self.pending_config = Some(new_config.into());
     }
 }
