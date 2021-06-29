@@ -73,14 +73,37 @@ static mut DAC_BUF: [[SampleBuffer; 2]; 2] = [[[0; SAMPLE_BUFFER_SIZE]; 2]; 2];
 #[derive(Copy, Clone)]
 pub struct DacCode(pub u16);
 
-#[allow(clippy::from_over_into)]
-impl Into<f32> for DacCode {
-    fn into(self) -> f32 {
+impl From<f32> for DacCode {
+    fn from(voltage: f32) -> DacCode {
+        // The DAC output range in bipolar mode (including the external output op-amp) is +/- 4.096
+        // V with 16-bit resolution. The anti-aliasing filter has an additional gain of 2.5.
+        let dac_range = 4.096 * 2.5;
+
+        let voltage = if voltage > dac_range {
+            dac_range
+        } else if voltage < -1. * dac_range {
+            -1. * dac_range
+        } else {
+            voltage
+        };
+
+        DacCode::from((voltage / dac_range * i16::MAX as f32) as i16)
+    }
+}
+
+impl From<DacCode> for f32 {
+    fn from(code: DacCode) -> f32 {
         // The DAC output range in bipolar mode (including the external output op-amp) is +/- 4.096
         // V with 16-bit resolution. The anti-aliasing filter has an additional gain of 2.5.
         let dac_volts_per_lsb = 4.096 * 2.5 / (1u16 << 15) as f32;
 
-        (self.0 as i16).wrapping_add(i16::MIN) as f32 * dac_volts_per_lsb
+        (code.0 as i16).wrapping_add(i16::MIN) as f32 * dac_volts_per_lsb
+    }
+}
+
+impl From<DacCode> for i16 {
+    fn from(code: DacCode) -> i16 {
+        (code.0 as i16).wrapping_sub(i16::MIN)
     }
 }
 

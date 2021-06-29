@@ -40,14 +40,7 @@ pub struct Settings {
     force_hold: bool,
     telemetry_period: u16,
     stream_target: StreamTarget,
-    signal_generator: signal_generator::BasicConfig,
-    output_mode: [OutputMode; 2],
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Deserialize, Miniconf)]
-pub enum OutputMode {
-    IirFilter,
-    SignalGenerator,
+    signal_generator: [signal_generator::BasicConfig; 2],
 }
 
 impl Default for Settings {
@@ -68,10 +61,9 @@ impl Default for Settings {
             // The default telemetry period in seconds.
             telemetry_period: 10,
 
-            signal_generator: signal_generator::BasicConfig::default(),
+            signal_generator: [signal_generator::BasicConfig::default(); 2],
 
             stream_target: StreamTarget::default(),
-            output_mode: [OutputMode::IirFilter, OutputMode::IirFilter],
         }
     }
 }
@@ -85,7 +77,7 @@ const APP: () = {
         dacs: (Dac0Output, Dac1Output),
         network: NetworkUsers<Settings, Telemetry>,
         generator: BlockGenerator,
-        signal_generator: SignalGenerator,
+        signal_generator: [SignalGenerator; 2],
 
         settings: Settings,
         telemetry: TelemetryBuffer,
@@ -137,7 +129,10 @@ const APP: () = {
             digital_inputs: stabilizer.digital_inputs,
             telemetry: TelemetryBuffer::default(),
             settings,
-            signal_generator: SignalGenerator::new(settings.signal_generator),
+            signal_generator: [
+                SignalGenerator::new(settings.signal_generator[0]),
+                SignalGenerator::new(settings.signal_generator[1]),
+            ],
         }
     }
 
@@ -189,50 +184,29 @@ const APP: () = {
             fence(Ordering::SeqCst);
 
             for channel in 0..adc_samples.len() {
-                match settings.output_mode[channel] {
-                    OutputMode::IirFilter => {
-                        adc_samples[channel]
+                adc_samples[channel]
+                    .iter()
+                    .zip(dac_samples[channel].iter_mut())
+                    .zip(&mut signal_generator[channel])
+                    .map(|((ai, di), signal)| {
+                        let x = f32::from(*ai as i16);
+                        let y = settings.iir_ch[channel]
                             .iter()
-                            .zip(dac_samples[channel].iter_mut())
-                            .map(|(ai, di)| {
-                                let x = f32::from(*ai as i16);
-                                let y = settings.iir_ch[channel]
-                                    .iter()
-                                    .zip(iir_state[channel].iter_mut())
-                                    .fold(x, |yi, (ch, state)| {
-                                        ch.update(state, yi, hold)
-                                    });
-                                // Note(unsafe): The filter limits must ensure that the value is in range.
-                                // The truncation introduces 1/2 LSB distortion.
-                                let y: i16 = unsafe { y.to_int_unchecked() };
-                                // Convert to DAC code
-                                *di = DacCode::from(y).0;
-                            })
-                            .last();
-                    }
-                    OutputMode::SignalGenerator => {
-                        // Do not generate the samples twice, or we may mess up phasing of the
-                        // signal generator. Instead, copy the previously-generated signal.
-                        // TODO: Is there a nicer way we can handle this edge case?
-                        if (channel == 1)
-                            && settings.output_mode[0]
-                                == OutputMode::SignalGenerator
-                        {
-                            *dac_samples[1] = *dac_samples[0];
-                        } else {
-                            signal_generator
-                                .generate(&mut dac_samples[channel][..]);
-                        }
-                    }
-                }
-            }
+                            .zip(iir_state[channel].iter_mut())
+                            .fold(x, |yi, (ch, state)| {
+                                ch.update(state, yi, hold)
+                            });
 
-            if !settings
-                .output_mode
-                .iter()
-                .any(|&mode| mode == OutputMode::SignalGenerator)
-            {
-                signal_generator.skip(adc_samples[0].len() as u32);
+                        // Note(unsafe): The filter limits must ensure that the value is in range.
+                        // The truncation introduces 1/2 LSB distortion.
+                        let y: i16 = unsafe { y.to_int_unchecked() };
+
+                        let y = y.saturating_add(signal);
+
+                        // Convert to DAC code
+                        *di = DacCode::from(y).0;
+                    })
+                    .last();
             }
 
             // Stream the data.
@@ -273,9 +247,10 @@ const APP: () = {
         c.resources.afes.0.set_gain(settings.afe[0]);
         c.resources.afes.1.set_gain(settings.afe[1]);
 
-        // Update the signal generator
+        // Update the signal generators
         c.resources.signal_generator.lock(|generator| {
-            generator.update_waveform(settings.signal_generator)
+            generator[0].update_waveform(settings.signal_generator[0]);
+            generator[1].update_waveform(settings.signal_generator[1]);
         });
 
         let target = settings.stream_target.into();
