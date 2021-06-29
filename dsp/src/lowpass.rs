@@ -25,7 +25,6 @@ impl<const N: usize> Lowpass<N> {
     /// Filtered output y.
     pub fn update(&mut self, x: i32, k: u8) -> i32 {
         debug_assert!(k & 31 == k);
-        debug_assert!((k - 1) & 31 == k - 1);
         // This is an unrolled and optimized first-order IIR loop
         // that works for all possible time constants.
         // Note T-DF-I and the zeros at Nyquist.
@@ -35,6 +34,6 @@ impl<const N: usize> Lowpass<N> {
             *y += dy;
             x = *y - (dy >> 1);
         }
-        x.saturating_add((self.y.len() as i32) << (k - 1))
+        x.saturating_add((self.y.len() as i32) << (k - 1).max(0))
     }
 }

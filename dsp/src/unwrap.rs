@@ -70,7 +70,7 @@ impl Unwrapper {
 mod tests {
     use super::*;
     #[test]
-    fn mini() {
+    fn overflowing_sub_correctness() {
         for (x0, x1, v) in [
             (0i32, 0i32, 0i8),
             (0, 1, 0),
@@ -99,6 +99,44 @@ mod tests {
             let (dx0, w0) = x1.overflowing_sub(*x0);
             assert_eq!(w0, w != 0);
             assert_eq!(dx, dx0);
+        }
+    }
+
+    #[test]
+    fn saturating_scale_correctness() {
+        let shift = 8;
+        for (lo, hi, res) in [
+            (0i32, 0i32, 0i32),
+            (0, 1, 0x0100_0000),
+            (0, -1, -0x0100_0000),
+            (0x100, 0, 1),
+            (-1 << 31, 0, -1 << 23),
+            (0x7fffffff, 0, 0x007f_ffff),
+            (0x7fffffff, 1, 0x0017f_ffff),
+            (-0x7fffffff, -1, -0x0180_0000),
+            (0x1234_5600, 0x7f, 0x7f12_3456),
+            (0x1234_5600, -0x7f, -0x7f00_0000 + 0x12_3456),
+            (0, 0x7f, 0x7f00_0000),
+            (0, 0x80, 0x7fff_ff80),
+            (0, -0x7f, -0x7f00_0000),
+            (0, -0x80, -0x7fff_ff80),
+            (0x7fff_ffff, 0x7f, 0x7f7f_ffff),
+            (-0x8000_0000, 0x7f, 0x7e80_0000),
+            (-0x8000_0000, -0x7f, -0x7f80_0000),
+            (0x7fff_ffff, -0x7f, -0x7e80_0001),
+            (0x100, 0x7f, 0x7f00_0001),
+            (0, -0x80, -0x7fff_ff80),
+            (-1 << 31, 0x80, 0x7fff_ff80),
+            (-1 << 31, -0x80, -0x7fff_ff80),
+        ]
+        .iter()
+        {
+            let s = saturating_scale(*lo, *hi, shift);
+            assert_eq!(
+                *res, s,
+                "{:#x} != {:#x} = saturating_scale({:#x}, {:#x}, {:#x})",
+                *res, s, *lo, *hi, shift
+            );
         }
     }
 }

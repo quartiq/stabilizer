@@ -38,7 +38,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9a69a963b70ddacfcd382524f72a4576f359af9334b3bf48a79566590bb8bfa"
 dependencies = [
  "bitrate",
- "cortex-m 0.6.7",
+ "cortex-m 0.7.2",
  "embedded-hal",
 ]
 
@@ -433,6 +433,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "mutex-trait"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4bb1638d419e12f8b1c43d9e639abd0d1424285bdea2f76aa231e233c63cd3a"
+
+[[package]]
 name = "nanorand"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -778,6 +784,7 @@ dependencies = [
  "mcp23017",
  "miniconf",
  "minimq",
+ "mutex-trait",
  "nb 1.0.0",
  "num_enum",
  "paste",
@@ -803,7 +810,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b672c837e0ee8158ecc7fce0f9a948dd0693a9c588338e728d14b73307a0b7d"
 dependencies = [
  "bare-metal 0.2.5",
- "cortex-m 0.6.7",
+ "cortex-m 0.7.2",
  "cortex-m-rt",
  "vcell",
 ]
