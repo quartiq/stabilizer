@@ -46,6 +46,8 @@ enum Conf {
     Quadrature,
     Modulation,
     Feedback,
+    Debug0,
+    Debug1,
 }
 
 #[derive(Copy, Clone, Debug, Miniconf, Deserialize, PartialEq)]
@@ -256,7 +258,7 @@ const APP: () = {
                 .unwrap()
                 * 2; // Full scale assuming the 2f component is gone.
 
-            let iir_output = settings.iir.update(iir_state, output.re as f32, false);
+            let iir_output = settings.iir.update(iir_state, (output.re as f32) / (2.0*SCALE), false);
 
             // Convert to DAC data.
             for (channel, samples) in dac_samples.iter_mut().enumerate() {
@@ -271,7 +273,9 @@ const APP: () = {
                         Conf::InPhase => output.re >> 16,
                         Conf::Quadrature => output.im >> 16,
                         Conf::Modulation => DAC_SEQUENCE[i] as i32,
-                        Conf::Feedback => (iir_output as i32) >> 16,
+                        Conf::Feedback => (iir_output as i32),
+                        Conf::Debug0 => (iir_state[1] as i32),
+                        Conf::Debug1 => (settings.iir.ba[0] as i32),
                     };
 
                     *sample = DacCode::from(value as i16).0;
