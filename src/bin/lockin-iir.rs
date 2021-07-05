@@ -274,8 +274,6 @@ const APP: () = {
                         Conf::Quadrature => output.im >> 16,
                         Conf::Modulation => DAC_SEQUENCE[i] as i32,
                         Conf::Feedback => (iir_output as i32),
-                        Conf::Debug0 => (iir_state[1] as i32),
-                        Conf::Debug1 => (settings.iir.ba[0] as i32),
                     };
 
                     *sample = DacCode::from(value as i16).0;
