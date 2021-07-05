@@ -314,10 +314,28 @@ const APP: () = {
     fn settings_update(mut c: settings_update::Context) {
         let settings = c.resources.network.miniconf.settings();
 
+
         c.resources.afes.0.set_gain(settings.afe[0]);
         c.resources.afes.1.set_gain(settings.afe[1]);
 
+
+        let mut offset_changed:bool = false;
+        c.resources.settings.lock(|current|
+            if current.iir.y_offset != settings.iir.y_offset {
+                offset_changed = true;
+            }
+            else{
+                offset_changed = false;
+            }
+        );
+
         c.resources.settings.lock(|current| *current = *settings);
+        // Scale the offset here so it only has to be done once.
+        c.resources.settings.lock(|current|
+            if offset_changed {
+                current.iir.y_offset = current.iir.y_offset*0.1*SCALE;
+            }
+        );
 
         let target = settings.stream_target.into();
         c.resources.network.direct_stream(target);

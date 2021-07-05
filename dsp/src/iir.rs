@@ -4,7 +4,6 @@ use serde::Deserialize;
 use super::{abs, copysign, macc, max, min};
 use core::f32;
 
-const SCALE: f32 = i16::MAX as _;
 
 /// IIR state and coefficients type.
 ///
@@ -133,7 +132,7 @@ impl IIR {
         let y0 = if hold {
             xy[n / 2 + 1]
         } else {
-            macc(self.y_offset * 0.1 * SCALE, xy, &self.ba) // Why the 0.1 factor???S
+            macc(self.y_offset, xy, &self.ba) // Why the 0.1 factor???S
         };
         // Limit y0
         let y0 = max(self.y_min, min(self.y_max, y0));
