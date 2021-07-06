@@ -46,8 +46,6 @@ enum Conf {
     Quadrature,
     Modulation,
     Feedback,
-    Debug0,
-    Debug1,
 }
 
 #[derive(Copy, Clone, Debug, Miniconf, Deserialize, PartialEq)]
