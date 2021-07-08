@@ -250,7 +250,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db9efecb57ab54fa918730f2874d7d37647169c50fa1357fecb81abee840b113"
 dependencies = [
- "heapless 0.7.1",
+ "heapless 0.7.2",
  "nb 1.0.0",
  "no-std-net",
 ]
@@ -352,9 +352,9 @@ dependencies = [
 
 [[package]]
 name = "heapless"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7ee8a997d259962217f40279f34201fdf06e669bafa69d7c1f4c7ff1893b5f6"
+checksum = "e44a9fba8877c568fc30457f5639d0aa7f57e494e4cdbc464150740a66c6613a"
 dependencies = [
  "atomic-polyfill",
  "hash32 0.2.1",
@@ -429,7 +429,7 @@ dependencies = [
  "bit_field",
  "embedded-nal",
  "enum-iterator",
- "heapless 0.7.1",
+ "heapless 0.7.2",
 ]
 
 [[package]]
@@ -461,9 +461,9 @@ checksum = "546c37ac5d9e56f55e73b677106873d9d9f5190605e41a856503623648488cae"
 
 [[package]]
 name = "ndarray"
-version = "0.15.1"
+version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc1372704f14bb132a49a6701c2238970a359ee0829fed481b522a63bf25456a"
+checksum = "08e854964160a323e65baa19a0b1a027f76d590faba01f05c0cbc3187221a8c9"
 dependencies = [
  "matrixmultiply",
  "num-complex",
@@ -569,9 +569,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.8.3"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ef9e7e66b4468674bfcb0c81af8b7fa0bb154fa9f28eb840da5c447baeb8d7e"
+checksum = "2e7573632e6454cf6b99d7aac4ccca54be06da05aca2ef7423d22d27d4d4bcd8"
 dependencies = [
  "libc",
  "rand_chacha",
@@ -721,7 +721,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8014aeea272bca0f0779778d43253f2f3375b414185b30e6ecc4d3e4a9994781"
 dependencies = [
- "heapless 0.7.1",
+ "heapless 0.7.2",
  "ryu",
  "serde",
 ]
@@ -763,7 +763,7 @@ version = "0.1.0"
 source = "git+https://github.com/quartiq/smoltcp-nal.git?rev=5baf55f#5baf55fafbfe2c08d9fe56c836171e9d2fb468e8"
 dependencies = [
  "embedded-nal",
- "heapless 0.7.1",
+ "heapless 0.7.2",
  "nanorand",
  "smoltcp",
 ]
@@ -779,7 +779,7 @@ dependencies = [
  "cortex-m-rtic",
  "dsp",
  "embedded-hal",
- "heapless 0.7.1",
+ "heapless 0.7.2",
  "log",
  "mcp23017",
  "miniconf",
