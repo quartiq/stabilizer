@@ -1,0 +1,35 @@
+name: Release Documentation
+
+on:
+  workflow_dispatch:
+  push:
+      #    branches:
+      #      - master
+
+jobs:
+  release-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+            fetch-depth: 0
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: thumbv7em-none-eabihf
+          override: true
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          args: --no-deps -p miniconf -p ad9959 -p stabilizer -p dsp
+
+      - run: mv target/thumbv7em-none-eabihf/doc docs/firmware
+
+      - uses: peaceiris/actions-gh-pages@v3.8.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: docs
+          enable_jekyll: true
+          publish_branch: pages

@@ -83,3 +83,29 @@ jobs:
         with:
           command: bench
           args: --package dsp --target=x86_64-unknown-linux-gnu
+
+  doc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: thumbv7em-none-eabihf
+          override: true
+      - name: Install Deadlinks
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-deadlinks
+
+      - name: cargo doc
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          args: --no-deps -p miniconf -p dsp -p ad9959 -p stabilizer
+      - name: cargo deadlinks
+        uses: actions-rs/cargo@v1
+        with:
+          command: deadlinks
+          args: --dir target/thumbv7em-none-eabihf/doc

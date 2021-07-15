@@ -15,9 +15,8 @@ use minimq::QoS;
 use serde::Serialize;
 
 use super::NetworkReference;
-use crate::hardware::{
-    adc::AdcCode, afe::Gain, dac::DacCode, design_parameters::MQTT_BROKER,
-};
+use crate::configuration::MQTT_BROKER;
+use crate::hardware::{adc::AdcCode, afe::Gain, dac::DacCode};
 
 /// The telemetry client for reporting telemetry data over MQTT.
 pub struct TelemetryClient<T: Serialize> {
@@ -49,8 +48,13 @@ pub struct TelemetryBuffer {
 /// overhead.
 #[derive(Serialize)]
 pub struct Telemetry {
+    /// Most recent input voltage measurement.
     adcs: [f32; 2],
+
+    /// Most recent output voltage.
     dacs: [f32; 2],
+
+    /// Most recent digital input assertion state.
     digital_inputs: [bool; 2],
 }
 
