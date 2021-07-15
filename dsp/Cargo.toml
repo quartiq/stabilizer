@@ -1,6 +1,7 @@
 [package]
 name = "dsp"
 version = "0.1.0"
+resolver = "2"
 authors = ["Robert Jördens <rj@quartiq.de>"]
 edition = "2018"
 
@@ -12,7 +13,7 @@ miniconf = "0.1"
 [dev-dependencies]
 easybench = "1.0"
 rand = "0.8"
-ndarray = { default-features = false, version = "0.15" }
+ndarray = "0.15"
 
 [[bench]]
 name = "micro"
