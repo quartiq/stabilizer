@@ -33,3 +33,4 @@ jobs:
           publish_dir: docs
           enable_jekyll: true
           publish_branch: pages
+          force_orphan: true
