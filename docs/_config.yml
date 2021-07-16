@@ -3,8 +3,8 @@ title: Stabilizer
 description: "User Manual"
 logo: "/assets/stabilizer-logo.png"
 
-#url: "https://quartiq.de"
-#baseurl: "/stabilizer"
+url: "https://quartiq.de"
+baseurl: "/stabilizer"
 
 exclude: ['README.md']
 
