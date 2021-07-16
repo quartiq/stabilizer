@@ -3,8 +3,8 @@ name: Release Documentation
 on:
   workflow_dispatch:
   push:
-      #    branches:
-      #      - master
+    branches:
+      - master
 
 jobs:
   release-docs:
