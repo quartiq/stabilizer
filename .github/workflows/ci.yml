@@ -122,7 +122,9 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: deadlinks
-          args: --dir target/thumbv7em-none-eabihf/doc
+          # We intentionally ignore fragments, as RTIC may generate fragments for various
+          # auto-generated code.
+          args: --dir target/thumbv7em-none-eabihf/doc --ignore-fragments
 
       - name: Move firmware documents
         run: |
