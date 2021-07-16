@@ -129,7 +129,6 @@ pub enum SignalConfig {
 pub struct SignalGenerator {
     phase_accumulator: u32,
     config: Config,
-    pending_config: Option<Config>,
 }
 
 impl Default for SignalGenerator {
@@ -137,7 +136,6 @@ impl Default for SignalGenerator {
         Self {
             config: BasicConfig::default().into(),
             phase_accumulator: 0,
-            pending_config: None,
         }
     }
 }
@@ -153,43 +151,13 @@ impl SignalGenerator {
     pub fn new(config: impl Into<Config>) -> Self {
         Self {
             config: config.into(),
-            pending_config: None,
             phase_accumulator: 0,
         }
     }
 
-    // Increment the phase of the signal.
-    //
-    // # Note
-    // This handles automatically applying pending configurations on phase wrap.
-    //
-    // # Returns
-    // The new phase to use
-    fn increment(&mut self) -> i32 {
-        let (phase, overflow) = self
-            .phase_accumulator
-            .overflowing_add(self.config.frequency);
-
-        self.phase_accumulator = phase;
-
-        // Special case: If the FTW is specified as zero, we would otherwise never update the
-        // settings. Perform a check here for this corner case.
-        if overflow || self.config.frequency == 0 {
-            if let Some(config) = self.pending_config.take() {
-                self.config = config;
-                self.phase_accumulator = 0;
-            }
-        }
-
-        self.phase_accumulator as i32
-    }
-
     /// Update waveform generation settings.
-    ///
-    /// # Note
-    /// Changes will not take effect until the current waveform period elapses.
     pub fn update_waveform(&mut self, new_config: impl Into<Config>) {
-        self.pending_config = Some(new_config.into());
+        self.config = new_config.into();
     }
 }
 
@@ -198,7 +166,9 @@ impl core::iter::Iterator for SignalGenerator {
 
     /// Get the next value in the generator sequence.
     fn next(&mut self) -> Option<i16> {
-        let phase = self.increment();
+        self.phase_accumulator =
+            self.phase_accumulator.wrapping_add(self.config.frequency);
+        let phase = self.phase_accumulator as i32;
 
         let amplitude = match self.config.signal {
             SignalConfig::Cosine => (dsp::cossin(phase).0 >> 16) as i16,
