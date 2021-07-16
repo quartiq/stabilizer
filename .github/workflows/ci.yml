@@ -129,8 +129,11 @@ jobs:
       - name: Move firmware documents
         run: |
           mkdir -p docs/_site/stabilizer
-          mv target/thumbv7em-none-eabihf/doc docs/_site/stabilizer/firmware
 
       - name: Test User Manual
         working-directory: docs
-        run: rake test
+        run: |
+          rake build
+          mv target/thumbv7em-none-eabihf/doc docs/_site/stabilizer/firmware
+          rake test
+
