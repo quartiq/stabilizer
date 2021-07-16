@@ -39,6 +39,19 @@ pub type Vec5 = [f32; 5];
 ///   Therefore it can trivially implement bump-less transfer.
 /// * Cascading multiple IIR filters allows stable and robust
 ///   implementation of transfer functions beyond bequadratic terms.
+///
+/// # Miniconf
+///
+/// `{"y_offset": y_offset, "y_min": y_min, "y_max": y_max, "ba": [b0, b1, b2, a1, a2]}`
+///
+/// * `y0` is the output offset code
+/// * `ym` is the lower saturation limit
+/// * `yM` is the upper saturation limit
+///
+/// IIR filter tap gains (`ba`) are an array `[b0, b1, b2, a1, a2]` such that the
+/// new output is computed as `y0 = a1*y1 + a2*y2 + b0*x0 + b1*x1 + b2*x2`.
+/// The IIR coefficients can be mapped to other transfer function
+/// representations, for example as described in <https://arxiv.org/abs/1508.06319>
 #[derive(Copy, Clone, Debug, Default, Deserialize, MiniconfAtomic)]
 pub struct IIR {
     pub ba: Vec5,

@@ -4,7 +4,7 @@ include!(concat!(env!("OUT_DIR"), "/cossin_table.rs"));
 
 /// Compute the cosine and sine of an angle.
 /// This is ported from the MiSoC cossin core.
-/// (https://github.com/m-labs/misoc/blob/master/misoc/cores/cossin.py)
+/// <https://github.com/m-labs/misoc/blob/master/misoc/cores/cossin.py>
 ///
 /// # Arguments
 /// * `phase` - 32-bit phase.

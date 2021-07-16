@@ -200,7 +200,7 @@ dependencies = [
 [[package]]
 name = "derive_miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?rev=2750533#275053396f0334e9efefa1ab2aae4c19b95a9a53"
+source = "git+https://github.com/quartiq/miniconf.git?rev=9c826f8#9c826f8de8d0dd1a59e1ce7bf124ac0311994b46"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -414,7 +414,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?rev=2750533#275053396f0334e9efefa1ab2aae4c19b95a9a53"
+source = "git+https://github.com/quartiq/miniconf.git?rev=9c826f8#9c826f8de8d0dd1a59e1ce7bf124ac0311994b46"
 dependencies = [
  "derive_miniconf",
  "serde",

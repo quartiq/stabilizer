@@ -1,3 +1,29 @@
+//! # Lockin
+//!
+//! THe `lockin` application implements a lock-in amplifier using either an external or internally
+//! generated
+//!
+//! ## Features
+//! * Up to 800 kHz sampling
+//! * Up to 400 kHz modulation frequency
+//! * Supports internal and external reference sources:
+//!     1. Internal: Generate reference internally and output on one of the channel outputs
+//!     2. External: Reciprocal PLL, reference input applied to DI0.
+//! * Adjustable PLL and locking time constants
+//! * Adjustable phase offset and harmonic index
+//! * Run-time configurable output modes (in-phase, quadrature, magnitude, log2 power, phase, frequency)
+//! * Input/output data streamng via UDP
+//!
+//! ## Settings
+//! Refer to the [Settings] structure for documentation of run-time configurable settings for this
+//! application.
+//!
+//! ## Telemetry
+//! Refer to [Telemetry] for information about telemetry reported by this application.
+//!
+//! ## Livestreaming
+//! This application streams raw ADC and DAC data over UDP. Refer to
+//! [stabilizer::net::data_stream](../stabilizer/net/data_stream/index.html) for more information.
 #![deny(warnings)]
 #![no_std]
 #![no_main]
@@ -8,6 +34,7 @@ use mutex_trait::prelude::*;
 
 use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
 use stabilizer::{
+    configuration,
     hardware::{
         self,
         adc::{Adc0Input, Adc1Input, AdcCode},
@@ -38,35 +65,118 @@ const DAC_SEQUENCE: [i16; design_parameters::SAMPLE_BUFFER_SIZE] =
 
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 enum Conf {
+    /// Output the lockin magnitude.
     Magnitude,
+    /// Output the phase of the lockin
     Phase,
+    /// Output the lockin reference frequency as a sinusoid
     ReferenceFrequency,
+    /// Output the logarithmic power of the lockin
     LogPower,
+    /// Output the in-phase component of the lockin signal.
     InPhase,
+    /// Output the quadrature component of the lockin signal.
     Quadrature,
+    /// Output the lockin internal modulation frequency as a sinusoid
     Modulation,
 }
 
 #[derive(Copy, Clone, Debug, Miniconf, Deserialize, PartialEq)]
 enum LockinMode {
+    /// Utilize an internally generated reference for demodulation
     Internal,
+    /// Utilize an external modulation signal supplied to DI0
     External,
 }
 
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 pub struct Settings {
+    /// Configure the Analog Front End (AFE) gain.
+    ///
+    /// # Path
+    /// `afe/<n>`
+    ///
+    /// * <n> specifies which channel to configure. <n> := [0, 1]
+    ///
+    /// # Value
+    /// Any of the variants of [Gain] enclosed in double quotes.
     afe: [Gain; 2],
+
+    /// Specifies the operational mode of the lockin.
+    ///
+    /// # Path
+    /// `lockin_mode`
+    ///
+    /// # Value
+    /// One of the variants of [LockinMode] enclosed in double quotes.
     lockin_mode: LockinMode,
 
+    /// Specifis the PLL time constant.
+    ///
+    /// # Path
+    /// `pll_tc/<n>`
+    ///
+    /// * <n> specifies which channel to configure. <n> := [0, 1]
+    ///
+    /// # Value
+    /// The PLL time constant as an unsigned byte (0-255).
     pll_tc: [u8; 2],
 
+    /// Specifies the lockin time constant.
+    ///
+    /// # Path
+    /// `lockin_tc`
+    ///
+    /// # Value
+    /// The lockin low-pass time constant as an unsigned byte (0-255).
     lockin_tc: u8,
+
+    /// Specifies which harmonic to use for the lockin.
+    ///
+    /// # Path
+    /// `lockin_harmonic`
+    ///
+    /// # Value
+    /// Harmonic index of the LO. -1 to _de_modulate the fundamental (complex conjugate)
     lockin_harmonic: i32,
+
+    /// Specifies the LO phase offset.
+    ///
+    /// # Path
+    /// `lockin_phase`
+    ///
+    /// # Value
+    /// Demodulation LO phase offset. Units are in terms of i32, where [i32::MIN] is equivalent to
+    /// -pi and [i32::MAX] is equivalent to +pi.
     lockin_phase: i32,
 
+    /// Specifies DAC output mode.
+    ///
+    /// # Path
+    /// `output_conf/<n>`
+    ///
+    /// * <n> specifies which channel to configure. <n> := [0, 1]
+    ///
+    /// # Value
+    /// One of the variants of [Conf] enclosed in double quotes.
     output_conf: [Conf; 2],
+
+    /// Specifies the telemetry output period in seconds.
+    ///
+    /// # Path
+    /// `telemetry_period`
+    ///
+    /// # Value
+    /// Any non-zero value less than 65536.
     telemetry_period: u16,
 
+    /// Specifies the target for data livestreaming.
+    ///
+    /// # Path
+    /// `stream_target`
+    ///
+    /// # Value
+    /// See [StreamTarget#miniconf]
     stream_target: StreamTarget,
 }
 
@@ -128,8 +238,8 @@ const APP: () = {
         let settings = Settings::default();
 
         let pll = RPLL::new(
-            design_parameters::ADC_SAMPLE_TICKS_LOG2
-                + design_parameters::SAMPLE_BUFFER_SIZE_LOG2,
+            configuration::ADC_SAMPLE_TICKS_LOG2
+                + configuration::SAMPLE_BUFFER_SIZE_LOG2,
         );
 
         // Spawn a settings and telemetry update for default settings.
@@ -204,8 +314,7 @@ const APP: () = {
                 );
                 (
                     pll_phase,
-                    (pll_frequency
-                        >> design_parameters::SAMPLE_BUFFER_SIZE_LOG2)
+                    (pll_frequency >> configuration::SAMPLE_BUFFER_SIZE_LOG2)
                         as i32,
                 )
             }
@@ -213,7 +322,7 @@ const APP: () = {
                 // Reference phase and frequency are known.
                 (
                     1i32 << 30,
-                    1i32 << (32 - design_parameters::SAMPLE_BUFFER_SIZE_LOG2),
+                    1i32 << (32 - configuration::SAMPLE_BUFFER_SIZE_LOG2),
                 )
             }
         };

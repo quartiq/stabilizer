@@ -16,7 +16,7 @@
 ///! capture is simultaneously triggered. That trigger is prescaled (its rate is divided) by the
 ///! batch size. This results in the input capture triggering identically to when the ADC samples
 ///! the last sample of the batch. That sample is then available for processing by the user.
-use crate::hardware::{design_parameters, timers};
+use crate::{configuration, hardware::timers};
 use core::convert::TryFrom;
 use stm32h7xx_hal as hal;
 
@@ -58,10 +58,8 @@ impl Timestamper {
 
         // Capture at the batch period.
         input_capture.configure_prescaler(
-            timers::Prescaler::try_from(
-                design_parameters::SAMPLE_BUFFER_SIZE_LOG2,
-            )
-            .unwrap(),
+            timers::Prescaler::try_from(configuration::SAMPLE_BUFFER_SIZE_LOG2)
+                .unwrap(),
         );
 
         Self {

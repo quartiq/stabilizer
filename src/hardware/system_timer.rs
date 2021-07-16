@@ -45,10 +45,11 @@ impl SystemTimer {
 }
 
 impl rtic::Monotonic for SystemTimer {
-    // Instants are stored in 32-bit signed integers. With a 10KHz tick rate, this means an
-    // instant can store up to ~59 hours of time before overflowing.
+    /// Instants are stored in 32-bit signed integers. With a 10KHz tick rate, this means an
+    /// instant can store up to ~59 hours of time before overflowing.
     type Instant = i32;
 
+    /// The ratio of the CPU clock to the system timer.
     fn ratio() -> rtic::Fraction {
         rtic::Fraction {
             // At 10KHz with a 400MHz CPU clock, the CPU clock runs 40,000 times faster than
