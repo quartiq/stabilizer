@@ -116,6 +116,13 @@ impl From<i16> for DacCode {
     }
 }
 
+impl From<u16> for DacCode {
+    /// Create a dac code from the provided DAC output code.
+    fn from(value: u16) -> Self {
+        Self(value)
+    }
+}
+
 macro_rules! dac_output {
     ($name:ident, $index:literal, $data_stream:ident,
      $spi:ident, $trigger_channel:ident, $dma_req:ident) => {

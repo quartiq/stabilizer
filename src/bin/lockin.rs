@@ -160,16 +160,14 @@ const APP: () = {
             signal_generator: signal_generator::SignalGenerator::new(
                 signal_generator::Config {
                     // Same frequency as batch size.
-                    frequency: ((u32::MAX as u64 + 1u64)
-                        / design_parameters::SAMPLE_BUFFER_SIZE as u64)
+                    frequency: (1u64
+                        << (32 - design_parameters::SAMPLE_BUFFER_SIZE_LOG2))
                         as u32,
 
-                    // Equal symmetry
-                    phase_symmetry: 0,
-
                     // 1V Amplitude
-                    amplitude: ((1.0 / 10.24) * i16::MAX as f32) as i16,
-                    signal: signal_generator::Signal::Cosine,
+                    amplitude: DacCode::from(1.0).into(),
+
+                    signal: signal_generator::SignalConfig::Cosine,
                 },
             ),
 
@@ -269,9 +267,6 @@ const APP: () = {
                         Conf::InPhase => output.re >> 16,
                         Conf::Quadrature => output.im >> 16,
 
-                        // Note: Because the signal generator has a period equal to one batch size,
-                        // it's okay to only update it when outputting the modulation waveform, as
-                        // it will perfectly wrap back to zero phase for each batch.
                         Conf::Modulation => {
                             signal_generator.next().unwrap() as i32
                         }

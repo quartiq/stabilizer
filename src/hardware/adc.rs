@@ -83,18 +83,45 @@ use hal::dma::{
 #[derive(Copy, Clone)]
 pub struct AdcCode(pub u16);
 
-#[allow(clippy::from_over_into)]
-impl Into<f32> for AdcCode {
+impl From<u16> for AdcCode {
+    /// Construct an ADC code from a provided binary (ADC-formatted) code.
+    fn from(value: u16) -> Self {
+        Self(value)
+    }
+}
+
+impl From<i16> for AdcCode {
+    /// Construct an ADC code from the stabilizer-defined code (i16 full range).
+    fn from(value: i16) -> Self {
+        Self(value as u16)
+    }
+}
+
+impl From<AdcCode> for i16 {
+    /// Get a stabilizer-defined code from the ADC code.
+    fn from(code: AdcCode) -> i16 {
+        code.0 as i16
+    }
+}
+
+impl From<AdcCode> for u16 {
+    /// Get an ADC-frmatted binary value from the code.
+    fn from(code: AdcCode) -> u16 {
+        code.0
+    }
+}
+
+impl From<AdcCode> for f32 {
     /// Convert raw ADC codes to/from voltage levels.
     ///
     /// # Note
     /// This does not account for the programmable gain amplifier at the signal input.
-    fn into(self) -> f32 {
+    fn from(code: AdcCode) -> f32 {
         // The ADC has a differential input with a range of +/- 4.096 V and 16-bit resolution.
         // The gain into the two inputs is 1/5.
         let adc_volts_per_lsb = 5.0 / 2.0 * 4.096 / (1u16 << 15) as f32;
 
-        (self.0 as i16) as f32 * adc_volts_per_lsb
+        i16::from(code) as f32 * adc_volts_per_lsb
     }
 }
 
