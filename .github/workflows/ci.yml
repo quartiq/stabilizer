@@ -124,7 +124,7 @@ jobs:
           command: deadlinks
           # We intentionally ignore fragments, as RTIC may generate fragments for various
           # auto-generated code.
-          args: --dir target/thumbv7em-none-eabihf/doc --ignore-fragments
+          args: --dir target/thumbv7em-none-eabihf/doc --ignore-fragments --check-http --check-intra-doc-links
 
       - name: Move firmware documents
         run: |
