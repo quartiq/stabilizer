@@ -1,10 +1,8 @@
 ---
-title: Networking
+title: Usage
 layout: default
 nav_order: 4
-permalink: /networking/
-has_children: true
-has_toc: false
+permalink: /usage/
 ---
 
 ## Table of Contents
@@ -13,7 +11,7 @@ has_toc: false
 1. TOC
 {:toc}
 
-## MiniConf Run-time Settings
+## Miniconf Run-time Settings
 Stabilizer supports run-time settings configuration using MQTT.
 
 Settings can be stored in the MQTT broker so that they are automatically applied whenever
@@ -27,8 +25,42 @@ to another. Disambiguation of devices is done by using Stabilizer's MAC address.
 Settings are specific to an application. If two identical settings exist for two different
 applications, each application maintains its own independent value.
 
-Refer to the [documentation](run-time-settings) for information on how to configure run-time
-settings.
+### Setup
+
+In order to use `miniconf.py`, run the following command:
+```
+python -m pip install gmqtt
+```
+
+### Usage
+The `miniconf.py` script utilizes a unique "device prefix". The device prefix is always of the
+form `dt/sinara/<app>/<mac-address>`, where `<app>` is the name of the application and
+`<mac-address>` is the MAC address of the device, formatted with delimiting dashes.
+
+Settings have a `path` and a `value` being configured. The `value` parameter is JSON-encoded data
+and the `path` value is a path-like string.
+
+As an example, for configuring `dual-iir`'s `stream_target`, the following information would be
+used:
+* `path` = `stream_target`
+* `value` = `{"ip": [192, 168, 0, 1], "port": 4000}`
+
+```
+python miniconf.py --broker localhost dt/sinara/dual-iir/00-11-22-33-44-55 stream_target='{"ip": [192, 168, 0, 1], "port": 4000}'
+```
+
+The prefix can be found for a specific device by looking at the topic on which telemetry that is
+being published.
+
+Refer to the [application documentation]({{site.baseurl}}/#applications) for the exact settings and values exposed
+for each application.
+
+The rules for constructing `path` values are documented in [`miniconf`'s
+documentation](https://github.com/quartiq/miniconf#settings-paths)
+
+Refer to the documentation for [Miniconf]({{site.baseurl}}/firmware/miniconf/enum.Error.html) for a
+description of the possible error codes that `miniconf.py` may return if the settings update was
+unsuccessful.
 
 ## Telemetry
 
