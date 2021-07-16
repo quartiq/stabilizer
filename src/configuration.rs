@@ -14,14 +14,14 @@ pub const MQTT_BROKER: [u8; 4] = [10, 34, 16, 10];
 /// timer, which runs at 100 MHz.
 ///
 /// ## Example
-/// With a value of 7, this corresponds to 2^7 = 128 ticks. Each tick of the 100MHz timer requires
+/// With a value of 7, this corresponds to 2^7 = 128 ticks. Each tick of the 100 MHz timer requires
 /// 10ns.
 ///
 /// Sampling Period = 10ns * 128 = 1.28 us
-/// Sampling Frequency = 781.25KHz
+/// Sampling Frequency = 781.25 KHz
 ///
 /// Or more succinctly:
-/// `F_s = 100MHz / (2 ^ ADC_SAMPLE_TICKS_LOG2)`
+/// `F_s = 100 MHz / (2 ^ ADC_SAMPLE_TICKS_LOG2)`
 pub const ADC_SAMPLE_TICKS_LOG2: u8 = 7;
 
 /// Sample Batch Sizing
