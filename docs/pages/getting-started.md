@@ -46,7 +46,7 @@ application requirements. Some examples of parameters that may require configura
 
 Parameters are configured by editing `src/configuration.rs`.
 
-Refer to the [documentation]({{site.baseurl}}/firmware/stabilizer/configuration.rs) for more
+Refer to the [documentation]({{site.baseurl}}/firmware/stabilizer/configuration/index.html) for more
 information on parameters.
 
 When these parameters are updated, firmware must be built and flashed onto Stabilizer before they

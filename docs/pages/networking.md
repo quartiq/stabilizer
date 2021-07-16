@@ -49,7 +49,7 @@ buffering requirements.
 In its most basic form, telemetry publishes the latest ADC input voltages, DAC output voltages, and
 digital input states.
 
-Refer to the respective [application documentation](/#applications) for more information on telemetry.
+Refer to the respective [application documentation]({{site.baseurl}}/#applications) for more information on telemetry.
 
 ## Livestream
 
@@ -60,4 +60,4 @@ host computer for further analysis.
 Livestreamed data is sent with "best effort" - it's possible that data may be lost either due to
 network congestion or by Stabilizer.
 
-Refer to the the respective [application documentation](/#applications) for more information.
+Refer to the the respective [application documentation]({{site.baseurl}}/#applications) for more information.

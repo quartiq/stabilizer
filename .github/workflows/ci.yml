@@ -88,6 +88,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+
+      - uses: actions/setup-ruby@v1
+        with:
+          ruby-version: 2.7.x
+
+      - name: Setup Jekyll
+        working-directory: docs
+        runs: |
+          gem update
+          gem update bundler
+          gem install jekyll bundler
+          bundler install
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -104,8 +117,18 @@ jobs:
         with:
           command: doc
           args: --no-deps -p miniconf -p dsp -p ad9959 -p stabilizer
+
       - name: cargo deadlinks
         uses: actions-rs/cargo@v1
         with:
           command: deadlinks
           args: --dir target/thumbv7em-none-eabihf/doc
+
+      - name: Move firmware documents
+        runs: |
+          mkdir -p docs/_site/stabilizer
+          mv targets/thumbv7em-none-eabihf/doc docs/_site/stabilizer/firmware
+
+      - name: Test User Manual
+        working-directory: docs
+        runs: rake test

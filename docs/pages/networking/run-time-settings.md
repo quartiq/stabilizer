@@ -37,7 +37,7 @@ python miniconf.py --broker localhost dt/sinara/dual-iir/00-11-22-33-44-55 strea
 The prefix can be found for a specific device by looking at the topic on which telemetry that is
 being published.
 
-Refer to the [application documentation](/#applications) for the exact settings and values exposed
+Refer to the [application documentation]({{site.baseurl}}/#applications) for the exact settings and values exposed
 for each application.
 
 The rules for constructing `path` values are documented in [`miniconf`'s
