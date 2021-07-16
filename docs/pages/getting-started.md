@@ -13,16 +13,18 @@ nav_order: 2
 ---
 
 # Getting Started
+{: .no_toc }
 
 There are a number of steps that must be completed when first getting started with Stabilizer.
-1. Set parameters in the firmware source code, such as IP addresses and sampling rate.
-1. Build the application by compiling the source code.
-1. Upload the application and programming it onto the device.
+1. Update the Stabilizer Application
+    1. Set parameters in the firmware source code, such as IP addresses and sampling rate.
+    1. Build the application by compiling the source code.
+    1. Upload the application and programming it onto the device.
 1. Set up MQTT for telemetry and configuration.
 
 The following sections will walk you through completing each of these steps.
 
-# Program Stabilizer
+# Update Stabilizer
 
 Firmware is compiled and loaded onto Stabilizer to program a specific application.
 
