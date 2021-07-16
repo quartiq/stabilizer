@@ -134,6 +134,6 @@ jobs:
         working-directory: docs
         run: |
           rake build
-          mv target/thumbv7em-none-eabihf/doc docs/_site/stabilizer/firmware
+          mv ../target/thumbv7em-none-eabihf/doc _site/stabilizer/firmware
           rake test
 
