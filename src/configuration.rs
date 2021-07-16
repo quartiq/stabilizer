@@ -11,7 +11,7 @@ pub const MQTT_BROKER: [u8; 4] = [10, 34, 16, 10];
 ///
 /// # Units
 /// The units of this parameter are specified as a logarithmic number of ticks of the internal
-/// timer, which runs at 100MHz.
+/// timer, which runs at 100 MHz.
 ///
 /// ## Example
 /// With a value of 7, this corresponds to 2^7 = 128 ticks. Each tick of the 100MHz timer requires

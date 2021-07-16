@@ -14,18 +14,11 @@ nav_order: 2
 
 # Getting Started
 
-Getting started requires a few steps:
 There are a number of steps that must be completed when first getting started with Stabilizer.
-1. Configure the firmware
-    * This requires updating any parameters, such as static IP addresses and
-   sampling rate.
-1. Build the application
-    * This requires compiling the code after configuration parameters have been
-   updated.
-1. Upload the application
-    * Once fimrware has been built, it needs to be programmed onto the device.
-1. Set up MQTT
-    * Stabilizer utilizes MQTT for telemetry and configuration.
+1. Set parameters in the firmware source code, such as IP addresses and sampling rate.
+1. Build the application by compiling the source code.
+1. Upload the application and programming it onto the device.
+1. Set up MQTT for telemetry and configuration.
 
 The following sections will walk you through completing each of these steps.
 
@@ -40,11 +33,11 @@ desired application.
 
 Stabilizer firmware contains compile-time parameters that may need to be changed based on
 application requirements. Some examples of parameters that may require configuraton:
-* Sample frequency
-* Sample batch size
+* Sampling interval.
+* Batch size.
 * MQTT Broker IP address
 
-Parameters are configured by editing `src/configuration.rs`.
+Parameters are configured by editing the file `src/configuration.rs`.
 
 Refer to the [documentation]({{site.baseurl}}/firmware/stabilizer/configuration/index.html) for more
 information on parameters.
