@@ -4,15 +4,13 @@
 
 # Stabilizer Firmware
 
-## Hardware
-
-[![Hardware](https://github.com/sinara-hw/Stabilizer/wiki/Stabilizer_v1.0_top_small.jpg)](https://github.com/sinara-hw/Stabilizer)
-
 ## Applications
 
-This firmware offers a library of hardware and software functionality targeting the use of the Stabilizer hardware in various digital signal processing applications commonly occurring in Quantum Technology.
-It provides abstractions over the fast analog inputs and outputs, time stamping, Pounder DDS interfaces and a collection of tailored and optimized digital signal processing algorithms (IIR, FIR, Lockin, PLL, reciprocal PLL, Unwrapper, Lowpass, Cosine-Sine, Atan2).
-An application can compose and configure these hardware and software components to implement different use cases.
+Check out the [Documentation](https://quartiq.de/stabilizer) for more information on usage,
+configuration, and development.
 
-Check out the [Documentation](https://quartiq.de/stabilizer) for more information on usage.
+## Hardware
 
+[![Stabilizer](https://github.com/sinara-hw/Stabilizer/wiki/Stabilizer_v1.0_top_small.jpg)](https://github.com/sinara-hw/Stabilizer)
+
+[![Pounder](https://user-images.githubusercontent.com/1338946/125936814-3664aa2d-a530-4c85-9393-999a7173424e.png)](https://github.com/sinara-hw/Pounder/wiki)

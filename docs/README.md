@@ -11,10 +11,10 @@ To run locally:
 bundle install
 bundle exec jekyll serve
 ```
-1. Navigate to `localhost:4000` in a web browser
+1. Navigate to `localhost:4000/stabilizer/` in a web browser
 
 Note: Some of the links in the docs rely on Cargo's documentation. To make all links work locally, run:
 ```
-cargo doc --bins
+cargo doc --no-deps -p dsp -p miniconf -p stabilizer -p ad9959
 cp -r target/thumbv7em-none-eabihf/doc docs/firmware
 ```

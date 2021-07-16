@@ -49,13 +49,13 @@ pub struct TelemetryBuffer {
 #[derive(Serialize)]
 pub struct Telemetry {
     /// Most recent input voltage measurement.
-    adcs: [f32; 2],
+    pub adcs: [f32; 2],
 
     /// Most recent output voltage.
-    dacs: [f32; 2],
+    pub dacs: [f32; 2],
 
     /// Most recent digital input assertion state.
-    digital_inputs: [bool; 2],
+    pub digital_inputs: [bool; 2],
 }
 
 impl Default for TelemetryBuffer {
