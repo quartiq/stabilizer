@@ -2,7 +2,7 @@
 title: Usage
 layout: default
 nav_order: 4
-permalink: /usage/
+permalink: /usage
 ---
 
 ## Table of Contents
