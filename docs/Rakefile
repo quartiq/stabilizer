@@ -11,6 +11,7 @@ def run_htmlproofer()
     assume_extension: true,
 
     file_ignore: [ /stabilizer\/firmware\/.*/ ],
+    url_ignore: [ /quartiq.de\/stabilizer/ ],
 
     # The options for the curl library that's used.
     :typhoeus => {
