@@ -129,7 +129,7 @@ jobs:
       - name: Move firmware documents
         run: |
           mkdir -p docs/_site/stabilizer
-          mv targets/thumbv7em-none-eabihf/doc docs/_site/stabilizer/firmware
+          mv target/thumbv7em-none-eabihf/doc docs/_site/stabilizer/firmware
 
       - name: Test User Manual
         working-directory: docs
