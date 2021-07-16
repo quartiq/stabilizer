@@ -38,7 +38,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9a69a963b70ddacfcd382524f72a4576f359af9334b3bf48a79566590bb8bfa"
 dependencies = [
  "bitrate",
- "cortex-m 0.6.7",
+ "cortex-m 0.7.3",
  "embedded-hal",
 ]
 
@@ -250,7 +250,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db9efecb57ab54fa918730f2874d7d37647169c50fa1357fecb81abee840b113"
 dependencies = [
- "heapless 0.7.2",
+ "heapless 0.7.3",
  "nb 1.0.0",
  "no-std-net",
 ]
@@ -352,9 +352,9 @@ dependencies = [
 
 [[package]]
 name = "heapless"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e44a9fba8877c568fc30457f5639d0aa7f57e494e4cdbc464150740a66c6613a"
+checksum = "34e26526e7168021f34243a3c8faac4dc4f938cde75a0f9b8e373cca5eb4e7ce"
 dependencies = [
  "atomic-polyfill",
  "hash32 0.2.1",
@@ -429,7 +429,7 @@ dependencies = [
  "bit_field",
  "embedded-nal",
  "enum-iterator",
- "heapless 0.7.2",
+ "heapless 0.7.3",
 ]
 
 [[package]]
@@ -721,7 +721,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8014aeea272bca0f0779778d43253f2f3375b414185b30e6ecc4d3e4a9994781"
 dependencies = [
- "heapless 0.7.2",
+ "heapless 0.7.3",
  "ryu",
  "serde",
 ]
@@ -763,7 +763,7 @@ version = "0.1.0"
 source = "git+https://github.com/quartiq/smoltcp-nal.git?rev=5baf55f#5baf55fafbfe2c08d9fe56c836171e9d2fb468e8"
 dependencies = [
  "embedded-nal",
- "heapless 0.7.2",
+ "heapless 0.7.3",
  "nanorand",
  "smoltcp",
 ]
@@ -779,7 +779,7 @@ dependencies = [
  "cortex-m-rtic",
  "dsp",
  "embedded-hal",
- "heapless 0.7.2",
+ "heapless 0.7.3",
  "log",
  "mcp23017",
  "miniconf",
@@ -810,7 +810,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b672c837e0ee8158ecc7fce0f9a948dd0693a9c588338e728d14b73307a0b7d"
 dependencies = [
  "bare-metal 0.2.5",
- "cortex-m 0.6.7",
+ "cortex-m 0.7.3",
  "cortex-m-rt",
  "vcell",
 ]
