@@ -95,7 +95,7 @@ jobs:
 
       - name: Setup Jekyll
         working-directory: docs
-        runs: |
+        run: |
           gem update
           gem update bundler
           gem install jekyll bundler
@@ -125,10 +125,10 @@ jobs:
           args: --dir target/thumbv7em-none-eabihf/doc
 
       - name: Move firmware documents
-        runs: |
+        run: |
           mkdir -p docs/_site/stabilizer
           mv targets/thumbv7em-none-eabihf/doc docs/_site/stabilizer/firmware
 
       - name: Test User Manual
         working-directory: docs
-        runs: rake test
+        run: rake test
