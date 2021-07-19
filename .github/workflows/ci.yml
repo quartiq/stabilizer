@@ -126,24 +126,9 @@ jobs:
           # auto-generated code.
           args: --dir target/thumbv7em-none-eabihf/doc --ignore-fragments --check-http --check-intra-doc-links
 
-      - uses: lemonarc/jekyll-action@1.0.0
-        working-directory: docs
-
-      - name: Setup Site
+      - name: Test Site
         working-directory: docs
         run: |
-          mkdir _site/stabilizer
-          mv _site/* _site/stabilizer
+          rake build
           mv ../target/thumbv7em-none-eabihf/doc _site/stabilizer/firmware
-
-      - name: Test User Manual
-        uses: chabad360/htmlproofer@v1.1
-        working-directory: docs
-        with:
-          directory: "./_site/stabilizer"
-          arguments:
-            --assume-extension
-            --file-ignore "/stabilizer\/firmware\/.*/"
-            --url-irgnore "/quartiq.de\/stabilizer/"
-            --allow-hash-href
-            --typhoeus_config '{"ssl_verify_peer": false}'
+          rake test
