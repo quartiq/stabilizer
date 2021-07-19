@@ -121,6 +121,9 @@ jobs:
             --root cargo-cache
             cargo-deadlinks
 
+      - name: Update Path
+        run: echo "./cargo-cache" >> $GITHUB_PATH
+
       - name: cargo doc
         uses: actions-rs/cargo@v1
         with:
@@ -129,8 +132,6 @@ jobs:
 
       - name: cargo deadlinks
         uses: actions-rs/cargo@v1
-        env:
-          PATH: cargo-cache;${{env.PATH}}
         with:
           command: deadlinks
           # We intentionally ignore fragments, as RTIC may generate fragments for various
