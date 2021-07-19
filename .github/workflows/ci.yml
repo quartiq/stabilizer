@@ -100,6 +100,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gems-
 
+      - uses: actions/cache@v2
+        with:
+          path: cargo-cache
+          key: ${{runner.os}}-cargo
+          restore-keys: |
+            ${{runner.os}}-cargo
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -110,7 +117,9 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: install
-          args: cargo-deadlinks
+          args: |
+            --root cargo-cache
+            cargo-deadlinks
 
       - name: cargo doc
         uses: actions-rs/cargo@v1
@@ -120,6 +129,8 @@ jobs:
 
       - name: cargo deadlinks
         uses: actions-rs/cargo@v1
+        env:
+          PATH: cargo-cache;${{env.PATH}}
         with:
           command: deadlinks
           # We intentionally ignore fragments, as RTIC may generate fragments for various
@@ -129,6 +140,10 @@ jobs:
       - name: Test Site
         working-directory: docs
         run: |
+          # Install depedencies at our cache location
+          bundle config path vendor/bundle
+          bundle install
+
           rake build
           mv ../target/thumbv7em-none-eabihf/doc _site/stabilizer/firmware
           rake test
