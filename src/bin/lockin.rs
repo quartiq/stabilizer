@@ -40,7 +40,6 @@ use stabilizer::{
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
-        design_parameters,
         embedded_hal::digital::v2::InputPin,
         hal,
         input_stamper::InputStamper,
@@ -259,6 +258,23 @@ const APP: () = {
         // Enable the timestamper.
         stabilizer.timestamper.start();
 
+        let signal_config = {
+            let frequency_tuning_word =
+                (1u64 << (32 - configuration::SAMPLE_BUFFER_SIZE_LOG2)) as u32;
+
+            signal_generator::Config {
+                // Same frequency as batch size.
+                frequency_tuning_word: [
+                    frequency_tuning_word,
+                    frequency_tuning_word,
+                ],
+                // 1V Amplitude
+                amplitude: DacCode::from(1.0).into(),
+
+                signal: signal_generator::Signal::Cosine,
+            }
+        };
+
         init::LateResources {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
@@ -268,17 +284,7 @@ const APP: () = {
             timestamper: stabilizer.timestamper,
             telemetry: TelemetryBuffer::default(),
             signal_generator: signal_generator::SignalGenerator::new(
-                signal_generator::Config {
-                    // Same frequency as batch size.
-                    frequency: (1u64
-                        << (32 - design_parameters::SAMPLE_BUFFER_SIZE_LOG2))
-                        as u32,
-
-                    // 1V Amplitude
-                    amplitude: DacCode::from(1.0).into(),
-
-                    signal: signal_generator::SignalConfig::Cosine,
-                },
+                signal_config,
             ),
 
             settings,

@@ -2,6 +2,7 @@ use crate::hardware::{dac::DacCode, design_parameters::ADC_SAMPLE_TICKS};
 use miniconf::Miniconf;
 use serde::Deserialize;
 
+/// Types of signals that can be generated.
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 pub enum Signal {
     Cosine,
@@ -9,11 +10,27 @@ pub enum Signal {
     Triangle,
 }
 
+/// Basic configuration for a generated signal.
+///
+/// # Miniconf
+/// `{"signal": <signal>, "frequency", 1000.0, "symmetry": 0.5, "amplitude": 1.0}`
+///
+/// Where `<signal>` may be any of [Signal] variants, `frequency` specifies the signal frequency
+/// in Hertz, `symmetry` specifies the normalized signal symmetry which ranges from 0 - 1.0, and
+/// `amplitude` specifies the signal amplitude in Volts.
 #[derive(Copy, Clone, Debug, Miniconf, Deserialize)]
 pub struct BasicConfig {
-    pub frequency: f32,
-    pub asymmetry: f32,
+    /// The signal type that should be generated. See [Signal] variants.
     pub signal: Signal,
+
+    /// The frequency of the generated signal in Hertz.
+    pub frequency: f32,
+
+    /// The normalized symmetry of the signal. At 0% symmetry, the first half phase does not exist.
+    /// At 25% symmetry, the first half-phase lasts for 25% of the signal period.
+    pub symmetry: f32,
+
+    /// The amplitude of the output signal in volts.
     pub amplitude: f32,
 }
 
@@ -21,7 +38,7 @@ impl Default for BasicConfig {
     fn default() -> Self {
         Self {
             frequency: 1.0e3,
-            asymmetry: 0.0,
+            symmetry: 0.5,
             signal: Signal::Cosine,
             amplitude: 0.0,
         }
@@ -30,11 +47,29 @@ impl Default for BasicConfig {
 
 impl From<BasicConfig> for Config {
     fn from(config: BasicConfig) -> Config {
-        // Calculate the frequency tuning word
-        let frequency: u32 = {
+        // Calculate the frequency tuning words
+        let frequency_tuning_word: [u32; 2] = {
             let conversion_factor =
                 ADC_SAMPLE_TICKS as f32 / 100.0e6 * (1u64 << 32) as f32;
-            (config.frequency * conversion_factor) as u32
+
+            if config.symmetry <= 0.0 {
+                [
+                    i32::MAX as u32,
+                    (config.frequency * conversion_factor) as u32,
+                ]
+            } else if config.symmetry >= 1.0 {
+                [
+                    (config.frequency * conversion_factor) as u32,
+                    i32::MAX as u32,
+                ]
+            } else {
+                [
+                    (config.frequency * conversion_factor / config.symmetry)
+                        as u32,
+                    (config.frequency * conversion_factor
+                        / (1.0 - config.symmetry)) as u32,
+                ]
+            }
         };
 
         // Clamp amplitude and symmetry.
@@ -46,53 +81,10 @@ impl From<BasicConfig> for Config {
             config.amplitude
         };
 
-        let symmetry = {
-            let asymmetry = if config.asymmetry < -1.0 {
-                -1.0
-            } else if config.asymmetry > 1.0 {
-                1.0
-            } else {
-                config.asymmetry
-            };
-
-            (asymmetry * i32::MAX as f32) as i32
-        };
-
-        let signal_config = match config.signal {
-            Signal::Cosine => SignalConfig::Cosine,
-            Signal::Square => SignalConfig::Square { symmetry },
-            Signal::Triangle => {
-                let tuning_word = {
-                    let segment_one_turns =
-                        symmetry.wrapping_sub(i32::MIN) >> 16;
-                    let segment_one_tw = if segment_one_turns > 0 {
-                        u16::MAX as u32 / segment_one_turns as u32
-                    } else {
-                        0
-                    };
-
-                    let segment_two_turns =
-                        i32::MAX.wrapping_sub(symmetry) >> 16;
-                    let segment_two_tw = if segment_two_turns > 0 {
-                        u16::MAX as u32 / segment_two_turns as u32
-                    } else {
-                        0
-                    };
-
-                    [segment_one_tw, segment_two_tw]
-                };
-
-                SignalConfig::Triangle {
-                    symmetry,
-                    tuning_word,
-                }
-            }
-        };
-
         Config {
             amplitude: DacCode::from(amplitude).into(),
-            signal: signal_config,
-            frequency,
+            signal: config.signal,
+            frequency_tuning_word,
         }
     }
 }
@@ -100,29 +92,13 @@ impl From<BasicConfig> for Config {
 #[derive(Copy, Clone, Debug)]
 pub struct Config {
     /// The type of signal being generated
-    pub signal: SignalConfig,
+    pub signal: Signal,
 
     /// The full-scale output code of the signal
     pub amplitude: i16,
 
     /// The frequency tuning word of the signal. Phase is incremented by this amount
-    pub frequency: u32,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum SignalConfig {
-    Cosine,
-    Square {
-        /// The phase symmetry cross-over of the waveform.
-        symmetry: i32,
-    },
-    Triangle {
-        /// The phase symmetry cross-over of the waveform.
-        symmetry: i32,
-        /// The amplitude added for each phase turn increment (different words for different
-        /// phases).
-        tuning_word: [u32; 2],
-    },
+    pub frequency_tuning_word: [u32; 2],
 }
 
 #[derive(Debug)]
@@ -166,37 +142,26 @@ impl core::iter::Iterator for SignalGenerator {
 
     /// Get the next value in the generator sequence.
     fn next(&mut self) -> Option<i16> {
-        self.phase_accumulator =
-            self.phase_accumulator.wrapping_add(self.config.frequency);
+        self.phase_accumulator = self.phase_accumulator.wrapping_add(
+            if (self.phase_accumulator as i32).is_negative() {
+                self.config.frequency_tuning_word[0]
+            } else {
+                self.config.frequency_tuning_word[1]
+            },
+        );
+
         let phase = self.phase_accumulator as i32;
 
-        let amplitude = match self.config.signal {
-            SignalConfig::Cosine => (dsp::cossin(phase).0 >> 16) as i16,
-            SignalConfig::Square { symmetry } => {
-                if phase < symmetry {
+        let amplitude: i16 = match self.config.signal {
+            Signal::Cosine => (dsp::cossin(phase).0 >> 16) as i16,
+            Signal::Square => {
+                if phase.is_negative() {
                     i16::MAX
                 } else {
                     i16::MIN
                 }
             }
-            SignalConfig::Triangle {
-                symmetry,
-                tuning_word,
-            } => {
-                if phase < symmetry {
-                    let segment_turns =
-                        (phase.wrapping_sub(i32::MIN) >> 16) as u16;
-                    i16::MIN.wrapping_add(
-                        (tuning_word[0] * segment_turns as u32) as i16,
-                    )
-                } else {
-                    let segment_turns =
-                        (phase.wrapping_sub(symmetry) >> 16) as u16;
-                    i16::MAX.wrapping_sub(
-                        (tuning_word[1] * segment_turns as u32) as i16,
-                    )
-                }
-            }
+            Signal::Triangle => i16::MAX - (phase.abs() >> 15) as i16,
         };
 
         // Calculate the final output result as an i16.

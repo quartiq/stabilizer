@@ -120,6 +120,16 @@ pub struct Settings {
     /// # Value
     /// See [StreamTarget#miniconf]
     stream_target: StreamTarget,
+
+    /// Specifies the config for signal generators to add on to DAC0/DAC1 outputs.
+    ///
+    /// # Path
+    /// `signal_generator/<n>`
+    ///
+    /// * <n> specifies which channel to configure. <n> := [0, 1]
+    ///
+    /// # Value
+    /// See [signal_generator::BasicConfig#miniconf]
     signal_generator: [signal_generator::BasicConfig; 2],
 }
 
