@@ -347,8 +347,13 @@ const APP: () = {
         // Update the signal generators
         c.resources.signal_generator.lock(|generator| {
             for i in 0..2 {
-                if let Ok(config) = settings.signal_generator[i].try_into() {
-                    generator[i].update_waveform(config);
+                match settings.signal_generator[i].try_into() {
+                    Ok(config) => generator[i].update_waveform(config),
+                    Err(err) => log::error!(
+                        "Failed to update signal generation on DAC{}: {:?}",
+                        i,
+                        err
+                    ),
                 }
             }
         });
