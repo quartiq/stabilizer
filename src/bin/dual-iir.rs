@@ -29,7 +29,10 @@
 #![no_std]
 #![no_main]
 
-use core::sync::atomic::{fence, Ordering};
+use core::{
+    convert::TryInto,
+    sync::atomic::{fence, Ordering},
+};
 
 use mutex_trait::prelude::*;
 
@@ -220,8 +223,12 @@ const APP: () = {
             telemetry: TelemetryBuffer::default(),
             settings,
             signal_generator: [
-                SignalGenerator::new(settings.signal_generator[0]),
-                SignalGenerator::new(settings.signal_generator[1]),
+                SignalGenerator::new(
+                    settings.signal_generator[0].try_into().unwrap(),
+                ),
+                SignalGenerator::new(
+                    settings.signal_generator[1].try_into().unwrap(),
+                ),
             ],
         }
     }
@@ -339,8 +346,11 @@ const APP: () = {
 
         // Update the signal generators
         c.resources.signal_generator.lock(|generator| {
-            generator[0].update_waveform(settings.signal_generator[0]);
-            generator[1].update_waveform(settings.signal_generator[1]);
+            for i in 0..2 {
+                if let Ok(config) = settings.signal_generator[i].try_into() {
+                    generator[i].update_waveform(config);
+                }
+            }
         });
 
         let target = settings.stream_target.into();

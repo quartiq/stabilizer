@@ -1,4 +1,5 @@
 use crate::hardware::{dac::DacCode, design_parameters::ADC_SAMPLE_TICKS};
+use core::convert::{TryFrom, TryInto};
 use miniconf::Miniconf;
 use serde::Deserialize;
 
@@ -45,8 +46,17 @@ impl Default for BasicConfig {
     }
 }
 
-impl From<BasicConfig> for Config {
-    fn from(config: BasicConfig) -> Config {
+/// Represents the errors that can occur when attempting to configure the signal generator.
+#[derive(Copy, Clone, Debug)]
+pub enum Error {
+    /// The provided amplitude is out-of-range.
+    InvalidAmplitude,
+}
+
+impl TryFrom<BasicConfig> for Config {
+    type Error = Error;
+
+    fn try_from(config: BasicConfig) -> Result<Config, Error> {
         // Calculate the frequency tuning words
         let frequency_tuning_word: [u32; 2] = {
             let conversion_factor =
@@ -72,20 +82,13 @@ impl From<BasicConfig> for Config {
             }
         };
 
-        // Clamp amplitude and symmetry.
-        let amplitude = if config.amplitude > 10.24 {
-            10.24
-        } else if config.amplitude < 0.0 {
-            0.0
-        } else {
-            config.amplitude
-        };
-
-        Config {
-            amplitude: DacCode::from(amplitude).into(),
+        Ok(Config {
+            amplitude: DacCode::try_from(config.amplitude)
+                .or(Err(Error::InvalidAmplitude))?
+                .into(),
             signal: config.signal,
             frequency_tuning_word,
-        }
+        })
     }
 }
 
@@ -110,7 +113,7 @@ pub struct SignalGenerator {
 impl Default for SignalGenerator {
     fn default() -> Self {
         Self {
-            config: BasicConfig::default().into(),
+            config: BasicConfig::default().try_into().unwrap(),
             phase_accumulator: 0,
         }
     }
@@ -124,16 +127,16 @@ impl SignalGenerator {
     ///
     /// # Returns
     /// The generator
-    pub fn new(config: impl Into<Config>) -> Self {
+    pub fn new(config: Config) -> Self {
         Self {
-            config: config.into(),
+            config,
             phase_accumulator: 0,
         }
     }
 
     /// Update waveform generation settings.
-    pub fn update_waveform(&mut self, new_config: impl Into<Config>) {
-        self.config = new_config.into();
+    pub fn update_waveform(&mut self, new_config: Config) {
+        self.config = new_config;
     }
 }
 

@@ -57,6 +57,8 @@ use mutex_trait::Mutex;
 use super::design_parameters::{SampleBuffer, SAMPLE_BUFFER_SIZE};
 use super::timers;
 
+use core::convert::TryFrom;
+
 use hal::dma::{
     dma::{DMAReq, DmaConfig},
     traits::TargetAddress,
@@ -75,21 +77,23 @@ static mut DAC_BUF: [[SampleBuffer; 2]; 2] = [[[0; SAMPLE_BUFFER_SIZE]; 2]; 2];
 #[derive(Copy, Clone)]
 pub struct DacCode(pub u16);
 
-impl From<f32> for DacCode {
-    fn from(voltage: f32) -> DacCode {
+impl TryFrom<f32> for DacCode {
+    type Error = ();
+
+    fn try_from(voltage: f32) -> Result<DacCode, ()> {
         // The DAC output range in bipolar mode (including the external output op-amp) is +/- 4.096
         // V with 16-bit resolution. The anti-aliasing filter has an additional gain of 2.5.
         let dac_range = 4.096 * 2.5;
 
-        let voltage = if voltage > dac_range {
-            dac_range
+        if voltage > dac_range {
+            Err(())
         } else if voltage < -1. * dac_range {
-            -1. * dac_range
+            Err(())
         } else {
-            voltage
-        };
-
-        DacCode::from((voltage / dac_range * i16::MAX as f32) as i16)
+            Ok(DacCode::from(
+                (voltage / dac_range * i16::MAX as f32) as i16,
+            ))
+        }
     }
 }
 

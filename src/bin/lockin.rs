@@ -28,7 +28,10 @@
 #![no_std]
 #![no_main]
 
-use core::sync::atomic::{fence, Ordering};
+use core::{
+    convert::TryFrom,
+    sync::atomic::{fence, Ordering},
+};
 
 use mutex_trait::prelude::*;
 
@@ -269,7 +272,7 @@ const APP: () = {
                     frequency_tuning_word,
                 ],
                 // 1V Amplitude
-                amplitude: DacCode::from(1.0).into(),
+                amplitude: DacCode::try_from(1.0).unwrap().into(),
 
                 signal: signal_generator::Signal::Cosine,
             }
