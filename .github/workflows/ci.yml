@@ -93,24 +93,27 @@ jobs:
         with:
           ruby-version: 2.7.x
 
-      - name: Setup Jekyll
-        working-directory: docs
-        run: |
-          gem update
-          gem update bundler
-          gem install jekyll bundler
-          bundler install
-
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           target: thumbv7em-none-eabihf
           override: true
+
+      - uses: actions/cache@v2
+        with:
+          path: docs/vendor/bundle
+          key: ${{runner.os}}-gems-${{ hashFiles('**/Gemfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-gems-
+
+      - uses: Swatinem/rust-cache@v1
+
       - name: Install Deadlinks
         uses: actions-rs/cargo@v1
         with:
           command: install
-          args: cargo-deadlinks
+          args: |
+            cargo-deadlinks
 
       - name: cargo doc
         uses: actions-rs/cargo@v1
@@ -126,14 +129,13 @@ jobs:
           # auto-generated code.
           args: --dir target/thumbv7em-none-eabihf/doc --ignore-fragments --check-http --check-intra-doc-links
 
-      - name: Move firmware documents
-        run: |
-          mkdir -p docs/_site/stabilizer
-
-      - name: Test User Manual
+      - name: Test Site
         working-directory: docs
         run: |
-          rake build
-          mv ../target/thumbv7em-none-eabihf/doc _site/stabilizer/firmware
-          rake test
+          # Install depedencies at our cache location
+          bundle config path vendor/bundle
+          bundle install
 
+          bundle exec rake build
+          mv ../target/thumbv7em-none-eabihf/doc _site/stabilizer/firmware
+          bundle exec rake test
