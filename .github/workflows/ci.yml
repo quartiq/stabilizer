@@ -96,7 +96,7 @@ jobs:
       - uses: actions/cache@v2
         with:
           path: docs/vendor/bundle
-          keys: ${{runner.os}}-gems-${{ hashFiles('**/Gemfile.lock') }}
+          key: ${{runner.os}}-gems-${{ hashFiles('**/Gemfile.lock') }}
           restore-keys: |
             ${{ runner.os }}-gems-
 
