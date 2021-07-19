@@ -89,7 +89,7 @@ impl TryFrom<f32> for DacCode {
             Err(())
         } else {
             Ok(DacCode::from(
-                (voltage / dac_range * i16::MAX as f32) as i16,
+                (voltage * (i16::MAX as f32 / dac_range)) as i16,
             ))
         }
     }

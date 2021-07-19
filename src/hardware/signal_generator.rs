@@ -27,8 +27,9 @@ pub struct BasicConfig {
     /// The frequency of the generated signal in Hertz.
     pub frequency: f32,
 
-    /// The normalized symmetry of the signal. At 0% symmetry, the first half phase does not exist.
-    /// At 25% symmetry, the first half-phase lasts for 25% of the signal period.
+    /// The normalized symmetry of the signal. At 0% symmetry, the duration of the first half oscillation is minimal.
+    /// At 25% symmetry, the first half oscillation lasts for 25% of the signal period. For square wave output this
+    //// symmetry is the duty cycle.
     pub symmetry: f32,
 
     /// The amplitude of the output signal in volts.
@@ -59,25 +60,17 @@ impl TryFrom<BasicConfig> for Config {
     fn try_from(config: BasicConfig) -> Result<Config, Error> {
         // Calculate the frequency tuning words
         let frequency_tuning_word: [u32; 2] = {
-            let conversion_factor =
-                ADC_SAMPLE_TICKS as f32 / 100.0e6 * (1u64 << 32) as f32;
+            const LSB_PER_HERTZ: f32 = ((1u64 + ADC_SAMPLE_TICKS_LOG2) << 32) as f32 / 100.0e6;
+            let ftw = config.frequency * LSB_PER_HERTZ;
 
             if config.symmetry <= 0.0 {
-                [
-                    i32::MAX as u32,
-                    (config.frequency * conversion_factor) as u32,
-                ]
+                [1u32 << 31, ftw as u32]
             } else if config.symmetry >= 1.0 {
-                [
-                    (config.frequency * conversion_factor) as u32,
-                    i32::MAX as u32,
-                ]
+                [ftw as u32, 1u32 << 31]
             } else {
                 [
-                    (config.frequency * conversion_factor / config.symmetry)
-                        as u32,
-                    (config.frequency * conversion_factor
-                        / (1.0 - config.symmetry)) as u32,
+                    (ftw / config.symmetry) as u32,
+                    (ftw / (1.0 - config.symmetry)) as u32,
                 ]
             }
         };
@@ -161,7 +154,7 @@ impl core::iter::Iterator for SignalGenerator {
                 if phase.is_negative() {
                     i16::MAX
                 } else {
-                    i16::MIN
+                    -i16::MAX
                 }
             }
             Signal::Triangle => i16::MAX - (phase.abs() >> 15) as i16,
@@ -171,6 +164,6 @@ impl core::iter::Iterator for SignalGenerator {
         let result = amplitude as i32 * self.config.amplitude as i32;
 
         // Note: We downshift by 15-bits to preserve only one of the sign bits.
-        Some((result >> 15) as i16)
+        Some(((result + (1 << 14)) >> 15) as i16)
     }
 }
