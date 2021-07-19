@@ -85,6 +85,7 @@ jobs:
           args: --package dsp --target=x86_64-unknown-linux-gnu
 
   doc:
+
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -93,6 +94,12 @@ jobs:
         with:
           ruby-version: 2.7.x
 
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: thumbv7em-none-eabihf
+          override: true
+
       - uses: actions/cache@v2
         with:
           path: docs/vendor/bundle
@@ -100,29 +107,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gems-
 
-      - uses: actions/cache@v2
-        with:
-          path: cargo-cache
-          key: ${{runner.os}}-cargo-${{ hashFiles('cargo-cache/bins/*') }}
-          restore-keys: |
-            ${{runner.os}}-cargo-
-
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: thumbv7em-none-eabihf
-          override: true
+      - uses: Swatinem/rust-cache@v1
 
       - name: Install Deadlinks
         uses: actions-rs/cargo@v1
         with:
           command: install
           args: |
-            --root cargo-cache
             cargo-deadlinks
-
-      - name: Update Path
-        run: echo "./cargo-cache" >> $GITHUB_PATH
 
       - name: cargo doc
         uses: actions-rs/cargo@v1
