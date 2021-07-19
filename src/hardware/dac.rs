@@ -85,9 +85,7 @@ impl TryFrom<f32> for DacCode {
         // V with 16-bit resolution. The anti-aliasing filter has an additional gain of 2.5.
         let dac_range = 4.096 * 2.5;
 
-        if voltage > dac_range {
-            Err(())
-        } else if voltage < -1. * dac_range {
+        if voltage > dac_range || voltage < -1. * dac_range {
             Err(())
         } else {
             Ok(DacCode::from(
