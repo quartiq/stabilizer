@@ -1,20 +1,15 @@
-///! Stabilizer data stream capabilities
-///!
-///! # Design
-///! Stabilizer data streamining utilizes UDP packets to send live data streams at high throughput.
-///! Packets are always sent in a best-effort fashion, and data may be dropped. Each packet contains
-///! an identifier that can be used to detect any dropped data.
-///!
-///! The current implementation utilizes an single-producer, single-consumer queue to send data
-///! between a high priority task and the UDP transmitter.
-///!
-///! A "batch" of data is defined to be a single item in the SPSC queue sent to the UDP transmitter
-///! thread. The transmitter thread then serializes as many sequential "batches" into a single UDP
-///! packet as possible. The UDP packet is also given a header indicating the starting batch
-///! sequence number and the number of batches present. If the UDP transmitter encounters a
-///! non-sequential batch, it does not enqueue it into the packet and instead transmits any staged
-///! data. The non-sequential batch is then transmitted in a new UDP packet. This method allows a
-///! receiver to detect dropped batches (e.g. due to processing overhead).
+//! Stabilizer data stream capabilities
+//!
+//! # Design
+//! Data streamining utilizes UDP packets to send live data streams at high throughput.
+//! Packets are always sent in a best-effort fashion, and data may be dropped. Each packet contains
+//! an identifier that can be used to detect dropped data.
+//!
+//! Refer to [DataPacket] for information about the serialization format of each UDP packet.
+//!
+//! # Example
+//! A sample Python script is available in `scripts/stream_throughput.py` to demonstrate reception
+//! of livestreamed data.
 use heapless::spsc::{Consumer, Producer, Queue};
 use miniconf::MiniconfAtomic;
 use serde::Deserialize;
@@ -30,6 +25,15 @@ const BLOCK_BUFFER_SIZE: usize = 30;
 const SUBSAMPLE_RATE: usize = 1;
 
 /// Represents the destination for the UDP stream to send data to.
+///
+/// # Miniconf
+/// `{"ip": <addr>, "port": <port>}`
+///
+/// * `<addr>` is an array of 4 bytes. E.g. `[192, 168, 0, 1]`
+/// * `<port>` is any unsigned 16-bit value.
+///
+/// ## Example
+/// `{"ip": [192, 168,0, 1], "port": 1111}`
 #[derive(Copy, Clone, Debug, MiniconfAtomic, Deserialize, Default)]
 pub struct StreamTarget {
     pub ip: [u8; 4],
@@ -125,22 +129,74 @@ impl BlockGenerator {
     }
 }
 
+/// # Stream Packet
 /// Represents a single UDP packet sent by the stream.
 ///
-/// # Packet Format
-/// All data is sent in network-endian format. The format is as follows
+/// A "batch" of data is defined to be the data collected for a single invocation of the DSP
+/// routine. A packet is composed of as many sequential batches as can fit.
 ///
-/// Header:
-/// [0..2]: Start block ID (u16)
-/// [2..3]: Num Blocks present (u8) <N>
-/// [3..4]: Batch Size (u8) <BS>
+/// The packet is given a header indicating the starting batch sequence number and the number of
+/// batches present. If the UDP transmitter encounters a non-sequential batch, it does not enqueue
+/// it into the packet and instead transmits any staged data. The non-sequential batch is then
+/// transmitted in a new UDP packet. This method allows a receiver to detect dropped batches (e.g.
+/// due to processing overhead).
 ///
-/// Following the header, batches are added sequentially. Each batch takes the form of:
-/// [<BS>*0..<BS>*2]: ADC0
-/// [<BS>*2..<BS>*4]: ADC1
-/// [<BS>*4..<BS>*6]: DAC0
-/// [<BS>*6..<BS>*8]: DAC1
-struct DataPacket<'a> {
+/// ## Data Format
+///
+/// Data sent via UDP is sent in "blocks". Each block is a single batch of ADC/DAC codes from an
+/// individual DSP processing routine. Each block is assigned a unique 16-bit identifier. The identifier
+/// increments by one for each block and rolls over. All blocks in a single packet are guaranteed to
+/// contain sequential identifiers.
+///
+/// All data is transmitted in network-endian (big-endian) format.
+///
+/// ### Quick Reference
+///
+/// In the reference below, any values enclosed in parentheses represents the number of bytes used for
+/// that value. E.g. "Batch size (1)" indicates 1 byte is used to represent the batch size.
+/// ```
+/// # UDP packets take the following form
+/// <Header>,<Batch 1>,[<Batch 2>, ...<Batch N>]
+///
+/// # The header takes the following form
+/// <Header> = <Starting ID (2)>,<Number blocks [N] (1)>,<Batch size [BS] (1)>
+///
+/// # Each batch takes the following form
+/// <Batch N> = <ADC0>,<ADC1>,<DAC0>,<DAC1>
+///
+/// # Where
+/// <ADCx/DACx> = <Sample 1 (2)>, ...<Sample BS (2)>
+/// ```
+///
+/// ### Packet Format
+/// Multiple blocks are sent in a single UDP packet simultaneously. Each UDP packet transmitted
+/// contains a header followed by the serialized data blocks.
+/// ```
+/// <Header>,<Batch 1>,[<Batch 2>, ...<Batch N>]
+/// ```
+///
+/// ### Header
+/// A header takes the following form:
+/// * The starting block ID (2 bytes)
+/// * The number of blocks present in the packet (1 byte)
+/// * The size of each bach in samples (1 byte)
+///
+/// ```
+/// <Starting ID (2)>,<N blocks (1)>,<Batch size (1)>
+/// ```
+///
+/// ### Data Blocks
+/// Following the header, each block is sequentially serialized. Each block takes the following form:
+/// ```
+/// <ADC0 samples>,<ADC1 samples>,<DAC0 samples>,<DAC1 samples>
+/// ```
+///
+/// Where `<XXX samples>` is an array of N 16-bit ADC/DAC samples. The number of samples is provided in the
+/// header.
+///
+/// ADC and DAC codes are transmitted in raw machine-code format. Please refer to the datasheet for the
+/// ADC and DAC if you need to convert these to voltages.
+pub struct DataPacket<'a> {
     buf: &'a mut [u8],
     subsample_rate: usize,
     start_id: Option<u16>,

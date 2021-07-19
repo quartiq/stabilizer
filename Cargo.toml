@@ -1,6 +1,7 @@
 [package]
 name = "stabilizer"
 version = "0.5.0"
+resolver = "2"
 authors = ["Robert Jördens <rj@quartiq.de>"]
 description = "Firmware for the Sinara Stabilizer board (stm32h743, eth, poe, 2 adc, 2 dac)"
 categories = ["embedded", "no-std", "hardware-support", "science"]
@@ -34,11 +35,11 @@ log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"
 rtt-target = { version = "0.3", features = ["cortex-m"] }
 serde = { version = "1.0", features = ["derive"], default-features = false }
 heapless = { version = "0.7", features = ["serde"] }
-cortex-m-rtic = "0.5.6"
+cortex-m-rtic = "0.5.7"
 embedded-hal = "0.2.5"
 nb = "1.0.0"
 asm-delay = "0.9.0"
-num_enum = { version = "0.5.1", default-features = false }
+num_enum = { version = "0.5.2", default-features = false }
 paste = "1"
 dsp = { path = "dsp" }
 ad9959 = { path = "ad9959" }
@@ -70,7 +71,7 @@ rev = "a2e3ad5"
 
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf.git"
-rev = "2750533"
+rev = "9c826f8"
 
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"

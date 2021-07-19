@@ -1,3 +1,30 @@
+//! # Dual IIR
+//!
+//! The Dual IIR application exposes two configurable channels. Stabilizer samples input at a fixed
+//! rate, digitally filters the data, and then generates filtered output signals on the respective
+//! channel outputs.
+//!
+//! ## Features
+//! * Two indpenendent channels
+//! * up to 800 kHz rate, timed sampling
+//! * Run-time filter configuration
+//! * Input/Output data streaming
+//! * Down to 2 µs latency
+//! * f32 IIR math
+//! * Generic biquad (second order) IIR filter
+//! * Anti-windup
+//! * Derivative kick avoidance
+//!
+//! ## Settings
+//! Refer to the [Settings] structure for documentation of run-time configurable settings for this
+//! application.
+//!
+//! ## Telemetry
+//! Refer to [Telemetry] for information about telemetry reported by this application.
+//!
+//! ## Livestreaming
+//! This application streams raw ADC and DAC data over UDP. Refer to
+//! [stabilizer::net::data_stream](../stabilizer/net/data_stream/index.html) for more information.
 #![deny(warnings)]
 #![no_std]
 #![no_main]
@@ -35,11 +62,63 @@ const IIR_CASCADE_LENGTH: usize = 1;
 
 #[derive(Clone, Copy, Debug, Deserialize, Miniconf)]
 pub struct Settings {
+    /// Configure the Analog Front End (AFE) gain.
+    ///
+    /// # Path
+    /// `afe/<n>`
+    ///
+    /// * <n> specifies which channel to configure. <n> := [0, 1]
+    ///
+    /// # Value
+    /// Any of the variants of [Gain] enclosed in double quotes.
     afe: [Gain; 2],
+
+    /// Configure the IIR filter parameters.
+    ///
+    /// # Path
+    /// `iir_ch/<n>/<m>`
+    ///
+    /// * <n> specifies which channel to configure. <n> := [0, 1]
+    /// * <m> specifies which cascade to configure. <m> := [0, 1], depending on [IIR_CASCADE_LENGTH]
+    ///
+    /// # Value
+    /// See [iir::IIR#miniconf]
     iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+
+    /// Specified true if DI1 should be used as a "hold" input.
+    ///
+    /// # Path
+    /// `allow_hold`
+    ///
+    /// # Value
+    /// "true" or "false"
     allow_hold: bool,
+
+    /// Specified true if "hold" should be forced regardless of DI1 state and hold allowance.
+    ///
+    /// # Path
+    /// `force_hold`
+    ///
+    /// # Value
+    /// "true" or "false"
     force_hold: bool,
+
+    /// Specifies the telemetry output period in seconds.
+    ///
+    /// # Path
+    /// `telemetry_period`
+    ///
+    /// # Value
+    /// Any non-zero value less than 65536.
     telemetry_period: u16,
+
+    /// Specifies the target for data livestreaming.
+    ///
+    /// # Path
+    /// `stream_target`
+    ///
+    /// # Value
+    /// See [StreamTarget#miniconf]
     stream_target: StreamTarget,
     signal_generator: [signal_generator::BasicConfig; 2],
 }

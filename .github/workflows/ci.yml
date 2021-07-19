@@ -83,3 +83,57 @@ jobs:
         with:
           command: bench
           args: --package dsp --target=x86_64-unknown-linux-gnu
+
+  doc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-ruby@v1
+        with:
+          ruby-version: 2.7.x
+
+      - name: Setup Jekyll
+        working-directory: docs
+        run: |
+          gem update
+          gem update bundler
+          gem install jekyll bundler
+          bundler install
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: thumbv7em-none-eabihf
+          override: true
+      - name: Install Deadlinks
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-deadlinks
+
+      - name: cargo doc
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          args: --no-deps -p miniconf -p dsp -p ad9959 -p stabilizer
+
+      - name: cargo deadlinks
+        uses: actions-rs/cargo@v1
+        with:
+          command: deadlinks
+          # We intentionally ignore fragments, as RTIC may generate fragments for various
+          # auto-generated code.
+          args: --dir target/thumbv7em-none-eabihf/doc --ignore-fragments --check-http --check-intra-doc-links
+
+      - name: Move firmware documents
+        run: |
+          mkdir -p docs/_site/stabilizer
+
+      - name: Test User Manual
+        working-directory: docs
+        run: |
+          rake build
+          mv ../target/thumbv7em-none-eabihf/doc _site/stabilizer/firmware
+          rake test
+

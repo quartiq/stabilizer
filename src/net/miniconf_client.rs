@@ -14,7 +14,7 @@ use heapless::String;
 use log::info;
 
 use super::{MqttMessage, NetworkReference, SettingsResponse, UpdateState};
-use crate::hardware::design_parameters::MQTT_BROKER;
+use crate::configuration::MQTT_BROKER;
 
 /// MQTT settings interface.
 pub struct MiniconfClient<S>
