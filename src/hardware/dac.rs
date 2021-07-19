@@ -57,6 +57,8 @@ use mutex_trait::Mutex;
 use super::design_parameters::{SampleBuffer, SAMPLE_BUFFER_SIZE};
 use super::timers;
 
+use core::convert::TryFrom;
+
 use hal::dma::{
     dma::{DMAReq, DmaConfig},
     traits::TargetAddress,
@@ -75,14 +77,37 @@ static mut DAC_BUF: [[SampleBuffer; 2]; 2] = [[[0; SAMPLE_BUFFER_SIZE]; 2]; 2];
 #[derive(Copy, Clone)]
 pub struct DacCode(pub u16);
 
-#[allow(clippy::from_over_into)]
-impl Into<f32> for DacCode {
-    fn into(self) -> f32 {
+impl TryFrom<f32> for DacCode {
+    type Error = ();
+
+    fn try_from(voltage: f32) -> Result<DacCode, ()> {
+        // The DAC output range in bipolar mode (including the external output op-amp) is +/- 4.096
+        // V with 16-bit resolution. The anti-aliasing filter has an additional gain of 2.5.
+        let dac_range = 4.096 * 2.5;
+
+        if voltage > dac_range || voltage < -1. * dac_range {
+            Err(())
+        } else {
+            Ok(DacCode::from(
+                (voltage * (i16::MAX as f32 / dac_range)) as i16,
+            ))
+        }
+    }
+}
+
+impl From<DacCode> for f32 {
+    fn from(code: DacCode) -> f32 {
         // The DAC output range in bipolar mode (including the external output op-amp) is +/- 4.096
         // V with 16-bit resolution. The anti-aliasing filter has an additional gain of 2.5.
         let dac_volts_per_lsb = 4.096 * 2.5 / (1u16 << 15) as f32;
 
-        (self.0 as i16).wrapping_add(i16::MIN) as f32 * dac_volts_per_lsb
+        (code.0 as i16).wrapping_add(i16::MIN) as f32 * dac_volts_per_lsb
+    }
+}
+
+impl From<DacCode> for i16 {
+    fn from(code: DacCode) -> i16 {
+        (code.0 as i16).wrapping_sub(i16::MIN)
     }
 }
 
@@ -90,6 +115,13 @@ impl From<i16> for DacCode {
     /// Encode signed 16-bit values into DAC offset binary for a bipolar output configuration.
     fn from(value: i16) -> Self {
         Self(value.wrapping_add(i16::MIN) as u16)
+    }
+}
+
+impl From<u16> for DacCode {
+    /// Create a dac code from the provided DAC output code.
+    fn from(value: u16) -> Self {
+        Self(value)
     }
 }
 

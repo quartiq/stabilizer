@@ -29,7 +29,10 @@
 #![no_std]
 #![no_main]
 
-use core::sync::atomic::{fence, Ordering};
+use core::{
+    convert::TryInto,
+    sync::atomic::{fence, Ordering},
+};
 
 use mutex_trait::prelude::*;
 
@@ -42,6 +45,7 @@ use stabilizer::{
         dac::{Dac0Output, Dac1Output, DacCode},
         embedded_hal::digital::v2::InputPin,
         hal,
+        signal_generator::{self, SignalGenerator},
         system_timer::SystemTimer,
         DigitalInput0, DigitalInput1, AFE0, AFE1,
     },
@@ -119,6 +123,17 @@ pub struct Settings {
     /// # Value
     /// See [StreamTarget#miniconf]
     stream_target: StreamTarget,
+
+    /// Specifies the config for signal generators to add on to DAC0/DAC1 outputs.
+    ///
+    /// # Path
+    /// `signal_generator/<n>`
+    ///
+    /// * <n> specifies which channel to configure. <n> := [0, 1]
+    ///
+    /// # Value
+    /// See [signal_generator::BasicConfig#miniconf]
+    signal_generator: [signal_generator::BasicConfig; 2],
 }
 
 impl Default for Settings {
@@ -139,6 +154,8 @@ impl Default for Settings {
             // The default telemetry period in seconds.
             telemetry_period: 10,
 
+            signal_generator: [signal_generator::BasicConfig::default(); 2],
+
             stream_target: StreamTarget::default(),
         }
     }
@@ -153,6 +170,7 @@ const APP: () = {
         dacs: (Dac0Output, Dac1Output),
         network: NetworkUsers<Settings, Telemetry>,
         generator: BlockGenerator,
+        signal_generator: [SignalGenerator; 2],
 
         settings: Settings,
         telemetry: TelemetryBuffer,
@@ -193,6 +211,8 @@ const APP: () = {
         // Start sampling ADCs.
         stabilizer.adc_dac_timer.start();
 
+        let settings = Settings::default();
+
         init::LateResources {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
@@ -201,7 +221,15 @@ const APP: () = {
             network,
             digital_inputs: stabilizer.digital_inputs,
             telemetry: TelemetryBuffer::default(),
-            settings: Settings::default(),
+            settings,
+            signal_generator: [
+                SignalGenerator::new(
+                    settings.signal_generator[0].try_into().unwrap(),
+                ),
+                SignalGenerator::new(
+                    settings.signal_generator[1].try_into().unwrap(),
+                ),
+            ],
         }
     }
 
@@ -221,7 +249,7 @@ const APP: () = {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, resources=[adcs, digital_inputs, dacs, iir_state, settings, telemetry, generator], priority=2)]
+    #[task(binds=DMA1_STR4, resources=[adcs, digital_inputs, dacs, iir_state, settings, signal_generator, telemetry, generator], priority=2)]
     #[inline(never)]
     #[link_section = ".itcm.process"]
     fn process(mut c: process::Context) {
@@ -233,6 +261,7 @@ const APP: () = {
             ref mut iir_state,
             ref mut telemetry,
             ref mut generator,
+            ref mut signal_generator,
         } = c.resources;
 
         let digital_inputs = [
@@ -255,7 +284,8 @@ const APP: () = {
                 adc_samples[channel]
                     .iter()
                     .zip(dac_samples[channel].iter_mut())
-                    .map(|(ai, di)| {
+                    .zip(&mut signal_generator[channel])
+                    .map(|((ai, di), signal)| {
                         let x = f32::from(*ai as i16);
                         let y = settings.iir_ch[channel]
                             .iter()
@@ -263,9 +293,13 @@ const APP: () = {
                             .fold(x, |yi, (ch, state)| {
                                 ch.update(state, yi, hold)
                             });
+
                         // Note(unsafe): The filter limits must ensure that the value is in range.
                         // The truncation introduces 1/2 LSB distortion.
                         let y: i16 = unsafe { y.to_int_unchecked() };
+
+                        let y = y.saturating_add(signal);
+
                         // Convert to DAC code
                         *di = DacCode::from(y).0;
                     })
@@ -300,7 +334,7 @@ const APP: () = {
         }
     }
 
-    #[task(priority = 1, resources=[network, afes, settings])]
+    #[task(priority = 1, resources=[network, afes, settings, signal_generator])]
     fn settings_update(mut c: settings_update::Context) {
         // Update the IIR channels.
         let settings = c.resources.network.miniconf.settings();
@@ -309,6 +343,22 @@ const APP: () = {
         // Update AFEs
         c.resources.afes.0.set_gain(settings.afe[0]);
         c.resources.afes.1.set_gain(settings.afe[1]);
+
+        // Update the signal generators
+        for (i, &config) in settings.signal_generator.iter().enumerate() {
+            match config.try_into() {
+                Ok(config) => {
+                    c.resources
+                        .signal_generator
+                        .lock(|generator| generator[i].update_waveform(config));
+                }
+                Err(err) => log::error!(
+                    "Failed to update signal generation on DAC{}: {:?}",
+                    i,
+                    err
+                ),
+            }
+        }
 
         let target = settings.stream_target.into();
         c.resources.network.direct_stream(target);
