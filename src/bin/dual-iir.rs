@@ -345,22 +345,20 @@ const APP: () = {
         c.resources.afes.1.set_gain(settings.afe[1]);
 
         // Update the signal generators
-        c.resources.signal_generator.lock(|generator| {
-            for (i, (ref mut generator, &config)) in generator
-                .iter_mut()
-                .zip(settings.signal_generator.iter())
-                .enumerate()
-            {
-                match config.try_into() {
-                    Ok(config) => generator.update_waveform(config),
-                    Err(err) => log::error!(
-                        "Failed to update signal generation on DAC{}: {:?}",
-                        i,
-                        err
-                    ),
+        for (i, &config) in settings.signal_generator.iter().enumerate() {
+            match config.try_into() {
+                Ok(config) => {
+                    c.resources
+                        .signal_generator
+                        .lock(|generator| generator[i].update_waveform(config));
                 }
+                Err(err) => log::error!(
+                    "Failed to update signal generation on DAC{}: {:?}",
+                    i,
+                    err
+                ),
             }
-        });
+        }
 
         let target = settings.stream_target.into();
         c.resources.network.direct_stream(target);
