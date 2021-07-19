@@ -3,7 +3,7 @@
 /// MQTT broker IPv4 address
 ///
 /// In the default configuration, the IP address is defined as 10.34.16.10.
-pub const MQTT_BROKER: [u8; 4] = [10, 35, 16, 10];
+pub const MQTT_BROKER: [u8; 4] = [10, 34, 16, 10];
 
 /// Sampling Frequency
 ///
