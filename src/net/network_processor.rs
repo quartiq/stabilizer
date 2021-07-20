@@ -74,12 +74,10 @@ impl NetworkProcessor {
         // Service the network stack to process any inbound and outbound traffic.
         let now = self.clock.current_ms();
 
-        let result = match self.stack.lock(|stack| stack.poll(now)) {
+        match self.stack.lock(|stack| stack.poll(now)) {
             Ok(true) => UpdateState::Updated,
             Ok(false) => UpdateState::NoChange,
             Err(_) => UpdateState::Updated,
-        };
-
-        result
+        }
     }
 }

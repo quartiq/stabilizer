@@ -82,8 +82,8 @@ impl TcpSocketStorage {
     }
 }
 
-impl NetStorage {
-    pub fn new() -> Self {
+impl Default for NetStorage {
+    fn default() -> Self {
         NetStorage {
             // Placeholder for the real IP address, which is initialized at runtime.
             ip_addrs: [smoltcp::wire::IpCidr::Ipv6(
@@ -671,7 +671,7 @@ pub fn setup(
         // Note(unwrap): The hardware configuration function is only allowed to be called once.
         // Unwrapping is intended to panic if called again to prevent re-use of global memory.
         let store =
-            cortex_m::singleton!(: NetStorage = NetStorage::new()).unwrap();
+            cortex_m::singleton!(: NetStorage = NetStorage::default()).unwrap();
 
         store.ip_addrs[0] = smoltcp::wire::IpCidr::new(
             smoltcp::wire::IpAddress::Ipv4(
