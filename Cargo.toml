@@ -75,11 +75,11 @@ rev = "9c826f8"
 
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
-rev = "5baf55f"
+rev = "0634188"
 
 [dependencies.minimq]
 git = "https://github.com/quartiq/minimq.git"
-rev = "dbdbec0"
+rev = "93813e3"
 
 [features]
 nightly = ["cortex-m/inline-asm", "dsp/nightly"]

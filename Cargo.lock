@@ -424,12 +424,13 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.2.0"
-source = "git+https://github.com/quartiq/minimq.git?rev=dbdbec0#dbdbec0b77d2e134dc6c025018a82c14cbdfbe34"
+source = "git+https://github.com/quartiq/minimq.git?rev=93813e3#93813e37e013b04ffb5e02aca7eca1859b1b2443"
 dependencies = [
  "bit_field",
  "embedded-nal",
  "enum-iterator",
  "heapless 0.7.3",
+ "smlang",
 ]
 
 [[package]]
@@ -748,6 +749,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "smlang"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de6880d53d3cffd26b03b95b37dfa80ab66937792a505a8c89c271bbde949ff5"
+dependencies = [
+ "smlang-macros",
+]
+
+[[package]]
+name = "smlang-macros"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32f0936dcbf984fe0371e049d3e41a5cf4f8033da8cdea376101665e199575c2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "smoltcp"
 version = "0.8.0"
 source = "git+https://github.com/smoltcp-rs/smoltcp?branch=master#027f255f904b9b7c4226cfd8b2d31f272ffa5105"
@@ -760,7 +781,7 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/smoltcp-nal.git?rev=5baf55f#5baf55fafbfe2c08d9fe56c836171e9d2fb468e8"
+source = "git+https://github.com/quartiq/smoltcp-nal.git?rev=0634188#063418836d112942203fb5e5fd501b946a6839b3"
 dependencies = [
  "embedded-nal",
  "heapless 0.7.3",
