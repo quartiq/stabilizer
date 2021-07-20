@@ -1,4 +1,7 @@
-use crate::{configuration::ADC_SAMPLE_TICKS_LOG2, hardware::dac::DacCode};
+use crate::{
+    configuration::ADC_SAMPLE_TICKS_LOG2, hardware::dac::DacCode,
+    hardware::design_parameters::TIMER_FREQUENCY,
+};
 use core::convert::{TryFrom, TryInto};
 use miniconf::Miniconf;
 use serde::Deserialize;
@@ -60,13 +63,14 @@ impl TryFrom<BasicConfig> for Config {
     fn try_from(config: BasicConfig) -> Result<Config, Error> {
         // Calculate the frequency tuning words
         let frequency_tuning_word: [u32; 2] = {
-            const LSB_PER_HERTZ: f32 =
-                (1u64 << (31 + ADC_SAMPLE_TICKS_LOG2)) as f32 / 100.0e6;
+            const LSB_PER_HERTZ: f32 = (1u64 << (31 + ADC_SAMPLE_TICKS_LOG2))
+                as f32
+                / (TIMER_FREQUENCY.0 * 1_000_000) as f32;
             let ftw = config.frequency * LSB_PER_HERTZ;
 
-            if config.symmetry <= 0.0 {
+            if config.symmetry <= ftw / u32::MAX as f32 {
                 [1u32 << 31, ftw as u32]
-            } else if config.symmetry >= 1.0 {
+            } else if 1. - config.symmetry <= ftw / u32::MAX as f32 {
                 [ftw as u32, 1u32 << 31]
             } else {
                 [
