@@ -1,4 +1,7 @@
-use crate::{configuration::ADC_SAMPLE_TICKS_LOG2, hardware::dac::DacCode};
+use crate::{
+    configuration::ADC_SAMPLE_TICKS_LOG2, hardware::dac::DacCode,
+    hardware::design_parameters::TIMER_FREQUENCY,
+};
 use core::convert::{TryFrom, TryInto};
 use miniconf::Miniconf;
 use serde::Deserialize;
@@ -52,27 +55,43 @@ impl Default for BasicConfig {
 pub enum Error {
     /// The provided amplitude is out-of-range.
     InvalidAmplitude,
+    /// The provided symmetry is out of range.
+    InvalidSymmetry,
+    /// The provided frequency is out of range.
+    InvalidFrequency,
 }
 
 impl TryFrom<BasicConfig> for Config {
     type Error = Error;
 
     fn try_from(config: BasicConfig) -> Result<Config, Error> {
-        // Calculate the frequency tuning words
-        let frequency_tuning_word: [u32; 2] = {
-            const LSB_PER_HERTZ: f32 =
-                (1u64 << (31 + ADC_SAMPLE_TICKS_LOG2)) as f32 / 100.0e6;
-            let ftw = config.frequency * LSB_PER_HERTZ;
+        // Validate symmetry
+        if config.symmetry < 0.0 || config.symmetry > 1.0 {
+            return Err(Error::InvalidSymmetry);
+        }
 
-            if config.symmetry <= 0.0 {
-                [1u32 << 31, ftw as u32]
-            } else if config.symmetry >= 1.0 {
-                [ftw as u32, 1u32 << 31]
+        const LSB_PER_HERTZ: f32 = (1u64 << (31 + ADC_SAMPLE_TICKS_LOG2))
+            as f32
+            / (TIMER_FREQUENCY.0 * 1_000_000) as f32;
+        let ftw = config.frequency * LSB_PER_HERTZ;
+
+        // Validate base frequency tuning word to be below Nyquist.
+        const NYQUIST: f32 = (1u32 << 31) as _;
+        if ftw < 0.0 || 2.0 * ftw > NYQUIST {
+            return Err(Error::InvalidFrequency);
+        }
+
+        // Calculate the frequency tuning words.
+        let frequency_tuning_word = {
+            let ftws = [ftw / config.symmetry, ftw / (1.0 - config.symmetry)];
+
+            // Clip both frequency tuning words to within Nyquist before rounding.
+            if ftws[0] > NYQUIST {
+                [1u32 << 31, ftws[1] as u32]
+            } else if ftws[1] > NYQUIST {
+                [ftws[0] as u32, 1u32 << 31]
             } else {
-                [
-                    (ftw / config.symmetry) as u32,
-                    (ftw / (1.0 - config.symmetry)) as u32,
-                ]
+                [ftws[0] as u32, ftws[1] as u32]
             }
         };
 
