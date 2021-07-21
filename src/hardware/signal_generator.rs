@@ -77,7 +77,7 @@ impl TryFrom<BasicConfig> for Config {
 
         // Validate base frequency tuning word to be below Nyquist.
         const NYQUIST: f32 = (1u32 << 31) as _;
-        if 2.0 * ftw > NYQUIST {
+        if ftw < 0.0 || 2.0 * ftw > NYQUIST {
             return Err(Error::InvalidFrequency);
         }
 
