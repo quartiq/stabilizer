@@ -770,7 +770,7 @@ pub fn setup(
     let pounder = if pounder_pgood.is_high().unwrap() {
         log::info!("Found Pounder");
 
-        let mut io_expander = {
+        let io_expander = {
             let sda = gpiob.pb7.into_alternate_af4().set_open_drain();
             let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
             let i2c1 = device.I2C1.i2c(
@@ -782,12 +782,70 @@ pub fn setup(
             mcp23017::MCP23017::default(i2c1).unwrap()
         };
 
-        // Configure power-on-default state for pounder. All LEDs are off, on-board oscillator
-        // selected and enabled, attenuators out of reset. Note that testing indicates the
-        // output state needs to be set first to properly update the output registers.
-        io_expander.all_pin_mode(mcp23017::PinMode::OUTPUT).unwrap();
-        io_expander.write_gpio(mcp23017::Port::GPIOA, 0x00).unwrap();
-        io_expander.write_gpio(mcp23017::Port::GPIOB, 0x2F).unwrap();
+        let spi = {
+            let spi_mosi = gpiod
+                .pd7
+                .into_alternate_af5()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let spi_miso = gpioa
+                .pa6
+                .into_alternate_af5()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let spi_sck = gpiog
+                .pg11
+                .into_alternate_af5()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+
+            let config = hal::spi::Config::new(hal::spi::Mode {
+                polarity: hal::spi::Polarity::IdleHigh,
+                phase: hal::spi::Phase::CaptureOnSecondTransition,
+            });
+
+            // The maximum frequency of this SPI must be limited due to capacitance on the MISO
+            // line causing a long RC decay.
+            device.SPI1.spi(
+                (spi_sck, spi_miso, spi_mosi),
+                config,
+                5.mhz(),
+                ccdr.peripheral.SPI1,
+                &ccdr.clocks,
+            )
+        };
+
+        let (adc1, adc2) = {
+            let (mut adc1, mut adc2) = hal::adc::adc12(
+                device.ADC1,
+                device.ADC2,
+                &mut delay,
+                ccdr.peripheral.ADC12,
+                &ccdr.clocks,
+            );
+
+            let adc1 = {
+                adc1.calibrate();
+                adc1.enable()
+            };
+
+            let adc2 = {
+                adc2.calibrate();
+                adc2.enable()
+            };
+
+            (adc1, adc2)
+        };
+
+        let adc1_in_p = gpiof.pf11.into_analog();
+        let adc2_in_p = gpiof.pf14.into_analog();
+
+        let pounder_devices = pounder::PounderDevices::new(
+            io_expander,
+            spi,
+            adc1,
+            adc2,
+            adc1_in_p,
+            adc2_in_p,
+        )
+        .unwrap();
 
         let ad9959 = {
             let qspi_interface = {
@@ -861,71 +919,6 @@ pub fn setup(
 
             ad9959
         };
-
-        let spi = {
-            let spi_mosi = gpiod
-                .pd7
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let spi_miso = gpioa
-                .pa6
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let spi_sck = gpiog
-                .pg11
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-
-            let config = hal::spi::Config::new(hal::spi::Mode {
-                polarity: hal::spi::Polarity::IdleHigh,
-                phase: hal::spi::Phase::CaptureOnSecondTransition,
-            });
-
-            // The maximum frequency of this SPI must be limited due to capacitance on the MISO
-            // line causing a long RC decay.
-            device.SPI1.spi(
-                (spi_sck, spi_miso, spi_mosi),
-                config,
-                5.mhz(),
-                ccdr.peripheral.SPI1,
-                &ccdr.clocks,
-            )
-        };
-
-        let (adc1, adc2) = {
-            let (mut adc1, mut adc2) = hal::adc::adc12(
-                device.ADC1,
-                device.ADC2,
-                &mut delay,
-                ccdr.peripheral.ADC12,
-                &ccdr.clocks,
-            );
-
-            let adc1 = {
-                adc1.calibrate();
-                adc1.enable()
-            };
-
-            let adc2 = {
-                adc2.calibrate();
-                adc2.enable()
-            };
-
-            (adc1, adc2)
-        };
-
-        let adc1_in_p = gpiof.pf11.into_analog();
-        let adc2_in_p = gpiof.pf14.into_analog();
-
-        let pounder_devices = pounder::PounderDevices::new(
-            io_expander,
-            spi,
-            adc1,
-            adc2,
-            adc1_in_p,
-            adc2_in_p,
-        )
-        .unwrap();
 
         let dds_output = {
             let io_update_trigger = {
