@@ -769,6 +769,26 @@ pub fn setup(
     delay.delay_ms(2u8);
     let pounder = if pounder_pgood.is_high().unwrap() {
         log::info!("Found Pounder");
+
+        let mut io_expander = {
+            let sda = gpiob.pb7.into_alternate_af4().set_open_drain();
+            let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
+            let i2c1 = device.I2C1.i2c(
+                (scl, sda),
+                400.khz(),
+                ccdr.peripheral.I2C1,
+                &ccdr.clocks,
+            );
+            mcp23017::MCP23017::default(i2c1).unwrap()
+        };
+
+        // Configure power-on-default state for pounder. All LEDs are off, on-board oscillator
+        // selected and enabled, attenuators out of reset. Note that testing indicates the
+        // output state needs to be set first to properly update the output registers.
+        io_expander.all_pin_mode(mcp23017::PinMode::OUTPUT).unwrap();
+        io_expander.write_gpio(mcp23017::Port::GPIOA, 0x00).unwrap();
+        io_expander.write_gpio(mcp23017::Port::GPIOB, 0x2F).unwrap();
+
         let ad9959 = {
             let qspi_interface = {
                 // Instantiate the QUADSPI pins and peripheral interface.
@@ -840,18 +860,6 @@ pub fn setup(
             gpiog.pg7 = io_update.into_analog();
 
             ad9959
-        };
-
-        let io_expander = {
-            let sda = gpiob.pb7.into_alternate_af4().set_open_drain();
-            let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
-            let i2c1 = device.I2C1.i2c(
-                (scl, sda),
-                400.khz(),
-                ccdr.peripheral.I2C1,
-                &ccdr.clocks,
-            );
-            mcp23017::MCP23017::default(i2c1).unwrap()
         };
 
         let spi = {
