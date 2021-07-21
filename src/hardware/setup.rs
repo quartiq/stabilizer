@@ -769,78 +769,6 @@ pub fn setup(
     delay.delay_ms(2u8);
     let pounder = if pounder_pgood.is_high().unwrap() {
         log::info!("Found Pounder");
-        let ad9959 = {
-            let qspi_interface = {
-                // Instantiate the QUADSPI pins and peripheral interface.
-                let qspi_pins = {
-                    let _qspi_ncs = gpioc
-                        .pc11
-                        .into_alternate_af9()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
-
-                    let clk = gpiob
-                        .pb2
-                        .into_alternate_af9()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
-                    let io0 = gpioe
-                        .pe7
-                        .into_alternate_af10()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
-                    let io1 = gpioe
-                        .pe8
-                        .into_alternate_af10()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
-                    let io2 = gpioe
-                        .pe9
-                        .into_alternate_af10()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
-                    let io3 = gpioe
-                        .pe10
-                        .into_alternate_af10()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
-
-                    (clk, io0, io1, io2, io3)
-                };
-
-                let qspi = hal::qspi::Qspi::bank2(
-                    device.QUADSPI,
-                    qspi_pins,
-                    design_parameters::POUNDER_QSPI_FREQUENCY,
-                    &ccdr.clocks,
-                    ccdr.peripheral.QSPI,
-                );
-
-                pounder::QspiInterface::new(qspi).unwrap()
-            };
-
-            #[cfg(feature = "pounder_v1_1")]
-            let reset_pin = gpiog.pg6.into_push_pull_output();
-            #[cfg(not(feature = "pounder_v1_1"))]
-            let reset_pin = gpioa.pa0.into_push_pull_output();
-
-            let mut io_update = gpiog.pg7.into_push_pull_output();
-
-            let ref_clk: hal::time::Hertz =
-                design_parameters::DDS_REF_CLK.into();
-
-            let mut ad9959 = ad9959::Ad9959::new(
-                qspi_interface,
-                reset_pin,
-                &mut io_update,
-                &mut delay,
-                ad9959::Mode::FourBitSerial,
-                ref_clk.0 as f32,
-                design_parameters::DDS_MULTIPLIER,
-            )
-            .unwrap();
-
-            ad9959.self_test().unwrap();
-
-            // Return IO_Update
-            gpiog.pg7 = io_update.into_analog();
-
-            ad9959
-        };
 
         let io_expander = {
             let sda = gpiob.pb7.into_alternate_af4().set_open_drain();
@@ -918,6 +846,79 @@ pub fn setup(
             adc2_in_p,
         )
         .unwrap();
+
+        let ad9959 = {
+            let qspi_interface = {
+                // Instantiate the QUADSPI pins and peripheral interface.
+                let qspi_pins = {
+                    let _qspi_ncs = gpioc
+                        .pc11
+                        .into_alternate_af9()
+                        .set_speed(hal::gpio::Speed::VeryHigh);
+
+                    let clk = gpiob
+                        .pb2
+                        .into_alternate_af9()
+                        .set_speed(hal::gpio::Speed::VeryHigh);
+                    let io0 = gpioe
+                        .pe7
+                        .into_alternate_af10()
+                        .set_speed(hal::gpio::Speed::VeryHigh);
+                    let io1 = gpioe
+                        .pe8
+                        .into_alternate_af10()
+                        .set_speed(hal::gpio::Speed::VeryHigh);
+                    let io2 = gpioe
+                        .pe9
+                        .into_alternate_af10()
+                        .set_speed(hal::gpio::Speed::VeryHigh);
+                    let io3 = gpioe
+                        .pe10
+                        .into_alternate_af10()
+                        .set_speed(hal::gpio::Speed::VeryHigh);
+
+                    (clk, io0, io1, io2, io3)
+                };
+
+                let qspi = hal::qspi::Qspi::bank2(
+                    device.QUADSPI,
+                    qspi_pins,
+                    design_parameters::POUNDER_QSPI_FREQUENCY,
+                    &ccdr.clocks,
+                    ccdr.peripheral.QSPI,
+                );
+
+                pounder::QspiInterface::new(qspi).unwrap()
+            };
+
+            #[cfg(feature = "pounder_v1_1")]
+            let reset_pin = gpiog.pg6.into_push_pull_output();
+            #[cfg(not(feature = "pounder_v1_1"))]
+            let reset_pin = gpioa.pa0.into_push_pull_output();
+
+            let mut io_update = gpiog.pg7.into_push_pull_output();
+
+            let ref_clk: hal::time::Hertz =
+                design_parameters::DDS_REF_CLK.into();
+
+            let mut ad9959 = ad9959::Ad9959::new(
+                qspi_interface,
+                reset_pin,
+                &mut io_update,
+                &mut delay,
+                ad9959::Mode::FourBitSerial,
+                ref_clk.0 as f32,
+                design_parameters::DDS_MULTIPLIER,
+            )
+            .unwrap();
+
+            ad9959.self_test().unwrap();
+
+            // Return IO_Update
+            gpiog.pg7 = io_update.into_analog();
+
+            ad9959
+        };
 
         let dds_output = {
             let io_update_trigger = {
