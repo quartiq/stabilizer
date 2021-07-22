@@ -43,6 +43,7 @@ use stabilizer::{
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
+        design_parameters::SAMPLE_BUFFER_SIZE,
         embedded_hal::digital::v2::InputPin,
         hal,
         signal_generator::{self, SignalGenerator},
@@ -50,7 +51,7 @@ use stabilizer::{
         DigitalInput0, DigitalInput1, AFE0, AFE1,
     },
     net::{
-        data_stream::{BlockGenerator, StreamTarget},
+        data_stream::{FrameGenerator, StreamTarget},
         miniconf::Miniconf,
         serde::Deserialize,
         telemetry::{Telemetry, TelemetryBuffer},
@@ -169,7 +170,7 @@ const APP: () = {
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         network: NetworkUsers<Settings, Telemetry>,
-        generator: BlockGenerator,
+        generator: FrameGenerator,
         signal_generator: [SignalGenerator; 2],
 
         settings: Settings,
@@ -307,7 +308,18 @@ const APP: () = {
             }
 
             // Stream the data.
-            generator.send(&adc_samples, &dac_samples);
+            generator.add::<_, { SAMPLE_BUFFER_SIZE * 8 }>(0, |buf| {
+                let mut offset = 0;
+                for device in [adc_samples.iter(), dac_samples.iter()] {
+                    for channel in device {
+                        for sample in channel.iter() {
+                            buf[offset..offset + 2]
+                                .copy_from_slice(&sample.to_ne_bytes());
+                            offset += 2;
+                        }
+                    }
+                }
+            });
 
             // Update telemetry measurements.
             telemetry.adcs =

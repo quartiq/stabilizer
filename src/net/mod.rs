@@ -17,7 +17,7 @@ pub mod shared;
 pub mod telemetry;
 
 use crate::hardware::{cycle_counter::CycleCounter, EthernetPhy, NetworkStack};
-use data_stream::{BlockGenerator, DataStream};
+use data_stream::{DataStream, FrameGenerator};
 use messages::{MqttMessage, SettingsResponse};
 use miniconf_client::MiniconfClient;
 use network_processor::NetworkProcessor;
@@ -49,7 +49,7 @@ pub struct NetworkUsers<S: Default + Clone + Miniconf, T: Serialize> {
     pub miniconf: MiniconfClient<S>,
     pub processor: NetworkProcessor,
     stream: DataStream,
-    generator: Option<BlockGenerator>,
+    generator: Option<FrameGenerator>,
     pub telemetry: TelemetryClient<T>,
 }
 
@@ -113,7 +113,7 @@ where
     }
 
     /// Enable live data streaming.
-    pub fn enable_streaming(&mut self) -> BlockGenerator {
+    pub fn enable_streaming(&mut self) -> FrameGenerator {
         self.generator.take().unwrap()
     }
 

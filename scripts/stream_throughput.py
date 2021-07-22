@@ -13,6 +13,12 @@ import logging
 # Representation of a single UDP packet transmitted by Stabilizer.
 Packet = collections.namedtuple('Packet', ['index', 'adc', 'dac'])
 
+Format = collections.namedtuple('Format', ['batch_size', 'batches_per_frame'])
+
+FORMAT = {
+    0: Format(8, 255)
+}
+
 class Timer:
     """ A basic timer for measuring elapsed time periods. """
 
@@ -88,9 +94,10 @@ class PacketParser:
         if len(self.buf) < 4:
             return None
 
-        start_id, num_blocks, data_size = struct.unpack_from('!HBB', self.buf)
+        start_id, format_id = struct.unpack_from('!HH', self.buf)
 
-        packet_size = 4 + data_size * num_blocks * 8
+        frame_format = FORMAT[format_id]
+        packet_size = 4 + frame_format.batch_size * frame_format.batches_per_frame * 8
 
         if len(self.buf) < packet_size:
             return None
