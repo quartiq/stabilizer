@@ -13,10 +13,10 @@ import logging
 # Representation of a single UDP packet transmitted by Stabilizer.
 Packet = collections.namedtuple('Packet', ['index', 'adc', 'dac'])
 
-Format = collections.namedtuple('Format', ['batch_size', 'batches_per_frame'])
+Format = collections.namedtuple('Format', ['batch_size', 'length'])
 
 FORMAT = {
-    0: Format(8, 255)
+    0: Format(8, 964)
 }
 
 class Timer:
@@ -94,30 +94,31 @@ class PacketParser:
         if len(self.buf) < 4:
             return None
 
-        start_id, format_id = struct.unpack_from('!HH', self.buf)
+        start_id, format_id = struct.unpack_from('<HH', self.buf)
 
         frame_format = FORMAT[format_id]
-        packet_size = 4 + frame_format.batch_size * frame_format.batches_per_frame * 8
 
-        if len(self.buf) < packet_size:
+        if len(self.buf) < frame_format.length:
             return None
 
         self.buf = self.buf[4:]
 
+        batches_per_frame = int((frame_format.length - 4) / (frame_format.batch_size * 8))
+
         packets = []
-        for offset in range(num_blocks):
-            adcs_dacs = struct.unpack_from(f'!{4 * data_size}H', self.buf)
+        for offset in range(batches_per_frame):
+            adcs_dacs = struct.unpack_from(f'<{4 * frame_format.batch_size}H', self.buf)
             adc = [
-                adcs_dacs[0:data_size],
-                adcs_dacs[data_size:2*data_size],
+                adcs_dacs[0:frame_format.batch_size],
+                adcs_dacs[frame_format.batch_size:2*frame_format.batch_size],
             ]
 
             dac = [
-                adcs_dacs[2*data_size: 3*data_size],
-                adcs_dacs[3*data_size:],
+                adcs_dacs[2*frame_format.batch_size: 3*frame_format.batch_size],
+                adcs_dacs[3*frame_format.batch_size:],
             ]
 
-            self.buf = self.buf[8*data_size:]
+            self.buf = self.buf[8*frame_format.batch_size:]
             packets.append(Packet(start_id + offset, adc, dac))
 
         return packets
@@ -155,7 +156,7 @@ def main():
 
     while True:
         # Receive any data over UDP and parse it.
-        data = connection.recv(4096)
+        data = connection.recv(4096 * 4)
         if data and not timer.is_started():
             timer.start()
 
@@ -166,7 +167,7 @@ def main():
 
             # Handle any dropped packets.
             if not check_index(last_index, packet.index):
-                print(hex(last_index), hex(packet.index))
+                print('Drop from ', hex(last_index), hex(packet.index))
                 if packet.index < (last_index + 1):
                     dropped = packet.index + 65536 - (last_index + 1)
                 else:

@@ -36,11 +36,6 @@ pub struct NetStorage {
         [Option<(smoltcp::wire::IpAddress, smoltcp::iface::Neighbor)>; 8],
     pub routes_cache:
         [Option<(smoltcp::wire::IpCidr, smoltcp::iface::Route)>; 8],
-
-    pub dhcp_rx_metadata: [smoltcp::socket::RawPacketMetadata; 1],
-    pub dhcp_tx_metadata: [smoltcp::socket::RawPacketMetadata; 1],
-    pub dhcp_tx_storage: [u8; 600],
-    pub dhcp_rx_storage: [u8; 600],
 }
 
 pub struct UdpSocketStorage {
@@ -94,10 +89,6 @@ impl Default for NetStorage {
             sockets: [None, None, None, None, None, None],
             tcp_socket_storage: [TcpSocketStorage::new(); NUM_TCP_SOCKETS],
             udp_socket_storage: [UdpSocketStorage::new(); NUM_UDP_SOCKETS],
-            dhcp_tx_storage: [0; 600],
-            dhcp_rx_storage: [0; 600],
-            dhcp_rx_metadata: [smoltcp::socket::RawPacketMetadata::EMPTY; 1],
-            dhcp_tx_metadata: [smoltcp::socket::RawPacketMetadata::EMPTY; 1],
         }
     }
 }

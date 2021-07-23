@@ -19,9 +19,11 @@ use heapless::pool::{Box, Init, Pool, Uninit};
 
 use super::NetworkReference;
 
-const FRAME_COUNT: usize = 4;
+const FRAME_COUNT: usize = 6;
+const FRAME_SIZE: usize = 1024;
 
-static mut FRAME_DATA: [u8; 5200] = [0; 5200];
+static mut FRAME_DATA: [u8; FRAME_SIZE * FRAME_COUNT] =
+    [0; FRAME_SIZE * FRAME_COUNT];
 
 /// Represents the destination for the UDP stream to send data to.
 ///
@@ -70,7 +72,7 @@ pub fn setup_streaming(
     let (producer, consumer) = queue.split();
 
     let frame_pool =
-        cortex_m::singleton!(: Pool<[u8; 1024]>= Pool::new()).unwrap();
+        cortex_m::singleton!(: Pool<[u8; FRAME_SIZE]>= Pool::new()).unwrap();
 
     // Note(unsafe): We guarantee that FRAME_DATA is only accessed once in this function.
     let memory = unsafe { &mut FRAME_DATA };
@@ -86,13 +88,13 @@ pub fn setup_streaming(
 struct StreamFrame {
     format: u16,
     sequence_number: u16,
-    buffer: Box<[u8; 1024], Init>,
+    buffer: Box<[u8; FRAME_SIZE], Init>,
     offset: usize,
 }
 
 impl StreamFrame {
     pub fn new(
-        buffer: Box<[u8; 1024], Uninit>,
+        buffer: Box<[u8; FRAME_SIZE], Uninit>,
         format: u16,
         sequence_number: u16,
     ) -> Self {
@@ -132,7 +134,7 @@ impl StreamFrame {
 /// The data generator for a stream.
 pub struct FrameGenerator {
     queue: Producer<'static, StreamFrame, FRAME_COUNT>,
-    pool: &'static Pool<[u8; 1024]>,
+    pool: &'static Pool<[u8; FRAME_SIZE]>,
     current_frame: Option<StreamFrame>,
     sequence_number: u16,
 }
@@ -140,7 +142,7 @@ pub struct FrameGenerator {
 impl FrameGenerator {
     fn new(
         queue: Producer<'static, StreamFrame, FRAME_COUNT>,
-        pool: &'static Pool<[u8; 1024]>,
+        pool: &'static Pool<[u8; FRAME_SIZE]>,
     ) -> Self {
         Self {
             queue,
@@ -172,11 +174,15 @@ impl FrameGenerator {
         self.current_frame.as_mut().unwrap().add_batch::<_, T>(f);
 
         if self.current_frame.as_ref().unwrap().is_full::<T>() {
-            // If we fail to enqueue the frame, free the underlying buffer.
-            match self.queue.enqueue(self.current_frame.take().unwrap()) {
-                Err(frame) => self.pool.free(frame.buffer),
-                _ => {}
-            };
+            if self
+                .queue
+                .enqueue(self.current_frame.take().unwrap())
+                .is_err()
+            {
+                // Given that the queue is the same size as the number of frames available, this
+                // should never occur.
+                panic!("Frame enqueue failure")
+            }
         }
     }
 }
@@ -189,7 +195,7 @@ pub struct DataStream {
     stack: NetworkReference,
     socket: Option<<NetworkReference as UdpClientStack>::UdpSocket>,
     queue: Consumer<'static, StreamFrame, FRAME_COUNT>,
-    frame_pool: &'static Pool<[u8; 1024]>,
+    frame_pool: &'static Pool<[u8; FRAME_SIZE]>,
     remote: SocketAddr,
 }
 
@@ -203,7 +209,7 @@ impl DataStream {
     fn new(
         stack: NetworkReference,
         consumer: Consumer<'static, StreamFrame, FRAME_COUNT>,
-        frame_pool: &'static Pool<[u8; 1024]>,
+        frame_pool: &'static Pool<[u8; FRAME_SIZE]>,
     ) -> Self {
         Self {
             stack,
