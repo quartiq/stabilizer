@@ -14,6 +14,11 @@ import logging
 # Representation of a single data batch transmitted by Stabilizer.
 Packet = collections.namedtuple('Packet', ['index', 'data'])
 
+# Specifies a known format for incoming packets.
+#
+# * `sample_size_bytes` is the number of bytes required for each sample in the batch.
+# * `batch_format` is a `struct` format string that will be provided the `batch_size` as an named
+# argument. This format string will be used to deserialize each batch of data from the frame.
 Format = collections.namedtuple('Format', ['sample_size_bytes', 'batch_format'])
 
 # All supported formats by this reception script.
@@ -158,7 +163,7 @@ def main():
 
     while True:
         # Receive any data over UDP and parse it.
-        data = connection.recv(4096 * 4)
+        data = connection.recv(4096)
         if data and not timer.is_started():
             timer.start()
 
