@@ -10,13 +10,15 @@ import struct
 import time
 import logging
 
-# Representation of a single UDP packet transmitted by Stabilizer.
-Packet = collections.namedtuple('Packet', ['index', 'adc', 'dac'])
+# Representation of a single data batch transmitted by Stabilizer.
+Packet = collections.namedtuple('Packet', ['index', 'data'])
 
-Format = collections.namedtuple('Format', ['batch_size', 'length'])
+Format = collections.namedtuple('Format', ['sample_size_bytes', 'batch_format'])
 
+# All supported formats by this reception script.
 FORMAT = {
-    0: Format(8, 964)
+    0: Format(sample_size_bytes=8,
+              batch_format='<{batch_size}H{batch_size}H{batch_size}H{batch_size}H')
 }
 
 class Timer:
@@ -94,32 +96,25 @@ class PacketParser:
         if len(self.buf) < 4:
             return None
 
-        start_id, format_id = struct.unpack_from('<HH', self.buf)
+        start_id, format_id, batch_count, batch_size = struct.unpack_from('<HHHB', self.buf)
+
+        if format_id not in FORMAT:
+            raise Exception(f'Unknown format specifier: {format_id}')
 
         frame_format = FORMAT[format_id]
+        required_length = 7 + batch_count * frame_format.sample_size_bytes * batch_size
 
-        if len(self.buf) < frame_format.length:
+        if len(self.buf) < required_length:
             return None
 
-        self.buf = self.buf[4:]
-
-        batches_per_frame = int((frame_format.length - 4) / (frame_format.batch_size * 8))
+        self.buf = self.buf[7:]
 
         packets = []
-        for offset in range(batches_per_frame):
-            adcs_dacs = struct.unpack_from(f'<{4 * frame_format.batch_size}H', self.buf)
-            adc = [
-                adcs_dacs[0:frame_format.batch_size],
-                adcs_dacs[frame_format.batch_size:2*frame_format.batch_size],
-            ]
-
-            dac = [
-                adcs_dacs[2*frame_format.batch_size: 3*frame_format.batch_size],
-                adcs_dacs[3*frame_format.batch_size:],
-            ]
-
-            self.buf = self.buf[8*frame_format.batch_size:]
-            packets.append(Packet(start_id + offset, adc, dac))
+        for offset in range(batch_count):
+            format_string = frame_format.batch_format.format(batch_size=batch_size)
+            data = struct.unpack_from(format_string, self.buf)
+            self.buf = self.buf[struct.calcsize(format_string):]
+            packets.append(Packet(start_id + offset, data))
 
         return packets
 

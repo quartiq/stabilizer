@@ -52,7 +52,7 @@ use stabilizer::{
         DigitalInput0, DigitalInput1, AFE0, AFE1,
     },
     net::{
-        data_stream::{FrameGenerator, StreamTarget},
+        data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Miniconf,
         serde::Deserialize,
         telemetry::{Telemetry, TelemetryBuffer},
@@ -396,18 +396,43 @@ const APP: () = {
             }
 
             // Stream the data.
-            generator.add::<_, { SAMPLE_BUFFER_SIZE * 8 }>(0, |buf| {
-                let mut offset = 0;
-                for device in [adc_samples.iter(), dac_samples.iter()] {
-                    for channel in device {
-                        for sample in channel.iter() {
-                            buf[offset..offset + 2]
-                                .copy_from_slice(&sample.to_ne_bytes());
-                            offset += 2;
-                        }
-                    }
-                }
-            });
+            generator.add::<_, { SAMPLE_BUFFER_SIZE * 8 }>(
+                StreamFormat::AdcDacData,
+                |buf| unsafe {
+                    let dst = buf.as_ptr() as usize as *mut u16;
+
+                    let adc0 = &adc_samples[0][0] as *const u16;
+                    core::ptr::copy_nonoverlapping(
+                        adc0,
+                        dst,
+                        SAMPLE_BUFFER_SIZE,
+                    );
+
+                    let dst = dst.add(SAMPLE_BUFFER_SIZE);
+                    let adc1 = &adc_samples[1][0] as *const u16;
+                    core::ptr::copy_nonoverlapping(
+                        adc1,
+                        dst,
+                        SAMPLE_BUFFER_SIZE,
+                    );
+
+                    let dst = dst.add(SAMPLE_BUFFER_SIZE);
+                    let dac0 = &dac_samples[0][0] as *const u16;
+                    core::ptr::copy_nonoverlapping(
+                        dac0,
+                        dst,
+                        SAMPLE_BUFFER_SIZE,
+                    );
+
+                    let dst = dst.add(SAMPLE_BUFFER_SIZE);
+                    let dac1 = &dac_samples[1][0] as *const u16;
+                    core::ptr::copy_nonoverlapping(
+                        dac1,
+                        dst,
+                        SAMPLE_BUFFER_SIZE,
+                    );
+                },
+            );
 
             // Update telemetry measurements.
             telemetry.adcs =

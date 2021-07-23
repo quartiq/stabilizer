@@ -15,6 +15,8 @@ use miniconf::MiniconfAtomic;
 use serde::Deserialize;
 use smoltcp_nal::embedded_nal::{IpAddr, Ipv4Addr, SocketAddr, UdpClientStack};
 
+use crate::hardware::design_parameters::SAMPLE_BUFFER_SIZE;
+
 use heapless::pool::{Box, Init, Pool, Uninit};
 
 use super::NetworkReference;
@@ -39,6 +41,15 @@ static mut FRAME_DATA: [u8; FRAME_SIZE * FRAME_COUNT] =
 pub struct StreamTarget {
     pub ip: [u8; 4],
     pub port: u16,
+}
+
+/// Specifies the format of streamed data
+#[repr(u16)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum StreamFormat {
+    /// Streamed data contains ADC0, ADC1, DAC0, and DAC1 sequentially in little-endian format. Each
+    /// batch is loaded into the stream frame sequentially until the frame is full.
+    AdcDacData = 0,
 }
 
 impl From<StreamTarget> for SocketAddr {
@@ -86,23 +97,27 @@ pub fn setup_streaming(
 }
 
 struct StreamFrame {
-    format: u16,
+    format: StreamFormat,
     sequence_number: u16,
     buffer: Box<[u8; FRAME_SIZE], Init>,
     offset: usize,
+    batch_count: u16,
+    batch_size: u8,
 }
 
 impl StreamFrame {
     pub fn new(
         buffer: Box<[u8; FRAME_SIZE], Uninit>,
-        format: u16,
+        format: StreamFormat,
         sequence_number: u16,
     ) -> Self {
         Self {
             format,
-            offset: 4,
+            offset: 7,
             sequence_number,
             buffer: unsafe { buffer.assume_init() },
+            batch_size: SAMPLE_BUFFER_SIZE as u8,
+            batch_count: 0,
         }
     }
 
@@ -115,6 +130,7 @@ impl StreamFrame {
         let result = f(&mut self.buffer[self.offset..self.offset + T]);
 
         self.offset += T;
+        self.batch_count = self.batch_count.checked_add(1).unwrap();
 
         result
     }
@@ -126,7 +142,9 @@ impl StreamFrame {
     pub fn finish(&mut self) -> &[u8] {
         let offset = self.offset;
         self.buffer[0..2].copy_from_slice(&self.sequence_number.to_ne_bytes());
-        self.buffer[2..4].copy_from_slice(&self.format.to_ne_bytes());
+        self.buffer[2..4].copy_from_slice(&(self.format as u16).to_ne_bytes());
+        self.buffer[4..6].copy_from_slice(&self.batch_count.to_ne_bytes());
+        self.buffer[6] = self.batch_size;
         &self.buffer[..offset]
     }
 }
@@ -152,7 +170,7 @@ impl FrameGenerator {
         }
     }
 
-    pub fn add<F, const T: usize>(&mut self, format: u16, f: F)
+    pub fn add<F, const T: usize>(&mut self, format: StreamFormat, f: F)
     where
         F: FnMut(&mut [u8]),
     {
@@ -170,6 +188,11 @@ impl FrameGenerator {
                 return;
             }
         }
+
+        assert!(
+            format == self.current_frame.as_ref().unwrap().format,
+            "Unexpected stream format encountered"
+        );
 
         self.current_frame.as_mut().unwrap().add_batch::<_, T>(f);
 
