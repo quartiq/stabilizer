@@ -2,10 +2,32 @@
 //!
 //! # Design
 //! Data streamining utilizes UDP packets to send live data streams at high throughput.
-//! Packets are always sent in a best-effort fashion, and data may be dropped. Each packet contains
-//! an identifier that can be used to detect dropped data.
+//! Packets are always sent in a best-effort fashion, and data may be dropped.
 //!
-//! Refer to [DataPacket] for information about the serialization format of each UDP packet.
+//! Stabilizer organizes livestreamed data into batches within a "Frame" that will be sent as a UDP
+//! packet. Each frame consits of a header followed by sequential batch serializations. The packet
+//! header is constant for all streaming capabilities, but the serialization format after the header
+//! is application-defined.
+//!
+//! ## Header Format
+//! The header of each stream frame consists of 7 bytes. All data is stored in little-endian format.
+//!
+//! Elements appear sequentiall as follows:
+//! * Sequence Number <u16>
+//! * Format Code <u16>
+//! * Batch Count <16>
+//! * Batch size <u8>
+//!
+//! The "Sequence Number" is an identifier that increments for ever execution of the DSP process.
+//! This can be used to determine if a stream frame was lost.
+//!
+//! The "Format Code" is a unique specifier that indicates the serialization format of each batch of
+//! data in the frame. Refer to [StreamFormat] for further information.
+//!
+//! The "Batch Count" indicates how many batches are present in the current frame.
+//!
+//! The "Batch Size" specifies the [crate::hardware::design_parameters::SAMPLE_BUFFER_SIZE]
+//! parameter, which can be used to determine the number of samples per batch.
 //!
 //! # Example
 //! A sample Python script is available in `scripts/stream_throughput.py` to demonstrate reception
@@ -21,9 +43,13 @@ use heapless::pool::{Box, Init, Pool, Uninit};
 
 use super::NetworkReference;
 
-const FRAME_COUNT: usize = 6;
+// The number of frames that can be buffered.
+const FRAME_COUNT: usize = 4;
+
+// The size of each livestream frame in bytes.
 const FRAME_SIZE: usize = 1024;
 
+// Static storage used for a heapless::Pool of frame buffers.
 static mut FRAME_DATA: [u8; FRAME_SIZE * FRAME_COUNT] =
     [0; FRAME_SIZE * FRAME_COUNT];
 
@@ -47,8 +73,13 @@ pub struct StreamTarget {
 #[repr(u16)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum StreamFormat {
-    /// Streamed data contains ADC0, ADC1, DAC0, and DAC1 sequentially in little-endian format. Each
-    /// batch is loaded into the stream frame sequentially until the frame is full.
+    /// Streamed data contains ADC0, ADC1, DAC0, and DAC1 sequentially in little-endian format.
+    ///
+    /// # Example
+    /// With a batch size of 2, the serialization would take the following form:
+    /// ```
+    /// <ADC0[0]> <ADC0[1]> <ADC1[0]> <ADC1[1]> <DAC0[0]> <DAC0[1]> <DAC1[0]> <DAC1[1]>
+    /// ```
     AdcDacData = 0,
 }
 
@@ -170,6 +201,12 @@ impl FrameGenerator {
         }
     }
 
+    /// Add a batch to the current stream frame.
+    ///
+    /// # Args
+    /// * `format` - The format of the stream. This must be the same for each execution.
+    /// * `f` - A closure that will be provided the buffer to write batch data into. The buffer will
+    ///   be the size of the `T` template argument.
     pub fn add<F, const T: usize>(&mut self, format: StreamFormat, f: F)
     where
         F: FnMut(&mut [u8]),
