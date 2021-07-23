@@ -4,6 +4,7 @@ Author: Ryan Summers
 
 Description: Provides a mechanism for measuring Stabilizer stream data throughput.
 """
+import argparse
 import socket
 import collections
 import struct
@@ -93,9 +94,10 @@ class PacketParser:
     def _parse(self):
         """ Attempt to parse packets from the received buffer. """
         # Attempt to parse a block from the buffer.
-        if len(self.buf) < 4:
+        if len(self.buf) < 7:
             return None
 
+        # Parse out the packet header
         start_id, format_id, batch_count, batch_size = struct.unpack_from('<HHHB', self.buf)
 
         if format_id not in FORMAT:
@@ -135,8 +137,13 @@ def check_index(previous_index, next_index):
 
 def main():
     """ Main program. """
+    parser = argparse.ArgumentParser(description='Measure Stabilizer livestream quality')
+    parser.add_argument('--port', default=1111, help='The port that stabilizer is streaming to')
+
+    args = parser.parse_args()
+
     connection = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    connection.bind(("", 1111))
+    connection.bind(("", args.port))
 
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s')
@@ -162,7 +169,7 @@ def main():
 
             # Handle any dropped packets.
             if not check_index(last_index, packet.index):
-                print('Drop from ', hex(last_index), hex(packet.index))
+                print(f'Drop from {hex(last_index)} to {hex(packet.index)}')
                 if packet.index < (last_index + 1):
                     dropped = packet.index + 65536 - (last_index + 1)
                 else:
