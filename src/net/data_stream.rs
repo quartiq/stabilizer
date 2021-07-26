@@ -139,6 +139,7 @@ pub fn setup_streaming(
     (generator, stream)
 }
 
+#[derive(Debug)]
 struct StreamFrame {
     buffer: Box<[u8; FRAME_SIZE], Init>,
     offset: usize,
@@ -249,15 +250,9 @@ impl FrameGenerator {
         current_frame.add_batch::<_, T>(f);
 
         if current_frame.is_full::<T>() {
-            if self
-                .queue
+            self.queue
                 .enqueue(self.current_frame.take().unwrap())
-                .is_err()
-            {
-                // Given that the queue is the same size as the number of frames available, this
-                // should never occur.
-                panic!("Frame enqueue failure")
-            }
+                .unwrap();
         }
     }
 }
