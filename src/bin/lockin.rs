@@ -231,7 +231,7 @@ const APP: () = {
             stabilizer.net.mac_address,
         );
 
-        let generator = network.enable_streaming();
+        let generator = network.enable_streaming(StreamFormat::AdcDacData);
 
         let settings = Settings::default();
 
@@ -396,43 +396,23 @@ const APP: () = {
             }
 
             // Stream the data.
-            generator.add::<_, { SAMPLE_BUFFER_SIZE * 8 }>(
-                StreamFormat::AdcDacData,
-                |buf| unsafe {
-                    let dst = buf.as_ptr() as usize as *mut u16;
-
-                    let adc0 = &adc_samples[0][0] as *const u16;
-                    core::ptr::copy_nonoverlapping(
-                        adc0,
-                        dst,
-                        SAMPLE_BUFFER_SIZE,
-                    );
-
-                    let dst = dst.add(SAMPLE_BUFFER_SIZE);
-                    let adc1 = &adc_samples[1][0] as *const u16;
-                    core::ptr::copy_nonoverlapping(
-                        adc1,
-                        dst,
-                        SAMPLE_BUFFER_SIZE,
-                    );
-
-                    let dst = dst.add(SAMPLE_BUFFER_SIZE);
-                    let dac0 = &dac_samples[0][0] as *const u16;
-                    core::ptr::copy_nonoverlapping(
-                        dac0,
-                        dst,
-                        SAMPLE_BUFFER_SIZE,
-                    );
-
-                    let dst = dst.add(SAMPLE_BUFFER_SIZE);
-                    let dac1 = &dac_samples[1][0] as *const u16;
-                    core::ptr::copy_nonoverlapping(
-                        dac1,
-                        dst,
-                        SAMPLE_BUFFER_SIZE,
-                    );
-                },
-            );
+            const N: usize = SAMPLE_BUFFER_SIZE * core::mem::size_of::<u16>();
+            generator.add::<_, { N * 4 }>(|buf| {
+                for (data, buf) in adc_samples
+                    .iter()
+                    .chain(dac_samples.iter())
+                    .zip(buf.chunks_exact_mut(N))
+                {
+                    assert_eq!(core::mem::size_of_val(data), N);
+                    let data = unsafe {
+                        core::slice::from_raw_parts(
+                            data.as_ptr() as *const u8,
+                            N,
+                        )
+                    };
+                    buf.copy_from_slice(data)
+                }
+            });
 
             // Update telemetry measurements.
             telemetry.adcs =

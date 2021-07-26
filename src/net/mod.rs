@@ -113,8 +113,13 @@ where
     }
 
     /// Enable live data streaming.
-    pub fn enable_streaming(&mut self) -> FrameGenerator {
-        self.generator.take().unwrap()
+    pub fn enable_streaming(
+        &mut self,
+        format: data_stream::StreamFormat,
+    ) -> FrameGenerator {
+        let mut generator = self.generator.take().unwrap();
+        generator.set_format(format);
+        generator
     }
 
     /// Direct the stream to the provided remote target.

@@ -12,22 +12,21 @@
 //! ## Header Format
 //! The header of each stream frame consists of 7 bytes. All data is stored in little-endian format.
 //!
-//! Elements appear sequentiall as follows:
-//! * Sequence Number <u16>
-//! * Format Code <u16>
-//! * Batch Count <16>
-//! * Batch size <u8>
+//! Elements appear sequentially as follows:
+//! * Magic word 0x057B <u16>
+//! * Format Code <u8>
+//! * Batch Size <u8>
+//! * Sequence Number <u32>
 //!
-//! The "Sequence Number" is an identifier that increments for ever execution of the DSP process.
-//! This can be used to determine if a stream frame was lost.
+//! The "Magic word" is a constant field for all packets. The value is alway 0x057B.
 //!
 //! The "Format Code" is a unique specifier that indicates the serialization format of each batch of
 //! data in the frame. Refer to [StreamFormat] for further information.
 //!
-//! The "Batch Count" indicates how many batches are present in the current frame.
+//! The "Batch size" is the value of [SAMPLE_BUFFER_SIZE].
 //!
-//! The "Batch Size" specifies the [crate::hardware::design_parameters::SAMPLE_BUFFER_SIZE]
-//! parameter, which can be used to determine the number of samples per batch.
+//! The "Sequence Number" is an identifier that increments for ever execution of the DSP process.
+//! This can be used to determine if a stream frame was lost.
 //!
 //! # Example
 //! A sample Python script is available in `scripts/stream_throughput.py` to demonstrate reception
@@ -42,6 +41,10 @@ use crate::hardware::design_parameters::SAMPLE_BUFFER_SIZE;
 use heapless::pool::{Box, Init, Pool, Uninit};
 
 use super::NetworkReference;
+
+const MAGIC_WORD: u16 = 0x057B;
+
+const HEADER_SIZE: usize = 8;
 
 // The number of frames that can be buffered.
 const FRAME_COUNT: usize = 4;
@@ -70,9 +73,12 @@ pub struct StreamTarget {
 }
 
 /// Specifies the format of streamed data
-#[repr(u16)]
+#[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum StreamFormat {
+    /// Reserved, unused format specifier.
+    Unknown = 0,
+
     /// Streamed data contains ADC0, ADC1, DAC0, and DAC1 sequentially in little-endian format.
     ///
     /// # Example
@@ -80,7 +86,7 @@ pub enum StreamFormat {
     /// ```
     /// <ADC0[0]> <ADC0[1]> <ADC1[0]> <ADC1[1]> <DAC0[0]> <DAC0[1]> <DAC1[0]> <DAC1[1]>
     /// ```
-    AdcDacData = 0,
+    AdcDacData = 1,
 }
 
 impl From<StreamTarget> for SocketAddr {
@@ -128,27 +134,25 @@ pub fn setup_streaming(
 }
 
 struct StreamFrame {
-    format: StreamFormat,
-    sequence_number: u16,
     buffer: Box<[u8; FRAME_SIZE], Init>,
     offset: usize,
-    batch_count: u16,
-    batch_size: u8,
 }
 
 impl StreamFrame {
     pub fn new(
         buffer: Box<[u8; FRAME_SIZE], Uninit>,
-        format: StreamFormat,
-        sequence_number: u16,
+        format: u8,
+        buffer_size: u8,
+        sequence_number: u32,
     ) -> Self {
+        let mut buffer = unsafe { buffer.assume_init() };
+        buffer[0..2].copy_from_slice(&MAGIC_WORD.to_ne_bytes());
+        buffer[2] = format;
+        buffer[3] = buffer_size;
+        buffer[4..8].copy_from_slice(&sequence_number.to_ne_bytes());
         Self {
-            format,
-            offset: 7,
-            sequence_number,
-            buffer: unsafe { buffer.assume_init() },
-            batch_size: SAMPLE_BUFFER_SIZE as u8,
-            batch_count: 0,
+            buffer,
+            offset: HEADER_SIZE,
         }
     }
 
@@ -161,7 +165,6 @@ impl StreamFrame {
         let result = f(&mut self.buffer[self.offset..self.offset + T]);
 
         self.offset += T;
-        self.batch_count = self.batch_count.checked_add(1).unwrap();
 
         result
     }
@@ -171,12 +174,7 @@ impl StreamFrame {
     }
 
     pub fn finish(&mut self) -> &[u8] {
-        let offset = self.offset;
-        self.buffer[0..2].copy_from_slice(&self.sequence_number.to_ne_bytes());
-        self.buffer[2..4].copy_from_slice(&(self.format as u16).to_ne_bytes());
-        self.buffer[4..6].copy_from_slice(&self.batch_count.to_ne_bytes());
-        self.buffer[6] = self.batch_size;
-        &self.buffer[..offset]
+        &self.buffer[..self.offset]
     }
 }
 
@@ -185,7 +183,8 @@ pub struct FrameGenerator {
     queue: Producer<'static, StreamFrame, FRAME_COUNT>,
     pool: &'static Pool<[u8; FRAME_SIZE]>,
     current_frame: Option<StreamFrame>,
-    sequence_number: u16,
+    sequence_number: u32,
+    format: StreamFormat,
 }
 
 impl FrameGenerator {
@@ -196,18 +195,32 @@ impl FrameGenerator {
         Self {
             queue,
             pool,
+            format: StreamFormat::Unknown,
             current_frame: None,
             sequence_number: 0,
         }
     }
 
+    /// Specify the format of the stream.
+    ///
+    /// # Note:
+    /// This function may only be called once upon initializing streaming
+    ///
+    /// # Args
+    /// * `format` - The desired format of the stream.
+    #[doc(hidden)]
+    pub(crate) fn set_format(&mut self, format: StreamFormat) {
+        assert!(self.format == StreamFormat::Unknown);
+        assert!(format != StreamFormat::Unknown);
+        self.format = format;
+    }
+
     /// Add a batch to the current stream frame.
     ///
     /// # Args
-    /// * `format` - The format of the stream. This must be the same for each execution.
     /// * `f` - A closure that will be provided the buffer to write batch data into. The buffer will
     ///   be the size of the `T` template argument.
-    pub fn add<F, const T: usize>(&mut self, format: StreamFormat, f: F)
+    pub fn add<F, const T: usize>(&mut self, f: F)
     where
         F: FnMut(&mut [u8]),
     {
@@ -218,7 +231,8 @@ impl FrameGenerator {
             if let Some(buffer) = self.pool.alloc() {
                 self.current_frame.replace(StreamFrame::new(
                     buffer,
-                    format,
+                    self.format as u8,
+                    SAMPLE_BUFFER_SIZE as u8,
                     sequence_number,
                 ));
             } else {
@@ -226,14 +240,11 @@ impl FrameGenerator {
             }
         }
 
-        assert!(
-            format == self.current_frame.as_ref().unwrap().format,
-            "Unexpected stream format encountered"
-        );
+        let current_frame = self.current_frame.as_mut().unwrap();
 
-        self.current_frame.as_mut().unwrap().add_batch::<_, T>(f);
+        current_frame.add_batch::<_, T>(f);
 
-        if self.current_frame.as_ref().unwrap().is_full::<T>() {
+        if current_frame.is_full::<T>() {
             if self
                 .queue
                 .enqueue(self.current_frame.take().unwrap())
