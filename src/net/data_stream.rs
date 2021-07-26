@@ -89,6 +89,12 @@ pub enum StreamFormat {
     AdcDacData = 1,
 }
 
+impl From<StreamFormat> for u8 {
+    fn from(format: StreamFormat) -> u8 {
+        format as u8
+    }
+}
+
 impl From<StreamTarget> for SocketAddr {
     fn from(target: StreamTarget) -> SocketAddr {
         SocketAddr::new(
@@ -184,7 +190,7 @@ pub struct FrameGenerator {
     pool: &'static Pool<[u8; FRAME_SIZE]>,
     current_frame: Option<StreamFrame>,
     sequence_number: u32,
-    format: StreamFormat,
+    format: u8,
 }
 
 impl FrameGenerator {
@@ -195,7 +201,7 @@ impl FrameGenerator {
         Self {
             queue,
             pool,
-            format: StreamFormat::Unknown,
+            format: StreamFormat::Unknown.into(),
             current_frame: None,
             sequence_number: 0,
         }
@@ -209,10 +215,8 @@ impl FrameGenerator {
     /// # Args
     /// * `format` - The desired format of the stream.
     #[doc(hidden)]
-    pub(crate) fn set_format(&mut self, format: StreamFormat) {
-        assert!(self.format == StreamFormat::Unknown);
-        assert!(format != StreamFormat::Unknown);
-        self.format = format;
+    pub(crate) fn set_format(&mut self, format: impl Into<u8>) {
+        self.format = format.into();
     }
 
     /// Add a batch to the current stream frame.

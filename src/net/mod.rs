@@ -113,9 +113,12 @@ where
     }
 
     /// Enable live data streaming.
+    ///
+    /// # Args
+    /// * `format` - A unique u8 code indicating the format of the data.
     pub fn enable_streaming(
         &mut self,
-        format: data_stream::StreamFormat,
+        format: impl Into<u8>,
     ) -> FrameGenerator {
         let mut generator = self.generator.take().unwrap();
         generator.set_format(format);
