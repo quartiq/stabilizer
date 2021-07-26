@@ -50,7 +50,7 @@ const HEADER_SIZE: usize = 8;
 const FRAME_COUNT: usize = 4;
 
 // The size of each livestream frame in bytes.
-const FRAME_SIZE: usize = 1024;
+const FRAME_SIZE: usize = 1024 + HEADER_SIZE;
 
 // Static storage used for a heapless::Pool of frame buffers.
 static mut FRAME_DATA: [u8; FRAME_SIZE * FRAME_COUNT] =
