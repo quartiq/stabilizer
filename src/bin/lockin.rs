@@ -403,7 +403,7 @@ const APP: () = {
                     .chain(dac_samples.iter())
                     .zip(buf.chunks_exact_mut(N))
                 {
-                    assert_eq!(core::mem::size_of_val(data), N);
+                    assert_eq!(core::mem::size_of_val(*data), N);
                     let data = unsafe {
                         core::slice::from_raw_parts(
                             data.as_ptr() as *const u8,

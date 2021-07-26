@@ -32,7 +32,7 @@ def parse_packet(buf):
     """ Attempt to parse packets from the received buffer. """
     # Attempt to parse a block from the buffer.
     if len(buf) < struct.calcsize(HEADER_FORMAT):
-        return None
+        return []
 
     # Parse out the packet header
     magic, format_id, batch_size, sequence_number = struct.unpack_from(HEADER_FORMAT, buf)
@@ -40,14 +40,14 @@ def parse_packet(buf):
 
     if magic != MAGIC_HEADER:
         logging.warning('Encountered bad magic header: %s', hex(magic))
-        return None
+        return []
 
     if format_id not in FORMAT:
         raise Exception(f'Unknown format specifier: {format_id}')
 
     frame_format = FORMAT[format_id](batch_size)
 
-    batch_count = len(buf) / struct.calcsize(frame_format)
+    batch_count = int(len(buf) / struct.calcsize(frame_format))
 
     packets = []
     for offset in range(batch_count):
@@ -135,9 +135,7 @@ def main():
 
         # Handle any received packets.
         total_bytes += len(data)
-        packet = parse_packet(data)
-
-        if packet:
+        for packet in parse_packet(data):
             # Handle any dropped packets.
             drop_count += sequence_delta(last_index, packet.index)
             last_index = packet.index
