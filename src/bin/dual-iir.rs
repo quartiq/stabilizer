@@ -43,6 +43,7 @@ use stabilizer::{
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
+        design_parameters::SAMPLE_BUFFER_SIZE,
         embedded_hal::digital::v2::InputPin,
         hal,
         signal_generator::{self, SignalGenerator},
@@ -50,7 +51,7 @@ use stabilizer::{
         DigitalInput0, DigitalInput1, AFE0, AFE1,
     },
     net::{
-        data_stream::{BlockGenerator, StreamTarget},
+        data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Miniconf,
         serde::Deserialize,
         telemetry::{Telemetry, TelemetryBuffer},
@@ -169,7 +170,7 @@ const APP: () = {
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         network: NetworkUsers<Settings, Telemetry>,
-        generator: BlockGenerator,
+        generator: FrameGenerator,
         signal_generator: [SignalGenerator; 2],
 
         settings: Settings,
@@ -193,7 +194,10 @@ const APP: () = {
             stabilizer.net.mac_address,
         );
 
-        let generator = network.enable_streaming();
+        let generator = network.configure_streaming(
+            StreamFormat::AdcDacData,
+            SAMPLE_BUFFER_SIZE as u8,
+        );
 
         // Spawn a settings update for default settings.
         c.spawn.settings_update().unwrap();
@@ -307,7 +311,23 @@ const APP: () = {
             }
 
             // Stream the data.
-            generator.send(&adc_samples, &dac_samples);
+            const N: usize = SAMPLE_BUFFER_SIZE * core::mem::size_of::<u16>();
+            generator.add::<_, { N * 4 }>(|buf| {
+                for (data, buf) in adc_samples
+                    .iter()
+                    .chain(dac_samples.iter())
+                    .zip(buf.chunks_exact_mut(N))
+                {
+                    assert_eq!(core::mem::size_of_val(*data), N);
+                    let data = unsafe {
+                        core::slice::from_raw_parts(
+                            data.as_ptr() as *const u8,
+                            N,
+                        )
+                    };
+                    buf.copy_from_slice(data)
+                }
+            });
 
             // Update telemetry measurements.
             telemetry.adcs =

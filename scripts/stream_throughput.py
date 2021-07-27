@@ -4,14 +4,55 @@ Author: Ryan Summers
 
 Description: Provides a mechanism for measuring Stabilizer stream data throughput.
 """
+import argparse
 import socket
 import collections
 import struct
 import time
 import logging
 
-# Representation of a single UDP packet transmitted by Stabilizer.
-Packet = collections.namedtuple('Packet', ['index', 'adc', 'dac'])
+# Representation of a single data batch transmitted by Stabilizer.
+Packet = collections.namedtuple('Packet', ['index', 'data'])
+
+# The magic header half-word at the start of each packet.
+MAGIC_HEADER = 0x057B
+
+# The struct format of the header.
+HEADER_FORMAT = '<HBBI'
+
+# All supported formats by this reception script.
+#
+# The items in this dict are functions that will be provided the sample batch size and will return
+# the struct deserialization code to unpack a single batch.
+FORMAT = {
+    1: lambda batch_size: f'<{batch_size}H{batch_size}H{batch_size}H{batch_size}H'
+}
+
+def parse_packet(buf):
+    """ Attempt to parse packets from the received buffer. """
+    # Attempt to parse a block from the buffer.
+    if len(buf) < struct.calcsize(HEADER_FORMAT):
+        return
+
+    # Parse out the packet header
+    magic, format_id, batch_size, sequence_number = struct.unpack_from(HEADER_FORMAT, buf)
+    buf = buf[struct.calcsize(HEADER_FORMAT):]
+
+    if magic != MAGIC_HEADER:
+        logging.warning('Encountered bad magic header: %s', hex(magic))
+        return
+
+    frame_format = FORMAT[format_id](batch_size)
+
+    batch_count = int(len(buf) / struct.calcsize(frame_format))
+
+    packets = []
+    for offset in range(batch_count):
+        data = struct.unpack_from(frame_format, buf)
+        buf = buf[struct.calcsize(frame_format):]
+        yield Packet(sequence_number + offset, data)
+
+
 
 class Timer:
     """ A basic timer for measuring elapsed time periods. """
@@ -52,99 +93,35 @@ class Timer:
         return now - self.start_time
 
 
-class PacketParser:
-    """ Utilize class used for parsing received UDP data. """
+def sequence_delta(previous_sequence, next_sequence):
+    """ Check the number of items between two sequence numbers. """
+    if previous_sequence is None:
+        return 0
 
-    def __init__(self):
-        """ Initialize the parser. """
-        self.buf = b''
-        self.total_bytes = 0
-
-
-    def ingress(self, data):
-        """ Ingress received UDP data. """
-        self.total_bytes += len(data)
-        self.buf += data
-
-
-    def parse_all_packets(self):
-        """ Parse all received packets from the receive buffer.
-
-        Returns:
-            A list of received Packets.
-        """
-        packets = []
-        while True:
-            new_packets = self._parse()
-            if new_packets:
-                packets += new_packets
-            else:
-                return packets
-
-
-    def _parse(self):
-        """ Attempt to parse packets from the received buffer. """
-        # Attempt to parse a block from the buffer.
-        if len(self.buf) < 4:
-            return None
-
-        start_id, num_blocks, data_size = struct.unpack_from('!HBB', self.buf)
-
-        packet_size = 4 + data_size * num_blocks * 8
-
-        if len(self.buf) < packet_size:
-            return None
-
-        self.buf = self.buf[4:]
-
-        packets = []
-        for offset in range(num_blocks):
-            adcs_dacs = struct.unpack_from(f'!{4 * data_size}H', self.buf)
-            adc = [
-                adcs_dacs[0:data_size],
-                adcs_dacs[data_size:2*data_size],
-            ]
-
-            dac = [
-                adcs_dacs[2*data_size: 3*data_size],
-                adcs_dacs[3*data_size:],
-            ]
-
-            self.buf = self.buf[8*data_size:]
-            packets.append(Packet(start_id + offset, adc, dac))
-
-        return packets
-
-
-def check_index(previous_index, next_index):
-    """ Check if two indices are sequential. """
-    if previous_index == -1:
-        return True
-
-    # Handle index roll-over. Indices are only stored in 16-bit numbers.
-    if next_index < previous_index:
-        next_index += 65536
-
-    expected_index = previous_index + 1
-
-    return next_index == expected_index
+    delta = next_sequence - (previous_sequence + 1)
+    return delta & 0xFFFFFFFF
 
 
 def main():
     """ Main program. """
+    parser = argparse.ArgumentParser(description='Measure Stabilizer livestream quality')
+    parser.add_argument('--port', default=1111, help='The port that stabilizer is streaming to')
+
+    args = parser.parse_args()
+
     connection = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    connection.bind(("", 1111))
+    connection.bind(("", args.port))
 
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s')
 
-    last_index = -1
+    last_index = None
 
     drop_count = 0
     good_blocks = 0
+    total_bytes = 0
 
     timer = Timer()
-    parser = PacketParser()
 
     while True:
         # Receive any data over UDP and parse it.
@@ -152,34 +129,24 @@ def main():
         if data and not timer.is_started():
             timer.start()
 
-        parser.ingress(data)
-
         # Handle any received packets.
-        for packet in parser.parse_all_packets():
-
+        total_bytes += len(data)
+        for packet in parse_packet(data):
             # Handle any dropped packets.
-            if not check_index(last_index, packet.index):
-                print(hex(last_index), hex(packet.index))
-                if packet.index < (last_index + 1):
-                    dropped = packet.index + 65536 - (last_index + 1)
-                else:
-                    dropped = packet.index - (last_index + 1)
-
-                drop_count += dropped
-
+            drop_count += sequence_delta(last_index, packet.index)
             last_index = packet.index
             good_blocks += 1
 
         # Report the throughput periodically.
         if timer.is_triggered():
-            drate = parser.total_bytes * 8 / 1e6 / timer.elapsed()
+            drate = total_bytes * 8 / 1e6 / timer.elapsed()
 
             print(f'''
 Data Rate:       {drate:.3f} Mbps
 Received Blocks: {good_blocks}
 Dropped blocks:  {drop_count}
 
-Metadata: {parser.total_bytes / 1e6:.3f} MB in {timer.elapsed():.2f} s
+Metadata: {total_bytes / 1e6:.3f} MB in {timer.elapsed():.2f} s
 ----
 ''')
             timer.arm()

@@ -17,7 +17,7 @@ pub mod shared;
 pub mod telemetry;
 
 use crate::hardware::{cycle_counter::CycleCounter, EthernetPhy, NetworkStack};
-use data_stream::{BlockGenerator, DataStream};
+use data_stream::{DataStream, FrameGenerator};
 use messages::{MqttMessage, SettingsResponse};
 use miniconf_client::MiniconfClient;
 use network_processor::NetworkProcessor;
@@ -49,7 +49,7 @@ pub struct NetworkUsers<S: Default + Clone + Miniconf, T: Serialize> {
     pub miniconf: MiniconfClient<S>,
     pub processor: NetworkProcessor,
     stream: DataStream,
-    generator: Option<BlockGenerator>,
+    generator: Option<FrameGenerator>,
     pub telemetry: TelemetryClient<T>,
 }
 
@@ -113,8 +113,17 @@ where
     }
 
     /// Enable live data streaming.
-    pub fn enable_streaming(&mut self) -> BlockGenerator {
-        self.generator.take().unwrap()
+    ///
+    /// # Args
+    /// * `format` - A unique u8 code indicating the format of the data.
+    pub fn configure_streaming(
+        &mut self,
+        format: impl Into<u8>,
+        batch_size: u8,
+    ) -> FrameGenerator {
+        let mut generator = self.generator.take().unwrap();
+        generator.configure(format, batch_size);
+        generator
     }
 
     /// Direct the stream to the provided remote target.
