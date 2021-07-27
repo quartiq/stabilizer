@@ -194,7 +194,10 @@ const APP: () = {
             stabilizer.net.mac_address,
         );
 
-        let generator = network.enable_streaming(StreamFormat::AdcDacData);
+        let generator = network.configure_streaming(
+            StreamFormat::AdcDacData,
+            SAMPLE_BUFFER_SIZE as u8,
+        );
 
         // Spawn a settings update for default settings.
         c.spawn.settings_update().unwrap();

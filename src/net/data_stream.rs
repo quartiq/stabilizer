@@ -9,34 +9,24 @@
 //! header is constant for all streaming capabilities, but the serialization format after the header
 //! is application-defined.
 //!
-//! ## Header Format
-//! The header of each stream frame consists of 7 bytes. All data is stored in little-endian format.
+//! ## Frame Header
+//! The header consists of the following, all in little-endian.
 //!
-//! Elements appear sequentially as follows:
-//! * Magic word 0x057B <u16>
-//! * Format Code <u8>
-//! * Batch Size <u8>
-//! * Sequence Number <u32>
-//!
-//! The "Magic word" is a constant field for all packets. The value is alway 0x057B.
-//!
-//! The "Format Code" is a unique specifier that indicates the serialization format of each batch of
-//! data in the frame. Refer to [StreamFormat] for further information.
-//!
-//! The "Batch size" is the value of [SAMPLE_BUFFER_SIZE].
-//!
-//! The "Sequence Number" is an identifier that increments for ever execution of the DSP process.
-//! This can be used to determine if a stream frame was lost.
+//! * **Magic word 0x057B** <u16>: a constant to identify Stabilizer streaming data.
+//! * **Format Code** <u8>: a unique ID that indicates the serialization format of each batch of data
+//!   in the frame. Refer to [StreamFormat] for further information.
+//! * **Batch Size** <u8>: the number of samples in each batch of data.
+//! * **Sequence Number** <u32>: an the sequence number of the first batch in the frame.
+//!   This can be used to determine if and how many stream batches are lost.
 //!
 //! # Example
 //! A sample Python script is available in `scripts/stream_throughput.py` to demonstrate reception
 //! of livestreamed data.
 use heapless::spsc::{Consumer, Producer, Queue};
 use miniconf::MiniconfAtomic;
+use num_enum::IntoPrimitive;
 use serde::Deserialize;
 use smoltcp_nal::embedded_nal::{IpAddr, Ipv4Addr, SocketAddr, UdpClientStack};
-
-use crate::hardware::design_parameters::SAMPLE_BUFFER_SIZE;
 
 use heapless::pool::{Box, Init, Pool, Uninit};
 
@@ -44,6 +34,9 @@ use super::NetworkReference;
 
 const MAGIC_WORD: u16 = 0x057B;
 
+// The size of the header, calculated in bytes.
+// The header has a 16-bit magic word, an 8-bit format, 8-bit batch-size, and 32-bit sequence
+// number, which corresponds to 8 bytes total.
 const HEADER_SIZE: usize = 8;
 
 // The number of frames that can be buffered.
@@ -51,6 +44,10 @@ const FRAME_COUNT: usize = 4;
 
 // The size of each livestream frame in bytes.
 const FRAME_SIZE: usize = 1024 + HEADER_SIZE;
+
+// The size of the frame queue must be at least as large as the number of frame buffers. Every
+// allocated frame buffer should fit in the queue.
+const FRAME_QUEUE_SIZE: usize = FRAME_COUNT * 2;
 
 // Static storage used for a heapless::Pool of frame buffers.
 static mut FRAME_DATA: [u8; FRAME_SIZE * FRAME_COUNT] =
@@ -74,7 +71,7 @@ pub struct StreamTarget {
 
 /// Specifies the format of streamed data
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, IntoPrimitive)]
 pub enum StreamFormat {
     /// Reserved, unused format specifier.
     Unknown = 0,
@@ -87,12 +84,6 @@ pub enum StreamFormat {
     /// <ADC0[0]> <ADC0[1]> <ADC1[0]> <ADC1[1]> <DAC0[0]> <DAC0[1]> <DAC1[0]> <DAC1[1]>
     /// ```
     AdcDacData = 1,
-}
-
-impl From<StreamFormat> for u8 {
-    fn from(format: StreamFormat) -> u8 {
-        format as u8
-    }
 }
 
 impl From<StreamTarget> for SocketAddr {
@@ -120,8 +111,10 @@ impl From<StreamTarget> for SocketAddr {
 pub fn setup_streaming(
     stack: NetworkReference,
 ) -> (FrameGenerator, DataStream) {
+    // The queue needs to be at least as large as the frame count to ensure that every allocated
+    // frame can potentially be enqueued for transmission.
     let queue =
-        cortex_m::singleton!(: Queue<StreamFrame, FRAME_COUNT> = Queue::new())
+        cortex_m::singleton!(: Queue<StreamFrame, FRAME_QUEUE_SIZE> = Queue::new())
             .unwrap();
     let (producer, consumer) = queue.split();
 
@@ -167,17 +160,13 @@ impl StreamFrame {
     where
         F: FnMut(&mut [u8]),
     {
-        assert!(!self.is_full::<T>(), "Batch cannot be added to full frame");
-
-        let result = f(&mut self.buffer[self.offset..self.offset + T]);
+        f(&mut self.buffer[self.offset..self.offset + T]);
 
         self.offset += T;
-
-        result
     }
 
     pub fn is_full<const T: usize>(&self) -> bool {
-        self.offset + T >= self.buffer.len()
+        self.offset + T > self.buffer.len()
     }
 
     pub fn finish(&mut self) -> &[u8] {
@@ -187,37 +176,42 @@ impl StreamFrame {
 
 /// The data generator for a stream.
 pub struct FrameGenerator {
-    queue: Producer<'static, StreamFrame, FRAME_COUNT>,
+    queue: Producer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
     pool: &'static Pool<[u8; FRAME_SIZE]>,
     current_frame: Option<StreamFrame>,
     sequence_number: u32,
     format: u8,
+    batch_size: u8,
 }
 
 impl FrameGenerator {
     fn new(
-        queue: Producer<'static, StreamFrame, FRAME_COUNT>,
+        queue: Producer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
         pool: &'static Pool<[u8; FRAME_SIZE]>,
     ) -> Self {
         Self {
             queue,
             pool,
+            batch_size: 0,
             format: StreamFormat::Unknown.into(),
             current_frame: None,
             sequence_number: 0,
         }
     }
 
-    /// Specify the format of the stream.
+    /// Configure the format of the stream.
     ///
     /// # Note:
-    /// This function may only be called once upon initializing streaming
+    /// This function shall only be called once upon initializing streaming
     ///
     /// # Args
     /// * `format` - The desired format of the stream.
+    /// * `batch_size` - The number of samples in each data batch. See
+    /// [crate::hardware::design_parameters::SAMPLE_BUFFER_SIZE]
     #[doc(hidden)]
-    pub(crate) fn set_format(&mut self, format: impl Into<u8>) {
+    pub(crate) fn configure(&mut self, format: impl Into<u8>, batch_size: u8) {
         self.format = format.into();
+        self.batch_size = batch_size;
     }
 
     /// Add a batch to the current stream frame.
@@ -237,7 +231,7 @@ impl FrameGenerator {
                 self.current_frame.replace(StreamFrame::new(
                     buffer,
                     self.format as u8,
-                    SAMPLE_BUFFER_SIZE as u8,
+                    self.batch_size,
                     sequence_number,
                 ));
             } else {
@@ -245,11 +239,14 @@ impl FrameGenerator {
             }
         }
 
+        // Note(unwrap): We ensure the frame is present above.
         let current_frame = self.current_frame.as_mut().unwrap();
 
         current_frame.add_batch::<_, T>(f);
 
         if current_frame.is_full::<T>() {
+            // Note(unwrap): The queue is designed to be at least as large as the frame buffer
+            // count, so this enqueue should always succeed.
             self.queue
                 .enqueue(self.current_frame.take().unwrap())
                 .unwrap();
@@ -264,7 +261,7 @@ impl FrameGenerator {
 pub struct DataStream {
     stack: NetworkReference,
     socket: Option<<NetworkReference as UdpClientStack>::UdpSocket>,
-    queue: Consumer<'static, StreamFrame, FRAME_COUNT>,
+    queue: Consumer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
     frame_pool: &'static Pool<[u8; FRAME_SIZE]>,
     remote: SocketAddr,
 }
@@ -278,7 +275,7 @@ impl DataStream {
     /// * `frame_pool` - The Pool to return stream frame objects into.
     fn new(
         stack: NetworkReference,
-        consumer: Consumer<'static, StreamFrame, FRAME_COUNT>,
+        consumer: Consumer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
         frame_pool: &'static Pool<[u8; FRAME_SIZE]>,
     ) -> Self {
         Self {

@@ -22,7 +22,7 @@ HEADER_FORMAT = '<HBBI'
 
 # All supported formats by this reception script.
 #
-# The items in this dict are functions that will be provided the sampel batch size and will return
+# The items in this dict are functions that will be provided the sample batch size and will return
 # the struct deserialization code to unpack a single batch.
 FORMAT = {
     1: lambda batch_size: f'<{batch_size}H{batch_size}H{batch_size}H{batch_size}H'
@@ -32,7 +32,7 @@ def parse_packet(buf):
     """ Attempt to parse packets from the received buffer. """
     # Attempt to parse a block from the buffer.
     if len(buf) < struct.calcsize(HEADER_FORMAT):
-        return []
+        return
 
     # Parse out the packet header
     magic, format_id, batch_size, sequence_number = struct.unpack_from(HEADER_FORMAT, buf)
@@ -40,10 +40,7 @@ def parse_packet(buf):
 
     if magic != MAGIC_HEADER:
         logging.warning('Encountered bad magic header: %s', hex(magic))
-        return []
-
-    if format_id not in FORMAT:
-        raise Exception(f'Unknown format specifier: {format_id}')
+        return
 
     frame_format = FORMAT[format_id](batch_size)
 
@@ -53,9 +50,8 @@ def parse_packet(buf):
     for offset in range(batch_count):
         data = struct.unpack_from(frame_format, buf)
         buf = buf[struct.calcsize(frame_format):]
-        packets.append(Packet(sequence_number + offset, data))
+        yield Packet(sequence_number + offset, data)
 
-    return packets
 
 
 class Timer:
@@ -129,7 +125,7 @@ def main():
 
     while True:
         # Receive any data over UDP and parse it.
-        data = connection.recv(1024)
+        data = connection.recv(4096)
         if data and not timer.is_started():
             timer.start()
 

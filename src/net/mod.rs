@@ -116,12 +116,13 @@ where
     ///
     /// # Args
     /// * `format` - A unique u8 code indicating the format of the data.
-    pub fn enable_streaming(
+    pub fn configure_streaming(
         &mut self,
         format: impl Into<u8>,
+        batch_size: u8,
     ) -> FrameGenerator {
         let mut generator = self.generator.take().unwrap();
-        generator.set_format(format);
+        generator.configure(format, batch_size);
         generator
     }
 
