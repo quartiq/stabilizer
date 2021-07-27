@@ -46,7 +46,6 @@ def parse_packet(buf):
 
     batch_count = int(len(buf) / struct.calcsize(frame_format))
 
-    packets = []
     for offset in range(batch_count):
         data = struct.unpack_from(frame_format, buf)
         buf = buf[struct.calcsize(frame_format):]
@@ -105,7 +104,7 @@ def sequence_delta(previous_sequence, next_sequence):
 def main():
     """ Main program. """
     parser = argparse.ArgumentParser(description='Measure Stabilizer livestream quality')
-    parser.add_argument('--port', default=1111, help='The port that stabilizer is streaming to')
+    parser.add_argument('--port', type=int, default=1111, help='The port that stabilizer is streaming to')
 
     args = parser.parse_args()
 

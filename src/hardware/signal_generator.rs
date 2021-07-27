@@ -65,8 +65,9 @@ impl TryFrom<BasicConfig> for Config {
     type Error = Error;
 
     fn try_from(config: BasicConfig) -> Result<Config, Error> {
+        let symmetry_complement = 1.0 - config.symmetry;
         // Validate symmetry
-        if config.symmetry < 0.0 || config.symmetry > 1.0 {
+        if config.symmetry < 0.0 || symmetry_complement < 0.0 {
             return Err(Error::InvalidSymmetry);
         }
 
@@ -82,18 +83,19 @@ impl TryFrom<BasicConfig> for Config {
         }
 
         // Calculate the frequency tuning words.
-        let frequency_tuning_word = {
-            let ftws = [ftw / config.symmetry, ftw / (1.0 - config.symmetry)];
-
-            // Clip both frequency tuning words to within Nyquist before rounding.
-            if ftws[0] > NYQUIST {
-                [1u32 << 31, ftws[1] as u32]
-            } else if ftws[1] > NYQUIST {
-                [ftws[0] as u32, 1u32 << 31]
+        // Clip both frequency tuning words to within Nyquist before rounding.
+        let frequency_tuning_word = [
+            if config.symmetry * NYQUIST > ftw {
+                ftw / config.symmetry
             } else {
-                [ftws[0] as u32, ftws[1] as u32]
-            }
-        };
+                NYQUIST
+            } as u32,
+            if symmetry_complement * NYQUIST > ftw {
+                ftw / symmetry_complement
+            } else {
+                NYQUIST
+            } as u32,
+        ];
 
         Ok(Config {
             amplitude: DacCode::try_from(config.amplitude)
