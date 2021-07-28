@@ -562,6 +562,7 @@ impl ProfileSerializer {
     /// * `acr` - If provided, indicates the amplitude control register for the channels. The ACR
     ///   should be stored in the 3 LSB of the word. Note that if amplitude scaling is to be used,
     ///   the "Amplitude multiplier enable" bit must be set.
+    #[inline]
     pub fn update_channels(
         &mut self,
         channels: &[Channel],
@@ -597,6 +598,7 @@ impl ProfileSerializer {
         self.index += value.len() + 1;
     }
 
+    #[inline]
     fn pad(&mut self) {
         // Pad the buffer to 32-bit (4 byte) alignment by adding dummy writes to CSR and LSRR.
         match self.index & 3 {
@@ -621,6 +623,7 @@ impl ProfileSerializer {
     ///
     /// # Returns
     /// A slice of `u32` words representing the serialized profile.
+    #[inline]
     pub fn finalize<'a>(&'a mut self) -> &'a [u32] {
         self.pad();
         unsafe {

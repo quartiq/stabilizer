@@ -162,6 +162,7 @@ impl<'a> ProfileBuilder<'a> {
 
     /// Write the profile to the DDS asynchronously.
     #[allow(dead_code)]
+    #[inline]
     pub fn write_profile(mut self) {
         let profile = self.serializer.finalize();
         self.dds_output.write_profile(profile);
