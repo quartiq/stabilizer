@@ -528,7 +528,7 @@ pub struct DdsConfig {
 impl DdsConfig {
     /// Create a serializer that can be used for generating a serialized DDS profile for writing to
     /// a QSPI stream.
-    pub fn builder(&self) -> ProfileSerializer {
+    pub fn serializer(&self) -> ProfileSerializer {
         ProfileSerializer::new(self.mode)
     }
 }
@@ -585,7 +585,7 @@ impl ProfileSerializer {
         }
 
         if let Some(acr) = acr {
-            self.add_write(Register::ACR, &acr.to_be_bytes()[1..=3]);
+            self.add_write(Register::ACR, &acr.to_be_bytes()[1..]);
         }
     }
 
