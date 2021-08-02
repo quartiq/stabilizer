@@ -14,7 +14,7 @@ use heapless::String;
 use log::info;
 
 use super::{MqttMessage, NetworkReference, SettingsResponse, UpdateState};
-use crate::configuration::MQTT_BROKER;
+use minimq::embedded_nal::IpAddr;
 
 /// MQTT settings interface.
 pub struct MiniconfClient<S>
@@ -38,9 +38,14 @@ where
     /// * `stack` - The network stack to use for communication.
     /// * `client_id` - The ID of the MQTT client. May be an empty string for auto-assigning.
     /// * `prefix` - The MQTT device prefix to use for this device.
-    pub fn new(stack: NetworkReference, client_id: &str, prefix: &str) -> Self {
-        let mqtt =
-            minimq::Minimq::new(MQTT_BROKER.into(), client_id, stack).unwrap();
+    /// * `broker` - The IP address of the MQTT broker to use.
+    pub fn new(
+        stack: NetworkReference,
+        client_id: &str,
+        prefix: &str,
+        broker: IpAddr,
+    ) -> Self {
+        let mqtt = minimq::Minimq::new(broker, client_id, stack).unwrap();
 
         let mut response_topic: String<128> = String::from(prefix);
         response_topic.push_str("/log").unwrap();

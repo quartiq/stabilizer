@@ -17,7 +17,6 @@ nav_order: 2
 
 There are a number of steps that must be completed when first getting started with Stabilizer.
 1. Update the Stabilizer Application
-    1. Set parameters in the firmware source code, such as IP addresses and sampling rate.
     1. Build the application by compiling the source code.
     1. Upload the application and programming it onto the device.
 1. Set up MQTT for telemetry and configuration.
@@ -31,23 +30,6 @@ Firmware is compiled and loaded onto Stabilizer to program a specific applicatio
 After receiving the Stabilizer hardware, you will need to flash firmware onto the device to use your
 desired application.
 
-## Configuring Firmware
-
-Stabilizer firmware contains compile-time parameters that may need to be changed based on
-application requirements. Some examples of parameters that may require configuraton:
-* Sampling interval.
-* Batch size.
-* MQTT Broker IP address
-
-Parameters are configured by editing the file `src/configuration.rs`.
-
-Refer to the [documentation]({{site.baseurl}}/firmware/stabilizer/configuration/index.html) for more
-information on parameters.
-
-When these parameters are updated, firmware must be built and flashed onto Stabilizer before they
-take effect.
-
-
 ## Building Firmware
 
 1. Clone or download [stabilizer](https://github.com/quartiq/stabilizer)
@@ -60,9 +42,9 @@ git clone https://github.com/quartiq/stabilizer
 ```bash
 rustup target add thumbv7em-none-eabihf
 ```
-1. Build Firmware
+1. Build Firmware with an optionally-specified MQTT broker IP.
 ```bash
-cargo build --release
+BROKER="10.34.16.10" cargo build --release
 ```
 
 ## Uploading Firmware

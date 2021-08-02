@@ -172,9 +172,14 @@ fn load_itcm() {
 
 /// Configure the stabilizer hardware for operation.
 ///
+/// # Note
+/// Refer to [design_parameters::TIMER_FREQUENCY] to determine the frequency of the sampling timer.
+///
 /// # Args
 /// * `core` - The RTIC core for configuring the cortex-M core of the device.
 /// * `device` - The microcontroller peripherals to be configured.
+/// * `sample_buffer_size` - The size of the ADC/DAC sample buffer.
+/// * `sample_ticks` - The number of timer ticks between each sample.
 ///
 /// # Returns
 /// (stabilizer, pounder) where `stabilizer` is a `StabilizerDevices` structure containing all
@@ -184,6 +189,8 @@ fn load_itcm() {
 pub fn setup(
     mut core: rtic::Peripherals,
     device: stm32h7xx_hal::stm32::Peripherals,
+    sample_buffer_size: usize,
+    sample_ticks: u32,
 ) -> (StabilizerDevices, Option<PounderDevices>) {
     let pwr = device.PWR.constrain();
     let vos = pwr.freeze();
@@ -295,8 +302,7 @@ pub fn setup(
         timer2.set_tick_freq(design_parameters::TIMER_FREQUENCY);
 
         let mut sampling_timer = timers::SamplingTimer::new(timer2);
-        sampling_timer
-            .set_period_ticks((design_parameters::ADC_SAMPLE_TICKS - 1) as u32);
+        sampling_timer.set_period_ticks(sample_ticks - 1);
 
         // The sampling timer is used as the master timer for the shadow-sampling timer. Thus,
         // it generates a trigger whenever it is enabled.
@@ -320,8 +326,7 @@ pub fn setup(
 
         let mut shadow_sampling_timer =
             timers::ShadowSamplingTimer::new(timer3);
-        shadow_sampling_timer
-            .set_period_ticks(design_parameters::ADC_SAMPLE_TICKS - 1);
+        shadow_sampling_timer.set_period_ticks(sample_ticks as u16 - 1);
 
         // The shadow sampling timer is a slave-mode timer to the sampling timer. It should
         // always be in-sync - thus, we configure it to operate in slave mode using "Trigger
@@ -409,6 +414,7 @@ pub fn setup(
                 dma_streams.2,
                 sampling_timer_channels.ch1,
                 shadow_sampling_timer_channels.ch1,
+                sample_buffer_size,
             )
         };
 
@@ -452,6 +458,7 @@ pub fn setup(
                 dma_streams.5,
                 sampling_timer_channels.ch2,
                 shadow_sampling_timer_channels.ch2,
+                sample_buffer_size,
             )
         };
 
@@ -539,11 +546,13 @@ pub fn setup(
             dac0_spi,
             dma_streams.6,
             sampling_timer_channels.ch3,
+            sample_buffer_size,
         );
         let dac1 = dac::Dac1Output::new(
             dac1_spi,
             dma_streams.7,
             sampling_timer_channels.ch4,
+            sample_buffer_size,
         );
         (dac0, dac1)
     };
@@ -940,8 +949,7 @@ pub fn setup(
                 let sample_frequency = {
                     let timer_frequency: hal::time::Hertz =
                         design_parameters::TIMER_FREQUENCY.into();
-                    timer_frequency.0 as f32
-                        / design_parameters::ADC_SAMPLE_TICKS as f32
+                    timer_frequency.0 as f32 / sample_ticks as f32
                 };
 
                 let sample_period = 1.0 / sample_frequency;

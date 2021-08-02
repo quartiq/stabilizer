@@ -20,6 +20,7 @@ use crate::hardware::{cycle_counter::CycleCounter, EthernetPhy, NetworkStack};
 use data_stream::{DataStream, FrameGenerator};
 use messages::{MqttMessage, SettingsResponse};
 use miniconf_client::MiniconfClient;
+use minimq::embedded_nal::IpAddr;
 use network_processor::NetworkProcessor;
 use shared::NetworkManager;
 use telemetry::TelemetryClient;
@@ -66,6 +67,7 @@ where
     /// * `cycle_counter` - The clock used for measuring time in the network.
     /// * `app` - The name of the application.
     /// * `mac` - The MAC address of the network.
+    /// * `broker` - The IP address of the MQTT broker to use.
     ///
     /// # Returns
     /// A new struct of network users.
@@ -75,6 +77,7 @@ where
         cycle_counter: CycleCounter,
         app: &str,
         mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
+        broker: IpAddr,
     ) -> Self {
         let stack_manager =
             cortex_m::singleton!(: NetworkManager = NetworkManager::new(stack))
@@ -92,12 +95,14 @@ where
             stack_manager.acquire_stack(),
             &get_client_id(app, "settings", mac),
             &prefix,
+            broker,
         );
 
         let telemetry = TelemetryClient::new(
             stack_manager.acquire_stack(),
             &get_client_id(app, "tlm", mac),
             &prefix,
+            broker,
         );
 
         let (generator, stream) =

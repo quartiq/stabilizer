@@ -1,8 +1,7 @@
 use crate::{
-    configuration::ADC_SAMPLE_TICKS_LOG2, hardware::dac::DacCode,
-    hardware::design_parameters::TIMER_FREQUENCY,
+    hardware::dac::DacCode, hardware::design_parameters::TIMER_FREQUENCY,
 };
-use core::convert::{TryFrom, TryInto};
+use core::convert::TryFrom;
 use miniconf::Miniconf;
 use serde::Deserialize;
 
@@ -32,7 +31,7 @@ pub struct BasicConfig {
 
     /// The normalized symmetry of the signal. At 0% symmetry, the duration of the first half oscillation is minimal.
     /// At 25% symmetry, the first half oscillation lasts for 25% of the signal period. For square wave output this
-    //// symmetry is the duty cycle.
+    /// symmetry is the duty cycle.
     pub symmetry: f32,
 
     /// The amplitude of the output signal in volts.
@@ -61,20 +60,25 @@ pub enum Error {
     InvalidFrequency,
 }
 
-impl TryFrom<BasicConfig> for Config {
-    type Error = Error;
-
-    fn try_from(config: BasicConfig) -> Result<Config, Error> {
-        let symmetry_complement = 1.0 - config.symmetry;
+impl BasicConfig {
+    /// Convert configuration into signal generator values.
+    ///
+    /// # Args
+    /// * `sample_ticks_log2` - The logarithm of the number of timer sample ticks between each
+    /// sample.
+    pub fn try_into_config(
+        self,
+        sample_ticks_log2: u8,
+    ) -> Result<Config, Error> {
+        let symmetry_complement = 1.0 - self.symmetry;
         // Validate symmetry
-        if config.symmetry < 0.0 || symmetry_complement < 0.0 {
+        if self.symmetry < 0.0 || symmetry_complement < 0.0 {
             return Err(Error::InvalidSymmetry);
         }
 
-        const LSB_PER_HERTZ: f32 = (1u64 << (31 + ADC_SAMPLE_TICKS_LOG2))
-            as f32
+        let lsb_per_hertz: f32 = (1u64 << (31 + sample_ticks_log2)) as f32
             / (TIMER_FREQUENCY.0 * 1_000_000) as f32;
-        let ftw = config.frequency * LSB_PER_HERTZ;
+        let ftw = self.frequency * lsb_per_hertz;
 
         // Validate base frequency tuning word to be below Nyquist.
         const NYQUIST: f32 = (1u32 << 31) as _;
@@ -85,8 +89,8 @@ impl TryFrom<BasicConfig> for Config {
         // Calculate the frequency tuning words.
         // Clip both frequency tuning words to within Nyquist before rounding.
         let frequency_tuning_word = [
-            if config.symmetry * NYQUIST > ftw {
-                ftw / config.symmetry
+            if self.symmetry * NYQUIST > ftw {
+                ftw / self.symmetry
             } else {
                 NYQUIST
             } as u32,
@@ -98,10 +102,10 @@ impl TryFrom<BasicConfig> for Config {
         ];
 
         Ok(Config {
-            amplitude: DacCode::try_from(config.amplitude)
+            amplitude: DacCode::try_from(self.amplitude)
                 .or(Err(Error::InvalidAmplitude))?
                 .into(),
-            signal: config.signal,
+            signal: self.signal,
             frequency_tuning_word,
         })
     }
@@ -119,6 +123,16 @@ pub struct Config {
     pub frequency_tuning_word: [u32; 2],
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            signal: Signal::Cosine,
+            amplitude: 0,
+            frequency_tuning_word: [0, 0],
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct SignalGenerator {
     phase_accumulator: u32,
@@ -128,7 +142,7 @@ pub struct SignalGenerator {
 impl Default for SignalGenerator {
     fn default() -> Self {
         Self {
-            config: BasicConfig::default().try_into().unwrap(),
+            config: Config::default(),
             phase_accumulator: 0,
         }
     }

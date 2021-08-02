@@ -29,10 +29,7 @@
 #![no_std]
 #![no_main]
 
-use core::{
-    convert::TryInto,
-    sync::atomic::{fence, Ordering},
-};
+use core::sync::atomic::{fence, Ordering};
 
 use mutex_trait::prelude::*;
 
@@ -43,7 +40,7 @@ use stabilizer::{
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
-        design_parameters::SAMPLE_BUFFER_SIZE,
+        design_parameters::DEFAULT_MQTT_BROKER,
         embedded_hal::digital::v2::InputPin,
         hal,
         signal_generator::{self, SignalGenerator},
@@ -63,6 +60,13 @@ const SCALE: f32 = i16::MAX as _;
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
+
+// The number of samples in each batch process
+const SAMPLE_BUFFER_SIZE: usize = 8;
+
+// The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^7 =
+// 128, there is 1.28uS per sample, corresponding to a sampling frequency of 781.25 KHz.
+const SAMPLE_TICKS_LOG2: u8 = 7;
 
 #[derive(Clone, Copy, Debug, Deserialize, Miniconf)]
 pub struct Settings {
@@ -183,8 +187,12 @@ const APP: () = {
     #[init(spawn=[telemetry, settings_update, ethernet_link])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) =
-            hardware::setup::setup(c.core, c.device);
+        let (mut stabilizer, _pounder) = hardware::setup::setup(
+            c.core,
+            c.device,
+            SAMPLE_BUFFER_SIZE,
+            1 << SAMPLE_TICKS_LOG2,
+        );
 
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
@@ -192,6 +200,9 @@ const APP: () = {
             stabilizer.cycle_counter,
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
+            option_env!("BROKER")
+                .and_then(|data| data.parse().ok())
+                .unwrap_or(DEFAULT_MQTT_BROKER.into()),
         );
 
         let generator = network.configure_streaming(
@@ -228,10 +239,14 @@ const APP: () = {
             settings,
             signal_generator: [
                 SignalGenerator::new(
-                    settings.signal_generator[0].try_into().unwrap(),
+                    settings.signal_generator[0]
+                        .try_into_config(SAMPLE_TICKS_LOG2)
+                        .unwrap(),
                 ),
                 SignalGenerator::new(
-                    settings.signal_generator[1].try_into().unwrap(),
+                    settings.signal_generator[1]
+                        .try_into_config(SAMPLE_TICKS_LOG2)
+                        .unwrap(),
                 ),
             ],
         }
@@ -366,7 +381,7 @@ const APP: () = {
 
         // Update the signal generators
         for (i, &config) in settings.signal_generator.iter().enumerate() {
-            match config.try_into() {
+            match config.try_into_config(SAMPLE_TICKS_LOG2) {
                 Ok(config) => {
                     c.resources
                         .signal_generator

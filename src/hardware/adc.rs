@@ -69,7 +69,7 @@ use stm32h7xx_hal as hal;
 
 use mutex_trait::Mutex;
 
-use super::design_parameters::{SampleBuffer, SAMPLE_BUFFER_SIZE};
+use super::design_parameters::{SampleBuffer, MAX_SAMPLE_BUFFER_SIZE};
 use super::timers;
 
 use hal::dma::{
@@ -142,7 +142,8 @@ static mut SPI_EOT_CLEAR: [u32; 1] = [0x00];
 // processed). Note that the contents of AXI SRAM is uninitialized, so the buffer contents on
 // startup are undefined. The dimensions are `ADC_BUF[adc_index][ping_pong_index][sample_index]`.
 #[link_section = ".axisram.buffers"]
-static mut ADC_BUF: [[SampleBuffer; 2]; 2] = [[[0; SAMPLE_BUFFER_SIZE]; 2]; 2];
+static mut ADC_BUF: [[SampleBuffer; 2]; 2] =
+    [[[0; MAX_SAMPLE_BUFFER_SIZE]; 2]; 2];
 
 macro_rules! adc_input {
     ($name:ident, $index:literal, $trigger_stream:ident, $data_stream:ident, $clear_stream:ident,
@@ -218,7 +219,7 @@ macro_rules! adc_input {
                     hal::dma::dma::$data_stream<hal::stm32::DMA1>,
                     hal::spi::Spi<hal::stm32::$spi, hal::spi::Disabled, u16>,
                     PeripheralToMemory,
-                    &'static mut SampleBuffer,
+                    &'static mut [u16],
                     hal::dma::DBTransfer,
                 >,
                 trigger_transfer: Transfer<
@@ -258,6 +259,7 @@ macro_rules! adc_input {
                     clear_stream: hal::dma::dma::$clear_stream<hal::stm32::DMA1>,
                     trigger_channel: timers::tim2::$trigger_channel,
                     clear_channel: timers::tim3::$clear_channel,
+                    sample_buffer_size: usize,
                 ) -> Self {
                     // The flag clear DMA transfer always clears the EOT flag in the SPI
                     // peripheral. It has the highest priority to ensure it is completed before the
@@ -357,8 +359,8 @@ macro_rules! adc_input {
                             spi,
                             // Note(unsafe): The ADC_BUF[$index] is "owned" by this peripheral.
                             // It shall not be used anywhere else in the module.
-                            unsafe { &mut ADC_BUF[$index][0] },
-                            unsafe { Some(&mut ADC_BUF[$index][1]) },
+                            unsafe { &mut ADC_BUF[$index][0][..sample_buffer_size] },
+                            unsafe { Some(&mut ADC_BUF[$index][1][..sample_buffer_size]) },
                             data_config,
                         );
 
@@ -390,8 +392,8 @@ macro_rules! adc_input {
                 /// NOTE(unsafe): Memory safety and access ordering is not guaranteed
                 /// (see the HAL DMA docs).
                 pub fn with_buffer<F, R>(&mut self, f: F) -> Result<R, DMAError>
-                    where
-                F: FnOnce(&mut SampleBuffer) -> R,
+                where
+                    F: FnOnce(&mut &'static mut [u16]) -> R,
                 {
                     unsafe { self.transfer.next_dbm_transfer_with(|buf, _current| f(buf)) }
                 }
@@ -400,7 +402,7 @@ macro_rules! adc_input {
             // This is not actually a Mutex. It only re-uses the semantics and macros of mutex-trait
             // to reduce rightward drift when jointly calling `with_buffer(f)` on multiple DAC/ADCs.
             impl Mutex for $name {
-                type Data = SampleBuffer;
+                type Data = &'static mut [u16];
                 fn lock<R>(&mut self, f: impl FnOnce(&mut Self::Data) -> R) -> R {
                     self.with_buffer(f).unwrap()
                 }

@@ -54,7 +54,7 @@ use stm32h7xx_hal as hal;
 
 use mutex_trait::Mutex;
 
-use super::design_parameters::{SampleBuffer, SAMPLE_BUFFER_SIZE};
+use super::design_parameters::{SampleBuffer, MAX_SAMPLE_BUFFER_SIZE};
 use super::timers;
 
 use core::convert::TryFrom;
@@ -70,7 +70,8 @@ use hal::dma::{
 // processed). Note that the contents of AXI SRAM is uninitialized, so the buffer contents on
 // startup are undefined. The dimensions are `ADC_BUF[adc_index][ping_pong_index][sample_index]`.
 #[link_section = ".axisram.buffers"]
-static mut DAC_BUF: [[SampleBuffer; 2]; 2] = [[[0; SAMPLE_BUFFER_SIZE]; 2]; 2];
+static mut DAC_BUF: [[SampleBuffer; 2]; 2] =
+    [[[0; MAX_SAMPLE_BUFFER_SIZE]; 2]; 2];
 
 /// Custom type for referencing DAC output codes.
 /// The internal integer is the raw code written to the DAC output register.
@@ -176,7 +177,7 @@ macro_rules! dac_output {
                 hal::dma::dma::$data_stream<hal::stm32::DMA1>,
                 $spi,
                 MemoryToPeripheral,
-                &'static mut SampleBuffer,
+                &'static mut [u16],
                 hal::dma::DBTransfer,
             >,
         }
@@ -192,6 +193,7 @@ macro_rules! dac_output {
                 spi: hal::spi::Spi<hal::stm32::$spi, hal::spi::Enabled, u16>,
                 stream: hal::dma::dma::$data_stream<hal::stm32::DMA1>,
                 trigger_channel: timers::tim2::$trigger_channel,
+                sample_buffer_size: usize,
             ) -> Self {
                 // Generate DMA events when an output compare of the timer hitting zero (timer roll over)
                 // occurs.
@@ -225,9 +227,13 @@ macro_rules! dac_output {
                         stream,
                         $spi::new(trigger_channel, spi),
                         // Note(unsafe): This buffer is only used once and provided for the DMA transfer.
-                        unsafe { &mut DAC_BUF[$index][0] },
+                        unsafe {
+                            &mut DAC_BUF[$index][0][..sample_buffer_size]
+                        },
                         // Note(unsafe): This buffer is only used once and provided for the DMA transfer.
-                        unsafe { Some(&mut DAC_BUF[$index][1]) },
+                        unsafe {
+                            Some(&mut DAC_BUF[$index][1][..sample_buffer_size])
+                        },
                         trigger_config,
                     );
 
@@ -246,7 +252,7 @@ macro_rules! dac_output {
             /// (see the HAL DMA docs).
             pub fn with_buffer<F, R>(&mut self, f: F) -> Result<R, DMAError>
             where
-                F: FnOnce(&mut SampleBuffer) -> R,
+                F: FnOnce(&mut &'static mut [u16]) -> R,
             {
                 unsafe {
                     self.transfer.next_dbm_transfer_with(|buf, _current| f(buf))
@@ -257,7 +263,7 @@ macro_rules! dac_output {
         // This is not actually a Mutex. It only re-uses the semantics and macros of mutex-trait
         // to reduce rightward drift when jointly calling `with_buffer(f)` on multiple DAC/ADCs.
         impl Mutex for $name {
-            type Data = SampleBuffer;
+            type Data = &'static mut [u16];
             fn lock<R>(&mut self, f: impl FnOnce(&mut Self::Data) -> R) -> R {
                 self.with_buffer(f).unwrap()
             }
