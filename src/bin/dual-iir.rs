@@ -201,7 +201,19 @@ const APP: () = {
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
             option_env!("BROKER")
-                .and_then(|data| data.parse().ok())
+                .and_then(|data| {
+                    data.parse::<minimq::embedded_nal::IpAddr>().map_or_else(
+                        |err| {
+                            log::error!(
+                                "{:?}: Failed to parse broker IP ({:?}) - Falling back to default",
+                                err,
+                                data
+                            );
+                            None
+                        },
+                        |ip| Some(ip),
+                    )
+                })
                 .unwrap_or(DEFAULT_MQTT_BROKER.into()),
         );
 
