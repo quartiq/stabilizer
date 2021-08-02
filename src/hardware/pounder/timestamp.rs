@@ -33,7 +33,7 @@ impl Timestamper {
     /// * `capture_channel` - The input capture channel for collecting timestamps.
     /// * `sampling_timer` - The stabilizer ADC sampling timer.
     /// * `_clock_input` - The input pin for the external clock from Pounder.
-    /// * `batch_size` - The number of seamples in each batch.
+    /// * `batch_size` - The number of samples in each batch.
     ///
     /// # Returns
     /// The new pounder timestamper in an operational state.
