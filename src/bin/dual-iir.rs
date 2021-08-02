@@ -29,10 +29,7 @@
 #![no_std]
 #![no_main]
 
-use core::{
-    convert::TryInto,
-    sync::atomic::{fence, Ordering},
-};
+use core::sync::atomic::{fence, Ordering};
 
 use mutex_trait::prelude::*;
 
@@ -43,7 +40,6 @@ use stabilizer::{
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
-        design_parameters::SAMPLE_BUFFER_SIZE,
         embedded_hal::digital::v2::InputPin,
         hal,
         signal_generator::{self, SignalGenerator},
@@ -51,6 +47,7 @@ use stabilizer::{
         DigitalInput0, DigitalInput1, AFE0, AFE1,
     },
     net::{
+        self,
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Miniconf,
         serde::Deserialize,
@@ -63,6 +60,13 @@ const SCALE: f32 = i16::MAX as _;
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
+
+// The number of samples in each batch process
+const BATCH_SIZE: usize = 8;
+
+// The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^7 =
+// 128, there is 1.28uS per sample, corresponding to a sampling frequency of 781.25 KHz.
+const SAMPLE_TICKS_LOG2: u8 = 7;
 
 #[derive(Clone, Copy, Debug, Deserialize, Miniconf)]
 pub struct Settings {
@@ -183,8 +187,12 @@ const APP: () = {
     #[init(spawn=[telemetry, settings_update, ethernet_link])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) =
-            hardware::setup::setup(c.core, c.device);
+        let (mut stabilizer, _pounder) = hardware::setup::setup(
+            c.core,
+            c.device,
+            BATCH_SIZE,
+            1 << SAMPLE_TICKS_LOG2,
+        );
 
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
@@ -192,12 +200,11 @@ const APP: () = {
             stabilizer.cycle_counter,
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
+            net::parse_or_default_broker(option_env!("BROKER")),
         );
 
-        let generator = network.configure_streaming(
-            StreamFormat::AdcDacData,
-            SAMPLE_BUFFER_SIZE as u8,
-        );
+        let generator = network
+            .configure_streaming(StreamFormat::AdcDacData, BATCH_SIZE as u8);
 
         // Spawn a settings update for default settings.
         c.spawn.settings_update().unwrap();
@@ -228,10 +235,14 @@ const APP: () = {
             settings,
             signal_generator: [
                 SignalGenerator::new(
-                    settings.signal_generator[0].try_into().unwrap(),
+                    settings.signal_generator[0]
+                        .try_into_config(SAMPLE_TICKS_LOG2)
+                        .unwrap(),
                 ),
                 SignalGenerator::new(
-                    settings.signal_generator[1].try_into().unwrap(),
+                    settings.signal_generator[1]
+                        .try_into_config(SAMPLE_TICKS_LOG2)
+                        .unwrap(),
                 ),
             ],
         }
@@ -311,14 +322,13 @@ const APP: () = {
             }
 
             // Stream the data.
-            const N: usize = SAMPLE_BUFFER_SIZE * core::mem::size_of::<u16>();
+            const N: usize = BATCH_SIZE * core::mem::size_of::<u16>();
             generator.add::<_, { N * 4 }>(|buf| {
                 for (data, buf) in adc_samples
                     .iter()
                     .chain(dac_samples.iter())
                     .zip(buf.chunks_exact_mut(N))
                 {
-                    assert_eq!(core::mem::size_of_val(*data), N);
                     let data = unsafe {
                         core::slice::from_raw_parts(
                             data.as_ptr() as *const u8,
@@ -366,7 +376,7 @@ const APP: () = {
 
         // Update the signal generators
         for (i, &config) in settings.signal_generator.iter().enumerate() {
-            match config.try_into() {
+            match config.try_into_config(SAMPLE_TICKS_LOG2) {
                 Ok(config) => {
                     c.resources
                         .signal_generator

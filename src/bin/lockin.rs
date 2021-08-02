@@ -37,13 +37,11 @@ use mutex_trait::prelude::*;
 
 use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
 use stabilizer::{
-    configuration,
     hardware::{
         self,
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
-        design_parameters::SAMPLE_BUFFER_SIZE,
         embedded_hal::digital::v2::InputPin,
         hal,
         input_stamper::InputStamper,
@@ -52,6 +50,7 @@ use stabilizer::{
         DigitalInput0, DigitalInput1, AFE0, AFE1,
     },
     net::{
+        self,
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Miniconf,
         serde::Deserialize,
@@ -59,6 +58,15 @@ use stabilizer::{
         NetworkState, NetworkUsers,
     },
 };
+
+// The logarithm of the number of samples in each batch process. This corresponds with 2^3 samples
+// per batch = 8 samples
+const BATCH_SIZE_SIZE_LOG2: u8 = 3;
+
+// The logarithm of the number of 100MHz timer ticks between each sample. This corresponds with a
+// sampling period of 2^7 = 128 ticks. At 100MHz, 10ns per tick, this corresponds to a sampling
+// period of 1.28 uS or 781.25 KHz.
+const ADC_SAMPLE_TICKS_LOG2: u8 = 7;
 
 #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
 enum Conf {
@@ -220,8 +228,12 @@ const APP: () = {
     #[init(spawn=[settings_update, telemetry, ethernet_link])]
     fn init(c: init::Context) -> init::LateResources {
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) =
-            hardware::setup::setup(c.core, c.device);
+        let (mut stabilizer, _pounder) = hardware::setup::setup(
+            c.core,
+            c.device,
+            1 << BATCH_SIZE_SIZE_LOG2,
+            1 << ADC_SAMPLE_TICKS_LOG2,
+        );
 
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
@@ -229,19 +241,17 @@ const APP: () = {
             stabilizer.cycle_counter,
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
+            net::parse_or_default_broker(option_env!("BROKER")),
         );
 
         let generator = network.configure_streaming(
             StreamFormat::AdcDacData,
-            SAMPLE_BUFFER_SIZE as u8,
+            1u8 << BATCH_SIZE_SIZE_LOG2,
         );
 
         let settings = Settings::default();
 
-        let pll = RPLL::new(
-            configuration::ADC_SAMPLE_TICKS_LOG2
-                + configuration::SAMPLE_BUFFER_SIZE_LOG2,
-        );
+        let pll = RPLL::new(ADC_SAMPLE_TICKS_LOG2 + BATCH_SIZE_SIZE_LOG2);
 
         // Spawn a settings and telemetry update for default settings.
         c.spawn.settings_update().unwrap();
@@ -267,7 +277,7 @@ const APP: () = {
 
         let signal_config = {
             let frequency_tuning_word =
-                (1u64 << (32 - configuration::SAMPLE_BUFFER_SIZE_LOG2)) as u32;
+                (1u64 << (32 - BATCH_SIZE_SIZE_LOG2)) as u32;
 
             signal_generator::Config {
                 // Same frequency as batch size.
@@ -334,18 +344,11 @@ const APP: () = {
                     settings.pll_tc[0],
                     settings.pll_tc[1],
                 );
-                (
-                    pll_phase,
-                    (pll_frequency >> configuration::SAMPLE_BUFFER_SIZE_LOG2)
-                        as i32,
-                )
+                (pll_phase, (pll_frequency >> BATCH_SIZE_SIZE_LOG2) as i32)
             }
             LockinMode::Internal => {
                 // Reference phase and frequency are known.
-                (
-                    1i32 << 30,
-                    1i32 << (32 - configuration::SAMPLE_BUFFER_SIZE_LOG2),
-                )
+                (1i32 << 30, 1i32 << (32 - BATCH_SIZE_SIZE_LOG2))
             }
         };
 
@@ -399,14 +402,14 @@ const APP: () = {
             }
 
             // Stream the data.
-            const N: usize = SAMPLE_BUFFER_SIZE * core::mem::size_of::<u16>();
+            const N: usize =
+                (1 << BATCH_SIZE_SIZE_LOG2) * core::mem::size_of::<u16>();
             generator.add::<_, { N * 4 }>(|buf| {
                 for (data, buf) in adc_samples
                     .iter()
                     .chain(dac_samples.iter())
                     .zip(buf.chunks_exact_mut(N))
                 {
-                    assert_eq!(core::mem::size_of_val(*data), N);
                     let data = unsafe {
                         core::slice::from_raw_parts(
                             data.as_ptr() as *const u8,

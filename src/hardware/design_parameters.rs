@@ -40,13 +40,7 @@ pub const DDS_SYSTEM_CLK: MegaHertz =
 #[allow(dead_code)]
 pub const DDS_SYNC_CLK_DIV: u8 = 4;
 
-// The number of ticks in the ADC sampling timer. The timer runs at 100MHz, so the step size is
-// equal to 10ns per tick.
-pub const ADC_SAMPLE_TICKS: u16 =
-    1 << crate::configuration::ADC_SAMPLE_TICKS_LOG2;
+/// The maximum ADC/DAC sample processing buffer size.
+pub const MAX_SAMPLE_BUFFER_SIZE: usize = 32;
 
-// The desired ADC sample processing buffer size.
-pub const SAMPLE_BUFFER_SIZE: usize =
-    1 << crate::configuration::SAMPLE_BUFFER_SIZE_LOG2;
-
-pub type SampleBuffer = [u16; SAMPLE_BUFFER_SIZE];
+pub type SampleBuffer = [u16; MAX_SAMPLE_BUFFER_SIZE];

@@ -16,8 +16,7 @@
 ///! capture is simultaneously triggered. That trigger is prescaled (its rate is divided) by the
 ///! batch size. This results in the input capture triggering identically to when the ADC samples
 ///! the last sample of the batch. That sample is then available for processing by the user.
-use crate::{configuration, hardware::timers};
-use core::convert::TryFrom;
+use crate::hardware::timers;
 use stm32h7xx_hal as hal;
 
 /// Software unit to timestamp stabilizer ADC samples using an external pounder reference clock.
@@ -34,6 +33,7 @@ impl Timestamper {
     /// * `capture_channel` - The input capture channel for collecting timestamps.
     /// * `sampling_timer` - The stabilizer ADC sampling timer.
     /// * `_clock_input` - The input pin for the external clock from Pounder.
+    /// * `batch_size` - The number of samples in each batch.
     ///
     /// # Returns
     /// The new pounder timestamper in an operational state.
@@ -44,6 +44,7 @@ impl Timestamper {
         _clock_input: hal::gpio::gpioa::PA0<
             hal::gpio::Alternate<hal::gpio::AF3>,
         >,
+        batch_size: usize,
     ) -> Self {
         // The sampling timer should generate a trigger output when CH1 comparison occurs.
         sampling_timer.generate_trigger(timers::TriggerGenerator::ComparePulse);
@@ -56,11 +57,16 @@ impl Timestamper {
         let mut input_capture = capture_channel
             .into_input_capture(timers::tim8::CaptureSource1::TRC);
 
+        let prescaler = match batch_size {
+            1 => timers::Prescaler::Div1,
+            2 => timers::Prescaler::Div2,
+            4 => timers::Prescaler::Div4,
+            8 => timers::Prescaler::Div8,
+            _ => panic!("Batch size does not support DDS timestamping"),
+        };
+
         // Capture at the batch period.
-        input_capture.configure_prescaler(
-            timers::Prescaler::try_from(configuration::SAMPLE_BUFFER_SIZE_LOG2)
-                .unwrap(),
-        );
+        input_capture.configure_prescaler(prescaler);
 
         Self {
             timer: timestamp_timer,
