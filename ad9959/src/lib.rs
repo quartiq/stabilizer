@@ -34,6 +34,7 @@ pub trait Interface {
 /// Indicates various communication modes of the DDS. The value of this enumeration is equivalent to
 /// the configuration bits of the DDS CSR register.
 #[derive(Copy, Clone, PartialEq)]
+#[repr(u8)]
 pub enum Mode {
     SingleBitTwoWire = 0b00,
     SingleBitThreeWire = 0b01,
@@ -601,18 +602,13 @@ impl ProfileSerializer {
     #[inline]
     fn pad(&mut self) {
         // Pad the buffer to 32-bit (4 byte) alignment by adding dummy writes to CSR and LSRR.
-        match self.index & 3 {
-            3 => {
-                // For a level of 3, we have to pad with 5 bytes to align things.
-                self.add_write(Register::CSR, &[(self.mode as u8) << 1]);
-                self.add_write(Register::LSRR, &[0, 0]);
-            }
-            2 => self.add_write(Register::CSR, &[(self.mode as u8) << 1]),
-            1 => self.add_write(Register::LSRR, &[0, 0]),
-            0 => {}
-
-            _ => unreachable!(),
+        if self.index & 1 != 0 {
+            self.add_write(Register::LSRR, &[0, 0]);
         }
+        if self.index & 2 != 0 {
+            self.add_write(Register::CSR, &[(self.mode as u8) << 1]);
+        }
+        debug_assert_eq!(self.index & 3, 0);
     }
 
     /// Get the serialized profile as a slice of 32-bit words.
