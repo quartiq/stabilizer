@@ -40,7 +40,6 @@ use stabilizer::{
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
-        design_parameters::DEFAULT_MQTT_BROKER,
         embedded_hal::digital::v2::InputPin,
         hal,
         signal_generator::{self, SignalGenerator},
@@ -48,6 +47,7 @@ use stabilizer::{
         DigitalInput0, DigitalInput1, AFE0, AFE1,
     },
     net::{
+        self,
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Miniconf,
         serde::Deserialize,
@@ -62,7 +62,7 @@ const SCALE: f32 = i16::MAX as _;
 const IIR_CASCADE_LENGTH: usize = 1;
 
 // The number of samples in each batch process
-const SAMPLE_BUFFER_SIZE: usize = 8;
+const BATCH_SIZE: usize = 8;
 
 // The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^7 =
 // 128, there is 1.28uS per sample, corresponding to a sampling frequency of 781.25 KHz.
@@ -190,7 +190,7 @@ const APP: () = {
         let (mut stabilizer, _pounder) = hardware::setup::setup(
             c.core,
             c.device,
-            SAMPLE_BUFFER_SIZE,
+            BATCH_SIZE,
             1 << SAMPLE_TICKS_LOG2,
         );
 
@@ -200,27 +200,11 @@ const APP: () = {
             stabilizer.cycle_counter,
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
-            option_env!("BROKER")
-                .and_then(|data| {
-                    data.parse::<minimq::embedded_nal::IpAddr>().map_or_else(
-                        |err| {
-                            log::error!(
-                                "{:?}: Failed to parse broker IP ({:?}) - Falling back to default",
-                                err,
-                                data
-                            );
-                            None
-                        },
-                        |ip| Some(ip),
-                    )
-                })
-                .unwrap_or(DEFAULT_MQTT_BROKER.into()),
+            net::parse_or_default_broker(option_env!("BROKER")),
         );
 
-        let generator = network.configure_streaming(
-            StreamFormat::AdcDacData,
-            SAMPLE_BUFFER_SIZE as u8,
-        );
+        let generator = network
+            .configure_streaming(StreamFormat::AdcDacData, BATCH_SIZE as u8);
 
         // Spawn a settings update for default settings.
         c.spawn.settings_update().unwrap();
@@ -338,7 +322,7 @@ const APP: () = {
             }
 
             // Stream the data.
-            const N: usize = SAMPLE_BUFFER_SIZE * core::mem::size_of::<u16>();
+            const N: usize = BATCH_SIZE * core::mem::size_of::<u16>();
             generator.add::<_, { N * 4 }>(|buf| {
                 for (data, buf) in adc_samples
                     .iter()

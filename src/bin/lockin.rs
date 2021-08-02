@@ -42,7 +42,6 @@ use stabilizer::{
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
-        design_parameters::DEFAULT_MQTT_BROKER,
         embedded_hal::digital::v2::InputPin,
         hal,
         input_stamper::InputStamper,
@@ -51,6 +50,7 @@ use stabilizer::{
         DigitalInput0, DigitalInput1, AFE0, AFE1,
     },
     net::{
+        self,
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Miniconf,
         serde::Deserialize,
@@ -61,7 +61,7 @@ use stabilizer::{
 
 // The logarithm of the number of samples in each batch process. This corresponds with 2^3 samples
 // per batch = 8 samples
-const SAMPLE_BUFFER_SIZE_LOG2: u8 = 3;
+const BATCH_SIZE_SIZE_LOG2: u8 = 3;
 
 // The logarithm of the number of 100MHz timer ticks between each sample. This corresponds with a
 // sampling period of 2^7 = 128 ticks. At 100MHz, 10ns per tick, this corresponds to a sampling
@@ -231,7 +231,7 @@ const APP: () = {
         let (mut stabilizer, _pounder) = hardware::setup::setup(
             c.core,
             c.device,
-            1 << SAMPLE_BUFFER_SIZE_LOG2,
+            1 << BATCH_SIZE_SIZE_LOG2,
             1 << ADC_SAMPLE_TICKS_LOG2,
         );
 
@@ -241,31 +241,17 @@ const APP: () = {
             stabilizer.cycle_counter,
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
-            option_env!("BROKER")
-                .and_then(|data| {
-                    data.parse::<minimq::embedded_nal::IpAddr>().map_or_else(
-                        |err| {
-                            log::error!(
-                                "{:?}: Failed to parse broker IP ({:?}) - Falling back to default",
-                                err,
-                                data
-                            );
-                            None
-                        },
-                        |ip| Some(ip),
-                    )
-                })
-                .unwrap_or(DEFAULT_MQTT_BROKER.into()),
+            net::parse_or_default_broker(option_env!("BROKER")),
         );
 
         let generator = network.configure_streaming(
             StreamFormat::AdcDacData,
-            1u8 << SAMPLE_BUFFER_SIZE_LOG2,
+            1u8 << BATCH_SIZE_SIZE_LOG2,
         );
 
         let settings = Settings::default();
 
-        let pll = RPLL::new(ADC_SAMPLE_TICKS_LOG2 + SAMPLE_BUFFER_SIZE_LOG2);
+        let pll = RPLL::new(ADC_SAMPLE_TICKS_LOG2 + BATCH_SIZE_SIZE_LOG2);
 
         // Spawn a settings and telemetry update for default settings.
         c.spawn.settings_update().unwrap();
@@ -291,7 +277,7 @@ const APP: () = {
 
         let signal_config = {
             let frequency_tuning_word =
-                (1u64 << (32 - SAMPLE_BUFFER_SIZE_LOG2)) as u32;
+                (1u64 << (32 - BATCH_SIZE_SIZE_LOG2)) as u32;
 
             signal_generator::Config {
                 // Same frequency as batch size.
@@ -358,11 +344,11 @@ const APP: () = {
                     settings.pll_tc[0],
                     settings.pll_tc[1],
                 );
-                (pll_phase, (pll_frequency >> SAMPLE_BUFFER_SIZE_LOG2) as i32)
+                (pll_phase, (pll_frequency >> BATCH_SIZE_SIZE_LOG2) as i32)
             }
             LockinMode::Internal => {
                 // Reference phase and frequency are known.
-                (1i32 << 30, 1i32 << (32 - SAMPLE_BUFFER_SIZE_LOG2))
+                (1i32 << 30, 1i32 << (32 - BATCH_SIZE_SIZE_LOG2))
             }
         };
 
@@ -417,7 +403,7 @@ const APP: () = {
 
             // Stream the data.
             const N: usize =
-                (1 << SAMPLE_BUFFER_SIZE_LOG2) * core::mem::size_of::<u16>();
+                (1 << BATCH_SIZE_SIZE_LOG2) * core::mem::size_of::<u16>();
             generator.add::<_, { N * 4 }>(|buf| {
                 for (data, buf) in adc_samples
                     .iter()
