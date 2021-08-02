@@ -20,6 +20,7 @@ use crate::hardware::{cycle_counter::CycleCounter, EthernetPhy, NetworkStack};
 use data_stream::{DataStream, FrameGenerator};
 use messages::{MqttMessage, SettingsResponse};
 use miniconf_client::MiniconfClient;
+use minimq::embedded_nal::IpAddr;
 use network_processor::NetworkProcessor;
 use shared::NetworkManager;
 use telemetry::TelemetryClient;
@@ -31,6 +32,9 @@ use serde::Serialize;
 use smoltcp_nal::embedded_nal::SocketAddr;
 
 pub type NetworkReference = shared::NetworkStackProxy<'static, NetworkStack>;
+
+/// The default MQTT broker IP address if unspecified.
+pub const DEFAULT_MQTT_BROKER: [u8; 4] = [10, 34, 16, 10];
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum UpdateState {
@@ -66,6 +70,7 @@ where
     /// * `cycle_counter` - The clock used for measuring time in the network.
     /// * `app` - The name of the application.
     /// * `mac` - The MAC address of the network.
+    /// * `broker` - The IP address of the MQTT broker to use.
     ///
     /// # Returns
     /// A new struct of network users.
@@ -75,6 +80,7 @@ where
         cycle_counter: CycleCounter,
         app: &str,
         mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
+        broker: IpAddr,
     ) -> Self {
         let stack_manager =
             cortex_m::singleton!(: NetworkManager = NetworkManager::new(stack))
@@ -92,12 +98,14 @@ where
             stack_manager.acquire_stack(),
             &get_client_id(app, "settings", mac),
             &prefix,
+            broker,
         );
 
         let telemetry = TelemetryClient::new(
             stack_manager.acquire_stack(),
             &get_client_id(app, "tlm", mac),
             &prefix,
+            broker,
         );
 
         let (generator, stream) =
@@ -199,4 +207,31 @@ pub fn get_device_prefix(
     write!(&mut prefix, "dt/sinara/{}/{}", app, mac).unwrap();
 
     prefix
+}
+
+/// Determine the broker IP address
+///
+/// # Note
+/// If the broker IP is unspecified or unparseable, the default IP is returned.
+///
+/// # Args
+/// * `input` - The optionally-specified command-line broker IP address as a string.
+///
+/// # Returns
+/// The broker IP address.
+pub fn parse_or_default_broker(input: Option<&str>) -> IpAddr {
+    input.and_then(|data| {
+             data.parse::<minimq::embedded_nal::IpAddr>().map_or_else(
+                 |err| {
+                     log::error!(
+                         "{:?}: Failed to parse broker IP ({:?}) - Falling back to default",
+                         err,
+                         data
+                     );
+                     None
+                 },
+                 Some,
+             )
+         })
+         .unwrap_or_else(|| DEFAULT_MQTT_BROKER.into())
 }
