@@ -178,7 +178,7 @@ fn load_itcm() {
 /// # Args
 /// * `core` - The RTIC core for configuring the cortex-M core of the device.
 /// * `device` - The microcontroller peripherals to be configured.
-/// * `sample_buffer_size` - The size of the ADC/DAC sample buffer.
+/// * `batch_size` - The size of each ADC/DAC batch.
 /// * `sample_ticks` - The number of timer ticks between each sample.
 ///
 /// # Returns
@@ -189,7 +189,7 @@ fn load_itcm() {
 pub fn setup(
     mut core: rtic::Peripherals,
     device: stm32h7xx_hal::stm32::Peripherals,
-    sample_buffer_size: usize,
+    batch_size: usize,
     sample_ticks: u32,
 ) -> (StabilizerDevices, Option<PounderDevices>) {
     let pwr = device.PWR.constrain();
@@ -414,7 +414,7 @@ pub fn setup(
                 dma_streams.2,
                 sampling_timer_channels.ch1,
                 shadow_sampling_timer_channels.ch1,
-                sample_buffer_size,
+                batch_size,
             )
         };
 
@@ -458,7 +458,7 @@ pub fn setup(
                 dma_streams.5,
                 sampling_timer_channels.ch2,
                 shadow_sampling_timer_channels.ch2,
-                sample_buffer_size,
+                batch_size,
             )
         };
 
@@ -546,13 +546,13 @@ pub fn setup(
             dac0_spi,
             dma_streams.6,
             sampling_timer_channels.ch3,
-            sample_buffer_size,
+            batch_size,
         );
         let dac1 = dac::Dac1Output::new(
             dac1_spi,
             dma_streams.7,
             sampling_timer_channels.ch4,
-            sample_buffer_size,
+            batch_size,
         );
         (dac0, dac1)
     };
@@ -994,6 +994,7 @@ pub fn setup(
                 tim8_channels.ch1,
                 &mut sampling_timer,
                 etr_pin,
+                batch_size,
             )
         };
 

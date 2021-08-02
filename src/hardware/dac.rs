@@ -193,7 +193,7 @@ macro_rules! dac_output {
                 spi: hal::spi::Spi<hal::stm32::$spi, hal::spi::Enabled, u16>,
                 stream: hal::dma::dma::$data_stream<hal::stm32::DMA1>,
                 trigger_channel: timers::tim2::$trigger_channel,
-                sample_buffer_size: usize,
+                batch_size: usize,
             ) -> Self {
                 // Generate DMA events when an output compare of the timer hitting zero (timer roll over)
                 // occurs.
@@ -227,13 +227,9 @@ macro_rules! dac_output {
                         stream,
                         $spi::new(trigger_channel, spi),
                         // Note(unsafe): This buffer is only used once and provided for the DMA transfer.
-                        unsafe {
-                            &mut DAC_BUF[$index][0][..sample_buffer_size]
-                        },
+                        unsafe { &mut DAC_BUF[$index][0][..batch_size] },
                         // Note(unsafe): This buffer is only used once and provided for the DMA transfer.
-                        unsafe {
-                            Some(&mut DAC_BUF[$index][1][..sample_buffer_size])
-                        },
+                        unsafe { Some(&mut DAC_BUF[$index][1][..batch_size]) },
                         trigger_config,
                     );
 

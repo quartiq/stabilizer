@@ -259,7 +259,7 @@ macro_rules! adc_input {
                     clear_stream: hal::dma::dma::$clear_stream<hal::stm32::DMA1>,
                     trigger_channel: timers::tim2::$trigger_channel,
                     clear_channel: timers::tim3::$clear_channel,
-                    sample_buffer_size: usize,
+                    batch_size: usize,
                 ) -> Self {
                     // The flag clear DMA transfer always clears the EOT flag in the SPI
                     // peripheral. It has the highest priority to ensure it is completed before the
@@ -359,8 +359,8 @@ macro_rules! adc_input {
                             spi,
                             // Note(unsafe): The ADC_BUF[$index] is "owned" by this peripheral.
                             // It shall not be used anywhere else in the module.
-                            unsafe { &mut ADC_BUF[$index][0][..sample_buffer_size] },
-                            unsafe { Some(&mut ADC_BUF[$index][1][..sample_buffer_size]) },
+                            unsafe { &mut ADC_BUF[$index][0][..batch_size] },
+                            unsafe { Some(&mut ADC_BUF[$index][1][..batch_size]) },
                             data_config,
                         );
 
