@@ -115,7 +115,7 @@ been used during development, but any MQTTv5 broker is supported.
 > later is used.
 
 Stabilizer utilizes a static IP address for broker configuration. Ensure the IP address was
-[configured](#configuring-firmware) properly to point to your broker before continuing.
+[configured](#building-firmware) properly to point to your broker before continuing.
 
 ## Test the Connection
 Once your broker is running, test that Stabilizer is properly connected to it.
