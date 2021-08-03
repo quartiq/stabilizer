@@ -200,7 +200,7 @@ const APP: () = {
             stabilizer.cycle_counter,
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
-            net::parse_or_default_broker(option_env!("BROKER")),
+            net::parse_ipv4(option_env!("BROKER").unwrap_or("10.34.16.10")),
         );
 
         let generator = network
