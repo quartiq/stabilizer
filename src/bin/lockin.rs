@@ -240,7 +240,10 @@ const APP: () = {
             stabilizer.cycle_counter,
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
-            option_env!("BROKER").unwrap_or("10.34.16.10").parse().unwrap(),
+            option_env!("BROKER")
+                .unwrap_or("10.34.16.10")
+                .parse()
+                .unwrap(),
         );
 
         let generator = network.configure_streaming(
