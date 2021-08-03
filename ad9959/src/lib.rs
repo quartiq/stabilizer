@@ -536,7 +536,7 @@ impl DdsConfig {
 
 /// Represents a means of serializing a DDS profile for writing to a stream.
 pub struct ProfileSerializer {
-    data: [u8; 32],
+    data: [u8; 16],
     index: usize,
     mode: Mode,
 }
@@ -549,7 +549,7 @@ impl ProfileSerializer {
     fn new(mode: Mode) -> Self {
         Self {
             mode,
-            data: [0; 32],
+            data: [0; 16],
             index: 0,
         }
     }
