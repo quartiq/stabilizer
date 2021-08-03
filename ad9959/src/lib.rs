@@ -321,7 +321,7 @@ impl<I: Interface> Ad9959<I> {
             .write(Register::CSR as u8, &[csr])
             .map_err(|_| Error::Interface)?;
 
-        self.write(register, &data)?;
+        self.write(register, data)?;
 
         Ok(())
     }
