@@ -208,18 +208,3 @@ pub fn get_device_prefix(
 
     prefix
 }
-
-/// Parse a string containing an IPv4 address.
-/// This is a convenience wrapper around the `no_std_net` parser.
-///
-/// # Args
-/// * `input` - The IP address as a string.
-///
-/// # Returns
-/// The IP address.
-///
-/// # Panic
-/// This panics if parsing fails.
-pub fn parse_ipv4(input: &str) -> IpAddr {
-    input.parse::<minimq::embedded_nal::IpAddr>().unwrap()
-}
