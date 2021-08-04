@@ -208,30 +208,3 @@ pub fn get_device_prefix(
 
     prefix
 }
-
-/// Determine the broker IP address
-///
-/// # Note
-/// If the broker IP is unspecified or unparseable, the default IP is returned.
-///
-/// # Args
-/// * `input` - The optionally-specified command-line broker IP address as a string.
-///
-/// # Returns
-/// The broker IP address.
-pub fn parse_or_default_broker(input: Option<&str>) -> IpAddr {
-    input.and_then(|data| {
-             data.parse::<minimq::embedded_nal::IpAddr>().map_or_else(
-                 |err| {
-                     log::error!(
-                         "{:?}: Failed to parse broker IP ({:?}) - Falling back to default",
-                         err,
-                         data
-                     );
-                     None
-                 },
-                 Some,
-             )
-         })
-         .unwrap_or_else(|| DEFAULT_MQTT_BROKER.into())
-}

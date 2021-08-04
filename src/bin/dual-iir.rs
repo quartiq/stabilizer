@@ -47,7 +47,6 @@ use stabilizer::{
         DigitalInput0, DigitalInput1, AFE0, AFE1,
     },
     net::{
-        self,
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Miniconf,
         serde::Deserialize,
@@ -200,7 +199,10 @@ const APP: () = {
             stabilizer.cycle_counter,
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
-            net::parse_or_default_broker(option_env!("BROKER")),
+            option_env!("BROKER")
+                .unwrap_or("10.34.16.10")
+                .parse()
+                .unwrap(),
         );
 
         let generator = network

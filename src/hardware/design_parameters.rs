@@ -11,13 +11,13 @@ pub const ADC_DAC_SCK_MAX: MegaHertz = MegaHertz(50);
 pub const TIMER_FREQUENCY: MegaHertz = MegaHertz(100);
 
 /// The QSPI frequency for communicating with the pounder DDS.
-pub const POUNDER_QSPI_FREQUENCY: MegaHertz = MegaHertz(40);
+pub const POUNDER_QSPI_FREQUENCY: MegaHertz = MegaHertz(100);
 
 /// The delay after initiating a QSPI transfer before asserting the IO_Update for the pounder DDS.
-// Pounder Profile writes are always 16 bytes, with 2 cycles required per byte, coming out to a
-// total of 32 QSPI clock cycles. The QSPI is configured for 40MHz, so this comes out to an offset
-// of 800nS. We use 900ns to be safe.
-pub const POUNDER_IO_UPDATE_DELAY: f32 = 900e-9;
+// Pounder Profile writes are up to 16 bytes, with 2 cycles required per byte, coming out to a
+// total of 32 QSPI clock cycles. The QSPI is configured for 100MHz, so this comes out to an offset
+// of 320 ns. We use 400 ns to be safe.
+pub const POUNDER_IO_UPDATE_DELAY: f32 = 400e-9;
 
 /// The duration to assert IO_Update for the pounder DDS.
 // IO_Update should be latched for 4 SYNC_CLK cycles after the QSPI profile write. With pounder

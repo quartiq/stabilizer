@@ -297,21 +297,23 @@ macro_rules! timer_channels {
                     // Only atomic operations on completed on the timer registers.
                     let regs = unsafe { &*<$TY>::ptr() };
 
-                    let result = if regs.sr.read().[< cc $index if >]().bit_is_set() {
+                    if regs.sr.read().[< cc $index if >]().bit_is_set() {
                         // Read the capture value. Reading the captured value clears the flag in the
                         // status register automatically.
-                        Some(regs.[< ccr $index >].read().ccr().bits())
-                    } else {
-                        None
-                    };
+                        let result = regs.[< ccr $index >].read().ccr().bits();
 
-                    // Read SR again to check for a potential over-capture. If there is an
-                    // overcapture, return an error.
-                    if regs.sr.read().[< cc $index of >]().bit_is_set() {
-                        regs.sr.modify(|_, w| w.[< cc $index of >]().clear_bit());
-                        Err(result)
+                        // Read SR again to check for a potential over-capture. Return an error in
+                        // that case.
+                        let sr = regs.sr.read();
+                        if sr.[< cc $index of >]().bit_is_set() {
+                            // NOTE(unsafe) write-back is safe
+                            regs.sr.write(|w| unsafe { w.bits(sr.bits()) }.[< cc $index of >]().clear_bit());
+                            Err(Some(result))
+                        } else {
+                            Ok(Some(result))
+                        }
                     } else {
-                        Ok(result)
+                        Ok(None)
                     }
                 }
 

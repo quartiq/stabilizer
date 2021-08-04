@@ -76,15 +76,15 @@ impl DdsOutput {
     /// # Args
     /// * `qspi` - The QSPI interface to the run the stream on.
     /// * `io_update_trigger` - The HighResTimerE used to generate IO_Update pulses.
-    /// * `dds_config` - The frozen DDS configuration.
+    /// * `config` - The frozen DDS configuration.
     pub fn new(
         mut qspi: QspiInterface,
         io_update_trigger: HighResTimerE,
-        dds_config: DdsConfig,
+        config: DdsConfig,
     ) -> Self {
         qspi.start_stream().unwrap();
         Self {
-            config: dds_config,
+            config,
             _qspi: qspi,
             io_update_trigger,
         }
@@ -93,10 +93,10 @@ impl DdsOutput {
     /// Get a builder for serializing a Pounder DDS profile.
     #[allow(dead_code)]
     pub fn builder(&mut self) -> ProfileBuilder {
-        let builder = self.config.builder();
+        let serializer = self.config.serializer();
         ProfileBuilder {
-            dds_stream: self,
-            serializer: builder,
+            dds_output: self,
+            serializer,
         }
     }
 
@@ -135,7 +135,7 @@ impl DdsOutput {
 
 /// A temporary builder for serializing and writing profiles.
 pub struct ProfileBuilder<'a> {
-    dds_stream: &'a mut DdsOutput,
+    dds_output: &'a mut DdsOutput,
     serializer: ProfileSerializer,
 }
 
@@ -162,8 +162,9 @@ impl<'a> ProfileBuilder<'a> {
 
     /// Write the profile to the DDS asynchronously.
     #[allow(dead_code)]
+    #[inline]
     pub fn write_profile(mut self) {
         let profile = self.serializer.finalize();
-        self.dds_stream.write_profile(profile);
+        self.dds_output.write_profile(profile);
     }
 }

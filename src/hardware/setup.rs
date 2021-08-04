@@ -207,6 +207,8 @@ pub fn setup(
         .d2ccip1r
         .modify(|_, w| w.spi123sel().pll2_p().spi45sel().pll2_q());
 
+    device.RCC.d1ccipr.modify(|_, w| w.qspisel().rcc_hclk3());
+
     let rcc = device.RCC.constrain();
     let ccdr = rcc
         .use_hse(8.mhz())

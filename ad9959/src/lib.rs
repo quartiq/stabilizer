@@ -34,6 +34,7 @@ pub trait Interface {
 /// Indicates various communication modes of the DDS. The value of this enumeration is equivalent to
 /// the configuration bits of the DDS CSR register.
 #[derive(Copy, Clone, PartialEq)]
+#[repr(u8)]
 pub enum Mode {
     SingleBitTwoWire = 0b00,
     SingleBitThreeWire = 0b01,
@@ -320,7 +321,7 @@ impl<I: Interface> Ad9959<I> {
             .write(Register::CSR as u8, &[csr])
             .map_err(|_| Error::Interface)?;
 
-        self.write(register, &data)?;
+        self.write(register, data)?;
 
         Ok(())
     }
@@ -528,7 +529,7 @@ pub struct DdsConfig {
 impl DdsConfig {
     /// Create a serializer that can be used for generating a serialized DDS profile for writing to
     /// a QSPI stream.
-    pub fn builder(&self) -> ProfileSerializer {
+    pub fn serializer(&self) -> ProfileSerializer {
         ProfileSerializer::new(self.mode)
     }
 }
@@ -562,6 +563,7 @@ impl ProfileSerializer {
     /// * `acr` - If provided, indicates the amplitude control register for the channels. The ACR
     ///   should be stored in the 3 LSB of the word. Note that if amplitude scaling is to be used,
     ///   the "Amplitude multiplier enable" bit must be set.
+    #[inline]
     pub fn update_channels(
         &mut self,
         channels: &[Channel],
@@ -585,7 +587,7 @@ impl ProfileSerializer {
         }
 
         if let Some(acr) = acr {
-            self.add_write(Register::ACR, &acr.to_be_bytes()[1..=3]);
+            self.add_write(Register::ACR, &acr.to_be_bytes()[1..]);
         }
     }
 
@@ -597,20 +599,20 @@ impl ProfileSerializer {
         self.index += value.len() + 1;
     }
 
+    #[inline]
     fn pad(&mut self) {
         // Pad the buffer to 32-bit (4 byte) alignment by adding dummy writes to CSR and LSRR.
-        match self.index & 3 {
-            3 => {
-                // For a level of 3, we have to pad with 5 bytes to align things.
-                self.add_write(Register::CSR, &[(self.mode as u8) << 1]);
-                self.add_write(Register::LSRR, &[0, 0]);
-            }
-            2 => self.add_write(Register::CSR, &[(self.mode as u8) << 1]),
-            1 => self.add_write(Register::LSRR, &[0, 0]),
-            0 => {}
-
-            _ => unreachable!(),
+        // In the case of 1 byte padding, this instead pads with 5 bytes as there is no
+        // valid single-byte write that could be used.
+        if self.index & 1 != 0 {
+            // Pad with 3 bytes
+            self.add_write(Register::LSRR, &[0, 0]);
         }
+        if self.index & 2 != 0 {
+            // Pad with 2 bytes
+            self.add_write(Register::CSR, &[(self.mode as u8) << 1]);
+        }
+        debug_assert_eq!(self.index & 3, 0);
     }
 
     /// Get the serialized profile as a slice of 32-bit words.
@@ -621,6 +623,7 @@ impl ProfileSerializer {
     ///
     /// # Returns
     /// A slice of `u32` words representing the serialized profile.
+    #[inline]
     pub fn finalize<'a>(&'a mut self) -> &'a [u32] {
         self.pad();
         unsafe {

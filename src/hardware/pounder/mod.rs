@@ -233,7 +233,7 @@ impl ad9959::Interface for QspiInterface {
                 };
 
                 self.qspi
-                    .write(encoded_address.into(), &encoded_payload)
+                    .write(encoded_address.into(), encoded_payload)
                     .map_err(|_| Error::Qspi)
             }
             ad9959::Mode::FourBitSerial => {
