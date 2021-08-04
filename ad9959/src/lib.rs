@@ -602,10 +602,14 @@ impl ProfileSerializer {
     #[inline]
     fn pad(&mut self) {
         // Pad the buffer to 32-bit (4 byte) alignment by adding dummy writes to CSR and LSRR.
+        // In the case of 1 byte padding, this instead pads with 5 bytes as there is no
+        // valid single-byte write that could be used.
         if self.index & 1 != 0 {
+            // Pad with 3 bytes
             self.add_write(Register::LSRR, &[0, 0]);
         }
         if self.index & 2 != 0 {
+            // Pad with 2 bytes
             self.add_write(Register::CSR, &[(self.mode as u8) << 1]);
         }
         debug_assert_eq!(self.index & 3, 0);
