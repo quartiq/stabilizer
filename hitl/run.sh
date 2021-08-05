@@ -13,7 +13,7 @@ set -eux
 # Set up python for testing
 python3 -m venv --system-site-packages py
 . py/bin/activate
-python3 -m pip install -r requirements.txt
+python3 -m pip install miniconf-py/
 
 cargo flash --chip STM32H743ZITx --elf target/thumbv7em-none-eabihf/release/dual-iir
 
