@@ -1,8 +1,0 @@
-setup.py
-miniconf/__init__.py
-miniconf/miniconf.py
-miniconf.egg-info/PKG-INFO
-miniconf.egg-info/SOURCES.txt
-miniconf.egg-info/dependency_links.txt
-miniconf.egg-info/requires.txt
-miniconf.egg-info/top_level.txt
