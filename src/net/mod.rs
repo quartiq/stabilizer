@@ -95,7 +95,8 @@ where
             &get_client_id(app, "settings", mac),
             &prefix,
             broker,
-        ).unwrap();
+        )
+        .unwrap();
 
         let telemetry = TelemetryClient::new(
             stack_manager.acquire_stack(),
