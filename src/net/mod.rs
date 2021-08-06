@@ -10,16 +10,12 @@ pub use miniconf;
 pub use serde;
 
 pub mod data_stream;
-pub mod messages;
-pub mod miniconf_client;
 pub mod network_processor;
 pub mod shared;
 pub mod telemetry;
 
 use crate::hardware::{cycle_counter::CycleCounter, EthernetPhy, NetworkStack};
 use data_stream::{DataStream, FrameGenerator};
-use messages::{MqttMessage, SettingsResponse};
-use miniconf_client::MiniconfClient;
 use minimq::embedded_nal::IpAddr;
 use network_processor::NetworkProcessor;
 use shared::NetworkManager;
@@ -27,7 +23,7 @@ use telemetry::TelemetryClient;
 
 use core::fmt::Write;
 use heapless::String;
-use miniconf::Miniconf;
+use miniconf::{Miniconf, MiniconfClient};
 use serde::Serialize;
 use smoltcp_nal::embedded_nal::SocketAddr;
 
@@ -49,8 +45,8 @@ pub enum NetworkState {
     NoChange,
 }
 /// A structure of Stabilizer's default network users.
-pub struct NetworkUsers<S: Default + Clone + Miniconf, T: Serialize> {
-    pub miniconf: MiniconfClient<S>,
+pub struct NetworkUsers<S: Default + Miniconf, T: Serialize> {
+    pub miniconf: MiniconfClient<S, NetworkReference>,
     pub processor: NetworkProcessor,
     stream: DataStream,
     generator: Option<FrameGenerator>,
@@ -59,7 +55,7 @@ pub struct NetworkUsers<S: Default + Clone + Miniconf, T: Serialize> {
 
 impl<S, T> NetworkUsers<S, T>
 where
-    S: Default + Clone + Miniconf,
+    S: Default + Miniconf,
     T: Serialize,
 {
     /// Construct Stabilizer's default network users.
@@ -99,7 +95,7 @@ where
             &get_client_id(app, "settings", mac),
             &prefix,
             broker,
-        );
+        ).unwrap();
 
         let telemetry = TelemetryClient::new(
             stack_manager.acquire_stack(),
@@ -164,8 +160,8 @@ where
         };
 
         match self.miniconf.update() {
-            UpdateState::Updated => NetworkState::SettingsChanged,
-            UpdateState::NoChange => poll_result,
+            Ok(true) => NetworkState::SettingsChanged,
+            _ => poll_result,
         }
     }
 }
