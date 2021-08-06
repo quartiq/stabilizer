@@ -95,12 +95,12 @@ async def test_loopback(miniconf, telemetry, set_point):
     print(f'Testing loopback for Vout = {set_point:.2f}')
     print('---------------------------------')
     # Configure the IIRs to output at the set point
-    assert (await miniconf.command('iir_ch/0/0', static_iir_output(set_point)))['code'] == 0
-    assert (await miniconf.command('iir_ch/1/0', static_iir_output(set_point)))['code'] == 0
-    assert (await miniconf.command('telemetry_period', 1))['code'] == 0
+    await miniconf.command('iir_ch/0/0', static_iir_output(set_point), retain=False)
+    await miniconf.command('iir_ch/1/0', static_iir_output(set_point), retain=False)
+    await miniconf.command('telemetry_period', 1, retain=False)
 
     # Wait for telemetry values to update.
-    await asyncio.sleep(2.0)
+    await asyncio.sleep(5.0)
 
     # Verify the ADCs are receiving the setpoint voltage.
     tolerance = max(0.05 * set_point, MINIMUM_VOLTAGE_ERROR)
@@ -133,8 +133,8 @@ def main():
 
         # Repeat test with AFE = 2x
         print('Configuring AFEs to 2x input')
-        assert (await interface.command('afe/0', "G2"))['code'] == 0
-        assert (await interface.command('afe/1', "G2"))['code'] == 0
+        await interface.command('afe/0', "G2", retain=False)
+        await interface.command('afe/1', "G2", retain=False)
         await test_loopback(interface, telemetry, 1.0)
 
         # Test with 0V output

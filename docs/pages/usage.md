@@ -25,15 +25,22 @@ to another. Disambiguation of devices is done by using Stabilizer's MAC address.
 Settings are specific to an application. If two identical settings exist for two different
 applications, each application maintains its own independent value.
 
-### Setup
+### Installation
+Install the Miniconf configuration utilities:
+```
+python -m pip install git+https://github.com/quartiq/miniconf#subdirectory=miniconf-py
+```
 
-In order to use `miniconf.py`, run the following command:
+To use `miniconf`, execute it as follows:
 ```
-python -m pip install gmqtt
+python -m miniconf --help
 ```
+
+Miniconf also exposes a programmatic Python API, so it's possible to write automation scripting of
+Stabilizer as well.
 
 ### Usage
-The `miniconf.py` script utilizes a unique "device prefix". The device prefix is always of the
+The Miniconf Python utility utilizes a unique "device prefix". The device prefix is always of the
 form `dt/sinara/<app>/<mac-address>`, where `<app>` is the name of the application and
 `<mac-address>` is the MAC address of the device, formatted with delimiting dashes.
 
@@ -46,7 +53,7 @@ used:
 * `value` = `{"ip": [192, 168, 0, 1], "port": 4000}`
 
 ```
-python miniconf.py --broker 10.34.16.10 dt/sinara/dual-iir/00-11-22-33-44-55 stream_target='{"ip": [10, 34, 16, 123], "port": 4000}'
+python -m miniconf --broker 10.34.16.10 dt/sinara/dual-iir/00-11-22-33-44-55 stream_target='{"ip": [10, 34, 16, 123], "port": 4000}'
 
 Where `10.34.16.10` is the MQTT broker address that matches the one configured in the source code and `10.34.16.123` and `4000` are the desire stream target IP and port.
 ```
@@ -61,7 +68,7 @@ The rules for constructing `path` values are documented in [`miniconf`'s
 documentation](https://github.com/quartiq/miniconf#settings-paths)
 
 Refer to the documentation for [Miniconf]({{site.baseurl}}/firmware/miniconf/enum.Error.html) for a
-description of the possible error codes that `miniconf.py` may return if the settings update was
+description of the possible error codes that Miniconf may return if the settings update was
 unsuccessful.
 
 ## Telemetry
