@@ -131,8 +131,7 @@ def main():
         # Configure the stream
         print(f'Configuring stream to target {".".join(map(str, local_ip))}:{args.port}')
         print('')
-        assert (await interface.command('stream_target',
-                                        {'ip': local_ip, 'port': args.port}))['code'] == 0
+        await interface.command('stream_target', {'ip': local_ip, 'port': args.port})
 
         # Verify frame reception
         print('Testing stream reception')
@@ -146,8 +145,7 @@ def main():
         # Disable the stream.
         print('Closing stream')
         print('')
-        assert (await interface.command('stream_target',
-                                        {'ip': [0, 0, 0, 0], 'port': 0}))['code'] == 0
+        await interface.command('stream_target', {'ip': [0, 0, 0, 0], 'port': 0})
         stream.clear()
 
         print('Verifying no further data is received')
