@@ -20,12 +20,28 @@ jobs:
           target: thumbv7em-none-eabihf
           override: true
 
+      - uses: Swatinem/rust-cache@v1
+
+      - name: Install Linkcheck
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: |
+            mdbook-linkcheck
+
+      - uses: peaceiris/actions-mdbook@v1
+        with:
+          mdbook-version: '0.4.12'
+
       - uses: actions-rs/cargo@v1
         with:
           command: doc
           args: --no-deps -p miniconf -p ad9959 -p stabilizer -p dsp
 
-      - run: mv target/thumbv7em-none-eabihf/doc docs/firmware
+      - run: |
+          working-directory: book
+          mv ../target/thumbv7em-none-eabihf/doc src/firmware
+          mdbook build
 
       - uses: peaceiris/actions-gh-pages@v3.8.0
         with:

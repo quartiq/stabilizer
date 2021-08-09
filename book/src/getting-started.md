@@ -1,17 +1,3 @@
----
-title: Getting Started
-layout: default
-permalink: /getting-started
-nav_order: 2
----
-
-## Table of Contents
-{: .no_toc .text-delta }
-
-1. TOC
-{:toc}
----
-
 # Getting Started
 {: .no_toc }
 
@@ -54,7 +40,7 @@ Firmware is loaded onto stabilizer utilizing an ST-Link (V2-1 or greater) JTAG p
 
 Ensure the ST-Link is connected to Stabilizer as shown below.
 
-![JTAG Connection]({{site.baseurl}}/assets/stabilizer-jtag.jpg)
+![JTAG Connection](assets/stabilizer-jtag.jpg)
 
 All of the instructions below assume you have properly [`built the firmware`](#building-firmware).
 
@@ -143,7 +129,7 @@ dt/sinara/dual-iir/00-11-22-33-44-55/telemetry
 Download [MQTT-Explorer](http://mqtt-explorer.com/) to observe which topics have been posted to the
 Broker.
 
-![MQTT Explorer Configuration]({{site.baseurl}}/assets/mqtt-explorer.png)
+![MQTT Explorer Configuration](assets/mqtt-explorer.png)
 
 > **Note**: Use the same broker address that you defined in the firmware for MQTT explorer.
 

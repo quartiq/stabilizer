@@ -1,17 +1,4 @@
----
-title: Usage
-layout: default
-nav_order: 4
-permalink: /usage
----
-
-## Table of Contents
-{: .no_toc .text-delta }
-
-1. TOC
-{:toc}
-
-## Miniconf Run-time Settings
+# Miniconf Run-time Settings
 Stabilizer supports run-time settings configuration using MQTT.
 
 Settings can be stored in the MQTT broker so that they are automatically applied whenever
@@ -25,7 +12,7 @@ to another. Disambiguation of devices is done by using Stabilizer's MAC address.
 Settings are specific to an application. If two identical settings exist for two different
 applications, each application maintains its own independent value.
 
-### Installation
+## Installation
 Install the Miniconf configuration utilities:
 ```
 python -m pip install git+https://github.com/quartiq/miniconf#subdirectory=miniconf-py
@@ -39,7 +26,7 @@ python -m miniconf --help
 Miniconf also exposes a programmatic Python API, so it's possible to write automation scripting of
 Stabilizer as well.
 
-### Usage
+## Usage
 The Miniconf Python utility utilizes a unique "device prefix". The device prefix is always of the
 form `dt/sinara/<app>/<mac-address>`, where `<app>` is the name of the application and
 `<mac-address>` is the MAC address of the device, formatted with delimiting dashes.
@@ -61,17 +48,17 @@ Where `10.34.16.10` is the MQTT broker address that matches the one configured i
 The prefix can be found for a specific device by looking at the topic on which telemetry that is
 being published.
 
-Refer to the [application documentation]({{site.baseurl}}/#applications) for the exact settings and values exposed
+Refer to the [application documentation](overview.md#applications) for the exact settings and values exposed
 for each application.
 
 The rules for constructing `path` values are documented in [`miniconf`'s
 documentation](https://github.com/quartiq/miniconf#settings-paths)
 
-Refer to the documentation for [Miniconf]({{site.baseurl}}/firmware/miniconf/enum.Error.html) for a
+Refer to the documentation for [Miniconf](firmware/miniconf/enum.Error.html) for a
 description of the possible error codes that Miniconf may return if the settings update was
 unsuccessful.
 
-## Telemetry
+# Telemetry
 
 Stabilizer applications publish telemetry utilizes MQTT for managing run-time settings configurations as well as live telemetry
 reporting.
@@ -90,9 +77,9 @@ buffering requirements.
 In its most basic form, telemetry publishes the latest ADC input voltages, DAC output voltages, and
 digital input states.
 
-Refer to the respective [application documentation]({{site.baseurl}}/#applications) for more information on telemetry.
+Refer to the respective [application documentation](overview.md#applications) for more information on telemetry.
 
-## Livestream
+# Livestream
 
 Stabilizer supports livestream capabilities for streaming real-time data over UDP. The livestream is
 intended to be a high-bandwidth mechanism to transfer large amounts of data from Stabilizer to a
@@ -101,4 +88,4 @@ host computer for further analysis.
 Livestreamed data is sent with "best effort" - it's possible that data may be lost either due to
 network congestion or by Stabilizer.
 
-Refer to the the respective [application documentation]({{site.baseurl}}/#applications) for more information.
+Refer to the the respective [application documentation](overview.md#applications) for more information.

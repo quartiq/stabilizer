@@ -1,0 +1,16 @@
+[book]
+authors = ["Ryan Summers"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Stabilizer"
+
+[build]
+create-missing = false
+build-dir = "stabilizer-manual"
+
+[output.html]
+site-url = "https://quartiq.de/stabilizer"
+git-repository-url = "https://github.com/quartiq/stabilizer"
+
+[output.linkcheck]
