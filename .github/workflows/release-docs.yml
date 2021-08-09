@@ -39,14 +39,14 @@ jobs:
 
       - name: Build Book
         working-directory: book
-        run:
+        run: |
           mv ../target/thumbv7em-none-eabihf/doc src/firmware
           mdbook build
 
       - uses: peaceiris/actions-gh-pages@v3.8.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs
+          publish_dir: book/stabilizer-manual/html
           enable_jekyll: true
           publish_branch: pages
           force_orphan: true
