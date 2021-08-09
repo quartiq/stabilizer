@@ -76,7 +76,7 @@ branch = "feature/assume-init"
 
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf.git"
-branch = "feature/client-integration"
+rev = "6c19ba2"
 
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"

@@ -23,7 +23,7 @@ use telemetry::TelemetryClient;
 
 use core::fmt::Write;
 use heapless::String;
-use miniconf::{Miniconf, MiniconfClient};
+use miniconf::Miniconf;
 use serde::Serialize;
 use smoltcp_nal::embedded_nal::SocketAddr;
 
@@ -46,7 +46,7 @@ pub enum NetworkState {
 }
 /// A structure of Stabilizer's default network users.
 pub struct NetworkUsers<S: Default + Miniconf, T: Serialize> {
-    pub miniconf: MiniconfClient<S, NetworkReference>,
+    pub miniconf: miniconf::MqttClient<S, NetworkReference>,
     pub processor: NetworkProcessor,
     stream: DataStream,
     generator: Option<FrameGenerator>,
@@ -90,7 +90,7 @@ where
 
         let prefix = get_device_prefix(app, mac);
 
-        let settings = MiniconfClient::new(
+        let settings = miniconf::MqttClient::new(
             stack_manager.acquire_stack(),
             &get_client_id(app, "settings", mac),
             &prefix,
