@@ -1,5 +1,4 @@
 # Getting Started
-{: .no_toc }
 
 There are a number of steps that must be completed when first getting started with Stabilizer.
 1. Update the Stabilizer Application
