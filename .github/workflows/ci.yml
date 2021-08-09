@@ -89,24 +89,17 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - uses: actions/setup-ruby@v1
-        with:
-          ruby-version: 2.7.x
-
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           target: thumbv7em-none-eabihf
           override: true
 
-      - uses: actions/cache@v2
-        with:
-          path: docs/vendor/bundle
-          key: ${{runner.os}}-gems-${{ hashFiles('**/Gemfile.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-gems-
-
       - uses: Swatinem/rust-cache@v1
+
+      - uses: peaceiris/actions-mdbook@v1
+        with:
+          mdbook-version: '0.4.12'
 
       - name: Install Deadlinks
         uses: actions-rs/cargo@v1
@@ -114,6 +107,12 @@ jobs:
           command: install
           args: |
             cargo-deadlinks
+
+      - name: Install Linkcheck
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: mdbook-linkcheck
 
       - name: cargo doc
         uses: actions-rs/cargo@v1
@@ -129,13 +128,9 @@ jobs:
           # auto-generated code.
           args: --dir target/thumbv7em-none-eabihf/doc --ignore-fragments --check-http --check-intra-doc-links
 
-      - name: Test Site
-        working-directory: docs
+      - name: Test Book
+        working-directory: book
         run: |
           # Install depedencies at our cache location
-          bundle config path vendor/bundle
-          bundle install
-
-          bundle exec rake build
-          mv ../target/thumbv7em-none-eabihf/doc _site/stabilizer/firmware
-          bundle exec rake test
+          mv ../target/thumbv7em-none-eabihf/doc src/firmware
+          mdbook build
