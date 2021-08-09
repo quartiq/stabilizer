@@ -11,10 +11,11 @@
 set -eux
 
 # Set up python for testing
-python3 -m venv --system-site-packages py
+python3 -m venv --system-site-packages py-venv
 . py/bin/activate
 
 # Install Miniconf utilities for configuring stabilizer.
+python3 -m pip install -e py/
 python3 -m pip install git+https://github.com/quartiq/miniconf#subdirectory=py/miniconf-mqtt
 python3 -m pip install gmqtt
 
