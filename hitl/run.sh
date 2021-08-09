@@ -15,7 +15,7 @@ python3 -m venv --system-site-packages py
 . py/bin/activate
 
 # Install Miniconf utilities for configuring stabilizer.
-python3 -m pip install git+https://github.com/quartiq/miniconf#subdirectory=miniconf-py
+python3 -m pip install git+https://github.com/quartiq/miniconf#subdirectory=py/miniconf-mqtt
 python3 -m pip install gmqtt
 
 cargo flash --chip STM32H743ZITx --elf target/thumbv7em-none-eabihf/release/dual-iir
