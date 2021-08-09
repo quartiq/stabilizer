@@ -39,7 +39,7 @@ jobs:
 
       - name: Build Book
         working-directory: book
-        run:
+        run: |
           mv ../target/thumbv7em-none-eabihf/doc src/firmware
           mdbook build
 
