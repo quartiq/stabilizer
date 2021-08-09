@@ -108,6 +108,12 @@ jobs:
           args: |
             cargo-deadlinks
 
+      - name: Install Linkcheck
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: mdbook-linkcheck
+
       - name: cargo doc
         uses: actions-rs/cargo@v1
         with:
