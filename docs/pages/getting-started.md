@@ -117,14 +117,18 @@ been used during development, but any MQTTv5 broker is supported.
 Stabilizer utilizes a static IP address for broker configuration. Ensure the IP address was
 [configured](#building-firmware) properly to point to your broker before continuing.
 
-We recommend running Mosquitto through [Docker](https://docker.com). After docker has been
-installed, run the following command from the `stabilizer` repository:
+We recommend running Mosquitto through [Docker](https://docker.com) to easily run Mosquitto on
+Windows, Linux, and OSX. After docker has been installed, run the following command from
+the `stabilizer` repository:
 ```
 docker run -p 1883:1883 --name mosquitto -v `pwd`/mosquitto.conf:/mosquitto/config/mosquitto.conf -v /mosquitto/data -v /mosquitto/log eclipse-mosquitto:2
 ```
 
 > _Note_: The above command assumes a bash shell. If using powershell, replace `` `pwd` `` with
 > `${pwd}`
+
+This command will create a container named `mosquitto` that can be stopped and started easily via
+docker.
 
 ## Test the Connection
 Once your broker is running, test that Stabilizer is properly connected to it.
