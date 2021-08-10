@@ -7,10 +7,19 @@ Description: Implements HITL testing of Stabilizer data livestream capabilities.
 import asyncio
 import sys
 import argparse
+import logging
 import socket
+import time
 
 from miniconf import Miniconf
 from stabilizer.stream import StabilizerStream
+
+# The duration to receive frames for.
+STREAM_TEST_DURATION_SECS = 5.0
+
+# The minimum efficiency of the stream in frame transfer to pass testing. Represented as
+# (received_frames / transmitted_frames).
+MIN_STREAM_EFFICIENCY = 0.95
 
 def _get_ip(broker):
     """ Get the IP of the local device.
@@ -68,11 +77,33 @@ def main():
         print('Testing stream reception')
         print('')
         last_sequence = None
-        for _ in range(5000):
+
+        # Sample frames over a set time period and verify that no drops are encountered.
+        stop = time.time() + STREAM_TEST_DURATION_SECS
+        dropped_frames = 0
+        total_frames = 0
+
+        while time.time() < stop:
             for (seqnum, _data) in stream.read_frame():
-                assert sequence_delta(last_sequence, seqnum) == 0, \
-                        f'Frame drop detected: 0x{last_sequence:08X} -> 0x{seqnum:08X}'
+                num_dropped = sequence_delta(last_sequence, seqnum)
+                total_frames += 1 + num_dropped
+
+                if num_dropped:
+                    dropped_frames += num_dropped
+                    logging.warning('Frame drop detected: 0x%08X -> 0x%08X (%d frames)',
+                                    last_sequence, seqnum, num_dropped)
+
                 last_sequence = seqnum
+
+        assert total_frames, 'Stream did not receive any frames'
+        stream_efficiency = 1.0 - (dropped_frames / total_frames)
+
+        print(f'Stream Reception Rate: {stream_efficiency * 100:.2f} %')
+        print(f'Received {total_frames} frames')
+        print(f'Lost {dropped_frames} frames')
+
+        assert stream_efficiency > MIN_STREAM_EFFICIENCY, \
+            f'Stream dropped too many packets.  Reception rate: {stream_efficiency * 100:.2f} %'
 
         # Disable the stream.
         print('Closing stream')
