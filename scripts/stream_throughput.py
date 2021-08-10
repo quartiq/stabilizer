@@ -5,53 +5,11 @@ Author: Ryan Summers
 Description: Provides a mechanism for measuring Stabilizer stream data throughput.
 """
 import argparse
-import socket
-import collections
-import struct
-import time
 import logging
+import sys
+import time
 
-# Representation of a single data batch transmitted by Stabilizer.
-Packet = collections.namedtuple('Packet', ['index', 'data'])
-
-# The magic header half-word at the start of each packet.
-MAGIC_HEADER = 0x057B
-
-# The struct format of the header.
-HEADER_FORMAT = '<HBBI'
-
-# All supported formats by this reception script.
-#
-# The items in this dict are functions that will be provided the sample batch size and will return
-# the struct deserialization code to unpack a single batch.
-FORMAT = {
-    1: lambda batch_size: f'<{batch_size}H{batch_size}H{batch_size}H{batch_size}H'
-}
-
-def parse_packet(buf):
-    """ Attempt to parse packets from the received buffer. """
-    # Attempt to parse a block from the buffer.
-    if len(buf) < struct.calcsize(HEADER_FORMAT):
-        return
-
-    # Parse out the packet header
-    magic, format_id, batch_size, sequence_number = struct.unpack_from(HEADER_FORMAT, buf)
-    buf = buf[struct.calcsize(HEADER_FORMAT):]
-
-    if magic != MAGIC_HEADER:
-        logging.warning('Encountered bad magic header: %s', hex(magic))
-        return
-
-    frame_format = FORMAT[format_id](batch_size)
-
-    batch_count = int(len(buf) / struct.calcsize(frame_format))
-
-    for offset in range(batch_count):
-        data = struct.unpack_from(frame_format, buf)
-        buf = buf[struct.calcsize(frame_format):]
-        yield Packet(sequence_number + offset, data)
-
-
+from stabilizer.stream import StabilizerStream
 
 class Timer:
     """ A basic timer for measuring elapsed time periods. """
@@ -104,12 +62,10 @@ def sequence_delta(previous_sequence, next_sequence):
 def main():
     """ Main program. """
     parser = argparse.ArgumentParser(description='Measure Stabilizer livestream quality')
-    parser.add_argument('--port', type=int, default=1111, help='The port that stabilizer is streaming to')
+    parser.add_argument('--port', type=int, default=2000,
+                        help='The port that stabilizer is streaming to')
 
     args = parser.parse_args()
-
-    connection = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    connection.bind(("", args.port))
 
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s')
@@ -122,23 +78,22 @@ def main():
 
     timer = Timer()
 
+    stream = StabilizerStream(args.port)
+
     while True:
         # Receive any data over UDP and parse it.
-        data = connection.recv(4096)
-        if data and not timer.is_started():
-            timer.start()
+        for (seqnum, _) in stream.read_frame():
+            if not timer.is_started():
+                timer.start()
 
-        # Handle any received packets.
-        total_bytes += len(data)
-        for packet in parse_packet(data):
             # Handle any dropped packets.
-            drop_count += sequence_delta(last_index, packet.index)
-            last_index = packet.index
+            drop_count += sequence_delta(last_index, seqnum)
+            last_index = seqnum
             good_blocks += 1
 
         # Report the throughput periodically.
         if timer.is_triggered():
-            drate = total_bytes * 8 / 1e6 / timer.elapsed()
+            drate = stream.get_rx_bytes() * 8 / 1e6 / timer.elapsed()
 
             print(f'''
 Data Rate:       {drate:.3f} Mbps
@@ -148,6 +103,7 @@ Dropped blocks:  {drop_count}
 Metadata: {total_bytes / 1e6:.3f} MB in {timer.elapsed():.2f} s
 ----
 ''')
+            sys.stdout.flush()
             timer.arm()
 
 

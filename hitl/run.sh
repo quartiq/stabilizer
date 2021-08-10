@@ -11,10 +11,11 @@
 set -eux
 
 # Set up python for testing
-python3 -m venv --system-site-packages py
-. py/bin/activate
+python3 -m venv --system-site-packages py-venv
+. py-venv/bin/activate
 
 # Install Miniconf utilities for configuring stabilizer.
+python3 -m pip install -e py/
 python3 -m pip install git+https://github.com/quartiq/miniconf#subdirectory=py/miniconf-mqtt
 python3 -m pip install gmqtt
 
@@ -36,3 +37,6 @@ python3 -m miniconf dt/sinara/dual-iir/04-91-62-d9-7e-5f afe/0='"G1"' iir_ch/0/0
 
 # Test the ADC/DACs connected via loopback.
 python3 hitl/loopback.py dt/sinara/dual-iir/04-91-62-d9-7e-5f
+
+# Test the livestream capabilities
+python3 hitl/streaming.py dt/sinara/dual-iir/04-91-62-d9-7e-5f
