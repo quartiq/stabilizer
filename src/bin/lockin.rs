@@ -279,7 +279,7 @@ const APP: () = {
 
         let signal_config = {
             let frequency_tuning_word =
-                (1u64 << (32 - BATCH_SIZE_SIZE_LOG2)) as u32;
+                (1u64 << (32 - BATCH_SIZE_SIZE_LOG2)) as i32;
 
             signal_generator::Config {
                 // Same frequency as batch size.
