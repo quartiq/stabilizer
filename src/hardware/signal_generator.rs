@@ -183,13 +183,13 @@ impl core::iter::Iterator for SignalGenerator {
             Signal::Cosine => (dsp::cossin(self.phase_accumulator).0 >> 16),
             Signal::Square => {
                 if sign {
-                    -i16::MAX as i32
+                    -1 << 15
                 } else {
-                    i16::MAX as i32
+                    1 << 15
                 }
             }
             Signal::Triangle => {
-                i16::MAX as i32 - (self.phase_accumulator.abs() >> 15)
+                (self.phase_accumulator >> 15).abs() - (1 << 15)
             }
         };
 
