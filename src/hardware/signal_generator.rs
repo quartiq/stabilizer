@@ -93,12 +93,12 @@ impl BasicConfig {
                 ftw / self.symmetry
             } else {
                 NYQUIST
-            } as u32,
+            } as i32,
             if symmetry_complement * NYQUIST > ftw {
                 ftw / symmetry_complement
             } else {
                 NYQUIST
-            } as u32,
+            } as i32,
         ];
 
         Ok(Config {
@@ -120,7 +120,7 @@ pub struct Config {
     pub amplitude: i16,
 
     /// The frequency tuning word of the signal. Phase is incremented by this amount
-    pub frequency_tuning_word: [u32; 2],
+    pub frequency_tuning_word: [i32; 2],
 }
 
 impl Default for Config {
@@ -135,7 +135,7 @@ impl Default for Config {
 
 #[derive(Debug)]
 pub struct SignalGenerator {
-    phase_accumulator: u32,
+    phase_accumulator: i32,
     config: Config,
 }
 
@@ -174,32 +174,26 @@ impl core::iter::Iterator for SignalGenerator {
 
     /// Get the next value in the generator sequence.
     fn next(&mut self) -> Option<i16> {
-        self.phase_accumulator = self.phase_accumulator.wrapping_add(
-            if (self.phase_accumulator as i32).is_negative() {
-                self.config.frequency_tuning_word[0]
-            } else {
-                self.config.frequency_tuning_word[1]
-            },
-        );
+        let sign = self.phase_accumulator.is_negative();
+        self.phase_accumulator = self
+            .phase_accumulator
+            .wrapping_add(self.config.frequency_tuning_word[sign as usize]);
 
-        let phase = self.phase_accumulator as i32;
-
-        let amplitude: i16 = match self.config.signal {
-            Signal::Cosine => (dsp::cossin(phase).0 >> 16) as i16,
+        let scale = match self.config.signal {
+            Signal::Cosine => (dsp::cossin(self.phase_accumulator).0 >> 16),
             Signal::Square => {
-                if phase.is_negative() {
-                    i16::MAX
+                if sign {
+                    -i16::MAX as i32
                 } else {
-                    -i16::MAX
+                    i16::MAX as i32
                 }
             }
-            Signal::Triangle => i16::MAX - (phase.abs() >> 15) as i16,
+            Signal::Triangle => {
+                i16::MAX as i32 - (self.phase_accumulator.abs() >> 15)
+            }
         };
 
         // Calculate the final output result as an i16.
-        let result = amplitude as i32 * self.config.amplitude as i32;
-
-        // Note: We downshift by 15-bits to preserve only one of the sign bits.
-        Some(((result + (1 << 14)) >> 15) as i16)
+        Some(((self.config.amplitude as i32 * scale) >> 15) as _)
     }
 }
