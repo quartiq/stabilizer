@@ -80,27 +80,27 @@ def main():
 
         # Sample frames over a set time period and verify that no drops are encountered.
         stop = time.time() + STREAM_TEST_DURATION_SECS
-        dropped_frames = 0
-        total_frames = 0
+        dropped_batches = 0
+        total_batches = 0
 
         while time.time() < stop:
             for (seqnum, _data) in stream.read_frame():
                 num_dropped = sequence_delta(last_sequence, seqnum)
-                total_frames += 1 + num_dropped
+                total_batches += 1 + num_dropped
 
                 if num_dropped:
-                    dropped_frames += num_dropped
-                    logging.warning('Frame drop detected: 0x%08X -> 0x%08X (%d frames)',
+                    dropped_batches += num_dropped
+                    logging.warning('Frame drop detected: 0x%08X -> 0x%08X (%d batches)',
                                     last_sequence, seqnum, num_dropped)
 
                 last_sequence = seqnum
 
-        assert total_frames, 'Stream did not receive any frames'
-        stream_efficiency = 1.0 - (dropped_frames / total_frames)
+        assert total_batches, 'Stream did not receive any frames'
+        stream_efficiency = 1.0 - (dropped_batches / total_batches)
 
         print(f'Stream Reception Rate: {stream_efficiency * 100:.2f} %')
-        print(f'Received {total_frames} frames')
-        print(f'Lost {dropped_frames} frames')
+        print(f'Received {total_batches} ')
+        print(f'Lost {dropped_batches} batches')
 
         assert stream_efficiency > MIN_STREAM_EFFICIENCY, \
             f'Stream dropped too many packets.  Reception rate: {stream_efficiency * 100:.2f} %'
