@@ -32,12 +32,12 @@
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, SDMMC])]
 mod app {
     use core::sync::atomic::{fence, Ordering};
+    use rtic::time::duration::Extensions;
 
     use mutex_trait::prelude::*;
 
     use dsp::iir;
     use miniconf::Miniconf;
-    use rtic::time::duration::Seconds;
     use serde::Deserialize;
     use stabilizer::{
         hardware::{
@@ -441,9 +441,9 @@ mod app {
         });
 
         // Schedule the telemetry task in the future.
-        telemetry_task::Monotonic::spawn_after(Seconds(
-            telemetry_period as u32,
-        ))
+        telemetry_task::Monotonic::spawn_after(
+            (telemetry_period as u32).seconds(),
+        )
         .unwrap();
     }
 
@@ -452,7 +452,7 @@ mod app {
         c.shared
             .network
             .lock(|network| network.processor.handle_link());
-        ethernet_link::Monotonic::spawn_after(Seconds(1u32)).unwrap();
+        ethernet_link::Monotonic::spawn_after(1u32.seconds()).unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]

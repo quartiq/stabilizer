@@ -6,7 +6,7 @@
 use super::{NetworkReference, UpdateState};
 use crate::hardware::{system_timer::SystemTimer, EthernetPhy};
 use core::convert::TryFrom;
-use rtic::time::{duration::Milliseconds, Clock};
+use rtic::time::{duration::Milliseconds, fraction::Fraction, Clock};
 
 /// Processor for managing network hardware.
 pub struct NetworkProcessor {
@@ -27,6 +27,10 @@ impl NetworkProcessor {
     /// # Returns
     /// The newly constructed processor.
     pub fn new(stack: NetworkReference, phy: EthernetPhy) -> Self {
+        // We make assumptions about the tick rate of the timer and storage sizes below. To make
+        // sure those assumptions are valid, check them once on startup.
+        assert!(SystemTimer::SCALING_FACTOR <= Fraction::new(1, 1_000));
+
         Self {
             stack,
             phy,
@@ -74,8 +78,10 @@ impl NetworkProcessor {
             // Note(unwrap): The system timer is infallible.
             let now = self.clock.try_now().unwrap();
 
-            // TODO: This unwrap will overflow every ~49 days and panic. We need to figure out how
-            // to handle an overflowing millisecond counter.
+            // Note(unwrap): The underlying timer operates at a tick frequency greater than 1 time
+            // per millisecond. Therefore, at the maximum timer tick count, the duration since the
+            // epoch is defined to be less than 2^32 milliseconds. Thus, a 32-bit millisecond
+            // counter should always be sufficient to store this duration.
             Milliseconds::try_from(now.duration_since_epoch()).unwrap()
         };
 
