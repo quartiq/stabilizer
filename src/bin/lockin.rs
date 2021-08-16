@@ -206,8 +206,11 @@ impl Default for Settings {
     }
 }
 
-#[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, monotonic = stabilizer::hardware::system_timer::SystemTimer)]
-const APP: () = {
+#[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, monotonic = stabilizer::hardware::system_timer::SystemTimer, dispatchers=[DCMI, JPEG, SDMMC])]
+mod app {
+    use super::*;
+
+    #[shared]
     struct Resources {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
@@ -224,8 +227,11 @@ const APP: () = {
         lockin: Lockin<4>,
     }
 
+    #[local]
+    struct Local {}
+
     #[init(spawn=[settings_update, telemetry, ethernet_link])]
-    fn init(c: init::Context) -> init::LateResources {
+    fn init(c: init::Context) -> (Shared, Local, init::Monotonics) {
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup::setup(
             c.core,
@@ -237,7 +243,6 @@ const APP: () = {
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
-            stabilizer.cycle_counter,
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
             option_env!("BROKER")
@@ -294,7 +299,7 @@ const APP: () = {
             }
         };
 
-        init::LateResources {
+        let shared = Shared {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
@@ -311,7 +316,9 @@ const APP: () = {
 
             pll,
             lockin: Lockin::default(),
-        }
+        };
+
+        (shared, Local {}, init::Monotonics())
     }
 
     /// Main DSP processing routine.
@@ -321,7 +328,7 @@ const APP: () = {
     /// This is an implementation of a externally (DI0) referenced PLL lockin on the ADC0 signal.
     /// It outputs either I/Q or power/phase on DAC0/DAC1. Data is normalized to full scale.
     /// PLL bandwidth, filter bandwidth, slope, and x/y or power/phase post-filters are available.
-    #[task(binds=DMA1_STR4, resources=[adcs, dacs, lockin, timestamper, pll, settings, telemetry, generator, signal_generator], priority=2)]
+    #[task(binds=DMA1_STR4, shared=[adcs, dacs, lockin, timestamper, pll, settings, telemetry, generator, signal_generator], priority=2)]
     #[inline(never)]
     #[link_section = ".itcm.process"]
     fn process(mut c: process::Context) {
@@ -434,12 +441,12 @@ const APP: () = {
         });
     }
 
-    #[idle(resources=[network], spawn=[settings_update])]
+    #[idle(shared=[network])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
             match c.resources.network.lock(|net| net.update()) {
                 NetworkState::SettingsChanged => {
-                    c.spawn.settings_update().unwrap()
+                    settings_update::spawn().unwrap()
                 }
                 NetworkState::Updated => {}
                 NetworkState::NoChange => cortex_m::asm::wfi(),
@@ -447,7 +454,7 @@ const APP: () = {
         }
     }
 
-    #[task(priority = 1, resources=[network, settings, afes])]
+    #[task(priority = 1, shared=[network, settings, afes])]
     fn settings_update(mut c: settings_update::Context) {
         let settings = c.resources.network.miniconf.settings();
 
@@ -460,7 +467,7 @@ const APP: () = {
         c.resources.network.direct_stream(target);
     }
 
-    #[task(priority = 1, resources=[network, digital_inputs, settings, telemetry], schedule=[telemetry])]
+    #[task(priority = 1, shared=[network, digital_inputs, settings, telemetry])]
     fn telemetry(mut c: telemetry::Context) {
         let mut telemetry: TelemetryBuffer =
             c.resources.telemetry.lock(|telemetry| *telemetry);
@@ -481,32 +488,20 @@ const APP: () = {
             .publish(&telemetry.finalize(gains[0], gains[1]));
 
         // Schedule the telemetry task in the future.
-        c.schedule
-            .telemetry(
-                c.scheduled
-                    + SystemTimer::ticks_from_secs(telemetry_period as u32),
-            )
-            .unwrap();
+        telemetry::spawn_after(SystemTimer::ticks_from_secs(
+            telemetry_period as u32,
+        ))
+        .unwrap();
     }
 
-    #[task(priority = 1, resources=[network], schedule=[ethernet_link])]
+    #[task(priority = 1, shared=[network])]
     fn ethernet_link(c: ethernet_link::Context) {
         c.resources.network.processor.handle_link();
-        c.schedule
-            .ethernet_link(c.scheduled + SystemTimer::ticks_from_secs(1))
-            .unwrap();
+        ethernet_link::spanw_after(SystemTimer::ticks_from_secs(1)).unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]
     fn eth(_: eth::Context) {
         unsafe { hal::ethernet::interrupt_handler() }
     }
-
-    extern "C" {
-        // hw interrupt handlers for RTIC to use for scheduling tasks
-        // one per priority
-        fn DCMI();
-        fn JPEG();
-        fn SDMMC();
-    }
-};
+}

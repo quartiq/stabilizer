@@ -4,13 +4,15 @@
 ///! The network processir is a small taks to regularly process incoming data over ethernet, handle
 ///! the ethernet PHY state, and reset the network as appropriate.
 use super::{NetworkReference, UpdateState};
-use crate::hardware::{cycle_counter::CycleCounter, EthernetPhy};
+use crate::hardware::{system_timer::SystemTimer, EthernetPhy};
+use core::convert::TryFrom;
+use rtic::time::{duration::Milliseconds, Clock};
 
 /// Processor for managing network hardware.
 pub struct NetworkProcessor {
     stack: NetworkReference,
     phy: EthernetPhy,
-    clock: CycleCounter,
+    clock: SystemTimer,
     network_was_reset: bool,
 }
 
@@ -24,15 +26,11 @@ impl NetworkProcessor {
     ///
     /// # Returns
     /// The newly constructed processor.
-    pub fn new(
-        stack: NetworkReference,
-        phy: EthernetPhy,
-        clock: CycleCounter,
-    ) -> Self {
+    pub fn new(stack: NetworkReference, phy: EthernetPhy) -> Self {
         Self {
             stack,
             phy,
-            clock,
+            clock: SystemTimer {},
             network_was_reset: false,
         }
     }
@@ -72,9 +70,16 @@ impl NetworkProcessor {
     /// An update state corresponding with any changes in the underlying network.
     pub fn update(&mut self) -> UpdateState {
         // Service the network stack to process any inbound and outbound traffic.
-        let now = self.clock.current_ms();
+        let current_ms: Milliseconds<u32> = {
+            // Note(unwrap): The system timer is infallible.
+            let now = self.clock.try_now().unwrap();
 
-        match self.stack.lock(|stack| stack.poll(now)) {
+            // TODO: This unwrap will overflow every ~49 days and panic. We need to figure out how
+            // to handle an overflowing millisecond counter.
+            Milliseconds::try_from(now.duration_since_epoch()).unwrap()
+        };
+
+        match self.stack.lock(|stack| stack.poll(current_ms.0)) {
             Ok(true) => UpdateState::Updated,
             Ok(false) => UpdateState::NoChange,
             Err(_) => UpdateState::Updated,

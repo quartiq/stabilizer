@@ -14,10 +14,9 @@ use smoltcp_nal::smoltcp;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use super::{
-    adc, afe, cycle_counter::CycleCounter, dac, design_parameters, eeprom,
-    input_stamper::InputStamper, pounder, pounder::dds_output::DdsOutput,
-    system_timer, timers, DigitalInput0, DigitalInput1, EthernetPhy,
-    NetworkStack, AFE0, AFE1,
+    adc, afe, dac, design_parameters, eeprom, input_stamper::InputStamper,
+    pounder, pounder::dds_output::DdsOutput, system_timer, timers,
+    DigitalInput0, DigitalInput1, EthernetPhy, NetworkStack, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -109,7 +108,6 @@ pub struct StabilizerDevices {
     pub adc_dac_timer: timers::SamplingTimer,
     pub timestamp_timer: timers::TimestampTimer,
     pub net: NetworkDevices,
-    pub cycle_counter: CycleCounter,
     pub digital_inputs: (DigitalInput0, DigitalInput1),
 }
 
@@ -187,7 +185,7 @@ fn load_itcm() {
 /// `Some(devices)` if pounder is detected, where `devices` is a `PounderDevices` structure
 /// containing all of the pounder hardware interfaces in a disabled state.
 pub fn setup(
-    mut core: rtic::Peripherals,
+    mut core: rtic::export::Peripherals,
     device: stm32h7xx_hal::stm32::Peripherals,
     batch_size: usize,
     sample_ticks: u32,
@@ -1011,14 +1009,6 @@ pub fn setup(
         None
     };
 
-    let cycle_counter = {
-        // Set TRCENA bit, which is required for DWT counter to tick. (This is also
-        // set automatically when running in the debugger, and only cleared on power
-        // reset, not on soft reset.)
-        core.DCB.enable_trace();
-        CycleCounter::new(core.DWT, ccdr.clocks.c_ck())
-    };
-
     let stabilizer = StabilizerDevices {
         afes,
         adcs,
@@ -1027,7 +1017,6 @@ pub fn setup(
         net: network_devices,
         adc_dac_timer: sampling_timer,
         timestamp_timer,
-        cycle_counter,
         digital_inputs,
     };
 

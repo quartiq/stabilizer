@@ -4,7 +4,6 @@ pub use stm32h7xx_hal as hal;
 
 pub mod adc;
 pub mod afe;
-pub mod cycle_counter;
 pub mod dac;
 pub mod design_parameters;
 pub mod input_stamper;
