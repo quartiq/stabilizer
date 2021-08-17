@@ -5,12 +5,6 @@
 ///! This timer is used in place of the cycle counter to allow the timer to tick at a slower rate
 ///! than the CPU clock. This allows for longer scheduling periods with less resolution. This is
 ///! needed for infrequent (e.g. multiple second) telemetry periods.
-///!
-///! # Limitations
-///! This implementation relies on sufficient timer polling to not miss timer counter overflows. If
-///! the timer is not polled often enough, it's possible that an overflow would be missed and time
-///! would "halt" for a shore period of time. This could be fixed in the future by instead
-///! listening for the overflow interrupt instead of polling the overflow state.
 use hal::prelude::*;
 use rtic::{
     time::{clock::Error, fraction::Fraction, Clock, Instant},
@@ -27,6 +21,9 @@ static mut OVERFLOWS: u32 = 0;
 /// and/or instantiate multiple timers. All timers will reference the same underlying hardware
 /// clock.
 ///
+/// This timer supports durations up to (just shy of) 5 days. Any duration larger than that will
+/// wrap and behave incorrectly.
+///
 /// # Note
 /// The system timer must be initialized before being used.
 #[derive(Copy, Clone, Debug)]
@@ -39,9 +36,9 @@ impl SystemTimer {
     /// * `timer` - The hardware timer used for implementing the RTIC monotonic.
     pub fn initialize(mut timer: hal::timer::Timer<hal::device::TIM15>) {
         timer.pause();
-        // Have the system timer operate at a tick rate of 1 MHz (1uS per tick). With this
-        // configuration and a 65535 period, we get an overflow once every 6.5 ms.
-        timer.set_tick_freq(10.mhz());
+        // Have the system timer operate at a tick rate of 10 KHz (100 uS per tick). With this
+        // configuration and a 65535 period, we get an overflow once every 6.5 seconds.
+        timer.set_tick_freq(10.khz());
         timer.apply_freq();
 
         timer.resume();
@@ -52,7 +49,7 @@ impl Clock for SystemTimer {
     type T = u32;
 
     // The duration of each tick in seconds.
-    const SCALING_FACTOR: Fraction = Fraction::new(1, 10_000_000);
+    const SCALING_FACTOR: Fraction = Fraction::new(1, 10_000);
 
     fn try_now(&self) -> Result<Instant<Self>, Error> {
         // Note(unsafe): Multiple interrupt contexts have access to the underlying timer, so care
@@ -70,7 +67,7 @@ impl Clock for SystemTimer {
                 if regs.sr.read().uif().bit_is_set() {
                     regs.sr.modify(|_, w| w.uif().clear_bit());
                     unsafe {
-                        OVERFLOWS += 1;
+                        OVERFLOWS = OVERFLOWS.wrapping_add(1);
                     }
                 }
 
