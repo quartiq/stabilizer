@@ -79,9 +79,10 @@ impl NetworkProcessor {
             let now = self.clock.try_now().unwrap();
 
             // Note(unwrap): The underlying timer operates at a tick frequency greater than 1 time
-            // per millisecond. Therefore, at the maximum timer tick count, the duration since the
-            // epoch is defined to be less than 2^32 milliseconds. Thus, a 32-bit millisecond
-            // counter should always be sufficient to store this duration.
+            // per millisecond (see the assertion in `new()`). Therefore, at the maximum timer tick
+            // count, the duration since the epoch is defined to be less than 2^32 milliseconds.
+            // Thus, a 32-bit millisecond counter should always be sufficient to store this
+            // duration.
             Milliseconds::try_from(now.duration_since_epoch()).unwrap()
         };
 
