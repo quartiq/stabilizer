@@ -15,11 +15,11 @@
 //! * Input/output data streamng via UDP
 //!
 //! ## Settings
-//! Refer to the [Settings] structure for documentation of run-time configurable settings for this
-//! application.
+//! Refer to the [app::Settings] structure for documentation of run-time configurable settings for
+//! this application.
 //!
 //! ## Telemetry
-//! Refer to [Telemetry] for information about telemetry reported by this application.
+//! Refer to [stabilizer::net::telemetry::Telemetry] for information about telemetry reported by this application.
 //!
 //! ## Livestreaming
 //! This application streams raw ADC and DAC data over UDP. Refer to
