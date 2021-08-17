@@ -15,12 +15,11 @@
 //! * Input/output data streamng via UDP
 //!
 //! ## Settings
-//! Refer to the [app::Settings] structure for documentation of run-time configurable settings for
-//! this application.
+//! Refer to the [Settings] structure for documentation of run-time configurable settings for this
+//! application.
 //!
 //! ## Telemetry
-//! Refer to [stabilizer::net::telemetry::Telemetry] for information about telemetry reported by
-//! this application.
+//! Refer to [Telemetry] for information about telemetry reported by this application.
 //!
 //! ## Livestreaming
 //! This application streams raw ADC and DAC data over UDP. Refer to
@@ -29,186 +28,188 @@
 #![no_std]
 #![no_main]
 
-#[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, SDMMC])]
-mod app {
-    use core::{
-        convert::TryFrom,
-        sync::atomic::{fence, Ordering},
-    };
+use core::{
+    convert::TryFrom,
+    sync::atomic::{fence, Ordering},
+};
 
-    use mutex_trait::prelude::*;
-    use rtic::time::duration::Extensions;
+use mutex_trait::prelude::*;
 
-    use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
-    use stabilizer::{
-        hardware::{
-            self,
-            adc::{Adc0Input, Adc1Input, AdcCode},
-            afe::Gain,
-            dac::{Dac0Output, Dac1Output, DacCode},
-            embedded_hal::digital::v2::InputPin,
-            hal,
-            input_stamper::InputStamper,
-            signal_generator,
-            system_timer::SystemTimer,
-            DigitalInput0, DigitalInput1, AFE0, AFE1,
-        },
-        net::{
-            data_stream::{FrameGenerator, StreamFormat, StreamTarget},
-            miniconf::Miniconf,
-            serde::Deserialize,
-            telemetry::{Telemetry, TelemetryBuffer},
-            NetworkState, NetworkUsers,
-        },
-    };
+use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
+use rtic::time::duration::Extensions;
+use stabilizer::{
+    hardware::{
+        self,
+        adc::{Adc0Input, Adc1Input, AdcCode},
+        afe::Gain,
+        dac::{Dac0Output, Dac1Output, DacCode},
+        embedded_hal::digital::v2::InputPin,
+        hal,
+        input_stamper::InputStamper,
+        signal_generator,
+        system_timer::SystemTimer,
+        DigitalInput0, DigitalInput1, AFE0, AFE1,
+    },
+    net::{
+        data_stream::{FrameGenerator, StreamFormat, StreamTarget},
+        miniconf::Miniconf,
+        serde::Deserialize,
+        telemetry::{Telemetry, TelemetryBuffer},
+        NetworkState, NetworkUsers,
+    },
+};
 
-    // The logarithm of the number of samples in each batch process. This corresponds with 2^3 samples
-    // per batch = 8 samples
-    const BATCH_SIZE_SIZE_LOG2: u8 = 3;
+// The logarithm of the number of samples in each batch process. This corresponds with 2^3 samples
+// per batch = 8 samples
+const BATCH_SIZE_SIZE_LOG2: u8 = 3;
 
-    // The logarithm of the number of 100MHz timer ticks between each sample. This corresponds with a
-    // sampling period of 2^7 = 128 ticks. At 100MHz, 10ns per tick, this corresponds to a sampling
-    // period of 1.28 uS or 781.25 KHz.
-    const ADC_SAMPLE_TICKS_LOG2: u8 = 7;
+// The logarithm of the number of 100MHz timer ticks between each sample. This corresponds with a
+// sampling period of 2^7 = 128 ticks. At 100MHz, 10ns per tick, this corresponds to a sampling
+// period of 1.28 uS or 781.25 KHz.
+const ADC_SAMPLE_TICKS_LOG2: u8 = 7;
 
-    #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
-    enum Conf {
-        /// Output the lockin magnitude.
-        Magnitude,
-        /// Output the phase of the lockin
-        Phase,
-        /// Output the lockin reference frequency as a sinusoid
-        ReferenceFrequency,
-        /// Output the logarithmic power of the lockin
-        LogPower,
-        /// Output the in-phase component of the lockin signal.
-        InPhase,
-        /// Output the quadrature component of the lockin signal.
-        Quadrature,
-        /// Output the lockin internal modulation frequency as a sinusoid
-        Modulation,
-    }
+#[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
+enum Conf {
+    /// Output the lockin magnitude.
+    Magnitude,
+    /// Output the phase of the lockin
+    Phase,
+    /// Output the lockin reference frequency as a sinusoid
+    ReferenceFrequency,
+    /// Output the logarithmic power of the lockin
+    LogPower,
+    /// Output the in-phase component of the lockin signal.
+    InPhase,
+    /// Output the quadrature component of the lockin signal.
+    Quadrature,
+    /// Output the lockin internal modulation frequency as a sinusoid
+    Modulation,
+}
 
-    #[derive(Copy, Clone, Debug, Miniconf, Deserialize, PartialEq)]
-    enum LockinMode {
-        /// Utilize an internally generated reference for demodulation
-        Internal,
-        /// Utilize an external modulation signal supplied to DI0
-        External,
-    }
+#[derive(Copy, Clone, Debug, Miniconf, Deserialize, PartialEq)]
+enum LockinMode {
+    /// Utilize an internally generated reference for demodulation
+    Internal,
+    /// Utilize an external modulation signal supplied to DI0
+    External,
+}
 
-    #[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
-    pub struct Settings {
-        /// Configure the Analog Front End (AFE) gain.
-        ///
-        /// # Path
-        /// `afe/<n>`
-        ///
-        /// * <n> specifies which channel to configure. <n> := [0, 1]
-        ///
-        /// # Value
-        /// Any of the variants of [Gain] enclosed in double quotes.
-        afe: [Gain; 2],
+#[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
+pub struct Settings {
+    /// Configure the Analog Front End (AFE) gain.
+    ///
+    /// # Path
+    /// `afe/<n>`
+    ///
+    /// * <n> specifies which channel to configure. <n> := [0, 1]
+    ///
+    /// # Value
+    /// Any of the variants of [Gain] enclosed in double quotes.
+    afe: [Gain; 2],
 
-        /// Specifies the operational mode of the lockin.
-        ///
-        /// # Path
-        /// `lockin_mode`
-        ///
-        /// # Value
-        /// One of the variants of [LockinMode] enclosed in double quotes.
-        lockin_mode: LockinMode,
+    /// Specifies the operational mode of the lockin.
+    ///
+    /// # Path
+    /// `lockin_mode`
+    ///
+    /// # Value
+    /// One of the variants of [LockinMode] enclosed in double quotes.
+    lockin_mode: LockinMode,
 
-        /// Specifis the PLL time constant.
-        ///
-        /// # Path
-        /// `pll_tc/<n>`
-        ///
-        /// * <n> specifies which channel to configure. <n> := [0, 1]
-        ///
-        /// # Value
-        /// The PLL time constant as an unsigned byte (0-255).
-        pll_tc: [u8; 2],
+    /// Specifis the PLL time constant.
+    ///
+    /// # Path
+    /// `pll_tc/<n>`
+    ///
+    /// * <n> specifies which channel to configure. <n> := [0, 1]
+    ///
+    /// # Value
+    /// The PLL time constant as an unsigned byte (0-255).
+    pll_tc: [u8; 2],
 
-        /// Specifies the lockin time constant.
-        ///
-        /// # Path
-        /// `lockin_tc`
-        ///
-        /// # Value
-        /// The lockin low-pass time constant as an unsigned byte (0-255).
-        lockin_tc: u8,
+    /// Specifies the lockin time constant.
+    ///
+    /// # Path
+    /// `lockin_tc`
+    ///
+    /// # Value
+    /// The lockin low-pass time constant as an unsigned byte (0-255).
+    lockin_tc: u8,
 
-        /// Specifies which harmonic to use for the lockin.
-        ///
-        /// # Path
-        /// `lockin_harmonic`
-        ///
-        /// # Value
-        /// Harmonic index of the LO. -1 to _de_modulate the fundamental (complex conjugate)
-        lockin_harmonic: i32,
+    /// Specifies which harmonic to use for the lockin.
+    ///
+    /// # Path
+    /// `lockin_harmonic`
+    ///
+    /// # Value
+    /// Harmonic index of the LO. -1 to _de_modulate the fundamental (complex conjugate)
+    lockin_harmonic: i32,
 
-        /// Specifies the LO phase offset.
-        ///
-        /// # Path
-        /// `lockin_phase`
-        ///
-        /// # Value
-        /// Demodulation LO phase offset. Units are in terms of i32, where [i32::MIN] is equivalent to
-        /// -pi and [i32::MAX] is equivalent to +pi.
-        lockin_phase: i32,
+    /// Specifies the LO phase offset.
+    ///
+    /// # Path
+    /// `lockin_phase`
+    ///
+    /// # Value
+    /// Demodulation LO phase offset. Units are in terms of i32, where [i32::MIN] is equivalent to
+    /// -pi and [i32::MAX] is equivalent to +pi.
+    lockin_phase: i32,
 
-        /// Specifies DAC output mode.
-        ///
-        /// # Path
-        /// `output_conf/<n>`
-        ///
-        /// * <n> specifies which channel to configure. <n> := [0, 1]
-        ///
-        /// # Value
-        /// One of the variants of [Conf] enclosed in double quotes.
-        output_conf: [Conf; 2],
+    /// Specifies DAC output mode.
+    ///
+    /// # Path
+    /// `output_conf/<n>`
+    ///
+    /// * <n> specifies which channel to configure. <n> := [0, 1]
+    ///
+    /// # Value
+    /// One of the variants of [Conf] enclosed in double quotes.
+    output_conf: [Conf; 2],
 
-        /// Specifies the telemetry output period in seconds.
-        ///
-        /// # Path
-        /// `telemetry_period`
-        ///
-        /// # Value
-        /// Any non-zero value less than 65536.
-        telemetry_period: u16,
+    /// Specifies the telemetry output period in seconds.
+    ///
+    /// # Path
+    /// `telemetry_period`
+    ///
+    /// # Value
+    /// Any non-zero value less than 65536.
+    telemetry_period: u16,
 
-        /// Specifies the target for data livestreaming.
-        ///
-        /// # Path
-        /// `stream_target`
-        ///
-        /// # Value
-        /// See [StreamTarget#miniconf]
-        stream_target: StreamTarget,
-    }
+    /// Specifies the target for data livestreaming.
+    ///
+    /// # Path
+    /// `stream_target`
+    ///
+    /// # Value
+    /// See [StreamTarget#miniconf]
+    stream_target: StreamTarget,
+}
 
-    impl Default for Settings {
-        fn default() -> Self {
-            Self {
-                afe: [Gain::G1; 2],
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            afe: [Gain::G1; 2],
 
-                lockin_mode: LockinMode::External,
+            lockin_mode: LockinMode::External,
 
-                pll_tc: [21, 21], // frequency and phase settling time (log2 counter cycles)
+            pll_tc: [21, 21], // frequency and phase settling time (log2 counter cycles)
 
-                lockin_tc: 6,        // lockin lowpass time constant
-                lockin_harmonic: -1, // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
-                lockin_phase: 0,     // Demodulation LO phase offset
+            lockin_tc: 6,        // lockin lowpass time constant
+            lockin_harmonic: -1, // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
+            lockin_phase: 0,     // Demodulation LO phase offset
 
-                output_conf: [Conf::InPhase, Conf::Quadrature],
-                // The default telemetry period in seconds.
-                telemetry_period: 10,
+            output_conf: [Conf::InPhase, Conf::Quadrature],
+            // The default telemetry period in seconds.
+            telemetry_period: 10,
 
-                stream_target: StreamTarget::default(),
-            }
+            stream_target: StreamTarget::default(),
         }
     }
+}
+
+#[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, SDMMC])]
+mod app {
+    use super::*;
 
     #[monotonic(binds = TIM15)]
     type Monotonic = SystemTimer;

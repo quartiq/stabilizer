@@ -16,12 +16,11 @@
 //! * Derivative kick avoidance
 //!
 //! ## Settings
-//! Refer to the [app::Settings] structure for documentation of run-time configurable settings for
-//! this application.
+//! Refer to the [Settings] structure for documentation of run-time configurable settings for this
+//! application.
 //!
 //! ## Telemetry
-//! Refer to [stabilizer::net::telemetry::Telemetry] for information about telemetry reported by
-//! this application.
+//! Refer to [Telemetry] for information about telemetry reported by this application.
 //!
 //! ## Livestreaming
 //! This application streams raw ADC and DAC data over UDP. Refer to
@@ -30,145 +29,149 @@
 #![no_std]
 #![no_main]
 
-#[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, SDMMC])]
-mod app {
-    use core::sync::atomic::{fence, Ordering};
-    use rtic::time::duration::Extensions;
+use core::sync::atomic::{fence, Ordering};
 
-    use mutex_trait::prelude::*;
+use mutex_trait::prelude::*;
 
-    use dsp::iir;
-    use miniconf::Miniconf;
-    use serde::Deserialize;
-    use stabilizer::{
-        hardware::{
-            self,
-            adc::{Adc0Input, Adc1Input, AdcCode},
-            afe::Gain,
-            dac::{Dac0Output, Dac1Output, DacCode},
-            embedded_hal::digital::v2::InputPin,
-            hal,
-            signal_generator::{self, SignalGenerator},
-            system_timer::SystemTimer,
-            DigitalInput0, DigitalInput1, AFE0, AFE1,
-        },
-        net::{
-            data_stream::{FrameGenerator, StreamFormat, StreamTarget},
-            telemetry::{Telemetry, TelemetryBuffer},
-            NetworkState, NetworkUsers,
-        },
-    };
+use dsp::iir;
+use rtic::time::duration::Extensions;
+use stabilizer::{
+    hardware::{
+        self,
+        adc::{Adc0Input, Adc1Input, AdcCode},
+        afe::Gain,
+        dac::{Dac0Output, Dac1Output, DacCode},
+        embedded_hal::digital::v2::InputPin,
+        hal,
+        signal_generator::{self, SignalGenerator},
+        system_timer::SystemTimer,
+        DigitalInput0, DigitalInput1, AFE0, AFE1,
+    },
+    net::{
+        data_stream::{FrameGenerator, StreamFormat, StreamTarget},
+        miniconf::Miniconf,
+        serde::Deserialize,
+        telemetry::{Telemetry, TelemetryBuffer},
+        NetworkState, NetworkUsers,
+    },
+};
 
-    const SCALE: f32 = i16::MAX as _;
+const SCALE: f32 = i16::MAX as _;
 
-    // The number of cascaded IIR biquads per channel. Select 1 or 2!
-    const IIR_CASCADE_LENGTH: usize = 1;
+// The number of cascaded IIR biquads per channel. Select 1 or 2!
+const IIR_CASCADE_LENGTH: usize = 1;
 
-    // The number of samples in each batch process
-    const BATCH_SIZE: usize = 8;
+// The number of samples in each batch process
+const BATCH_SIZE: usize = 8;
 
-    // The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^7 =
-    // 128, there is 1.28uS per sample, corresponding to a sampling frequency of 781.25 KHz.
-    const SAMPLE_TICKS_LOG2: u8 = 7;
+// The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^7 =
+// 128, there is 1.28uS per sample, corresponding to a sampling frequency of 781.25 KHz.
+const SAMPLE_TICKS_LOG2: u8 = 7;
 
-    #[derive(Clone, Copy, Debug, Deserialize, Miniconf)]
-    pub struct Settings {
-        /// Configure the Analog Front End (AFE) gain.
-        ///
-        /// # Path
-        /// `afe/<n>`
-        ///
-        /// * <n> specifies which channel to configure. <n> := [0, 1]
-        ///
-        /// # Value
-        /// Any of the variants of [Gain] enclosed in double quotes.
-        afe: [Gain; 2],
+#[derive(Clone, Copy, Debug, Deserialize, Miniconf)]
+pub struct Settings {
+    /// Configure the Analog Front End (AFE) gain.
+    ///
+    /// # Path
+    /// `afe/<n>`
+    ///
+    /// * <n> specifies which channel to configure. <n> := [0, 1]
+    ///
+    /// # Value
+    /// Any of the variants of [Gain] enclosed in double quotes.
+    afe: [Gain; 2],
 
-        /// Configure the IIR filter parameters.
-        ///
-        /// # Path
-        /// `iir_ch/<n>/<m>`
-        ///
-        /// * <n> specifies which channel to configure. <n> := [0, 1]
-        /// * <m> specifies which cascade to configure. <m> := [0, 1], depending on [IIR_CASCADE_LENGTH]
-        ///
-        /// # Value
-        /// See [iir::IIR#miniconf]
-        iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+    /// Configure the IIR filter parameters.
+    ///
+    /// # Path
+    /// `iir_ch/<n>/<m>`
+    ///
+    /// * <n> specifies which channel to configure. <n> := [0, 1]
+    /// * <m> specifies which cascade to configure. <m> := [0, 1], depending on [IIR_CASCADE_LENGTH]
+    ///
+    /// # Value
+    /// See [iir::IIR#miniconf]
+    iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
 
-        /// Specified true if DI1 should be used as a "hold" input.
-        ///
-        /// # Path
-        /// `allow_hold`
-        ///
-        /// # Value
-        /// "true" or "false"
-        allow_hold: bool,
+    /// Specified true if DI1 should be used as a "hold" input.
+    ///
+    /// # Path
+    /// `allow_hold`
+    ///
+    /// # Value
+    /// "true" or "false"
+    allow_hold: bool,
 
-        /// Specified true if "hold" should be forced regardless of DI1 state and hold allowance.
-        ///
-        /// # Path
-        /// `force_hold`
-        ///
-        /// # Value
-        /// "true" or "false"
-        force_hold: bool,
+    /// Specified true if "hold" should be forced regardless of DI1 state and hold allowance.
+    ///
+    /// # Path
+    /// `force_hold`
+    ///
+    /// # Value
+    /// "true" or "false"
+    force_hold: bool,
 
-        /// Specifies the telemetry output period in seconds.
-        ///
-        /// # Path
-        /// `telemetry_period`
-        ///
-        /// # Value
-        /// Any non-zero value less than 65536.
-        telemetry_period: u16,
+    /// Specifies the telemetry output period in seconds.
+    ///
+    /// # Path
+    /// `telemetry_period`
+    ///
+    /// # Value
+    /// Any non-zero value less than 65536.
+    telemetry_period: u16,
 
-        /// Specifies the target for data livestreaming.
-        ///
-        /// # Path
-        /// `stream_target`
-        ///
-        /// # Value
-        /// See [StreamTarget#miniconf]
-        stream_target: StreamTarget,
+    /// Specifies the target for data livestreaming.
+    ///
+    /// # Path
+    /// `stream_target`
+    ///
+    /// # Value
+    /// See [StreamTarget#miniconf]
+    stream_target: StreamTarget,
 
-        /// Specifies the config for signal generators to add on to DAC0/DAC1 outputs.
-        ///
-        /// # Path
-        /// `signal_generator/<n>`
-        ///
-        /// * <n> specifies which channel to configure. <n> := [0, 1]
-        ///
-        /// # Value
-        /// See [signal_generator::BasicConfig#miniconf]
-        signal_generator: [signal_generator::BasicConfig; 2],
-    }
+    /// Specifies the config for signal generators to add on to DAC0/DAC1 outputs.
+    ///
+    /// # Path
+    /// `signal_generator/<n>`
+    ///
+    /// * <n> specifies which channel to configure. <n> := [0, 1]
+    ///
+    /// # Value
+    /// See [signal_generator::BasicConfig#miniconf]
+    signal_generator: [signal_generator::BasicConfig; 2],
+}
 
-    impl Default for Settings {
-        fn default() -> Self {
-            Self {
-                // Analog frontend programmable gain amplifier gains (G1, G2, G5, G10)
-                afe: [Gain::G1, Gain::G1],
-                // IIR filter tap gains are an array `[b0, b1, b2, a1, a2]` such that the
-                // new output is computed as `y0 = a1*y1 + a2*y2 + b0*x0 + b1*x1 + b2*x2`.
-                // The array is `iir_state[channel-index][cascade-index][coeff-index]`.
-                // The IIR coefficients can be mapped to other transfer function
-                // representations, for example as described in https://arxiv.org/abs/1508.06319
-                iir_ch: [[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH];
-                    2],
-                // Permit the DI1 digital input to suppress filter output updates.
-                allow_hold: false,
-                // Force suppress filter output updates.
-                force_hold: false,
-                // The default telemetry period in seconds.
-                telemetry_period: 10,
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            // Analog frontend programmable gain amplifier gains (G1, G2, G5, G10)
+            afe: [Gain::G1, Gain::G1],
+            // IIR filter tap gains are an array `[b0, b1, b2, a1, a2]` such that the
+            // new output is computed as `y0 = a1*y1 + a2*y2 + b0*x0 + b1*x1 + b2*x2`.
+            // The array is `iir_state[channel-index][cascade-index][coeff-index]`.
+            // The IIR coefficients can be mapped to other transfer function
+            // representations, for example as described in https://arxiv.org/abs/1508.06319
+            iir_ch: [[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2],
+            // Permit the DI1 digital input to suppress filter output updates.
+            allow_hold: false,
+            // Force suppress filter output updates.
+            force_hold: false,
+            // The default telemetry period in seconds.
+            telemetry_period: 10,
 
-                signal_generator: [signal_generator::BasicConfig::default(); 2],
+            signal_generator: [signal_generator::BasicConfig::default(); 2],
 
-                stream_target: StreamTarget::default(),
-            }
+            stream_target: StreamTarget::default(),
         }
     }
+}
+
+#[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, SDMMC])]
+mod app {
+    use super::*;
+
+    #[monotonic(binds = TIM15)]
+    type Monotonic = SystemTimer;
 
     #[shared]
     struct Shared {
@@ -178,9 +181,6 @@ mod app {
         settings: Settings,
         telemetry: TelemetryBuffer,
     }
-
-    #[monotonic(binds = TIM15)]
-    type Monotonic = SystemTimer;
 
     #[local]
     struct Local {
