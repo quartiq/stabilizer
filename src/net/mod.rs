@@ -14,7 +14,7 @@ pub mod network_processor;
 pub mod shared;
 pub mod telemetry;
 
-use crate::hardware::{cycle_counter::CycleCounter, EthernetPhy, NetworkStack};
+use crate::hardware::{EthernetPhy, NetworkStack};
 use data_stream::{DataStream, FrameGenerator};
 use minimq::embedded_nal::IpAddr;
 use network_processor::NetworkProcessor;
@@ -63,7 +63,6 @@ where
     /// # Args
     /// * `stack` - The network stack that will be used to share with all network users.
     /// * `phy` - The ethernet PHY connecting the network.
-    /// * `cycle_counter` - The clock used for measuring time in the network.
     /// * `app` - The name of the application.
     /// * `mac` - The MAC address of the network.
     /// * `broker` - The IP address of the MQTT broker to use.
@@ -73,7 +72,6 @@ where
     pub fn new(
         stack: NetworkStack,
         phy: EthernetPhy,
-        cycle_counter: CycleCounter,
         app: &str,
         mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
         broker: IpAddr,
@@ -82,11 +80,8 @@ where
             cortex_m::singleton!(: NetworkManager = NetworkManager::new(stack))
                 .unwrap();
 
-        let processor = NetworkProcessor::new(
-            stack_manager.acquire_stack(),
-            phy,
-            cycle_counter,
-        );
+        let processor =
+            NetworkProcessor::new(stack_manager.acquire_stack(), phy);
 
         let prefix = get_device_prefix(app, mac);
 
