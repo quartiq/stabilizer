@@ -26,7 +26,7 @@ static mut OVERFLOWS: u32 = 0;
 ///
 /// # Note
 /// The system timer must be initialized before being used.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct SystemTimer {}
 
 impl SystemTimer {
@@ -106,7 +106,7 @@ impl Monotonic for SystemTimer {
         // pre-emption.
         cortex_m::interrupt::free(|_cs| {
             let now = self.try_now().unwrap();
-            match now.checked_duration_until(&instant) {
+            match now.checked_duration_until(instant) {
                 // If the scheduled instant is too far in the future, we can't set an exact
                 // deadline because it's too far in the future. Instead, just set a time in the
                 // future and retry then.

@@ -19,7 +19,8 @@
 //! this application.
 //!
 //! ## Telemetry
-//! Refer to [stabilizer::net::telemetry::Telemetry] for information about telemetry reported by this application.
+//! Refer to [stabilizer::net::telemetry::Telemetry] for information about telemetry reported by
+//! this application.
 //!
 //! ## Livestreaming
 //! This application streams raw ADC and DAC data over UDP. Refer to
@@ -323,7 +324,7 @@ mod app {
             lockin: Lockin::default(),
         };
 
-        (shared, local, init::Monotonics(SystemTimer {}))
+        (shared, local, init::Monotonics(SystemTimer::default()))
     }
 
     /// Main DSP processing routine.

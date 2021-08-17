@@ -34,7 +34,7 @@ impl NetworkProcessor {
         Self {
             stack,
             phy,
-            clock: SystemTimer {},
+            clock: SystemTimer::default(),
             network_was_reset: false,
         }
     }

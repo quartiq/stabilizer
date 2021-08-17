@@ -260,7 +260,7 @@ mod app {
             afes: stabilizer.afes,
         };
 
-        (shared, local, init::Monotonics(SystemTimer {}))
+        (shared, local, init::Monotonics(SystemTimer::default()))
     }
 
     /// Main DSP processing routine for Stabilizer.
