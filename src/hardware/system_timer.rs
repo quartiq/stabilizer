@@ -36,7 +36,7 @@ impl SystemTimer {
     /// * `timer` - The hardware timer used for implementing the RTIC monotonic.
     pub fn initialize(mut timer: hal::timer::Timer<hal::device::TIM15>) {
         timer.pause();
-        // Have the system timer operate at a tick rate of 10 KHz (100 uS per tick). With this
+        // Have the system timer operate at a tick rate of 10 KHz (100 µs per tick). With this
         // configuration and a 65535 period, we get an overflow once every 6.5 seconds.
         timer.set_tick_freq(10.khz());
         timer.apply_freq();
