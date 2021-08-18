@@ -280,7 +280,6 @@ mod app {
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
     #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[settings, signal_generator, telemetry], priority=2)]
-    #[inline(never)]
     #[link_section = ".itcm.process"]
     fn process(mut c: process::Context) {
         let process::SharedResources {
