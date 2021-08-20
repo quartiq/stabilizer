@@ -15,12 +15,14 @@ use minimq::QoS;
 use serde::Serialize;
 
 use super::NetworkReference;
-use crate::hardware::{adc::AdcCode, afe::Gain, dac::DacCode};
+use crate::hardware::{
+    adc::AdcCode, afe::Gain, dac::DacCode, system_timer::SystemTimer,
+};
 use minimq::embedded_nal::IpAddr;
 
 /// The telemetry client for reporting telemetry data over MQTT.
 pub struct TelemetryClient<T: Serialize> {
-    mqtt: minimq::Minimq<NetworkReference, 256>,
+    mqtt: minimq::Minimq<NetworkReference, SystemTimer, 256>,
     telemetry_topic: String<128>,
     _telemetry: core::marker::PhantomData<T>,
 }
@@ -106,7 +108,13 @@ impl<T: Serialize> TelemetryClient<T> {
         prefix: &str,
         broker: IpAddr,
     ) -> Self {
-        let mqtt = minimq::Minimq::new(broker, client_id, stack).unwrap();
+        let mqtt = minimq::Minimq::new(
+            broker,
+            client_id,
+            stack,
+            SystemTimer::default(),
+        )
+        .unwrap();
 
         let mut telemetry_topic: String<128> = String::from(prefix);
         telemetry_topic.push_str("/telemetry").unwrap();

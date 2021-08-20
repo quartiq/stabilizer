@@ -70,6 +70,14 @@ rev = "33aa67d"
 git = "https://github.com/rust-embedded/cortex-m-rt.git"
 rev = "a2e3ad5"
 
+[patch.crates-io.minimq]
+git = "https://github.com/quartiq/minimq"
+rev = "73424f2"
+
+[patch.crates-io.miniconf]
+git = "https://github.com/quartiq/miniconf"
+rev = "1ac3870"
+
 [patch.crates-io.heapless]
 git = "https://github.com/quartiq/heapless.git"
 branch = "feature/assume-init"
