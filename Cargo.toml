@@ -72,7 +72,7 @@ rev = "a2e3ad5"
 
 [patch.crates-io.minimq]
 git = "https://github.com/quartiq/minimq"
-rev = "73424f2"
+rev = "096d29b"
 
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf"
