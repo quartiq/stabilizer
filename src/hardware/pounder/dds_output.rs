@@ -113,7 +113,8 @@ impl DdsOutput {
         // fashion.
         let regs = unsafe { &*hal::stm32::QUADSPI::ptr() };
 
-        if regs.sr.read().flevel() != 0 {
+        // Warn if the fifo is still at least half full.
+        if regs.sr.read().flevel().bits() >= 16 {
             warn!("QSPI stalling")
         }
 
