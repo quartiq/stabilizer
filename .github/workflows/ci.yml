@@ -95,7 +95,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: doc
-          args: --no-deps -p miniconf -p dsp -p ad9959 -p stabilizer
+          args: --no-deps -p miniconf -p idsp -p ad9959 -p stabilizer
 
       - name: cargo deadlinks
         uses: actions-rs/cargo@v1
