@@ -180,7 +180,7 @@ impl core::iter::Iterator for SignalGenerator {
             .wrapping_add(self.config.frequency_tuning_word[sign as usize]);
 
         let scale = match self.config.signal {
-            Signal::Cosine => (dsp::cossin(self.phase_accumulator).0 >> 16),
+            Signal::Cosine => (idsp::cossin(self.phase_accumulator).0 >> 16),
             Signal::Square => {
                 if sign {
                     -1 << 15

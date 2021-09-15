@@ -61,29 +61,6 @@ jobs:
           command: build
           args: --release --features "${{ matrix.features }}"
 
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        toolchain:
-          - stable
-          - beta
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.toolchain }}
-      - name: cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --package dsp --target=x86_64-unknown-linux-gnu
-      - name: cargo bench
-        uses: actions-rs/cargo@v1
-        with:
-          command: bench
-          args: --package dsp --target=x86_64-unknown-linux-gnu
-
   doc:
     runs-on: ubuntu-latest
     steps:
