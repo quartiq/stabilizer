@@ -3,7 +3,6 @@ delete_merged_branches = true
 timeout_sec = 1200
 status = [
   "style",
-  "test (stable)",
   "compile (stable)",
   "doc",
   "HITL Run Status"

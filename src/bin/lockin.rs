@@ -35,7 +35,7 @@ use core::{
 
 use mutex_trait::prelude::*;
 
-use dsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
+use idsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
 use rtic::time::duration::Extensions;
 use stabilizer::{
     hardware::{

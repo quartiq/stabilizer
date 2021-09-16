@@ -5,7 +5,7 @@ resolver = "2"
 authors = ["Robert Jördens <rj@quartiq.de>"]
 description = "Firmware for the Sinara Stabilizer board (stm32h743, eth, poe, 2 adc, 2 dac)"
 categories = ["embedded", "no-std", "hardware-support", "science"]
-license = "MIT OR Aapache-2.0"
+license = "MIT OR Apache-2.0"
 keywords = ["ethernet", "stm32h7", "adc", "dac", "physics"]
 repository = "https://github.com/quartiq/stabilizer"
 readme = "README.md"
@@ -26,7 +26,7 @@ features = []
 default-target = "thumbv7em-none-eabihf"
 
 [workspace]
-members = ["ad9959", "dsp"]
+members = ["ad9959"]
 
 [dependencies]
 cortex-m = { version = "0.7" }
@@ -41,7 +41,7 @@ nb = "1.0.0"
 asm-delay = "0.9.0"
 num_enum = { version = "0.5.4", default-features = false }
 paste = "1"
-dsp = { path = "dsp" }
+idsp = { version = "0.1.0" }
 ad9959 = { path = "ad9959" }
 miniconf = "0.1.0"
 shared-bus = {version = "0.2.2", features = ["cortex-m"] }
@@ -79,7 +79,7 @@ git = "https://github.com/quartiq/smoltcp-nal.git"
 rev = "0634188"
 
 [features]
-nightly = ["cortex-m/inline-asm", "dsp/nightly"]
+nightly = ["cortex-m/inline-asm", "idsp/nightly"]
 pounder_v1_1 = [ ]
 
 [profile.dev]
