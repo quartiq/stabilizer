@@ -1,0 +1,2 @@
+git+https://github.com/quartiq/miniconf#subdirectory=py/miniconf-mqtt
+sympy
