@@ -46,7 +46,7 @@ pub enum NetworkState {
 }
 /// A structure of Stabilizer's default network users.
 pub struct NetworkUsers<S: Default + Miniconf, T: Serialize> {
-    pub miniconf: miniconf::MqttClient<S, NetworkReference>,
+    pub miniconf: miniconf::MqttClient<S, NetworkReference, 512>,
     pub processor: NetworkProcessor,
     stream: DataStream,
     generator: Option<FrameGenerator>,

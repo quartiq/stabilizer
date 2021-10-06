@@ -78,6 +78,10 @@ branch = "feature/assume-init"
 git = "https://github.com/quartiq/smoltcp-nal.git"
 rev = "0634188"
 
+[patch.crates-io.miniconf]
+git = "https://github.com/quartiq/miniconf.git"
+branch = "feature/generic-mqtt-message-size"
+
 [features]
 nightly = ["cortex-m/inline-asm", "dsp/nightly"]
 pounder_v1_1 = [ ]

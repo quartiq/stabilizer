@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-Author: Etienne Wodey
+Author: Leibniz University Hannover, Institute of Quantum Optics, Étienne Wodey
         Vertigo Designs, Ryan Summers
 
 Description: Provides a mechanism to configure dual-iir IIR filters using a high-level API.
@@ -85,7 +85,7 @@ class Lowpass(Filter):
 
     ARGUMENTS = [
         add_argument('--f0', required=True, type=float, help='Corner frequency (Hz)'),
-        add_argument('--K', required=True, type=float, help='Lowpass filter gain (dB)'),
+        add_argument('--K', required=True, type=float, help='Lowpass filter gain'),
     ]
 
     @classmethod
@@ -104,7 +104,7 @@ class Highpass(Filter):
 
     ARGUMENTS = [
         add_argument('--f0', required=True, type=float, help='Corner frequency (Hz)'),
-        add_argument('--K', required=True, type=float, help='Highpass filter gain (dB)'),
+        add_argument('--K', required=True, type=float, help='Highpass filter gain'),
     ]
 
     @classmethod
@@ -122,11 +122,12 @@ class Allpass(Filter):
     DESCRIPTION = "Gain-limited all-pass filter"
 
     ARGUMENTS = [
-        add_argument('f0', type=float, help='Corner frequency (Hz)'),
-        add_argument('K', type=float, help='Highpass filter gain (dB)'),
+        add_argument('--f0', required=True, type=float, help='Corner frequency (Hz)'),
+        add_argument('--K', required=True, type=float, help='Highpass filter gain '),
     ]
 
-    def calculate_coefficients(self, sampling_period, args):
+    @classmethod
+    def calculate_coefficients(cls, sampling_period, args):
         f0_bar = pi * args.f0 * sampling_period
 
         a1 = (1 - f0_bar) / (1 + f0_bar)
@@ -141,12 +142,13 @@ class Notch(Filter):
     DESCRIPTION = "Notch filter"
 
     ARGUMENTS = [
-        add_argument('f0', type=float, help='Corner frequency (Hz)'),
-        add_argument('Q', type=float, help='Filter quality factor'),
-        add_argument('K', type=float, help='Filter gain'),
+        add_argument('--f0', required=True, type=float, help='Corner frequency (Hz)'),
+        add_argument('--Q', required=True, type=float, help='Filter quality factor'),
+        add_argument('--K', required=True, type=float, help='Filter gain'),
     ]
 
-    def calculate_coefficients(self, sampling_period, args):
+    @classmethod
+    def calculate_coefficients(cls, sampling_period, args):
         f0_bar = pi * args.f0 * sampling_period
 
         denominator = (1 + f0_bar / args.Q + f0_bar ** 2)
@@ -173,10 +175,9 @@ def main():
     parser.add_argument('--sample-ticks', type=int, default=128,
                         help='The number of Stabilizer hardware ticks between each sample')
 
-    # TODO: Move the y-min, y-max, and y-offset out of the IIR parameter configuration.
-    parser.add_argument('--y-min', type=float, default=DAC_MAX_SCALE,
+    parser.add_argument('--y-min', type=float, default=-DAC_MAX_SCALE,
                         help='The channel minimum output level (Volts)')
-    parser.add_argument('--y-max', type=float, default=-DAC_MAX_SCALE,
+    parser.add_argument('--y-max', type=float, default=DAC_MAX_SCALE,
                         help='The channel maximum output level (Volts)')
     parser.add_argument('--y-offset', type=float, default=0,
                         help='The channel output offset level (Volts)')
