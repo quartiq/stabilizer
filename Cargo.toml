@@ -80,7 +80,7 @@ rev = "0634188"
 
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf.git"
-branch = "feature/generic-mqtt-message-size"
+rev = "8da5961"
 
 [features]
 nightly = ["cortex-m/inline-asm", "dsp/nightly"]

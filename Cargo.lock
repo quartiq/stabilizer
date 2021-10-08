@@ -203,7 +203,7 @@ dependencies = [
 [[package]]
 name = "derive_miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?branch=feature/generic-mqtt-message-size#886e38e24ee5094aff22a80a046acfe53aba43fd"
+source = "git+https://github.com/quartiq/miniconf.git?rev=8da5961#8da5961c645160a69282f2d5524528645f3fd0b0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -425,7 +425,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?branch=feature/generic-mqtt-message-size#886e38e24ee5094aff22a80a046acfe53aba43fd"
+source = "git+https://github.com/quartiq/miniconf.git?rev=8da5961#8da5961c645160a69282f2d5524528645f3fd0b0"
 dependencies = [
  "derive_miniconf",
  "heapless 0.7.3",
