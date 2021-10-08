@@ -1,3 +1,10 @@
+
+
+### Table of Contents
+
+<-- TOC -->
+
+
 # Miniconf Run-time Settings
 Stabilizer supports run-time settings configuration using MQTT.
 
@@ -57,6 +64,23 @@ documentation](https://github.com/quartiq/miniconf#settings-paths)
 Refer to the documentation for [Miniconf](firmware/miniconf/enum.Error.html) for a
 description of the possible error codes that Miniconf may return if the settings update was
 unsuccessful.
+
+# IIR Configuration
+For the `dual-iir` application, a Python utility has been written to easily configure the IIR
+filters for a variety of filtering and control applications.
+
+The script is located in `scripts/dual_iir_configuration.py`.
+
+To use the script, install dependencies:
+```bash
+python -m pip install -r scripts/requirements.txt
+```
+
+Then, use the built-in help to learn how the utility can automatically configure your IIR filters
+for you:
+```bash
+python scripts/dual_iir_configuration.py --help
+```
 
 # Telemetry
 

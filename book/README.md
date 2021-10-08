@@ -5,6 +5,7 @@ This folder hosts the source used for generating Stabilizer's user manual.
 The user manual is generated using `mdbook`, which can be installed via cargo:
 ```
 cargo install mdbook
+cargo install mdbook-toc
 cargo install mdbook-linkcheck
 ```
 
