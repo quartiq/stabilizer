@@ -80,7 +80,7 @@ rev = "0634188"
 
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf.git"
-branch = "feature/minimq-update"
+rev = "3fec7db"
 
 [features]
 nightly = ["cortex-m/inline-asm", "dsp/nightly"]
