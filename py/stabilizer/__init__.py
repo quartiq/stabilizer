@@ -5,17 +5,18 @@ Author: QUARTIQ GmbH
 Description: General utilities for interfacing with Stabilizer using Python.
 """
 
-# The maximum output scale of the Stabilizer DACs.
-DAC_MAX_SCALE = 4.096 * 2.5
+# The number of DAC LSB codes per volt on Stabilizer outputs.
+DAC_LSB_PER_VOLT = (1 << 16) / (4.096 * 5)
 
 def voltage_to_machine_units(voltage):
-    """ Convert a voltage to IIR machine units.
+    """ Convert a voltage to machine units.
 
     Args:
         voltage: The voltage to convert
 
     Returns:
-        The IIR machine-units associated with the voltage.
+        The machine-units associated with the voltage.
     """
-    assert abs(voltage) <= DAC_MAX_SCALE, 'Voltage out-of-range'
-    return int(voltage / DAC_MAX_SCALE * 0x7FFF)
+    code = int(round(voltage * DAC_LSB_PER_VOLT))
+    assert abs(code) <= 0x7FFF, 'Voltage out-of-range'
+    return code

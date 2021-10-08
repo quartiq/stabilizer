@@ -262,9 +262,9 @@ def main():
     parser.add_argument('--sample-ticks', type=int, default=128,
                         help='The number of Stabilizer hardware ticks between each sample')
 
-    parser.add_argument('--y-min', type=float, default=-stabilizer.DAC_MAX_SCALE,
+    parser.add_argument('--y-min', type=float, default=-10.0,
                         help='The channel minimum output level (Volts)')
-    parser.add_argument('--y-max', type=float, default=stabilizer.DAC_MAX_SCALE,
+    parser.add_argument('--y-max', type=float, default=10.0,
                         help='The channel maximum output level (Volts)')
     parser.add_argument('--y-offset', type=float, default=0,
                         help='The channel output offset level (Volts)')
