@@ -48,7 +48,6 @@ shared-bus = {version = "0.2.2", features = ["cortex-m"] }
 serde-json-core = "0.4"
 mcp23017 = "1.0"
 mutex-trait = "0.2"
-minimq = "0.3"
 
 # rtt-target bump
 [dependencies.rtt-logger]
@@ -70,14 +69,6 @@ rev = "33aa67d"
 git = "https://github.com/rust-embedded/cortex-m-rt.git"
 rev = "a2e3ad5"
 
-[patch.crates-io.minimq]
-git = "https://github.com/quartiq/minimq"
-rev = "096d29b"
-
-[patch.crates-io.miniconf]
-git = "https://github.com/quartiq/miniconf"
-rev = "1ac3870"
-
 [patch.crates-io.heapless]
 git = "https://github.com/quartiq/heapless.git"
 branch = "feature/assume-init"
@@ -85,6 +76,14 @@ branch = "feature/assume-init"
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
 rev = "0634188"
+
+[dependencies.minimq]
+git = "https://github.com/quartiq/minimq.git"
+branch = "release/0.4"
+
+[patch.crates-io.miniconf]
+git = "https://github.com/quartiq/miniconf.git"
+branch = "feature/minimq-update"
 
 [features]
 nightly = ["cortex-m/inline-asm", "dsp/nightly"]

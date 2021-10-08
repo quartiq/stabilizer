@@ -203,7 +203,7 @@ dependencies = [
 [[package]]
 name = "derive_miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf?rev=1ac3870#1ac3870a63bd4246438ea67a683ec0f85b296a98"
+source = "git+https://github.com/quartiq/miniconf.git?branch=feature/minimq-update#c46c93a32023795cf8be7e1ac5a67de25e97b773"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -425,7 +425,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf?rev=1ac3870#1ac3870a63bd4246438ea67a683ec0f85b296a98"
+source = "git+https://github.com/quartiq/miniconf.git?branch=feature/minimq-update#c46c93a32023795cf8be7e1ac5a67de25e97b773"
 dependencies = [
  "derive_miniconf",
  "heapless 0.7.3",
@@ -437,8 +437,8 @@ dependencies = [
 
 [[package]]
 name = "minimq"
-version = "0.3.0"
-source = "git+https://github.com/quartiq/minimq?rev=096d29b#096d29bc97415c92586e7ae196bbf169e99827ac"
+version = "0.4.0"
+source = "git+https://github.com/quartiq/minimq.git?branch=release/0.4#cead7b8e91ed711fc33b79b6a4e9e499c48301ca"
 dependencies = [
  "bit_field",
  "embedded-nal",
