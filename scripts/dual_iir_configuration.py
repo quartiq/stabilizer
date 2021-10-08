@@ -291,7 +291,7 @@ def main():
         interface = await Miniconf.create(args.prefix, args.broker)
 
         # Set the filter coefficients.
-        # TODO: Handle higher-order cascades.
+        # Note: In the future, we will need to Handle higher-order cascades.
         await interface.command(f'iir_ch/{args.channel}/0', {
             'ba': coefficients,
             'y_min': stabilizer.voltage_to_machine_units(args.y_min),
