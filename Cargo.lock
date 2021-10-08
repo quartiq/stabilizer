@@ -430,9 +430,23 @@ dependencies = [
  "derive_miniconf",
  "heapless 0.7.3",
  "log",
- "minimq",
+ "minimq 0.4.0 (git+https://github.com/quartiq/minimq.git?branch=release/0.4)",
  "serde",
  "serde-json-core",
+]
+
+[[package]]
+name = "minimq"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2663108c61423acb77305e78252a745b7c56a7d781789997009c83364b1cb652"
+dependencies = [
+ "bit_field",
+ "embedded-nal",
+ "embedded-time",
+ "enum-iterator",
+ "heapless 0.7.3",
+ "smlang",
 ]
 
 [[package]]
@@ -897,7 +911,7 @@ dependencies = [
  "log",
  "mcp23017",
  "miniconf",
- "minimq",
+ "minimq 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "mutex-trait",
  "nb 1.0.0",
  "num_enum",
