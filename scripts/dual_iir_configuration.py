@@ -5,7 +5,6 @@ Author: Leibniz University Hannover, Institute of Quantum Optics, Étienne Wodey
 
 Description: Provides a mechanism to configure dual-iir IIR filters using a high-level API.
 """
-import abc
 import argparse
 import asyncio
 import collections
@@ -13,6 +12,7 @@ import logging
 
 from math import pi
 
+import stabilizer
 from miniconf import Miniconf
 
 #pylint: disable=invalid-name
@@ -20,11 +20,8 @@ from miniconf import Miniconf
 # The base Stabilizer tick rate in Hz.
 STABILIZER_TICK_RATE = 100e6
 
-# The maximum output scale of the Stabilizer DACs.
-DAC_MAX_SCALE = 4.096 * 2.5
 
-
-Filter = collections.namedtuple('Filter', ['help', 'arguments', 'handler'])
+Filter = collections.namedtuple('Filter', ['help', 'arguments', 'calculate_coefficients'])
 Argument = collections.namedtuple('Argument', ['positionals', 'keywords'])
 
 def add_argument(*args, **kwargs):
@@ -32,134 +29,224 @@ def add_argument(*args, **kwargs):
     return Argument(args, kwargs)
 
 
-def _voltage_to_machine_units(voltage):
-    """ Convert a voltage to IIR machine units.
+def get_filters():
+    """ Get a dictionary of all available filters. """
+    return {
+        'lowpass': Filter(help='Gain-limited low-pass filter',
+                          arguments=[
+                              add_argument('--f0', required=True, type=float,
+                                           help='Corner frequency (Hz)'),
+                              add_argument('--K', required=True, type=float,
+                                           help='Lowpass filter gain'),
+                          ],
+                          calculate_coefficients=calculate_lowpass_coefficients),
+        'highpass': Filter(help='Gain-limited high-pass filter',
+                           arguments=[
+                               add_argument('--f0', required=True, type=float,
+                                            help='Corner frequency (Hz)'),
+                               add_argument('--K', required=True, type=float,
+                                            help='Highpass filter gain'),
+                           ],
+                           calculate_coefficients=calculate_highpass_coefficients),
+        'allpass': Filter(help='Gain-limited all-pass filter',
+                          arguments=[
+                              add_argument('--f0', required=True, type=float,
+                                           help='Corner frequency (Hz)'),
+                              add_argument('--K', required=True, type=float,
+                                           help='Allpass filter gain'),
+                          ],
+                          calculate_coefficients=calculate_allpass_coefficients),
+        'notch': Filter(help='Notch filter',
+                        arguments=[
+                            add_argument('--f0', required=True, type=float,
+                                         help='Corner frequency (Hz)'),
+                            add_argument('--Q', required=True, type=float,
+                                         help='Filter quality factor'),
+                            add_argument('--K', required=True, type=float,
+                                         help='Filter gain'),
+                        ],
+                        calculate_coefficients=calculate_notch_coefficients),
+        'pid': Filter(help='PID controller',
+                      arguments=[
+                          add_argument('--Kp', required=True, type=float,
+                                       help='Proportional (P) gain at 1 Hz'),
+                          add_argument('--Ki', required=True, type=float,
+                                       help='Integral (I) gain at 1 Hz'),
+                          add_argument('--Kd', default=0, type=float,
+                                       help='Derivative (D) gain at 1 Hz'),
+                      ],
+                      calculate_coefficients=calculate_pid_coefficients),
+        'pii': Filter(help='PII controller',
+                      arguments=[
+                          add_argument('--Kp', required=True, type=float,
+                                       help='Proportional (P) gain at 1 Hz'),
+                          add_argument('--Ki', required=True, type=float,
+                                       help='Integral (I) gain at 1 Hz'),
+                          add_argument('--Kii', required=True, type=float,
+                                       help='Integral Squared (I^2) gain at 1 Hz'),
+                      ],
+                      calculate_coefficients=calculate_pii_coefficients),
+    }
+
+
+def calculate_lowpass_coefficients(sampling_period, args):
+    """ Calculate low-pass IIR filter coefficients.
+
+    Note:
+        Calculations largely taken using the derivations in page 9 of
+        https://arxiv.org/pdf/1508.06319.pdf
 
     Args:
-        voltage: The voltage to convert
+        sampling_period: The period between discrete samples of the input signal.
+        args: The filter command-line arguments.
 
     Returns:
-        The IIR machine-units associated with the voltage.
+        [b0, b1, b2, -a1, -a2] IIR coefficients to be programmed into a Stabilizer IIR filter
+        configuration.
     """
-    assert abs(voltage) <= DAC_MAX_SCALE, 'Voltage out-of-range'
-    return int(voltage / DAC_MAX_SCALE * 0x7FFF)
+    f0_bar = pi * args.f0 * sampling_period
+
+    a1 = (1 - f0_bar) / (1 + f0_bar)
+    b0 = args.K * (f0_bar / (1 + f0_bar))
+    b1 = args.K * f0_bar / (1 + f0_bar)
+
+    return [b0, b1, 0, a1, 0]
 
 
-class Filter(abc.ABC):
+def calculate_highpass_coefficients(sampling_period, args):
+    """ Calculate high-pass IIR filter coefficients.
 
-    def name(self):
-        return self.__class__.__name__
+    Note:
+        Calculations largely taken using the derivations in page 9 of
+        https://arxiv.org/pdf/1508.06319.pdf
 
-    @property
-    @abc.abstractmethod
-    def DESCRIPTION(self):
-        """ Description of the filter. """
+    Args:
+        sampling_period: The period between discrete samples of the input signal.
+        args: The filter command-line arguments.
 
+    Returns:
+        [b0, b1, b2, -a1, -a2] IIR coefficients to be programmed into a Stabilizer IIR filter
+        configuration.
+    """
+    f0_bar = pi * args.f0 * sampling_period
 
-    @property
-    @abc.abstractmethod
-    def ARGUMENTS(self):
-        """ A list of command-line arguments for the filter. """
+    a1 = (1 - f0_bar) / (1 + f0_bar)
+    b0 = args.K * (f0_bar / (1 + f0_bar))
+    b1 = - args.K / (1 + f0_bar)
 
-    @classmethod
-    @abc.abstractmethod
-    def calculate_coefficients(cls, sampling_period, args):
-        """ Calculate IIR filter coefficients.
-
-        Note:
-            Calculations largely taken using the derivations in page 9 of
-            https://arxiv.org/pdf/1508.06319.pdf
-
-        Args:
-            sampling_period: The period between discrete samples of the input signal.
-            args: The filter command-line arguments.
-
-        Returns:
-            [b0, b1, b2, -a1, -a2] IIR coefficients to be programmed into a Stabilizer IIR filter
-            configuration.
-        """
+    return [b0, b1, 0, a1, 0]
 
 
-class Lowpass(Filter):
-    DESCRIPTION = "Gain-limited low-pass filter"
+def calculate_allpass_coefficients(sampling_period, args):
+    """ Calculate all-pass IIR filter coefficients.
 
-    ARGUMENTS = [
-        add_argument('--f0', required=True, type=float, help='Corner frequency (Hz)'),
-        add_argument('--K', required=True, type=float, help='Lowpass filter gain'),
-    ]
+    Note:
+        Calculations largely taken using the derivations in page 9 of
+        https://arxiv.org/pdf/1508.06319.pdf
 
-    @classmethod
-    def calculate_coefficients(cls, sampling_period, args):
-        f0_bar = pi * args.f0 * sampling_period
+    Args:
+        sampling_period: The period between discrete samples of the input signal.
+        args: The filter command-line arguments.
 
-        a1 = (1 - f0_bar) / (1 + f0_bar)
-        b0 = args.K * (f0_bar / (1 + f0_bar))
-        b1 = args.K * f0_bar / (1 + f0_bar)
+    Returns:
+        [b0, b1, b2, -a1, -a2] IIR coefficients to be programmed into a Stabilizer IIR filter
+        configuration.
+    """
+    f0_bar = pi * args.f0 * sampling_period
 
-        return [b0, b1, 0, a1, 0]
+    a1 = (1 - f0_bar) / (1 + f0_bar)
 
+    b0 = args.K * (1 - f0_bar) / (1 + f0_bar)
+    b1 = - args.K
 
-class Highpass(Filter):
-    DESCRIPTION = "Gain-limited high-pass filter"
-
-    ARGUMENTS = [
-        add_argument('--f0', required=True, type=float, help='Corner frequency (Hz)'),
-        add_argument('--K', required=True, type=float, help='Highpass filter gain'),
-    ]
-
-    @classmethod
-    def calculate_coefficients(cls, sampling_period, args):
-        f0_bar = pi * args.f0 * sampling_period
-
-        a1 = (1 - f0_bar) / (1 + f0_bar)
-        b0 = args.K * (f0_bar / (1 + f0_bar))
-        b1 = - args.K / (1 + f0_bar)
-
-        return [b0, b1, 0, a1, 0]
+    return [b0, b1, 0, a1, 0]
 
 
-class Allpass(Filter):
-    DESCRIPTION = "Gain-limited all-pass filter"
+def calculate_notch_coefficients(sampling_period, args):
+    """ Calculate notch IIR filter coefficients.
 
-    ARGUMENTS = [
-        add_argument('--f0', required=True, type=float, help='Corner frequency (Hz)'),
-        add_argument('--K', required=True, type=float, help='Highpass filter gain '),
-    ]
+    Note:
+        Calculations largely taken using the derivations in page 9 of
+        https://arxiv.org/pdf/1508.06319.pdf
 
-    @classmethod
-    def calculate_coefficients(cls, sampling_period, args):
-        f0_bar = pi * args.f0 * sampling_period
+    Args:
+        sampling_period: The period between discrete samples of the input signal.
+        args: The filter command-line arguments.
 
-        a1 = (1 - f0_bar) / (1 + f0_bar)
+    Returns:
+        [b0, b1, b2, -a1, -a2] IIR coefficients to be programmed into a Stabilizer IIR filter
+        configuration.
+    """
+    f0_bar = pi * args.f0 * sampling_period
 
-        b0 = args.K * (1 - f0_bar) / (1 + f0_bar)
-        b1 = - args.K
+    denominator = (1 + f0_bar / args.Q + f0_bar ** 2)
 
-        return [b0, b1, 0, a1, 0]
+    a1 = 2 * (1 - f0_bar ** 2) / denominator
+    a2 = - (1 - f0_bar / args.Q + f0_bar ** 2) / denominator
+    b0 = args.K * (1 + f0_bar ** 2) / denominator
+    b1 = - (2 * args.K * (1 - f0_bar ** 2)) / denominator
+    b2 = args.K * (1 + f0_bar ** 2) / denominator
+
+    return [b0, b1, b2, a1, a2]
 
 
-class Notch(Filter):
-    DESCRIPTION = "Notch filter"
+def calculate_pid_coefficients(sampling_period, args):
+    """ Calculate PID IIR filter coefficients.
 
-    ARGUMENTS = [
-        add_argument('--f0', required=True, type=float, help='Corner frequency (Hz)'),
-        add_argument('--Q', required=True, type=float, help='Filter quality factor'),
-        add_argument('--K', required=True, type=float, help='Filter gain'),
-    ]
+    # Note
+        These equations are taken from the PID-IIR primer written by Robert Jördens at
+        https://hackmd.io/IACbwcOTSt6Adj3_F9bKuw
 
-    @classmethod
-    def calculate_coefficients(cls, sampling_period, args):
-        f0_bar = pi * args.f0 * sampling_period
+    Args:
+        sampling_period: The period between discrete samples of the input signal.
+        args: The filter command-line arguments.
 
-        denominator = (1 + f0_bar / args.Q + f0_bar ** 2)
+    Returns:
+        [b0, b1, b2, -a1, -a2] IIR coefficients to be programmed into a Stabilizer IIR filter
+        configuration.
+    """
 
-        a1 = 2 * (1 - f0_bar ** 2) / denominator
-        a2 = - (1 - f0_bar / args.Q + f0_bar ** 2) / denominator
-        b0 = args.K * (1 + f0_bar ** 2) / denominator
-        b1 = - (2 * args.K * (1 - f0_bar ** 2)) / denominator
-        b2 = args.K * (1 + f0_bar ** 2) / denominator
+    k_p = args.Kp
+    k_i = args.Ki * 2 * pi * sampling_period
+    k_d = args.Kd / (2 * pi) / sampling_period
 
-        return [b0, b1, b2, a1, a2]
+    b0 = k_p + k_i + k_d
+    b1 = - (k_p + 2 * k_d)
+    b2 = k_d
+
+    # For PID controllers, a1 and a2 are always fixed.
+    return [b0, b1, b2, 1, 0]
+
+
+def calculate_pii_coefficients(sampling_period, args):
+    """ Calculate PII IIR filter coefficients.
+
+    # Note
+        These equations are taken from the PID-IIR primer written by Robert Jördens at
+        https://hackmd.io/IACbwcOTSt6Adj3_F9bKuw
+
+    Args:
+        sampling_period: The period between discrete samples of the input signal.
+        args: The filter command-line arguments.
+
+    Returns:
+        [b0, b1, b2, -a1, -a2] IIR coefficients to be programmed into a Stabilizer IIR filter
+        configuration.
+    """
+    # a^2 * y = (Ki2 b^0 + Ki b^1 + Kp b^2) * x
+    # y0 -2y1 + y2 = ((Ki2, 0, 0) + (Ki, -Ki, 0) + (Kp, -2Kp, Kp)) * x
+    # (1)y0 + (-2)y1 + (1)y2 = (Ki2) x0 + (Ki) x0 + (-Ki) x1 + (Kp) x0 + (-2Kp) x1 + (Kp) x2
+    # (1)y0 + (-2)y1 + (1)y2 = (Ki2 + Ki + Kp) x0 + (-Ki + -2Kp) x1 + (Kp) x2
+    k_p = args.Kp
+    k_i = args.Ki * 2 * pi * sampling_period
+    k_i2 = args.Kii * (2 * pi * sampling_period) ** 2
+
+    b0 = k_i2 + k_i + k_p
+    b1 = - (k_i + 2 * k_p)
+    b2 = k_p
+
+    # For PII controllers, a1 and a2 are always fixed.
+    return [b0, b1, b2, 2, -1]
 
 
 def main():
@@ -175,9 +262,9 @@ def main():
     parser.add_argument('--sample-ticks', type=int, default=128,
                         help='The number of Stabilizer hardware ticks between each sample')
 
-    parser.add_argument('--y-min', type=float, default=-DAC_MAX_SCALE,
+    parser.add_argument('--y-min', type=float, default=-stabilizer.DAC_MAX_SCALE,
                         help='The channel minimum output level (Volts)')
-    parser.add_argument('--y-max', type=float, default=DAC_MAX_SCALE,
+    parser.add_argument('--y-max', type=float, default=stabilizer.DAC_MAX_SCALE,
                         help='The channel maximum output level (Volts)')
     parser.add_argument('--y-offset', type=float, default=0,
                         help='The channel output offset level (Volts)')
@@ -186,23 +273,18 @@ def main():
     # Next, add subparsers and their arguments.
     subparsers = parser.add_subparsers(help='Filter-specific design parameters', dest='filter_type')
 
-    FILTERS = {
-        'lowpass': Lowpass,
-        'highpass': Highpass,
-        'allpass': Allpass,
-        'notch': Notch
-    }
+    filters = get_filters()
 
-    for (filter_name, filt) in FILTERS.items():
-        subparser = subparsers.add_parser(filter_name, help=filt.DESCRIPTION)
-        for arg in filt.ARGUMENTS:
+    for (filter_name, filt) in filters.items():
+        subparser = subparsers.add_parser(filter_name, help=filt.help)
+        for arg in filt.arguments:
             subparser.add_argument(*arg.positionals, **arg.keywords)
 
     args = parser.parse_args()
 
     # Calculate the IIR coefficients for the filter.
     sampling_period = args.sample_ticks / STABILIZER_TICK_RATE
-    coefficients = FILTERS[args.filter_type].calculate_coefficients(sampling_period, args)
+    coefficients = filters[args.filter_type].calculate_coefficients(sampling_period, args)
 
     async def configure():
         logging.info('Connecting to broker')
@@ -212,9 +294,9 @@ def main():
         # TODO: Handle higher-order cascades.
         await interface.command(f'iir_ch/{args.channel}/0', {
             'ba': coefficients,
-            'y_min': _voltage_to_machine_units(args.y_min),
-            'y_max': _voltage_to_machine_units(args.y_max),
-            'y_offset': _voltage_to_machine_units(args.y_offset)
+            'y_min': stabilizer.voltage_to_machine_units(args.y_min),
+            'y_max': stabilizer.voltage_to_machine_units(args.y_max),
+            'y_offset': stabilizer.voltage_to_machine_units(args.y_offset)
         })
 
     asyncio.run(configure())

@@ -11,24 +11,11 @@ import sys
 
 from gmqtt import Client as MqttClient
 from miniconf import Miniconf
+import stabilizer
 
 # The minimum allowable loopback voltage error (difference between output set point and input
 # measured value).
 MINIMUM_VOLTAGE_ERROR = 0.010
-
-def _voltage_to_machine_units(voltage):
-    """ Convert a voltage to IIR machine units.
-
-    Args:
-        voltage: The voltage to convert
-
-    Returns:
-        The IIR machine-units associated with the voltage.
-    """
-    dac_range = 4.096 * 2.5
-    assert abs(voltage) <= dac_range, 'Voltage out-of-range'
-    return voltage / dac_range * 0x7FFF
-
 
 def static_iir_output(output_voltage):
     """ Generate IIR configuration for a static output voltage.
@@ -39,7 +26,7 @@ def static_iir_output(output_voltage):
     Returns
         The IIR configuration to send over Miniconf.
     """
-    machine_units = _voltage_to_machine_units(output_voltage)
+    machine_units = stabilizer.voltage_to_machine_units(output_voltage)
     return {
         'y_min': machine_units,
         'y_max': machine_units,
