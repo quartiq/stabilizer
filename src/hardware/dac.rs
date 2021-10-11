@@ -217,7 +217,7 @@ macro_rules! dac_output {
                 // elsewhere, so it is safe to access them here.
                 for buf in unsafe { DAC_BUF[$index].iter_mut() } {
                     for byte in buf.iter_mut() {
-                        *byte = 0;
+                        *byte = 32_768;
                     }
                 }
 
