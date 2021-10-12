@@ -82,14 +82,19 @@ The script is located in `scripts/dual_iir_configuration.py`.
 
 To use the script, install dependencies:
 ```bash
-python -m venv vpy --system-site-packages
-./vpy/Scripts/pip install scripts/requirements.txt
+python -m venv --system-site-packages vpy
+
+# Refer to https://docs.python.org/3/tutorial/venv.html for more information on activating the
+# virtual environment. This command is different on different platforms.
+./vpy/Scripts/activate
+
+python -m pip install scripts/requirements.txt
 ```
 
 Then, use the built-in help to learn how the utility can automatically configure your IIR filters
 for you:
 ```bash
-./vpy/Scripts/python scripts/dual_iir_configuration.py --help
+python scripts/dual_iir_configuration.py --help
 ```
 
 # Telemetry
