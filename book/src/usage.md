@@ -22,7 +22,8 @@ applications, each application maintains its own independent value.
 ## Installation
 Install the Miniconf configuration utilities:
 ```
-python -m pip install git+https://github.com/quartiq/miniconf#subdirectory=miniconf-py
+python -m venv vpy --system-site-packages
+./vpy/Scripts/pip install scripts/requirements.txt
 ```
 
 To use `miniconf`, execute it as follows:
@@ -73,13 +74,14 @@ The script is located in `scripts/dual_iir_configuration.py`.
 
 To use the script, install dependencies:
 ```bash
-python -m pip install -r scripts/requirements.txt
+python -m venv vpy --system-site-packages
+./vpy/Scripts/pip install scripts/requirements.txt
 ```
 
 Then, use the built-in help to learn how the utility can automatically configure your IIR filters
 for you:
 ```bash
-python scripts/dual_iir_configuration.py --help
+./vpy/Scripts/python scripts/dual_iir_configuration.py --help
 ```
 
 # Telemetry
