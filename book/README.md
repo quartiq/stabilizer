@@ -13,8 +13,7 @@ directory, and then serve the book:
 ```
 cargo doc --no-deps -p miniconf -p stabilizer -p idsp -p ad9959
 mv target/thumbv7em-none-eabihf/doc book/src/firmware
-cd book
-mdbook serve
+mdbook serve book
 ```
 
 Once the `mdbook serve` command is run, the manual can be found on a web browser at

@@ -16,12 +16,20 @@ applications, each application maintains its own independent value.
 Install the Miniconf configuration utilities using a virtual environment:
 ```
 python -m venv --system-site-packages vpy
-./vpy/Scripts/pip install -r scripts/requirements.txt
+
+# Refer to https://docs.python.org/3/tutorial/venv.html for more information on activating the
+# virtual environment. This command is different on different platforms.
+./vpy/Scripts/activate
+```
+
+Next, install prerequisite packages
+```
+python -m pip install -r scripts/requirements.txt
 ```
 
 To use `miniconf`, execute it as follows:
 ```
-./vpy/Scripts/python -m miniconf --help
+python -m miniconf --help
 ```
 
 Miniconf also exposes a programmatic Python API, so it's possible to write automation scripting of
@@ -41,7 +49,7 @@ used:
 * `value` = `{"ip": [192, 168, 0, 1], "port": 4000}`
 
 ```
-./vpy/Scripts/python -m miniconf --broker 10.34.16.10 dt/sinara/dual-iir/00-11-22-33-44-55 stream_target='{"ip": [10, 34, 16, 123], "port": 4000}'
+python -m miniconf --broker 10.34.16.10 dt/sinara/dual-iir/00-11-22-33-44-55 stream_target='{"ip": [10, 34, 16, 123], "port": 4000}'
 
 Where `10.34.16.10` is the MQTT broker address that matches the one configured in the source code and `10.34.16.123` and `4000` are the desire stream target IP and port.
 ```
