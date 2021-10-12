@@ -14,7 +14,7 @@ pub mod network_processor;
 pub mod shared;
 pub mod telemetry;
 
-use crate::hardware::{EthernetPhy, NetworkStack};
+use crate::hardware::{system_timer::SystemTimer, EthernetPhy, NetworkStack};
 use data_stream::{DataStream, FrameGenerator};
 use minimq::embedded_nal::IpAddr;
 use network_processor::NetworkProcessor;
@@ -46,7 +46,8 @@ pub enum NetworkState {
 }
 /// A structure of Stabilizer's default network users.
 pub struct NetworkUsers<S: Default + Miniconf, T: Serialize> {
-    pub miniconf: miniconf::MqttClient<S, NetworkReference, 512>,
+    pub miniconf:
+        miniconf::MqttClient<S, NetworkReference, SystemTimer, 512, 1>,
     pub processor: NetworkProcessor,
     stream: DataStream,
     generator: Option<FrameGenerator>,
@@ -90,6 +91,7 @@ where
             &get_client_id(app, "settings", mac),
             &prefix,
             broker,
+            SystemTimer::default(),
         )
         .unwrap();
 

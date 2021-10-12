@@ -22,7 +22,7 @@ Stabilizer can be extended and coupled with a mezzanine board. One such mezzanin
 # Applications
 
 This firmware offers a library of hardware and software functionality targeting the use of the Stabilizer hardware in various digital signal processing applications commonly occurring in Quantum Technology.
-It provides abstractions over the fast analog inputs and outputs, time stamping, Pounder DDS interfaces and a collection of tailored and optimized digital signal processing algorithms (IIR, FIR, Lockin, PLL, reciprocal PLL, Unwrapper, Lowpass, Cosine-Sine, Atan2) in the [DSP crate](firmware/dsp/index.html).
+It provides abstractions over the fast analog inputs and outputs, time stamping, Pounder DDS interfaces and a collection of tailored and optimized digital signal processing algorithms (IIR, FIR, Lockin, PLL, reciprocal PLL, Unwrapper, Lowpass, Cosine-Sine, Atan2) in the [`idsp` crate](firmware/idsp/index.html).
 An application, which is the compiled firmware running on the device, can compose and configure these hardware and software components to implement different use cases.
 Several applications are provided by default.
 

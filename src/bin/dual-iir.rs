@@ -33,7 +33,7 @@ use core::sync::atomic::{fence, Ordering};
 
 use mutex_trait::prelude::*;
 
-use dsp::iir;
+use idsp::iir;
 use rtic::time::duration::Extensions;
 use stabilizer::{
     hardware::{
