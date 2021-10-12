@@ -12,8 +12,9 @@ import logging
 
 from math import pi
 
-import stabilizer
 from miniconf import Miniconf
+
+import stabilizer
 
 #pylint: disable=invalid-name
 
