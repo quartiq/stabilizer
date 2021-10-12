@@ -10,7 +10,7 @@ DAC_LSB_PER_VOLT = (1 << 16) / (4.096 * 5)
 
 # The absolute full-scale output voltage in either positive or negative direction exposed by the
 # DAC.
-DAC_FULL_SCALE = DAC_LSB_PER_VOLT / (1 << 16) / 2
+DAC_FULL_SCALE = float(0x7FFF / DAC_LSB_PER_VOLT)
 
 def voltage_to_machine_units(voltage):
     """ Convert a voltage to machine units.
@@ -22,5 +22,5 @@ def voltage_to_machine_units(voltage):
         The machine-units associated with the voltage.
     """
     code = int(round(voltage * DAC_LSB_PER_VOLT))
-    assert abs(code) <= 0x7FFF, 'Voltage out-of-range'
+    assert abs(code) <= 0x7FFF, f'Voltage out-of-range ({hex(code)})'
     return code

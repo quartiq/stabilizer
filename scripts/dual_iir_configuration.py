@@ -103,24 +103,18 @@ def get_filters():
                         calculate_coefficients=calculate_notch_coefficients),
         'pid': Filter(help='PID controller',
                       arguments=[
-                          add_argument('--Kp', required=True, type=float,
+                          add_argument('--Kp', default=0, type=float,
                                        help='Proportional (P) gain at 1 Hz'),
-                          add_argument('--Ki', required=True, type=float,
+                          add_argument('--Ki', default=0, type=float,
                                        help='Integral (I) gain at 1 Hz'),
+                          add_argument('--Kii', default=0, type=float,
+                                       help='Integral Squared (I^2) gain at 1 Hz'),
                           add_argument('--Kd', default=0, type=float,
                                        help='Derivative (D) gain at 1 Hz'),
+                          add_argument('--Kdd', default=0, type=float,
+                                       help='Derivative Squared (D^2) gain at 1 Hz'),
                       ],
                       calculate_coefficients=calculate_pid_coefficients),
-        'pii': Filter(help='PII controller',
-                      arguments=[
-                          add_argument('--Kp', required=True, type=float,
-                                       help='Proportional (P) gain at 1 Hz'),
-                          add_argument('--Ki', required=True, type=float,
-                                       help='Integral (I) gain at 1 Hz'),
-                          add_argument('--Kii', required=True, type=float,
-                                       help='Integral Squared (I^2) gain at 1 Hz'),
-                      ],
-                      calculate_coefficients=calculate_pii_coefficients),
     }
 
 
@@ -175,34 +169,57 @@ def calculate_notch_coefficients(sampling_period, args):
 
 def calculate_pid_coefficients(sampling_period, args):
     """ Calculate PID IIR filter coefficients. """
+
+    # TODO: Disallow invalid combinations of e.g. I^2 + D
+
     k_p = args.Kp
-    k_i = args.Ki * 2 * pi * sampling_period
-    k_d = args.Kd / (2 * pi) / sampling_period
+    k_i = args.Ki * (2 * pi / sampling_period)
+    k_i2 = args.Kii * ((2 * pi / sampling_period) ** 2)
+    k_d = args.Kd / ((2 * pi) / sampling_period)
+    k_d2 = args.Kdd / (((2 * pi) / sampling_period) ** 2)
 
-    b0 = k_p + k_i + k_d
-    b1 = - (k_p + 2 * k_d)
-    b2 = k_d
+    # First, determine the lowest feed-back rank we can use.
+    if args.Kii != 0:
+        feedback_rank = 2
+    elif args.Ki != 0:
+        feedback_rank = 1
+    else:
+        feedback_rank = 0
 
-    # For PID controllers, a1 and a2 are always fixed.
-    return [b0, b1, b2, 1, 0]
+    print('Feedback rank: ', feedback_rank)
 
+    FEEDFORWARD_KERNELS = [
+        [1, 0, 0],
+        [1, -1, 0],
+        [1, -2, 1]
+    ]
 
-def calculate_pii_coefficients(sampling_period, args):
-    """ Calculate PII IIR filter coefficients. """
-    # a^2 * y = (Ki2 b^0 + Ki b^1 + Kp b^2) * x
-    # y0 -2y1 + y2 = ((Ki2, 0, 0) + (Ki, -Ki, 0) + (Kp, -2Kp, Kp)) * x
-    # (1)y0 + (-2)y1 + (1)y2 = (Ki2) x0 + (Ki) x0 + (-Ki) x1 + (Kp) x0 + (-2Kp) x1 + (Kp) x2
-    # (1)y0 + (-2)y1 + (1)y2 = (Ki2 + Ki + Kp) x0 + (-Ki + -2Kp) x1 + (Kp) x2
-    k_p = args.Kp
-    k_i = args.Ki * 2 * pi * sampling_period
-    k_i2 = args.Kii * (2 * pi * sampling_period) ** 2
+    FEEDBACK_KERNELS = [
+        # Proportional feedback
+        ([1, 0, 0], [k_p, k_d, k_d2]),
 
-    b0 = k_i2 + k_i + k_p
-    b1 = - (k_i + 2 * k_p)
-    b2 = k_p
+        # I integration
+        ([1, -1, 0], [k_i, k_p, k_d]),
 
-    # For PII controllers, a1 and a2 are always fixed.
-    return [b0, b1, b2, 2, -1]
+        # I^2 double integration
+        ([1, -2, 1], [k_i2, k_i, k_p]),
+    ]
+
+    # We now select the type of kernel using the rank of the feedback rank.
+    # a-coefficients are defined purely by the feedback kernel.
+    a_coefficients, gains = FEEDBACK_KERNELS[feedback_rank]
+
+    b_coefficients = [0, 0, 0]
+    for (kernel, gain) in zip(FEEDFORWARD_KERNELS, gains):
+        for index, kernel_value in enumerate(kernel):
+            b_coefficients[index] += kernel_value * gain
+
+    # Note: Normalization is redundant because a0 is defined to be 1 in all cases. Because of this,
+    # normalization is skipped.
+    b_norm = b_coefficients
+    a_norm = a_coefficients
+
+    return [b_norm[0], b_norm[1], b_norm[2], -1 * a_norm[1], -1 * a_norm[2]]
 
 
 def main():
