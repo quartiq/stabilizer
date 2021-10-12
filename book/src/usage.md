@@ -16,7 +16,7 @@ applications, each application maintains its own independent value.
 Install the Miniconf configuration utilities using a virtual environment:
 ```
 python -m venv --system-site-packages vpy
-./vpy/Scripts/pip install git+https://github.com/quartiq/miniconf#subdirectory=py/miniconf-mqtt
+./vpy/Scripts/pip install -r scripts/requirements.txt
 ```
 
 To use `miniconf`, execute it as follows:
