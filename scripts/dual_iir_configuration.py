@@ -20,9 +20,36 @@ from miniconf import Miniconf
 # The base Stabilizer tick rate in Hz.
 STABILIZER_TICK_RATE = 100e6
 
-
-Filter = collections.namedtuple('Filter', ['help', 'arguments', 'calculate_coefficients'])
+# Generic type for containing a command-line argument. Use `add_argument` for simple construction.
 Argument = collections.namedtuple('Argument', ['positionals', 'keywords'])
+
+""" Represents a generic filter that can be represented by an IIR filter.
+
+# Fields
+    * `help`: This field specifies helpful human-readable information that will be presented to
+        users on the command line.
+    * `arguments`: A list of `Argument` objects representing available command-line arguments for
+    the filter. Use the `add_argument()` function to easily parse options as they would be provided
+        to argparse.
+    * `calculate_coefficients`: A function, provided two argumetns, that returns the IIR
+    coefficients. See below for more information on this function.
+
+# Coefficients Calculation Function
+
+    Description:
+        This function takes in two input arguments and returns the IIR filter coefficients for
+        Stabilizer to represent the necessary filter.
+
+    Args:
+        sampling_period: The period between discrete samples of the input signal.
+        args: The filter command-line arguments. Any filter-related arguments may be accessed via
+        their name. E.g. `args.K`.
+
+    Returns:
+        [b0, b1, b2, -a1, -a2] IIR coefficients to be programmed into a Stabilizer IIR filter
+        configuration.
+"""
+Filter = collections.namedtuple('Filter', ['help', 'arguments', 'calculate_coefficients'])
 
 def add_argument(*args, **kwargs):
     """ Convert arguments into an Argument tuple. """
@@ -30,7 +57,15 @@ def add_argument(*args, **kwargs):
 
 
 def get_filters():
-    """ Get a dictionary of all available filters. """
+    """ Get a dictionary of all available filters.
+
+    Note:
+        Calculations coefficient largely taken using the derivations in page 9 of
+        https://arxiv.org/pdf/1508.06319.pdf
+
+        PII/PID coefficient equations are taken from the PID-IIR primer written by Robert Jördens at
+        https://hackmd.io/IACbwcOTSt6Adj3_F9bKuw
+    """
     return {
         'lowpass': Filter(help='Gain-limited low-pass filter',
                           arguments=[
@@ -90,20 +125,7 @@ def get_filters():
 
 
 def calculate_lowpass_coefficients(sampling_period, args):
-    """ Calculate low-pass IIR filter coefficients.
-
-    Note:
-        Calculations largely taken using the derivations in page 9 of
-        https://arxiv.org/pdf/1508.06319.pdf
-
-    Args:
-        sampling_period: The period between discrete samples of the input signal.
-        args: The filter command-line arguments.
-
-    Returns:
-        [b0, b1, b2, -a1, -a2] IIR coefficients to be programmed into a Stabilizer IIR filter
-        configuration.
-    """
+    """ Calculate low-pass IIR filter coefficients. """
     f0_bar = pi * args.f0 * sampling_period
 
     a1 = (1 - f0_bar) / (1 + f0_bar)
@@ -114,20 +136,7 @@ def calculate_lowpass_coefficients(sampling_period, args):
 
 
 def calculate_highpass_coefficients(sampling_period, args):
-    """ Calculate high-pass IIR filter coefficients.
-
-    Note:
-        Calculations largely taken using the derivations in page 9 of
-        https://arxiv.org/pdf/1508.06319.pdf
-
-    Args:
-        sampling_period: The period between discrete samples of the input signal.
-        args: The filter command-line arguments.
-
-    Returns:
-        [b0, b1, b2, -a1, -a2] IIR coefficients to be programmed into a Stabilizer IIR filter
-        configuration.
-    """
+    """ Calculate high-pass IIR filter coefficients. """
     f0_bar = pi * args.f0 * sampling_period
 
     a1 = (1 - f0_bar) / (1 + f0_bar)
@@ -138,20 +147,7 @@ def calculate_highpass_coefficients(sampling_period, args):
 
 
 def calculate_allpass_coefficients(sampling_period, args):
-    """ Calculate all-pass IIR filter coefficients.
-
-    Note:
-        Calculations largely taken using the derivations in page 9 of
-        https://arxiv.org/pdf/1508.06319.pdf
-
-    Args:
-        sampling_period: The period between discrete samples of the input signal.
-        args: The filter command-line arguments.
-
-    Returns:
-        [b0, b1, b2, -a1, -a2] IIR coefficients to be programmed into a Stabilizer IIR filter
-        configuration.
-    """
+    """ Calculate all-pass IIR filter coefficients. """
     f0_bar = pi * args.f0 * sampling_period
 
     a1 = (1 - f0_bar) / (1 + f0_bar)
@@ -163,20 +159,7 @@ def calculate_allpass_coefficients(sampling_period, args):
 
 
 def calculate_notch_coefficients(sampling_period, args):
-    """ Calculate notch IIR filter coefficients.
-
-    Note:
-        Calculations largely taken using the derivations in page 9 of
-        https://arxiv.org/pdf/1508.06319.pdf
-
-    Args:
-        sampling_period: The period between discrete samples of the input signal.
-        args: The filter command-line arguments.
-
-    Returns:
-        [b0, b1, b2, -a1, -a2] IIR coefficients to be programmed into a Stabilizer IIR filter
-        configuration.
-    """
+    """ Calculate notch IIR filter coefficients. """
     f0_bar = pi * args.f0 * sampling_period
 
     denominator = (1 + f0_bar / args.Q + f0_bar ** 2)
@@ -191,21 +174,7 @@ def calculate_notch_coefficients(sampling_period, args):
 
 
 def calculate_pid_coefficients(sampling_period, args):
-    """ Calculate PID IIR filter coefficients.
-
-    # Note
-        These equations are taken from the PID-IIR primer written by Robert Jördens at
-        https://hackmd.io/IACbwcOTSt6Adj3_F9bKuw
-
-    Args:
-        sampling_period: The period between discrete samples of the input signal.
-        args: The filter command-line arguments.
-
-    Returns:
-        [b0, b1, b2, -a1, -a2] IIR coefficients to be programmed into a Stabilizer IIR filter
-        configuration.
-    """
-
+    """ Calculate PID IIR filter coefficients. """
     k_p = args.Kp
     k_i = args.Ki * 2 * pi * sampling_period
     k_d = args.Kd / (2 * pi) / sampling_period
@@ -219,20 +188,7 @@ def calculate_pid_coefficients(sampling_period, args):
 
 
 def calculate_pii_coefficients(sampling_period, args):
-    """ Calculate PII IIR filter coefficients.
-
-    # Note
-        These equations are taken from the PID-IIR primer written by Robert Jördens at
-        https://hackmd.io/IACbwcOTSt6Adj3_F9bKuw
-
-    Args:
-        sampling_period: The period between discrete samples of the input signal.
-        args: The filter command-line arguments.
-
-    Returns:
-        [b0, b1, b2, -a1, -a2] IIR coefficients to be programmed into a Stabilizer IIR filter
-        configuration.
-    """
+    """ Calculate PII IIR filter coefficients. """
     # a^2 * y = (Ki2 b^0 + Ki b^1 + Kp b^2) * x
     # y0 -2y1 + y2 = ((Ki2, 0, 0) + (Ki, -Ki, 0) + (Kp, -2Kp, Kp)) * x
     # (1)y0 + (-2)y1 + (1)y2 = (Ki2) x0 + (Ki) x0 + (-Ki) x1 + (Kp) x0 + (-2Kp) x1 + (Kp) x2
@@ -262,13 +218,12 @@ def main():
     parser.add_argument('--sample-ticks', type=int, default=128,
                         help='The number of Stabilizer hardware ticks between each sample')
 
-    parser.add_argument('--y-min', type=float, default=-10.0,
+    parser.add_argument('--y-min', type=float, default=-stabilizer.DAC_FULL_SCALE,
                         help='The channel minimum output level (Volts)')
-    parser.add_argument('--y-max', type=float, default=10.0,
+    parser.add_argument('--y-max', type=float, default=stabilizer.DAC_FULL_SCALE,
                         help='The channel maximum output level (Volts)')
     parser.add_argument('--y-offset', type=float, default=0,
                         help='The channel output offset level (Volts)')
-
 
     # Next, add subparsers and their arguments.
     subparsers = parser.add_subparsers(help='Filter-specific design parameters', dest='filter_type')
