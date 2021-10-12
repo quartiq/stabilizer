@@ -1,2 +1,3 @@
-git+https://github.com/quartiq/miniconf#subdirectory=py/miniconf-mqtt
 py/
+git+https://github.com/quartiq/miniconf#subdirectory=py/miniconf-mqtt
+gmqtt

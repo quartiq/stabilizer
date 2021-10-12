@@ -21,15 +21,21 @@ desired application.
 ```bash
 git clone https://github.com/quartiq/stabilizer
 ```
-1. Get [rustup](https://rustup.rs/)
+2. Get [rustup](https://rustup.rs/)
     * The minimum supported Rust version (MSRV) is 1.52.0
-1. Install target support
+
+3. Install target support
 ```bash
 rustup target add thumbv7em-none-eabihf
 ```
-1. Build Firmware with an optionally-specified MQTT broker IP.
+4. Build Firmware with an optionally-specified MQTT broker IP.
 ```bash
+# Bash
 BROKER="10.34.16.10" cargo build --release
+
+# Powershell
+# Note: This sets the broker for all future builds as well.
+$env:BROKER='10.34.16.10'; cargo build --release
 ```
 
 ## Uploading Firmware
@@ -51,12 +57,16 @@ cargo install cargo-binutils
 rustup component add llvm-tools-preview
 ```
 
-1. Generate the binary file
+2. Generate the binary file
 ```bash
-cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin`
+# Bash
+BROKER="10.34.16.10" cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin
+
+# Powershell
+$env:BROKER='10.34.16.10'; cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin
 ```
 
-1. Copy `dual-iir.bin` into the ST-Link drive on your computer.
+3. Copy `dual-iir.bin` into the ST-Link drive on your computer.
 
 
 ### Alternative: Using USB
@@ -82,11 +92,15 @@ For an interactive flash experience with live logging, utilize `probe-run` as fo
 ```bash
 cargo install probe-run
 ```
-1. Build and run firmware on the device
+2. Build and run firmware on the device
 ```bash
-cargo run --release --bin dual-iir
+# Bash
+BROKER="10.34.16.10" cargo run --release --bin dual-iir
+
+# Powershell
+$Env:BROKER='10.34.16.10'; cargo run --release --bin dual-iir
 ```
-1. When using debug (non `--release`) mode, decrease the sampling frequency significantly.
+3. When using debug (non `--release`) mode, decrease the sampling frequency significantly.
   The added error checking code and missing optimizations may lead to the code
   missing deadlines and panicing.
 
@@ -105,12 +119,13 @@ Stabilizer utilizes a static IP address for broker configuration. Ensure the IP 
 We recommend running Mosquitto through [Docker](https://docker.com) to easily run Mosquitto on
 Windows, Linux, and OSX. After docker has been installed, run the following command from
 the `stabilizer` repository:
-```
+```bash
+# Bash
 docker run -p 1883:1883 --name mosquitto -v `pwd`/mosquitto.conf:/mosquitto/config/mosquitto.conf -v /mosquitto/data -v /mosquitto/log eclipse-mosquitto:2
-```
 
-> _Note_: The above command assumes a bash shell. If using powershell, replace `` `pwd` `` with
-> `${pwd}`
+# Powershell
+docker run -p 1883:1883 --name mosquitto -v ${pwd}/mosquitto.conf:/mosquitto/config/mosquitto.conf -v /mosquitto/data -v /mosquitto/log eclipse-mosquitto:2
+```
 
 This command will create a container named `mosquitto` that can be stopped and started easily via
 docker.

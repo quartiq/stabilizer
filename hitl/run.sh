@@ -11,8 +11,8 @@
 set -eux
 
 # Set up python for testing
-python3 -m venv --system-site-packages py-venv
-. py-venv/bin/activate
+python3 -m venv --system-site-packages vpy
+. vpy/bin/activate
 
 # Install Miniconf utilities for configuring stabilizer.
 python3 -m pip install -e py/
