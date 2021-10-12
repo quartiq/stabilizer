@@ -170,47 +170,37 @@ def calculate_notch_coefficients(sampling_period, args):
 def calculate_pid_coefficients(sampling_period, args):
     """ Calculate PID IIR filter coefficients. """
 
-    # TODO: Disallow invalid combinations of e.g. I^2 + D
-
-    k_p = args.Kp
-    k_i = args.Ki * (2 * pi / sampling_period)
-    k_i2 = args.Kii * ((2 * pi / sampling_period) ** 2)
-    k_d = args.Kd / ((2 * pi) / sampling_period)
-    k_d2 = args.Kdd / (((2 * pi) / sampling_period) ** 2)
-
     # First, determine the lowest feed-back rank we can use.
     if args.Kii != 0:
-        feedback_rank = 2
+        assert args.Kdd == 0, 'IIR filters with both I^2 and D^2 coefficients are unsupported'
+        assert args.Kd == 0, 'IIR filters with both I^2 and D coefficients are unsupported'
+        feedback_kernel = 2
     elif args.Ki != 0:
-        feedback_rank = 1
+        assert args.Kdd == 0, 'IIR filters with both I and D^2 coefficients are unsupported'
+        feedback_kernel = 1
     else:
-        feedback_rank = 0
+        feedback_kernel = 0
 
-    print('Feedback rank: ', feedback_rank)
-
-    FEEDFORWARD_KERNELS = [
+    KERNELS = [
         [1, 0, 0],
         [1, -1, 0],
         [1, -2, 1]
     ]
 
-    FEEDBACK_KERNELS = [
-        # Proportional feedback
-        ([1, 0, 0], [k_p, k_d, k_d2]),
+    digital_conversion = (2 * pi) / sampling_period
 
-        # I integration
-        ([1, -1, 0], [k_i, k_p, k_d]),
-
-        # I^2 double integration
-        ([1, -2, 1], [k_i2, k_i, k_p]),
+    FEEDFORWARD_COEFFICIENTS = [
+        [args.Kp, args.Kd / digital_conversion, args.Kdd / (digital_conversion ** 2)],
+        [args.Ki * digital_conversion, args.Kp, args.Kd / digital_conversion],
+        [args.Kii * (digital_conversion ** 2), args.Ki * digital_conversion, args.Kp],
     ]
 
     # We now select the type of kernel using the rank of the feedback rank.
     # a-coefficients are defined purely by the feedback kernel.
-    a_coefficients, gains = FEEDBACK_KERNELS[feedback_rank]
+    a_coefficients = KERNELS[feedback_kernel]
 
     b_coefficients = [0, 0, 0]
-    for (kernel, gain) in zip(FEEDFORWARD_KERNELS, gains):
+    for (kernel, gain) in zip(KERNELS, FEEDFORWARD_COEFFICIENTS[feedback_kernel]):
         for index, kernel_value in enumerate(kernel):
             b_coefficients[index] += kernel_value * gain
 
