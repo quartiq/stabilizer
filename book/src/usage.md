@@ -13,14 +13,15 @@ Settings are specific to an application. If two identical settings exist for two
 applications, each application maintains its own independent value.
 
 ## Installation
-Install the Miniconf configuration utilities:
+Install the Miniconf configuration utilities using a virtual environment:
 ```
-python -m pip install git+https://github.com/quartiq/miniconf#subdirectory=miniconf-py
+python -m venv --system-site-packages vpy
+./vpy/Scripts/pip install git+https://github.com/quartiq/miniconf#subdirectory=py/miniconf-mqtt
 ```
 
 To use `miniconf`, execute it as follows:
 ```
-python -m miniconf --help
+./vpy/Scripts/python -m miniconf --help
 ```
 
 Miniconf also exposes a programmatic Python API, so it's possible to write automation scripting of
@@ -40,7 +41,7 @@ used:
 * `value` = `{"ip": [192, 168, 0, 1], "port": 4000}`
 
 ```
-python -m miniconf --broker 10.34.16.10 dt/sinara/dual-iir/00-11-22-33-44-55 stream_target='{"ip": [10, 34, 16, 123], "port": 4000}'
+./vpy/Scripts/python -m miniconf --broker 10.34.16.10 dt/sinara/dual-iir/00-11-22-33-44-55 stream_target='{"ip": [10, 34, 16, 123], "port": 4000}'
 
 Where `10.34.16.10` is the MQTT broker address that matches the one configured in the source code and `10.34.16.123` and `4000` are the desire stream target IP and port.
 ```
