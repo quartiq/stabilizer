@@ -13,9 +13,18 @@ Settings are specific to an application. If two identical settings exist for two
 applications, each application maintains its own independent value.
 
 ## Installation
-Install the Miniconf configuration utilities:
+Install the Miniconf configuration utilities using a virtual environment:
 ```
-python -m pip install git+https://github.com/quartiq/miniconf#subdirectory=miniconf-py
+python -m venv --system-site-packages vpy
+
+# Refer to https://docs.python.org/3/tutorial/venv.html for more information on activating the
+# virtual environment. This command is different on different platforms.
+./vpy/Scripts/activate
+```
+
+Next, install prerequisite packages
+```
+python -m pip install -r scripts/requirements.txt
 ```
 
 To use `miniconf`, execute it as follows:
