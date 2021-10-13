@@ -211,13 +211,13 @@ macro_rules! dac_output {
                 let mut spi = spi.disable();
                 spi.listen(hal::spi::Event::Error);
 
-                // AXISRAM is uninitialized. As such, we manually zero-initialize it here before
-                // starting the transfer.
+                // AXISRAM is uninitialized. As such, we manually initialize it for a 0V DAC output
+                // here before starting the transfer .
                 // Note(unsafe): We currently own all DAC_BUF[index] buffers and are not using them
                 // elsewhere, so it is safe to access them here.
                 for buf in unsafe { DAC_BUF[$index].iter_mut() } {
                     for byte in buf.iter_mut() {
-                        *byte = 0;
+                        *byte = DacCode::try_from(0.0f32).unwrap().0;
                     }
                 }
 

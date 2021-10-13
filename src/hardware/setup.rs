@@ -466,11 +466,8 @@ pub fn setup(
     };
 
     let dacs = {
-        let _dac_clr_n = gpioe.pe12.into_push_pull_output().set_high().unwrap();
-        let _dac0_ldac_n =
-            gpioe.pe11.into_push_pull_output().set_low().unwrap();
-        let _dac1_ldac_n =
-            gpioe.pe15.into_push_pull_output().set_low().unwrap();
+        let mut dac_clr_n = gpioe.pe12.into_push_pull_output();
+        dac_clr_n.set_high().unwrap();
 
         let dac0_spi = {
             let spi_miso = gpioe
@@ -554,6 +551,14 @@ pub fn setup(
             sampling_timer_channels.ch4,
             batch_size,
         );
+
+        dac_clr_n.set_low().unwrap();
+        let _dac0_ldac_n =
+            gpioe.pe11.into_push_pull_output().set_low().unwrap();
+        let _dac1_ldac_n =
+            gpioe.pe15.into_push_pull_output().set_low().unwrap();
+        dac_clr_n.set_high().unwrap();
+
         (dac0, dac1)
     };
 
