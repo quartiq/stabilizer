@@ -556,9 +556,9 @@ pub fn setup(
         let _dac0_ldac_n =
             gpioe.pe11.into_push_pull_output().set_low().unwrap();
         let _dac1_ldac_n =
-            gpioe.pe15.into_push_pull_output().set_low().unwrap(); 
+            gpioe.pe15.into_push_pull_output().set_low().unwrap();
         dac_clr_n.set_high().unwrap();
-        
+
         (dac0, dac1)
     };
 
