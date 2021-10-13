@@ -215,7 +215,9 @@ def calculate_pid_coefficients(sampling_period, args):
 
 def main():
     """ Main program entry point. """
-    parser = argparse.ArgumentParser(description='Configure Stabilizer dual-iir filter parameters')
+    parser = argparse.ArgumentParser(
+        description='Configure Stabilizer dual-iir filter parameters. Note: This script assumes '
+                    'an AFE input gain of 1.')
     parser.add_argument('--broker', '-b', type=str, default='mqtt',
                         help='The MQTT broker to use to communicate with Stabilizer')
     parser.add_argument('--prefix', '-p', type=str, required=True,
@@ -226,6 +228,8 @@ def main():
     parser.add_argument('--sample-ticks', type=int, default=128,
                         help='The number of Stabilizer hardware ticks between each sample')
 
+    parser.add_argument('--x-offset', type=float, default=0,
+                        help='The channel input offset level (Volts)')
     parser.add_argument('--y-min', type=float, default=-stabilizer.DAC_FULL_SCALE,
                         help='The channel minimum output level (Volts)')
     parser.add_argument('--y-max', type=float, default=stabilizer.DAC_FULL_SCALE,
@@ -249,6 +253,10 @@ def main():
     sampling_period = args.sample_ticks / STABILIZER_TICK_RATE
     coefficients = filters[args.filter_type].calculate_coefficients(sampling_period, args)
 
+    # The feed-forward gain of the IIR filter is equivalent to the summation of the 'b' components
+    # of the filter.
+    forward_gain = sum(coefficients[:3])
+
     async def configure():
         logging.info('Connecting to broker')
         interface = await Miniconf.create(args.prefix, args.broker)
@@ -259,7 +267,8 @@ def main():
             'ba': coefficients,
             'y_min': stabilizer.voltage_to_machine_units(args.y_min),
             'y_max': stabilizer.voltage_to_machine_units(args.y_max),
-            'y_offset': stabilizer.voltage_to_machine_units(args.y_offset)
+            'y_offset': stabilizer.voltage_to_machine_units(
+                args.y_offset + forward_gain * args.x_offset)
         })
 
     asyncio.run(configure())
