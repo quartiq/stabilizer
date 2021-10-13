@@ -9,6 +9,11 @@ title = "Stabilizer"
 create-missing = false
 build-dir = "stabilizer-manual"
 
+[preprocessor.toc]
+marker = "<-- TOC -->"
+command = "mdbook-toc"
+renderer = ["html"]
+
 [output.html]
 site-url = "/stabilizer"
 git-repository-url = "https://github.com/quartiq/stabilizer"
