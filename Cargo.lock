@@ -11,6 +11,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "aho-corasick"
+version = "0.7.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e37cfd5e7657ada45f742d6e99ca5788580b5c529dc78faf11ece6dc702656f"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "aligned"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -38,7 +47,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9a69a963b70ddacfcd382524f72a4576f359af9334b3bf48a79566590bb8bfa"
 dependencies = [
  "bitrate",
- "cortex-m 0.7.3",
+ "cortex-m 0.6.7",
  "embedded-hal",
 ]
 
@@ -187,6 +196,18 @@ dependencies = [
  "quote",
  "rtic-syntax",
  "syn",
+]
+
+[[package]]
+name = "critical-section"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "673b836c1c5a73bd981805236f46dfddbe1092a6a829b22464bd40d7ceefd2f9"
+dependencies = [
+ "bare-metal 1.0.0",
+ "cfg-if",
+ "cortex-m 0.7.3",
+ "riscv",
 ]
 
 [[package]]
@@ -366,6 +387,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "lazy_static"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
+
+[[package]]
 name = "log"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -388,6 +415,12 @@ checksum = "2c32fd6627e73f1cfa95c00ddcdcb5a6a6ddbd10b308d08588a502c018b6e12c"
 dependencies = [
  "embedded-hal",
 ]
+
+[[package]]
+name = "memchr"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
 
 [[package]]
 name = "miniconf"
@@ -424,9 +457,9 @@ checksum = "b4bb1638d419e12f8b1c43d9e639abd0d1424285bdea2f76aa231e233c63cd3a"
 
 [[package]]
 name = "nanorand"
-version = "0.5.2"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac1378b66f7c93a1c0f8464a19bf47df8795083842e5090f4b7305973d5a22d0"
+checksum = "729eb334247daa1803e0a094d0a5c55711b85571179f5ec6e53eccfdf7008958"
 
 [[package]]
 name = "nb"
@@ -592,6 +625,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "regex"
+version = "1.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d07a8629359eb56f1e2fb1652bb04212c072a87ba68546a04065d525673ac461"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-syntax",
+]
+
+[[package]]
+name = "regex-syntax"
+version = "0.6.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f497285884f3fcff424ffc933e56d7cbca511def0c9831a7f9b5f6153e3cc89b"
+
+[[package]]
+name = "riscv"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6907ccdd7a31012b70faf2af85cd9e5ba97657cc3987c4f13f8e4d2c2a088aba"
+dependencies = [
+ "bare-metal 1.0.0",
+ "bit_field",
+ "riscv-target",
+]
+
+[[package]]
+name = "riscv-target"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88aa938cda42a0cf62a20cfe8d139ff1af20c2e681212b5b34adb5a58333f222"
+dependencies = [
+ "lazy_static",
+ "regex",
+]
+
+[[package]]
 name = "rtic-core"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -746,7 +817,7 @@ dependencies = [
 [[package]]
 name = "smoltcp"
 version = "0.8.0"
-source = "git+https://github.com/smoltcp-rs/smoltcp?branch=master#cc0f638148d27030e691b93688fce6d6bd5b29c5"
+source = "git+https://github.com/smoltcp-rs/smoltcp?branch=master#c8141bbe698cea7ce5bedf78114fc62d23fc460b"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -756,9 +827,11 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/smoltcp-nal.git?rev=0634188#063418836d112942203fb5e5fd501b946a6839b3"
+source = "git+https://github.com/quartiq/smoltcp-nal.git?rev=a28e41f#a28e41f61c9c521fef874ef08e551101fbd7a59e"
 dependencies = [
+ "critical-section",
  "embedded-nal",
+ "embedded-time",
  "heapless 0.7.3",
  "nanorand",
  "smoltcp",
@@ -806,7 +879,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b672c837e0ee8158ecc7fce0f9a948dd0693a9c588338e728d14b73307a0b7d"
 dependencies = [
  "bare-metal 0.2.5",
- "cortex-m 0.7.3",
+ "cortex-m 0.6.7",
  "cortex-m-rt",
  "vcell",
 ]

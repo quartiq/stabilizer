@@ -695,7 +695,7 @@ pub fn setup(
             smoltcp::iface::NeighborCache::new(&mut store.neighbor_cache[..]);
 
         let interface = smoltcp::iface::InterfaceBuilder::new(eth_dma)
-            .ethernet_addr(mac_addr)
+            .hardware_addr(smoltcp::wire::HardwareAddress::Ethernet(mac_addr))
             .neighbor_cache(neighbor_cache)
             .ip_addrs(&mut store.ip_addrs[..])
             .routes(routes)
@@ -748,7 +748,11 @@ pub fn setup(
             data
         };
 
-        let mut stack = smoltcp_nal::NetworkStack::new(interface, sockets);
+        let mut stack = smoltcp_nal::NetworkStack::new(
+            interface,
+            sockets,
+            system_timer::SystemTimer::default(),
+        );
 
         stack.seed_random_port(&random_seed);
 
