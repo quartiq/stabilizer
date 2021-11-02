@@ -37,7 +37,7 @@ SECTIONS {
     __eitcm = .;
   } > ITCM AT>FLASH
   __siitcm = LOADADDR(.itcm);
-} INSERT AFTER .uninit;
+} INSERT BEFORE .data;
 
 ASSERT(__sitcm % 8 == 0 && __eitcm % 8 == 0, "
 BUG(cortex-m-rt): .itcm is not 8-byte aligned");
