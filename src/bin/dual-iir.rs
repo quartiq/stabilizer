@@ -91,7 +91,7 @@ pub struct Settings {
     ///
     /// # Value
     /// See [iir::IIR#miniconf]
-    iir_ch: [[iir::IIR; IIR_CASCADE_LENGTH]; 2],
+    iir_ch: [[iir::IIR<f32>; IIR_CASCADE_LENGTH]; 2],
 
     /// Specified true if DI1 should be used as a "hold" input.
     ///
@@ -190,7 +190,7 @@ mod app {
         afes: (AFE0, AFE1),
         generator: FrameGenerator,
 
-        iir_state: [[iir::Vec5; IIR_CASCADE_LENGTH]; 2],
+        iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
     }
 
     #[init]
