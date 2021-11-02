@@ -822,7 +822,7 @@ dependencies = [
 [[package]]
 name = "smoltcp"
 version = "0.8.0"
-source = "git+https://github.com/smoltcp-rs/smoltcp?branch=master#c8141bbe698cea7ce5bedf78114fc62d23fc460b"
+source = "git+https://github.com/smoltcp-rs/smoltcp?branch=master#2dfc1598b6cf7819670666f45479a125d1cc5de9"
 dependencies = [
  "bitflags",
  "byteorder",
