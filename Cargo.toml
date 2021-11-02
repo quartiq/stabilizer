@@ -41,7 +41,7 @@ nb = "1.0.0"
 asm-delay = "0.9.0"
 num_enum = { version = "0.5.4", default-features = false }
 paste = "1"
-idsp = { version = "0.2.0" }
+idsp = "0.3.0"
 ad9959 = { path = "ad9959" }
 miniconf = "0.2.0"
 shared-bus = {version = "0.2.2", features = ["cortex-m"] }
@@ -79,7 +79,7 @@ git = "https://github.com/quartiq/smoltcp-nal.git"
 rev = "a28e41f"
 
 [features]
-nightly = ["cortex-m/inline-asm", "idsp/nightly"]
+nightly = ["cortex-m/inline-asm"]
 pounder_v1_1 = [ ]
 
 [profile.dev]
