@@ -43,7 +43,7 @@ num_enum = { version = "0.5.4", default-features = false }
 paste = "1"
 idsp = { version = "0.2.0" }
 ad9959 = { path = "ad9959" }
-miniconf = "0.1.0"
+miniconf = "0.2.0"
 shared-bus = {version = "0.2.2", features = ["cortex-m"] }
 serde-json-core = "0.4"
 mcp23017 = "1.0"
@@ -77,10 +77,6 @@ branch = "feature/assume-init"
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
 rev = "a28e41f"
-
-[patch.crates-io.miniconf]
-git = "https://github.com/quartiq/miniconf.git"
-rev = "3fec7db"
 
 [features]
 nightly = ["cortex-m/inline-asm", "idsp/nightly"]

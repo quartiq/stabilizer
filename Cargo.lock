@@ -47,7 +47,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9a69a963b70ddacfcd382524f72a4576f359af9334b3bf48a79566590bb8bfa"
 dependencies = [
  "bitrate",
- "cortex-m 0.7.3",
+ "cortex-m 0.6.7",
  "embedded-hal",
 ]
 
@@ -223,16 +223,6 @@ dependencies = [
 
 [[package]]
 name = "derive_miniconf"
-version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?rev=3fec7db#3fec7db811d295eb8ed7d6cb7abd8bc2b848e6c2"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "derive_miniconf"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a09410a9472600744ed45ab245fc56bce9c44a422434cf91cad613ac5857f93c"
@@ -382,7 +372,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "007330b46ea691ea9b23e466fee34e349801aa350c61bdbbea481b9e7a8f2f00"
 dependencies = [
- "miniconf 0.2.0",
+ "miniconf",
  "num-complex 0.4.0",
  "num-traits",
  "serde",
@@ -442,24 +432,11 @@ checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
 
 [[package]]
 name = "miniconf"
-version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?rev=3fec7db#3fec7db811d295eb8ed7d6cb7abd8bc2b848e6c2"
-dependencies = [
- "derive_miniconf 0.1.0",
- "heapless 0.7.3",
- "log",
- "minimq",
- "serde",
- "serde-json-core",
-]
-
-[[package]]
-name = "miniconf"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1052ead57d31cf73a64ed51f8c8be77ed266fae44b62addbf84f086d30e725f7"
 dependencies = [
- "derive_miniconf 0.1.1",
+ "derive_miniconf",
  "heapless 0.7.3",
  "log",
  "minimq",
@@ -884,7 +861,7 @@ dependencies = [
  "idsp",
  "log",
  "mcp23017",
- "miniconf 0.1.0",
+ "miniconf",
  "minimq",
  "mutex-trait",
  "nb 1.0.0",
@@ -912,7 +889,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b672c837e0ee8158ecc7fce0f9a948dd0693a9c588338e728d14b73307a0b7d"
 dependencies = [
  "bare-metal 0.2.5",
- "cortex-m 0.7.3",
+ "cortex-m 0.6.7",
  "cortex-m-rt",
  "vcell",
 ]
