@@ -172,15 +172,14 @@ dependencies = [
 
 [[package]]
 name = "cortex-m-rtic"
-version = "0.6.0-alpha.5"
+version = "0.6.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74081ae0575d772472789aa6a642a1632303fd64529078d7be06fdcbec31401a"
+checksum = "248b2f20fd8f885f8fa802766ea3f076692eb8d57e611c8afd1b82d3000cfe9a"
 dependencies = [
  "bare-metal 1.0.0",
  "cortex-m 0.7.3",
  "cortex-m-rtic-macros",
- "generic-array 0.14.4",
- "heapless 0.6.1",
+ "heapless",
  "rtic-core",
  "rtic-monotonic",
  "version_check",
@@ -258,7 +257,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db9efecb57ab54fa918730f2874d7d37647169c50fa1357fecb81abee840b113"
 dependencies = [
- "heapless 0.7.3",
+ "heapless",
  "nb 1.0.0",
  "no-std-net",
 ]
@@ -322,15 +321,6 @@ dependencies = [
 
 [[package]]
 name = "hash32"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4041af86e63ac4298ce40e5cca669066e75b6f1aa3390fe2561ffa5e1d9f4cc"
-dependencies = [
- "byteorder",
-]
-
-[[package]]
-name = "hash32"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0c35f58762feb77d74ebe43bdbc3210f09be9fe6742234d573bacc26ed92b67"
@@ -346,24 +336,13 @@ checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
 
 [[package]]
 name = "heapless"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "634bd4d29cbf24424d0a4bfcbf80c6960129dc24424752a7d1d1390607023422"
-dependencies = [
- "as-slice",
- "generic-array 0.14.4",
- "hash32 0.1.1",
- "stable_deref_trait",
-]
-
-[[package]]
-name = "heapless"
-version = "0.7.3"
-source = "git+https://github.com/quartiq/heapless.git?branch=feature/assume-init#0139ab11d55c6924dafd5d99ac9eda92bd0df77b"
+version = "0.7.7"
+source = "git+https://github.com/quartiq/heapless.git?branch=feature/assume-init#11a3ef7207683f1538969e2dd89cd4c7281c243e"
 dependencies = [
  "atomic-polyfill",
- "hash32 0.2.1",
+ "hash32",
  "serde",
+ "spin",
  "stable_deref_trait",
 ]
 
@@ -402,6 +381,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
 
 [[package]]
+name = "lock_api"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "712a4d093c9976e24e7dbca41db895dabcbac38eb5f4045393d17a95bdfb1109"
+dependencies = [
+ "scopeguard",
+]
+
+[[package]]
 name = "log"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -438,7 +426,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1052ead57d31cf73a64ed51f8c8be77ed266fae44b62addbf84f086d30e725f7"
 dependencies = [
  "derive_miniconf",
- "heapless 0.7.3",
+ "heapless",
  "log",
  "minimq",
  "serde",
@@ -455,7 +443,7 @@ dependencies = [
  "embedded-nal",
  "embedded-time",
  "enum-iterator",
- "heapless 0.7.3",
+ "heapless",
  "smlang",
 ]
 
@@ -744,6 +732,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
 
 [[package]]
+name = "scopeguard"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
+
+[[package]]
 name = "semver"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -779,7 +773,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8014aeea272bca0f0779778d43253f2f3375b414185b30e6ecc4d3e4a9994781"
 dependencies = [
- "heapless 0.7.3",
+ "heapless",
  "ryu",
  "serde",
 ]
@@ -843,9 +837,18 @@ dependencies = [
  "critical-section",
  "embedded-nal",
  "embedded-time",
- "heapless 0.7.3",
+ "heapless",
  "nanorand",
  "smoltcp",
+]
+
+[[package]]
+name = "spin"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "511254be0c5bcf062b019a6c89c01a664aa359ded62f78aa72c6fc137c0590e5"
+dependencies = [
+ "lock_api",
 ]
 
 [[package]]
@@ -858,7 +861,7 @@ dependencies = [
  "cortex-m-rt",
  "cortex-m-rtic",
  "embedded-hal",
- "heapless 0.7.3",
+ "heapless",
  "idsp",
  "log",
  "mcp23017",
