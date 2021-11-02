@@ -223,8 +223,9 @@ dependencies = [
 
 [[package]]
 name = "derive_miniconf"
-version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?rev=3fec7db#3fec7db811d295eb8ed7d6cb7abd8bc2b848e6c2"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a09410a9472600744ed45ab245fc56bce9c44a422434cf91cad613ac5857f93c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -367,12 +368,13 @@ dependencies = [
 
 [[package]]
 name = "idsp"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07fc07a0d9810f96a670cb5c726cf30e6c210d1f5f07ad34f343a40e2c72058d"
+checksum = "007330b46ea691ea9b23e466fee34e349801aa350c61bdbbea481b9e7a8f2f00"
 dependencies = [
  "miniconf",
  "num-complex 0.4.0",
+ "num-traits",
  "serde",
 ]
 
@@ -391,6 +393,12 @@ name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
+
+[[package]]
+name = "libm"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
 
 [[package]]
 name = "log"
@@ -424,8 +432,9 @@ checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
 
 [[package]]
 name = "miniconf"
-version = "0.1.0"
-source = "git+https://github.com/quartiq/miniconf.git?rev=3fec7db#3fec7db811d295eb8ed7d6cb7abd8bc2b848e6c2"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1052ead57d31cf73a64ed51f8c8be77ed266fae44b62addbf84f086d30e725f7"
 dependencies = [
  "derive_miniconf",
  "heapless 0.7.3",
@@ -553,6 +562,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a64b1ec5cda2586e284722486d802acf1f7dbdc623e2bfc57e65ca1cd099290"
 dependencies = [
  "autocfg",
+ "libm",
 ]
 
 [[package]]
