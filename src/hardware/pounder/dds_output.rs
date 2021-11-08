@@ -33,8 +33,8 @@
 ///! # Limitations
 ///!
 ///! The QSPI output FIFO is used as an intermediate buffer for holding pending QSPI writes. Because
-///! of this, the implementation only supports up to 16 serialized bytes (the QSPI FIFO is 4 32-bit
-///! words wide) in a single update.
+///! of this, the implementation only supports up to 16 serialized bytes (the QSPI FIFO is 8 32-bit
+///! words, or 32 bytes, wide) in a single update.
 ///!
 ///! There is currently no synchronization between completion of the QSPI data write and the
 ///! IO-update signal. It is currently assumed that the QSPI transfer will always complete within a
@@ -103,8 +103,9 @@ impl DdsOutput {
     /// Write a profile to the stream.
     ///
     /// # Note:
-    /// If a profile of more than 4 words is provided, it is possible that the QSPI interface will
-    /// stall execution.
+    /// If a profile of more than 8 words is provided, the QSPI interface will likely
+    /// stall execution. If there are still bytes pending in the FIFO, the write will certainly
+    /// stall.
     ///
     /// # Args
     /// * `profile` - The serialized DDS profile to write.
