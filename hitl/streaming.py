@@ -1,6 +1,5 @@
 #!/usr/bin/python3
-
-# Implements HITL testing of Stabilizer data livestream capabilities.
+"""HITL testing of Stabilizer data livestream capabilities"""
 
 import asyncio
 import logging
@@ -25,7 +24,7 @@ def _get_ip(remote):
     return list(map(int, address.split(".")))
 
 
-async def main():
+async def _main():
     parser = argparse.ArgumentParser(description="Stabilizer Stream HITL test")
     parser.add_argument("prefix", type=str,
                         help="The MQTT topic prefix of the target")
@@ -83,4 +82,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(_main())

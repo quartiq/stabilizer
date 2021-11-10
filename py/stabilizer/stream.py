@@ -1,25 +1,28 @@
 #!/usr/bin/python3
+"""Stabilizer streaming receiver and parsers"""
 
+import argparse
 import asyncio
 import logging
 import struct
 from collections import namedtuple
+from dataclasses import dataclass
 
 import numpy as np
+
+from . import DAC_VOLTS_PER_LSB
 
 logger = logging.getLogger(__name__)
 
 
-def wrap(x):
+def wrap(wide):
     """Wrap to 32 bit integer"""
-    return x & 0xffffffff
+    return wide & 0xffffffff
 
 
 class AdcDac:
     """Stabilizer default striming data format"""
     format_id = 1
-    adc_volt_per_lsb = 4.096 * 5 / (1 << 16)
-    dac_volt_per_lsb = adc_volt_per_lsb
 
     def __init__(self, header, body):
         self.header = header
@@ -29,14 +32,20 @@ class AdcDac:
         # convert DAC offset binary to two's complement
         self.data[2:] ^= np.int16(0x8000)
 
+    def to_mu(self):
+        """Return the raw data in machine units"""
+        return self.data
+
     def to_si(self):
+        """Convert the raw data to SI units"""
         return {
-            "adc": self.data[:2] * self.adc_volt_per_lsb,
-            "dac": self.data[2:] * self.dac_volt_per_lsb,
+            "adc": self.data[:2] * DAC_VOLTS_PER_LSB,
+            "dac": self.data[2:] * DAC_VOLTS_PER_LSB,
         }
 
 
 class StabilizerStream(asyncio.DatagramProtocol):
+    """Stabilizer streaming receiver protocol"""
     # The magic header half-word at the start of each packet.
     magic = 0x057B
     header_fmt = struct.Struct("<HBBI")
@@ -47,24 +56,23 @@ class StabilizerStream(asyncio.DatagramProtocol):
 
     @classmethod
     async def open(cls, local_addr, maxsize=1):
+        """Open a UDP socket and start receiving frames"""
         loop = asyncio.get_running_loop()
-        transport, protocol = await loop.create_datagram_endpoint(
+        _transport, protocol = await loop.create_datagram_endpoint(
             lambda: cls(maxsize), local_addr=local_addr)
         return protocol
 
     def __init__(self, maxsize):
         self.queue = asyncio.Queue(maxsize)
 
-    def connection_made(self, transport):
+    def connection_made(self, _transport):
         logger.info("Connection made (listening)")
-        self.transport = transport
 
-    def connection_lost(self):
+    def connection_lost(self, _exc):
         logger.info("Connection lost")
-        del self.transport
 
-    def datagram_received(self, frame, remote_addr):
-        header = self.header._make(self.header_fmt.unpack_from(frame))
+    def datagram_received(self, data, _addr):
+        header = self.header._make(self.header_fmt.unpack_from(data))
         if header.magic != self.magic:
             logger.warning("Bad frame magic: %#04x, ignoring", header.magic)
             return
@@ -73,23 +81,25 @@ class StabilizerStream(asyncio.DatagramProtocol):
         except KeyError:
             logger.warning("No parser for format %s, ignoring", header.format_id)
             return
-        body = frame[self.header_fmt.size:]
-        data = parser(header, body)
+        body = data[self.header_fmt.size:]
+        frame = parser(header, body)
         try:
-            self.queue.put_nowait(data)
+            self.queue.put_nowait(frame)
         except asyncio.QueueFull:
             logger.debug("Dropping frame: %#08x", header.sequence)
 
 
 async def measure(stream, duration):
-    class Statistics:
+    """Measure throughput and loss of stream reception"""
+    @dataclass
+    class _Statistics:
         expect = None
         received = 0
         lost = 0
         bytes = 0
-    stat = Statistics()
+    stat = _Statistics()
 
-    async def record():
+    async def _record():
         while True:
             data = await stream.queue.get()
             if stat.expect is not None:
@@ -100,7 +110,7 @@ async def measure(stream, duration):
             data.to_si()
 
     try:
-        await asyncio.wait_for(record(), timeout=duration)
+        await asyncio.wait_for(_record(), timeout=duration)
     except asyncio.TimeoutError:
         pass
 
@@ -117,7 +127,7 @@ async def measure(stream, duration):
 
 
 async def main():
-    import argparse
+    """Test CLI"""
     parser = argparse.ArgumentParser(description="Stabilizer streaming demo")
     parser.add_argument("--port", type=int, default=9293,
                         help="Local port to listen on")
@@ -131,7 +141,7 @@ async def main():
 
     logging.basicConfig(level=logging.INFO)
     stream = await StabilizerStream.open((args.host, args.port), args.maxsize)
-    loss = await measure(stream, args.duration)
+    await measure(stream, args.duration)
 
 
 if __name__ == "__main__":
