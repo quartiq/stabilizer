@@ -665,6 +665,45 @@ pub fn setup(
             )
         };
 
+        // Note(unsafe): The MMC_TX/RX_INTERRUPT_MASK registers incorrectly mark LPITRCIM as
+        // read-only, so Svd2rust doens't generate bindings to modify them. Instead, as a
+        // workaround, we manually manipulate the bits.
+        unsafe {
+            let eth_mac = &*hal::stm32::ETHERNET_MAC::ptr();
+
+            // Mask away Ethernet MAC MMC RX/TX interrupts. These statistics counter interruptss
+            // for the MMC are enabled by default and are intended to provide ethernet MAC-related
+            // statistics.
+            eth_mac.mmc_rx_interrupt_mask.modify(|_, w| {
+                w.rxlpiuscim()
+                    .set_bit()
+                    .rxucgpim()
+                    .set_bit()
+                    .rxalgnerpim()
+                    .set_bit()
+                    .rxcrcerpim()
+                    .set_bit()
+            });
+
+            eth_mac.mmc_tx_interrupt_mask.modify(|_, w| {
+                w.txlpiuscim()
+                    .set_bit()
+                    .txgpktim()
+                    .set_bit()
+                    .txmcolgpim()
+                    .set_bit()
+                    .txscolgpim()
+                    .set_bit()
+            });
+            let mmc_tx_interrupt_mask: *mut u32 =
+                &eth_mac.mmc_tx_interrupt_mask as *const _ as *mut u32;
+            *mmc_tx_interrupt_mask |= 1u32 << 27;
+
+            let mmc_rx_interrupt_mask: *mut u32 =
+                &eth_mac.mmc_rx_interrupt_mask as *const _ as *mut u32;
+            *mmc_rx_interrupt_mask |= 1u32 << 27;
+        }
+
         // Reset and initialize the ethernet phy.
         let mut lan8742a =
             ethernet::phy::LAN8742A::new(eth_mac.set_phy_addr(0));
