@@ -65,12 +65,9 @@ async def _main():
     while not stream.queue.empty():
         stream.queue.get_nowait()
 
-    try:
-        logger.info("Verifying no further frames are received")
-        await asyncio.wait_for(stream.queue.get(), timeout=1.)
-    except asyncio.TimeoutError:
-        pass
-    else:
+    logger.info("Verifying no further frames are received")
+    await asyncio.sleep(1.)
+    if not stream.queue.empty():
         raise RuntimeError("Unexpected frames received")
 
     print("PASS")
