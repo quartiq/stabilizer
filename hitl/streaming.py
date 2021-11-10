@@ -36,7 +36,7 @@ async def _main():
                         help="Local port to listen on")
     parser.add_argument("--duration", type=float, default=1.,
                         help="Test duration")
-    parser.add_argument("--max-loss", type=float, default=2e-2,
+    parser.add_argument("--max-loss", type=float, default=5e-2,
                         help="Maximum loss for success")
     args = parser.parse_args()
 
