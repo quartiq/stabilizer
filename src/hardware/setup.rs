@@ -665,9 +665,10 @@ pub fn setup(
             )
         };
 
-        // Note(unsafe): The MMC_TX/RX_INTERRUPT_MASK registers incorrectly mark LPITRCIM as
-        // read-only, so Svd2rust doens't generate bindings to modify them. Instead, as a
-        // workaround, we manually manipulate the bits.
+        // Note(unsafe): We need to manually disable various ethernet interrupts so they don't
+        // unintentionally hang the device. This behavior should be offloaded into the HAL in the
+        // future. We have given away the ETH_MAC peripherals, so we need to conjure them up to
+        // disable the ISRs.
         unsafe {
             let eth_mac = &*hal::stm32::ETHERNET_MAC::ptr();
 
@@ -696,13 +697,15 @@ pub fn setup(
                     .set_bit()
             });
 
-            let mmc_tx_interrupt_mask: *mut u32 =
-                &eth_mac.mmc_tx_interrupt_mask as *const _ as *mut u32;
-            *mmc_tx_interrupt_mask |= 1u32 << 27;
-
-            let mmc_rx_interrupt_mask: *mut u32 =
-                &eth_mac.mmc_rx_interrupt_mask as *const _ as *mut u32;
-            *mmc_rx_interrupt_mask |= 1u32 << 27;
+            // Note: The MMC_TX/RX_INTERRUPT_MASK registers incorrectly mark LPITRCIM as read-only,
+            // so svd2rust doens't generate bindings to modify them. Instead, as a workaround, we
+            // manually manipulate the bits.
+            eth_mac
+                .mmc_tx_interrupt_mask
+                .modify(|r, w| w.bits(r.bits() | (1 << 27)));
+            eth_mac
+                .mmc_rx_interrupt_mask
+                .modify(|r, w| w.bits(r.bits() | (1 << 27)));
         }
 
         // Reset and initialize the ethernet phy.
