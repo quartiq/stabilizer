@@ -1,132 +1,86 @@
 #!/usr/bin/python3
-"""
-Author: Vertigo Designs, Ryan Summers
 
-Description: Implements HITL testing of Stabilizer data livestream capabilities.
-"""
+# Implements HITL testing of Stabilizer data livestream capabilities.
+
 import asyncio
-import sys
-import argparse
 import logging
 import socket
-import time
+import argparse
 
 from miniconf import Miniconf
-from stabilizer.stream import StabilizerStream
+from stabilizer.stream import measure, StabilizerStream
 
-# The duration to receive frames for.
-STREAM_TEST_DURATION_SECS = 5.0
+logger = logging.getLogger(__name__)
 
-# The minimum efficiency of the stream in frame transfer to pass testing. Represented as
-# (received_frames / transmitted_frames).
-MIN_STREAM_EFFICIENCY = 0.95
 
-def _get_ip(broker):
-    """ Get the IP of the local device.
-
-    Args:
-        broker: The broker IP of the test. Used to select an interface to get the IP of.
-
-    Returns:
-        The IP as an array of integers.
-    """
+def _get_ip(remote):
+    """Get the local IP of a connection to the to a remote host."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        sock.connect((broker, 1883))
+        sock.connect((remote, 1883))
         address = sock.getsockname()[0]
     finally:
         sock.close()
 
-    return list(map(int, address.split('.')))
+    return list(map(int, address.split(".")))
 
 
-def sequence_delta(previous_sequence, next_sequence):
-    """ Check the number of items between two sequence numbers. """
-    if previous_sequence is None:
-        return 0
-
-    delta = next_sequence - (previous_sequence + 1)
-    return delta & 0xFFFFFFFF
-
-
-def main():
-    """ Main program entry point. """
-    parser = argparse.ArgumentParser(description='Loopback tests for Stabilizer HITL testing',)
-    parser.add_argument('prefix', type=str,
-                        help='The MQTT topic prefix of the target')
-    parser.add_argument('--broker', '-b', default='mqtt', type=str,
-                        help='The MQTT broker address')
-    parser.add_argument('--port', '-p', default=2000, type=int,
-                        help='The UDP port to use for streaming')
-
+async def main():
+    parser = argparse.ArgumentParser(description="Stabilizer Stream HITL test")
+    parser.add_argument("prefix", type=str,
+                        help="The MQTT topic prefix of the target")
+    parser.add_argument("--broker", "-b", default="mqtt", type=str,
+                        help="The MQTT broker address")
+    parser.add_argument("--host", default="0.0.0.0",
+                        help="Local address to listen on")
+    parser.add_argument("--port", type=int, default=9293,
+                        help="Local port to listen on")
+    parser.add_argument("--duration", type=float, default=1.,
+                        help="Test duration")
+    parser.add_argument("--max-loss", type=float, default=2e-2,
+                        help="Maximum loss for success")
     args = parser.parse_args()
 
-    async def test():
-        """ The actual testing being completed. """
-        local_ip = _get_ip(args.broker)
-        interface = await Miniconf.create(args.prefix, args.broker)
-        stream = StabilizerStream(args.port, timeout=0.5)
+    logging.basicConfig(level=logging.INFO)
 
-        # Configure the stream
-        print(f'Configuring stream to target {".".join(map(str, local_ip))}:{args.port}')
-        print('')
-        await interface.command('stream_target', {'ip': local_ip, 'port': args.port}, retain=False)
-        await interface.command('telemetry_period', 10, retain=False)
+    interface = await Miniconf.create(args.prefix, args.broker)
+    local_ip = _get_ip(args.broker)
 
-        # Verify frame reception
-        print('Testing stream reception')
-        print('')
-        last_sequence = None
+    logger.info("Starting stream")
+    await interface.command(
+        "stream_target", {"ip": local_ip, "port": args.port}, retain=False)
 
-        # Sample frames over a set time period and verify that no drops are encountered.
-        stop = time.time() + STREAM_TEST_DURATION_SECS
-        dropped_samples = 0
-        total_samples = 0
+    try:
+        logger.info("Testing stream reception")
+        stream = await StabilizerStream.open((args.host, args.port), maxsize=1)
+        loss = await measure(stream, args.duration)
+    finally:
+        logger.info("Stopping stream")
+        await interface.command(
+            "stream_target", {"ip": [0, 0, 0, 0], "port": 0}, retain=False)
 
-        while time.time() < stop:
-            frame = stream.read_frame()
+    if loss > args.max_loss:
+        raise RuntimeError("High loss")
 
-            num_dropped = sequence_delta(last_sequence, frame.sequence_number)
+    async def drain():
+        while not stream.queue.empty():
+            await stream.queue.get()
+    try:
+        logger.info("Draining queue")
+        await asyncio.wait_for(drain(), timeout=.01)
+    except asyncio.TimeoutError:
+        pass
 
-            if num_dropped:
-                dropped_samples += num_dropped
-                logging.warning('Frame drop detected: 0x%08X -> 0x%08X (%d batches)',
-                                last_sequence, frame.sequence_number, num_dropped)
+    try:
+        logger.info("Verifying no further data is received")
+        await asyncio.wait_for(stream.queue.get(), timeout=1.)
+    except asyncio.TimeoutError:
+        pass
+    else:
+        raise RuntimeError("Unexpected data")
 
-            num_samples = len(frame.traces[list(frame.traces.keys())[0]])
-
-            total_samples += num_samples + num_dropped
-
-            last_sequence = frame.sequence_number + num_samples - 1
-
-        assert total_samples, 'Stream did not receive any frames'
-        stream_efficiency = 1.0 - (dropped_samples / total_samples)
-
-        print(f'Stream Reception Rate: {stream_efficiency * 100:.2f} %')
-        print(f'Received {total_samples} ')
-        print(f'Lost {dropped_samples} samples')
-
-        assert stream_efficiency > MIN_STREAM_EFFICIENCY, \
-            f'Stream dropped too many packets.  Reception rate: {stream_efficiency * 100:.2f} %'
-
-        # Disable the stream.
-        print('Closing stream')
-        print('')
-        await interface.command('stream_target', {'ip': [0, 0, 0, 0], 'port': 0}, retain=False)
-        stream.clear()
-
-        print('Verifying no further data is received')
-        try:
-            frame = stream.read_frame()
-            raise Exception('Unexpected data encountered on stream')
-        except socket.timeout:
-            pass
-        print('PASS')
+    print("PASS")
 
 
-    loop = asyncio.get_event_loop()
-    sys.exit(loop.run_until_complete(test()))
-
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    asyncio.run(main())
