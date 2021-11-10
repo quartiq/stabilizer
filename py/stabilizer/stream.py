@@ -26,21 +26,31 @@ class AdcDac:
 
     def __init__(self, header, body):
         self.header = header
-        frame = np.frombuffer(body, "<i2").reshape(-1, 4, header.batch_size)
-        self.batch_count = frame.shape[0]
-        self.data = frame.swapaxes(0, 1).reshape(4, -1)
-        # convert DAC offset binary to two's complement
-        self.data[2:] ^= np.int16(0x8000)
+        self.body = body
+
+    def batch_count(self):
+        """Return the number of batches in the frame"""
+        return self.size() // (4 * 2 * self.header.batch_size)
+
+    def size(self):
+        """Return the data size of the frame in bytes"""
+        return len(self.body)
 
     def to_mu(self):
         """Return the raw data in machine units"""
-        return self.data
+        data = np.frombuffer(self.body, "<i2")
+        data = data.reshape(-1, 4, self.header.batch_size)
+        data = data.swapaxes(0, 1).reshape(4, -1)
+        # convert DAC offset binary to two's complement
+        data[2:] ^= np.int16(0x8000)
+        return data
 
     def to_si(self):
         """Convert the raw data to SI units"""
+        data = self.to_mu() * DAC_VOLTS_PER_LSB
         return {
-            "adc": self.data[:2] * DAC_VOLTS_PER_LSB,
-            "dac": self.data[2:] * DAC_VOLTS_PER_LSB,
+            "adc": data[:2],
+            "dac": data[2:],
         }
 
 
@@ -81,12 +91,11 @@ class StabilizerStream(asyncio.DatagramProtocol):
         except KeyError:
             logger.warning("No parser for format %s, ignoring", header.format_id)
             return
-        body = data[self.header_fmt.size:]
-        frame = parser(header, body)
-        try:
-            self.queue.put_nowait(frame)
-        except asyncio.QueueFull:
-            logger.debug("Dropping frame: %#08x", header.sequence)
+        frame = parser(header, data[self.header_fmt.size:])
+        if self.queue.full():
+            old = self.queue.get_nowait()
+            logger.debug("Dropping frame: %#08x", old.header.sequence)
+        self.queue.put_nowait(frame)
 
 
 async def measure(stream, duration):
@@ -104,11 +113,12 @@ async def measure(stream, duration):
             frame = await stream.queue.get()
             if stat.expect is not None:
                 stat.lost += wrap(frame.header.sequence - stat.expect)
-            stat.received += frame.batch_count
-            stat.expect = wrap(frame.header.sequence + frame.batch_count)
-            stat.bytes += frame.to_mu().nbytes
+            batch_count = frame.batch_count()
+            stat.received += batch_count
+            stat.expect = wrap(frame.header.sequence + batch_count)
+            stat.bytes += frame.size()
             # test conversion
-            frame.to_si()
+            # frame.to_si()
 
     try:
         await asyncio.wait_for(_record(), timeout=duration)

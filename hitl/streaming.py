@@ -34,7 +34,7 @@ async def _main():
                         help="Local address to listen on")
     parser.add_argument("--port", type=int, default=9293,
                         help="Local port to listen on")
-    parser.add_argument("--duration", type=float, default=1.,
+    parser.add_argument("--duration", type=float, default=10.,
                         help="Test duration")
     parser.add_argument("--max-loss", type=float, default=5e-2,
                         help="Maximum loss for success")
@@ -51,7 +51,7 @@ async def _main():
 
     try:
         logger.info("Testing stream reception")
-        stream = await StabilizerStream.open((args.host, args.port), maxsize=1)
+        stream = await StabilizerStream.open((args.host, args.port))
         loss = await measure(stream, args.duration)
         if loss > args.max_loss:
             raise RuntimeError("High frame loss", loss)
@@ -60,14 +60,9 @@ async def _main():
         await conf.command(
             "stream_target", {"ip": [0, 0, 0, 0], "port": 0}, retain=False)
 
-    async def drain():
-        while not stream.queue.empty():
-            await stream.queue.get()
-    try:
-        logger.info("Draining queue")
-        await asyncio.wait_for(drain(), timeout=.01)
-    except asyncio.TimeoutError:
-        pass
+    logger.info("Draining queue")
+    while not stream.queue.empty():
+        stream.queue.get_nowait()
 
     try:
         logger.info("Verifying no further frames are received")
