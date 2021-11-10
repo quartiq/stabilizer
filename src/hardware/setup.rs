@@ -695,6 +695,7 @@ pub fn setup(
                     .txscolgpim()
                     .set_bit()
             });
+
             let mmc_tx_interrupt_mask: *mut u32 =
                 &eth_mac.mmc_tx_interrupt_mask as *const _ as *mut u32;
             *mmc_tx_interrupt_mask |= 1u32 << 27;
