@@ -101,13 +101,14 @@ async def measure(stream, duration):
 
     async def _record():
         while True:
-            data = await stream.queue.get()
+            frame = await stream.queue.get()
             if stat.expect is not None:
-                stat.lost += wrap(data.header.sequence - stat.expect)
-            stat.received += data.batch_count
-            stat.expect = wrap(data.header.sequence + data.batch_count)
-            stat.bytes += data.data.nbytes
-            data.to_si()
+                stat.lost += wrap(frame.header.sequence - stat.expect)
+            stat.received += frame.batch_count
+            stat.expect = wrap(frame.header.sequence + frame.batch_count)
+            stat.bytes += frame.to_mu().nbytes
+            # test conversion
+            frame.to_si()
 
     try:
         await asyncio.wait_for(_record(), timeout=duration)

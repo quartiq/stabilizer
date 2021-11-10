@@ -42,24 +42,23 @@ async def _main():
 
     logging.basicConfig(level=logging.INFO)
 
-    interface = await Miniconf.create(args.prefix, args.broker)
+    conf = await Miniconf.create(args.prefix, args.broker)
     local_ip = _get_ip(args.broker)
 
     logger.info("Starting stream")
-    await interface.command(
+    await conf.command(
         "stream_target", {"ip": local_ip, "port": args.port}, retain=False)
 
     try:
         logger.info("Testing stream reception")
         stream = await StabilizerStream.open((args.host, args.port), maxsize=1)
         loss = await measure(stream, args.duration)
+        if loss > args.max_loss:
+            raise RuntimeError("High frame loss", loss)
     finally:
         logger.info("Stopping stream")
-        await interface.command(
+        await conf.command(
             "stream_target", {"ip": [0, 0, 0, 0], "port": 0}, retain=False)
-
-    if loss > args.max_loss:
-        raise RuntimeError("High loss")
 
     async def drain():
         while not stream.queue.empty():
@@ -71,12 +70,12 @@ async def _main():
         pass
 
     try:
-        logger.info("Verifying no further data is received")
+        logger.info("Verifying no further frames are received")
         await asyncio.wait_for(stream.queue.get(), timeout=1.)
     except asyncio.TimeoutError:
         pass
     else:
-        raise RuntimeError("Unexpected data")
+        raise RuntimeError("Unexpected frames received")
 
     print("PASS")
 
