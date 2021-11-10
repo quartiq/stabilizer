@@ -671,9 +671,9 @@ pub fn setup(
         unsafe {
             let eth_mac = &*hal::stm32::ETHERNET_MAC::ptr();
 
-            // Mask away Ethernet MAC MMC RX/TX interrupts. These statistics counter interruptss
-            // for the MMC are enabled by default and are intended to provide ethernet MAC-related
-            // statistics.
+            // Mask away Ethernet MAC MMC RX/TX interrupts. These are statistics counter interrupts
+            // and are enabled by default. They are intended to provide ethernet MAC-related
+            // statistics, which we are not using.
             eth_mac.mmc_rx_interrupt_mask.modify(|_, w| {
                 w.rxlpiuscim()
                     .set_bit()
