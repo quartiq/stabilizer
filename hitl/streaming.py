@@ -61,6 +61,7 @@ async def _main():
             "stream_target", {"ip": [0, 0, 0, 0], "port": 0}, retain=False)
 
     logger.info("Draining queue")
+    await asyncio.sleep(.1)
     while not stream.queue.empty():
         stream.queue.get_nowait()
 
