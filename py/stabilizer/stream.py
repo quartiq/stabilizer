@@ -14,6 +14,12 @@ from . import DAC_VOLTS_PER_LSB
 
 logger = logging.getLogger(__name__)
 
+@dataclass
+class Trace:
+    values: list
+    scale: float
+    label: str
+
 
 def wrap(wide):
     """Wrap to 32 bit integer"""
@@ -52,6 +58,15 @@ class AdcDac:
             "adc": data[:2],
             "dac": data[2:],
         }
+
+    def to_traces(self):
+        data = self.to_mu()
+        return [
+            Trace(data[0], scale=DAC_VOLTS_PER_LSB, label='ADC0'),
+            Trace(data[1], scale=DAC_VOLTS_PER_LSB, label='ADC1'),
+            Trace(data[2], scale=DAC_VOLTS_PER_LSB, label='DAC0'),
+            Trace(data[3], scale=DAC_VOLTS_PER_LSB, label='DAC1')
+        ]
 
 
 class StabilizerStream(asyncio.DatagramProtocol):
