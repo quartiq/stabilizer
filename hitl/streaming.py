@@ -51,7 +51,7 @@ async def _main():
 
     try:
         logger.info("Testing stream reception")
-        stream = await StabilizerStream.open((args.host, args.port))
+        _transport, stream = await StabilizerStream.open((args.host, args.port))
         loss = await measure(stream, args.duration)
         if loss > args.max_loss:
             raise RuntimeError("High frame loss", loss)

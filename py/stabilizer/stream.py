@@ -68,9 +68,9 @@ class StabilizerStream(asyncio.DatagramProtocol):
     async def open(cls, local_addr, maxsize=1):
         """Open a UDP socket and start receiving frames"""
         loop = asyncio.get_running_loop()
-        _transport, protocol = await loop.create_datagram_endpoint(
+        transport, protocol = await loop.create_datagram_endpoint(
             lambda: cls(maxsize), local_addr=local_addr)
-        return protocol
+        return transport, protocol
 
     def __init__(self, maxsize):
         self.queue = asyncio.Queue(maxsize)
@@ -151,7 +151,8 @@ async def main():
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
-    stream = await StabilizerStream.open((args.host, args.port), args.maxsize)
+    _transport, stream = await StabilizerStream.open(
+        (args.host, args.port), args.maxsize)
     await measure(stream, args.duration)
 
 
