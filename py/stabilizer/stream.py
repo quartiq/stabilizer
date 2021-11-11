@@ -14,11 +14,7 @@ from . import DAC_VOLTS_PER_LSB
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class Trace:
-    values: list
-    scale: float
-    label: str
+Trace = namedtuple("Trace", "values scale label")
 
 
 def wrap(wide):
