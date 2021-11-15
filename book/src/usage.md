@@ -45,7 +45,7 @@ Stabilizer as well.
 ## Usage
 The Miniconf Python utility utilizes a unique "device prefix". The device prefix is always of the
 form `dt/sinara/<app>/<mac-address>`, where `<app>` is the name of the application and
-`<mac-address>` is the MAC address of the device, formatted with delimiting dashes.
+`<mac-address>` is the MAC address of the device, formatted with delimiting dashes, and lower case letters.
 
 Settings have a `path` and a `value` being configured. The `value` parameter is JSON-encoded data
 and the `path` value is a path-like string.
