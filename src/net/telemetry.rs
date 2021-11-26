@@ -22,7 +22,7 @@ use minimq::embedded_nal::IpAddr;
 
 /// The telemetry client for reporting telemetry data over MQTT.
 pub struct TelemetryClient<T: Serialize> {
-    mqtt: minimq::Minimq<NetworkReference, SystemTimer, 256, 1>,
+    mqtt: minimq::Minimq<NetworkReference, SystemTimer, 512, 1>,
     telemetry_topic: String<128>,
     _telemetry: core::marker::PhantomData<T>,
 }
@@ -135,7 +135,7 @@ impl<T: Serialize> TelemetryClient<T> {
     /// # Args
     /// * `telemetry` - The telemetry to report
     pub fn publish(&mut self, telemetry: &T) {
-        let telemetry: Vec<u8, 256> =
+        let telemetry: Vec<u8, 512> =
             serde_json_core::to_vec(telemetry).unwrap();
         self.mqtt
             .client
