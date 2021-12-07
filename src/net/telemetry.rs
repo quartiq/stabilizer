@@ -139,7 +139,13 @@ impl<T: Serialize> TelemetryClient<T> {
             serde_json_core::to_vec(telemetry).unwrap();
         self.mqtt
             .client
-            .publish(&self.telemetry_topic, &telemetry, QoS::AtMostOnce, Retain::NotRetained, &[])
+            .publish(
+                &self.telemetry_topic,
+                &telemetry,
+                QoS::AtMostOnce,
+                Retain::NotRetained,
+                &[],
+            )
             .ok();
     }
 
