@@ -48,7 +48,7 @@ shared-bus = {version = "0.2.2", features = ["cortex-m"] }
 serde-json-core = "0.4"
 mcp23017 = "1.0"
 mutex-trait = "0.2"
-minimq = "0.4"
+minimq = "0.5.1"
 
 # rtt-target bump
 [dependencies.rtt-logger]
@@ -64,6 +64,10 @@ features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]
 # version = "0.9.0"
 git = "https://github.com/quartiq/stm32h7xx-hal.git"
 rev = "33aa67d"
+
+[patch.crates-io.miniconf]
+git = "https://github.com/quartiq/miniconf"
+rev = "f239869"
 
 # link.x section start/end
 [patch.crates-io.cortex-m-rt]
