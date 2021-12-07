@@ -48,7 +48,7 @@ shared-bus = {version = "0.2.2", features = ["cortex-m"] }
 serde-json-core = "0.4"
 mcp23017 = "1.0"
 mutex-trait = "0.2"
-minimq = "0.4"
+minimq = "0.5"
 
 # rtt-target bump
 [dependencies.rtt-logger]
