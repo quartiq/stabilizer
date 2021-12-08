@@ -67,7 +67,7 @@ rev = "33aa67d"
 
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf"
-rev = "f239869"
+rev = "eca1bf7"
 
 # link.x section start/end
 [patch.crates-io.cortex-m-rt]
