@@ -31,7 +31,7 @@ python -m venv --system-site-packages vpy
 
 Next, install prerequisite packages
 ```
-python -m pip install -r scripts/requirements.txt
+python -m pip install -e py
 ```
 
 To use `miniconf`, execute it as follows:
@@ -62,7 +62,8 @@ Where `10.34.16.10` is the MQTT broker address that matches the one configured i
 ```
 
 The prefix can be found for a specific device by looking at the topic on which telemetry that is
-being published.
+being published. It can also be automatically discovered if there is only one
+device alive.
 
 Refer to the [application documentation](overview.md#applications) for the exact settings and values exposed
 for each application.
@@ -77,19 +78,6 @@ unsuccessful.
 # IIR Configuration
 For the `dual-iir` application, a Python utility has been written to easily configure the IIR
 filters for a variety of filtering and control applications.
-
-The script is located in `py/stabilizer/iir_coefficients.py`.
-
-To use the script, install dependencies:
-```bash
-python -m venv --system-site-packages vpy
-
-# Refer to https://docs.python.org/3/tutorial/venv.html for more information on activating the
-# virtual environment. This command is different on different platforms.
-./vpy/Scripts/activate
-
-python -m pip install scripts/requirements.txt
-```
 
 Then, use the built-in help to learn how the utility can automatically configure your IIR filters
 for you:

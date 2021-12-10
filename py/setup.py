@@ -6,4 +6,7 @@ setup(name="stabilizer",
       description="Stabilizer Utilities",
       author="QUARTIQ GmbH",
       license="MIT",
-      install_requires=["numpy"])
+      install_requires=[
+            "numpy",
+            "miniconf-mqtt@git+https://github.com/quartiq/miniconf@develop#subdirectory=py/miniconf-mqtt"
+      ])

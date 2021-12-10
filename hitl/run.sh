@@ -10,14 +10,15 @@
 # Enable shell operating mode flags.
 set -eux
 
+# Stabilizer device prefix for HITL
+PREFIX=dt/sinara/dual-iir/04-91-62-d9-7e-5f
+
 # Set up python for testing
 python3 -m venv --system-site-packages vpy
 . vpy/bin/activate
 
 # Install Miniconf utilities for configuring stabilizer.
-python3 -m pip install -e py/
-python3 -m pip install git+https://github.com/quartiq/miniconf#subdirectory=py/miniconf-mqtt
-python3 -m pip install gmqtt
+python3 -m pip install -e py
 
 cargo flash --chip STM32H743ZITx --elf target/thumbv7em-none-eabihf/release/dual-iir
 
@@ -31,11 +32,11 @@ sleep 30
 ping -c 5 -w 20 stabilizer-hitl
 
 # Test the MQTT interface.
-python3 -m miniconf dt/sinara/dual-iir/04-91-62-d9-7e-5f afe/0='"G2"'
-python3 -m stabilizer.iir_coefficients -p dt/sinara/dual-iir/04-91-62-d9-7e-5f -c 0 -v pid --Ki 10 --Kp 1
+python3 -m miniconf $PREFIX afe/0='"G2"'
+python3 -m stabilizer.iir_coefficients -p $PREFIX -c 0 -v pid --Ki 10 --Kp 1
 
 # Test the ADC/DACs connected via loopback.
-python3 hitl/loopback.py dt/sinara/dual-iir/04-91-62-d9-7e-5f
+python3 hitl/loopback.py $PREFIX
 
 # Test the livestream capabilities
-python3 hitl/streaming.py dt/sinara/dual-iir/04-91-62-d9-7e-5f
+python3 hitl/streaming.py $PREFIX
