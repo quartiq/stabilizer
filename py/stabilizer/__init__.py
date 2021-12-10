@@ -1,6 +1,9 @@
 #!/usr/bin/python3
 """Stabilizer data conversion and streaming utilities"""
 
+# Sample period in seconds, default 100 MHz timer clock and a reload value of 128
+SAMPLE_PERIOD = 10e-9*128
+
 # The number of DAC LSB codes per volt on Stabilizer outputs.
 DAC_LSB_PER_VOLT = (1 << 16) / (4.096 * 5)
 
