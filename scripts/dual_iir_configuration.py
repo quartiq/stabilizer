@@ -188,7 +188,7 @@ def calculate_pid_coefficients(sampling_period, args):
         [1, -2, 1]
     ]
 
-    digital_conversion = (2 * pi) / sampling_period
+    digital_conversion = 2 * pi * sampling_period
 
     FEEDFORWARD_COEFFICIENTS = [
         [args.Kp, args.Kd / digital_conversion, args.Kdd / (digital_conversion ** 2)],
