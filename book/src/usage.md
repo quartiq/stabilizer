@@ -78,7 +78,7 @@ unsuccessful.
 For the `dual-iir` application, a Python utility has been written to easily configure the IIR
 filters for a variety of filtering and control applications.
 
-The script is located in `scripts/dual_iir_configuration.py`.
+The script is located in `py/stabilizer/iir_coefficients.py`.
 
 To use the script, install dependencies:
 ```bash
@@ -94,7 +94,7 @@ python -m pip install scripts/requirements.txt
 Then, use the built-in help to learn how the utility can automatically configure your IIR filters
 for you:
 ```bash
-python scripts/dual_iir_configuration.py --help
+python -m stabilizer.iir_coefficients --help
 ```
 
 # Telemetry

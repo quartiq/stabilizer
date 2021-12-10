@@ -56,6 +56,7 @@ class AdcDac:
         }
 
     def to_traces(self):
+        """Convert the raw data to labelled Trace instances"""
         data = self.to_mu()
         return [
             Trace(data[0], scale=DAC_VOLTS_PER_LSB, label='ADC0'),
