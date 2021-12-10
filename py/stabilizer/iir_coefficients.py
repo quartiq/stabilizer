@@ -14,7 +14,7 @@ import logging
 
 from math import pi
 
-from miniconf import Miniconf
+import miniconf
 
 import stabilizer
 
@@ -210,32 +210,40 @@ def _main():
     parser = argparse.ArgumentParser(
         description="Configure Stabilizer dual-iir filter parameters."
                     "Note: This script assumes an AFE input gain of 1.")
+    parser.add_argument('-v', '--verbose', action='count', default=0,
+                        help='Increase logging verbosity')
     parser.add_argument("--broker", "-b", type=str, default="mqtt",
                         help="The MQTT broker to use to communicate with "
-                        "Stabilizer")
-    parser.add_argument("--prefix", "-p", type=str, required=True,
+                        "Stabilizer (%(default)s)")
+    parser.add_argument("--prefix", "-p", type=str,
+                        default="dt/sinara/dual-iir/+",
                         help="The Stabilizer device prefix in MQTT, "
-                        "e.g. dt/sinara/dual-iir/00-11-22-33-44-55")
+                        "wildcards allowed as long as the match is unique "
+                        "(%(default)s)")
+    parser.add_argument("--no-discover", "-d", action="store_true",
+                        help="Do not discover Stabilizer device prefix.")
+
     parser.add_argument("--channel", "-c", type=int, choices=[0, 1],
                         required=True, help="The filter channel to configure.")
     parser.add_argument("--sample-period", type=float,
                         default=stabilizer.SAMPLE_PERIOD,
-                        help="Sample period in seconds.")
+                        help="Sample period in seconds (%(default)s s)")
 
     parser.add_argument("--x-offset", type=float, default=0,
-                        help="The channel input offset level (Volts)")
+                        help="The channel input offset (%(default)s V)")
     parser.add_argument("--y-min", type=float,
                         default=-stabilizer.DAC_FULL_SCALE,
-                        help="The channel minimum output level (Volts)")
+                        help="The channel minimum output (%(default)s V)")
     parser.add_argument("--y-max", type=float,
                         default=stabilizer.DAC_FULL_SCALE,
-                        help="The channel maximum output level (Volts)")
+                        help="The channel maximum output (%(default)s V)")
     parser.add_argument("--y-offset", type=float, default=0,
-                        help="The channel output offset level (Volts)")
+                        help="The channel output offset (%(default)s V)")
 
     # Next, add subparsers and their arguments.
     subparsers = parser.add_subparsers(
-        help="Filter-specific design parameters", dest="filter_type")
+        help="Filter-specific design parameters", dest="filter_type",
+        required=True)
 
     filters = get_filters()
 
@@ -246,6 +254,10 @@ def _main():
 
     args = parser.parse_args()
 
+    logging.basicConfig(
+        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        level=logging.WARN - 10*args.verbose)
+
     # Calculate the IIR coefficients for the filter.
     coefficients = filters[args.filter_type].coefficients(args)
 
@@ -255,9 +267,21 @@ def _main():
     if forward_gain == 0 and args.x_offset != 0:
         logger.warning("Filter has no DC gain but x_offset is non-zero")
 
+    if args.no_discover:
+        prefix = args.prefix
+    else:
+        devices = asyncio.run(miniconf.discover(args.broker, args.prefix))
+        if not devices:
+            raise ValueError("No prefixes discovered.")
+        if len(devices) > 1:
+            raise ValueError(f"Multiple prefixes discovered ({devices})."
+                             "Please specify a more specific --prefix")
+        prefix = devices[0]
+        logger.info("Automatically using detected device prefix: %s", prefix)
+
     async def configure():
-        logging.info("Connecting to broker")
-        interface = await Miniconf.create(args.prefix, args.broker)
+        logger.info("Connecting to broker")
+        interface = await miniconf.Miniconf.create(prefix, args.broker)
 
         # Set the filter coefficients.
         # Note: In the future, we will need to Handle higher-order cascades.
