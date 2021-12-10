@@ -45,7 +45,7 @@ jobs:
             pip install pylint
       - name: Run Pylint
         run: |
-          pylint scripts/
+          pylint py/stabilizer
 
   compile:
     runs-on: ubuntu-latest

@@ -18,7 +18,7 @@ python3 -m venv --system-site-packages vpy
 . vpy/bin/activate
 
 # Install Miniconf utilities for configuring stabilizer.
-python3 -m pip install -e py/
+python3 -m pip install -e py
 
 cargo flash --chip STM32H743ZITx --elf target/thumbv7em-none-eabihf/release/dual-iir
 
