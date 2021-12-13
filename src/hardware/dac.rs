@@ -129,6 +129,8 @@ impl From<u16> for DacCode {
 macro_rules! dac_output {
     ($name:ident, $index:literal, $data_stream:ident,
      $spi:ident, $trigger_channel:ident, $dma_req:ident) => {
+        use stm32h7xx_hal::prelude::*;
+
         /// $spi is used as a type for indicating a DMA transfer into the SPI TX FIFO
         struct $spi {
             spi: hal::spi::Spi<hal::stm32::$spi, hal::spi::Disabled, u16>,

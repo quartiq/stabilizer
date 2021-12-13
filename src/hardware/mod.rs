@@ -35,10 +35,15 @@ pub type DigitalInput0 =
 pub type DigitalInput1 =
     hal::gpio::gpioc::PC15<hal::gpio::Input<hal::gpio::Floating>>;
 
+// Number of TX descriptors in the ethernet descriptor ring.
+const TX_DESRING_CNT: usize = 4;
+
+// Number of RX descriptors in the ethernet descriptor ring.
+const RX_DESRING_CNT: usize = 4;
+
 pub type NetworkStack = smoltcp_nal::NetworkStack<
     'static,
-    'static,
-    hal::ethernet::EthernetDMA<'static>,
+    hal::ethernet::EthernetDMA<'static, TX_DESRING_CNT, RX_DESRING_CNT>,
     system_timer::SystemTimer,
 >;
 

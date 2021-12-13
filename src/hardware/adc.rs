@@ -149,6 +149,8 @@ macro_rules! adc_input {
     ($name:ident, $index:literal, $trigger_stream:ident, $data_stream:ident, $clear_stream:ident,
      $spi:ident, $trigger_channel:ident, $dma_req:ident, $clear_channel:ident, $dma_clear_req:ident) => {
         paste::paste! {
+            use stm32h7xx_hal::prelude::*;
+
             /// $spi-CR is used as a type for indicating a DMA transfer into the SPI control
             /// register whenever the tim2 update dma request occurs.
             struct [< $spi CR >] {

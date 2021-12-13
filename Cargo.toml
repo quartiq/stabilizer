@@ -30,7 +30,7 @@ members = ["ad9959"]
 
 [dependencies]
 cortex-m = { version = "0.7" }
-cortex-m-rt = { version = "0.6", features = ["device"] }
+cortex-m-rt = { version = "0.7", features = ["device"] }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
 rtt-target = { version = "0.3", features = ["cortex-m"] }
 serde = { version = "1.0", features = ["derive"], default-features = false }
@@ -60,19 +60,13 @@ rev = "70b0eb5"
 # * Utilize `master` branch of smoltcp
 # * Utilize `master` branch of HAL
 [dependencies.stm32h7xx-hal]
-features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]
-# version = "0.9.0"
-git = "https://github.com/quartiq/stm32h7xx-hal.git"
-rev = "33aa67d"
+features = ["stm32h743v", "rt", "unproven", "ethernet", "xspi"]
+git = "https://github.com/stm32-rs/stm32h7xx-hal"
+branch = "v0.11.0"
 
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf"
 rev = "eca1bf7"
-
-# link.x section start/end
-[patch.crates-io.cortex-m-rt]
-git = "https://github.com/rust-embedded/cortex-m-rt.git"
-rev = "a2e3ad5"
 
 [patch.crates-io.heapless]
 git = "https://github.com/quartiq/heapless.git"
@@ -80,7 +74,7 @@ branch = "feature/assume-init"
 
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
-rev = "a28e41f"
+branch = "rs/smoltcp-update"
 
 [features]
 nightly = ["cortex-m/inline-asm"]
