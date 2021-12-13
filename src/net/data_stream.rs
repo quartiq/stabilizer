@@ -63,7 +63,9 @@ static mut FRAME_DATA: [u8; FRAME_SIZE * FRAME_COUNT] =
 ///
 /// ## Example
 /// `{"ip": [192, 168,0, 1], "port": 1111}`
-#[derive(Copy, Clone, Debug, MiniconfAtomic, Serialize, Deserialize, Default)]
+#[derive(
+    Copy, Clone, Debug, MiniconfAtomic, Serialize, Deserialize, Default,
+)]
 pub struct StreamTarget {
     pub ip: [u8; 4],
     pub port: u16,
