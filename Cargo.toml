@@ -43,7 +43,7 @@ num_enum = { version = "0.5.4", default-features = false }
 paste = "1"
 idsp = "0.3.0"
 ad9959 = { path = "ad9959" }
-miniconf = "0.2.0"
+miniconf = "0.3"
 shared-bus = {version = "0.2.2", features = ["cortex-m"] }
 serde-json-core = "0.4"
 mcp23017 = "1.0"
@@ -65,9 +65,9 @@ features = ["stm32h743v", "rt", "unproven", "ethernet", "quadspi"]
 git = "https://github.com/quartiq/stm32h7xx-hal.git"
 rev = "33aa67d"
 
-[patch.crates-io.miniconf]
-git = "https://github.com/quartiq/miniconf"
-rev = "eca1bf7"
+[patch.crates-io.idsp]
+git = "https://github.com/quartiq/idsp"
+branch = "feature/serialize"
 
 # link.x section start/end
 [patch.crates-io.cortex-m-rt]
@@ -81,6 +81,10 @@ branch = "feature/assume-init"
 [dependencies.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal.git"
 rev = "a28e41f"
+
+[patch.crates-io.minimq]
+git = "https://github.com/quartiq/minimq"
+rev = "47fbf9d"
 
 [features]
 nightly = ["cortex-m/inline-asm"]
