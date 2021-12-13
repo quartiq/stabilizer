@@ -749,6 +749,8 @@ pub fn setup(
         .routes(routes)
         .finalize();
 
+        interface.add_socket(smoltcp::socket::Dhcpv4Socket::new());
+
         for storage in store.tcp_socket_storage[..].iter_mut() {
             let tcp_socket = {
                 let rx_buffer = smoltcp::socket::TcpSocketBuffer::new(
