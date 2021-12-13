@@ -67,7 +67,7 @@ rev = "33aa67d"
 
 [patch.crates-io.idsp]
 git = "https://github.com/quartiq/idsp"
-branch = "feature/serialize"
+rev = "799e6b6"
 
 # link.x section start/end
 [patch.crates-io.cortex-m-rt]

@@ -223,8 +223,9 @@ dependencies = [
 
 [[package]]
 name = "derive_miniconf"
-version = "0.1.1"
-source = "git+https://github.com/quartiq/miniconf?rev=f156cdd#f156cddd9c026abcda1d11471ff63ca175d7d5c8"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4bf0746ffedecccb7abefca46c550a49c50ee40fa5fd2555cfa115a1a109324a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -348,7 +349,7 @@ dependencies = [
 [[package]]
 name = "idsp"
 version = "0.3.0"
-source = "git+https://github.com/quartiq/idsp?branch=feature/serialize#f7e60d613bc7f6d13e7b76a724c7c7b3113150f3"
+source = "git+https://github.com/quartiq/idsp?rev=799e6b6#799e6b64790c185fd4e19f193c1f8d10b95fbbff"
 dependencies = [
  "miniconf",
  "num-complex 0.4.0",
@@ -419,8 +420,9 @@ checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
 
 [[package]]
 name = "miniconf"
-version = "0.2.0"
-source = "git+https://github.com/quartiq/miniconf?rev=f156cdd#f156cddd9c026abcda1d11471ff63ca175d7d5c8"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bebe771bb9b1d6ab2735374465002f6e15db45c8d863b8b1873881e98d6da22"
 dependencies = [
  "derive_miniconf",
  "heapless",
