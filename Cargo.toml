@@ -49,6 +49,7 @@ serde-json-core = "0.4"
 mcp23017 = "1.0"
 mutex-trait = "0.2"
 minimq = "0.5.1"
+smoltcp-nal = "0.2"
 
 # rtt-target bump
 [dependencies.rtt-logger]
@@ -71,10 +72,6 @@ rev = "eca1bf7"
 [patch.crates-io.heapless]
 git = "https://github.com/quartiq/heapless.git"
 branch = "feature/assume-init"
-
-[dependencies.smoltcp-nal]
-git = "https://github.com/quartiq/smoltcp-nal.git"
-branch = "rs/smoltcp-update"
 
 [features]
 nightly = ["cortex-m/inline-asm"]
