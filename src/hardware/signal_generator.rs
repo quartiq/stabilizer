@@ -3,10 +3,10 @@ use crate::{
 };
 use core::convert::TryFrom;
 use miniconf::Miniconf;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Types of signals that can be generated.
-#[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
+#[derive(Copy, Clone, Debug, Deserialize, Serialize, Miniconf)]
 pub enum Signal {
     Cosine,
     Square,
