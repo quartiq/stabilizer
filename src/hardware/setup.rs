@@ -602,51 +602,6 @@ pub fn setup(
         )
     };
 
-    // Configure ethernet pins.
-    {
-        // Reset the PHY before configuring pins.
-        let mut eth_phy_nrst = gpioe.pe3.into_push_pull_output();
-        eth_phy_nrst.set_low().unwrap();
-        delay.delay_us(200u8);
-        eth_phy_nrst.set_high().unwrap();
-        let _rmii_ref_clk = gpioa
-            .pa1
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_mdio = gpioa
-            .pa2
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_mdc = gpioc
-            .pc1
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_crs_dv = gpioa
-            .pa7
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_rxd0 = gpioc
-            .pc4
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_rxd1 = gpioc
-            .pc5
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_tx_en = gpiob
-            .pb11
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_txd0 = gpiob
-            .pb12
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_txd1 = gpiog
-            .pg14
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-    }
-
     let mac_addr = smoltcp::wire::EthernetAddress(eeprom::read_eui48(
         &mut eeprom_i2c,
         &mut delay,
@@ -654,18 +609,76 @@ pub fn setup(
     log::info!("EUI48: {}", mac_addr);
 
     let network_devices = {
-        // Configure the ethernet controller
-        let (eth_dma, eth_mac) = unsafe {
-            ethernet::new_unchecked(
-                device.ETHERNET_MAC,
-                device.ETHERNET_MTL,
-                device.ETHERNET_DMA,
-                &mut DES_RING,
-                mac_addr,
-                ccdr.peripheral.ETH1MAC,
-                &ccdr.clocks,
+        let ethernet_pins = {
+            // Reset the PHY before configuring pins.
+            let mut eth_phy_nrst = gpioe.pe3.into_push_pull_output();
+            eth_phy_nrst.set_low().unwrap();
+            delay.delay_us(200u8);
+            eth_phy_nrst.set_high().unwrap();
+
+            let rmii_ref_clk = gpioa
+                .pa1
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let rmii_mdio = gpioa
+                .pa2
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let rmii_mdc = gpioc
+                .pc1
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let rmii_crs_dv = gpioa
+                .pa7
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let rmii_rxd0 = gpioc
+                .pc4
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let rmii_rxd1 = gpioc
+                .pc5
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let rmii_tx_en = gpiob
+                .pb11
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let rmii_txd0 = gpiob
+                .pb12
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let rmii_txd1 = gpiog
+                .pg14
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+
+            (
+                rmii_ref_clk,
+                rmii_mdio,
+                rmii_mdc,
+                rmii_crs_dv,
+                rmii_rxd0,
+                rmii_rxd1,
+                rmii_tx_en,
+                rmii_txd0,
+                rmii_txd1,
             )
         };
+
+        // Configure the ethernet controller
+        let (eth_dma, eth_mac) = ethernet::new(
+            device.ETHERNET_MAC,
+            device.ETHERNET_MTL,
+            device.ETHERNET_DMA,
+            ethernet_pins,
+            // Note(unsafe): We only call this function once to take ownership of the
+            // descriptor ring.
+            unsafe { &mut DES_RING },
+            mac_addr,
+            ccdr.peripheral.ETH1MAC,
+            &ccdr.clocks,
+        );
 
         // Note(unsafe): We need to manually disable various ethernet interrupts so they don't
         // unintentionally hang the device. This behavior should be offloaded into the HAL in the
