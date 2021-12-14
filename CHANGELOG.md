@@ -9,17 +9,36 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
-* Telemetry
-* RTT logging
+* Telemetry (#341)
+* Logging via RTT (real time tracing) over SWD/JTAG instead of semihosting
+  for fast and low-overhead debugging (#393 #391 #358)
 * Settings structures now automatically publish after a short delay on boot
+  (#475)
+* Full-rate data streaming (e.g. complete raw ADC/DAC data) via Ethernet/UDP
+  (#414 #394 #380)
+* Process routine can be executed from fast closely coupled memory with wide
+  bus for faster execution (#420)
+* Compilation specifically targeting Cortex-M7 instruction set for faster
+  code (#358)
+* Fast double-buffered DMA pattern for less overhead (#367)
+* Integrated signal generator for stimulus and scan waveform generation (#434
+  #388)
+* Relicensed as MIT/Apache (#419 #416)
+* Expanded code documentation (#452 #346)
+* Quick-start guide and book (#431 #430 #401 #404)
+* Expanded and revised python API including the computation of IIR coefficients
+  from PID gains (#472 #471 #451 #427)
+* Device MQTT broker connection status indicated via MQTT (#468 #441)
 
 ### Changed
 
-* Const generics, bumping the MSRV to 1.51.0
-* `lockin-internal` and `lockin-external` have been merged into `lockin`
+* Const generics, bumping the MSRV to 1.51.0 (#355 etc)
+* `lockin-internal` and `lockin-external` have been merged into `lockin` (#352)
 * Set target CPU to cortex-m7, effectively bumping the MSRV to 1.52.0
 
 ### Fixed
+
+* Minimized DAC output pulses during boot (#453)
 
 ## [v0.5.0] - 2021-04-21
 
