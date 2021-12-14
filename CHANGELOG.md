@@ -9,36 +9,36 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
-* Telemetry (#341)
+* Telemetry ([#341](https://github.com/quartiq/stabilizer/pull/341))
 * Logging via RTT (real time tracing) over SWD/JTAG instead of semihosting
-  for fast and low-overhead debugging (#393 #391 #358)
+  for fast and low-overhead debugging ([#393](https://github.com/quartiq/stabilizer/pull/393) [#391](https://github.com/quartiq/stabilizer/pull/391) [#358](https://github.com/quartiq/stabilizer/pull/358))
 * Settings structures now automatically publish after a short delay on boot
-  (#475)
+  ([#475](https://github.com/quartiq/stabilizer/pull/475))
 * Full-rate data streaming (e.g. complete raw ADC/DAC data) via Ethernet/UDP
-  (#414 #394 #380)
+  ([#414](https://github.com/quartiq/stabilizer/pull/414) [#394](https://github.com/quartiq/stabilizer/pull/394) [#380](https://github.com/quartiq/stabilizer/pull/380))
 * Compilation specifically targeting Cortex-M7 instruction set for faster
-  code (#358)
-* Fast double-buffered DMA pattern for less overhead (#367)
-* Integrated signal generator for stimulus and scan waveform generation (#434
-  #388)
-* Relicensed as MIT/Apache (#419 #416)
-* Expanded code documentation (#452 #346)
-* Quick-start guide and book (#431 #430 #401 #404)
+  code ([#358](https://github.com/quartiq/stabilizer/pull/358))
+* Fast double-buffered DMA pattern for less overhead ([#367](https://github.com/quartiq/stabilizer/pull/367))
+* Integrated signal generator for stimulus and scan waveform generation ([#434](https://github.com/quartiq/stabilizer/pull/434)
+  [#388](https://github.com/quartiq/stabilizer/pull/388))
+* Relicensed as MIT/Apache ([#419](https://github.com/quartiq/stabilizer/pull/419) [#416](https://github.com/quartiq/stabilizer/pull/416))
+* Expanded code documentation ([#452](https://github.com/quartiq/stabilizer/pull/452) [#346](https://github.com/quartiq/stabilizer/pull/346))
+* Quick-start guide and book ([#431](https://github.com/quartiq/stabilizer/pull/431) [#430](https://github.com/quartiq/stabilizer/pull/430) [#401](https://github.com/quartiq/stabilizer/pull/401) [#404](https://github.com/quartiq/stabilizer/pull/404))
 * Expanded and revised python API including the computation of IIR coefficients
-  from PID gains (#472 #471 #451 #427)
-* Device MQTT broker connection status indicated via MQTT (#468 #441)
+  from PID gains ([#472](https://github.com/quartiq/stabilizer/pull/472) [#471](https://github.com/quartiq/stabilizer/pull/471) [#451](https://github.com/quartiq/stabilizer/pull/451) [#427](https://github.com/quartiq/stabilizer/pull/427))
+* Device MQTT broker connection status indicated via MQTT ([#468](https://github.com/quartiq/stabilizer/pull/468) [#441](https://github.com/quartiq/stabilizer/pull/441))
 
 ### Changed
 
-* Const generics, bumping the MSRV to 1.51.0 (#355 etc)
-* `lockin-internal` and `lockin-external` have been merged into `lockin` (#352)
+* Const generics, bumping the MSRV to 1.51.0 ([#355](https://github.com/quartiq/stabilizer/pull/355) etc)
+* `lockin-internal` and `lockin-external` have been merged into `lockin` ([#352](https://github.com/quartiq/stabilizer/pull/352))
 * Set target CPU to cortex-m7, effectively bumping the MSRV to 1.52.0
 * Process routine can be executed from fast closely coupled memory with wide
-  bus for faster execution (#420)
+  bus for faster execution ([#420](https://github.com/quartiq/stabilizer/pull/420))
 
 ### Fixed
 
-* Minimized DAC output pulses during boot (#453)
+* Minimized DAC output pulses during boot ([#453](https://github.com/quartiq/stabilizer/pull/453))
 
 ## [v0.5.0] - 2021-04-21
 
