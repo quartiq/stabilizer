@@ -822,6 +822,7 @@ dependencies = [
  "embedded-time",
  "heapless",
  "nanorand",
+ "shared-bus",
  "smoltcp",
 ]
 
@@ -858,7 +859,6 @@ dependencies = [
  "rtt-target",
  "serde",
  "serde-json-core",
- "shared-bus",
  "smoltcp-nal",
  "stm32h7xx-hal",
 ]

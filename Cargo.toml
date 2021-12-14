@@ -44,12 +44,11 @@ paste = "1"
 idsp = "0.3.0"
 ad9959 = { path = "ad9959" }
 miniconf = "0.2.0"
-shared-bus = {version = "0.2.2", features = ["cortex-m"] }
 serde-json-core = "0.4"
 mcp23017 = "1.0"
 mutex-trait = "0.2"
 minimq = "0.5.1"
-smoltcp-nal = "0.2"
+smoltcp-nal = { version = "0.2", features = ["shared-stack"] }
 
 # rtt-target bump
 [dependencies.rtt-logger]

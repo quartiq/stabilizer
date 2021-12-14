@@ -11,14 +11,14 @@ pub use serde;
 
 pub mod data_stream;
 pub mod network_processor;
-pub mod shared;
 pub mod telemetry;
 
-use crate::hardware::{system_timer::SystemTimer, EthernetPhy, NetworkStack};
+use crate::hardware::{
+    system_timer::SystemTimer, EthernetPhy, NetworkManager, NetworkStack,
+};
 use data_stream::{DataStream, FrameGenerator};
 use minimq::embedded_nal::IpAddr;
 use network_processor::NetworkProcessor;
-use shared::NetworkManager;
 use telemetry::TelemetryClient;
 
 use core::fmt::Write;
@@ -27,7 +27,8 @@ use miniconf::Miniconf;
 use serde::Serialize;
 use smoltcp_nal::embedded_nal::SocketAddr;
 
-pub type NetworkReference = shared::NetworkStackProxy<'static, NetworkStack>;
+pub type NetworkReference =
+    smoltcp_nal::shared::NetworkStackProxy<'static, NetworkStack>;
 
 /// The default MQTT broker IP address if unspecified.
 pub const DEFAULT_MQTT_BROKER: [u8; 4] = [10, 34, 16, 10];

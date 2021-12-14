@@ -47,6 +47,12 @@ pub type NetworkStack = smoltcp_nal::NetworkStack<
     system_timer::SystemTimer,
 >;
 
+pub type NetworkManager = smoltcp_nal::shared::NetworkManager<
+    'static,
+    hal::ethernet::EthernetDMA<'static, TX_DESRING_CNT, RX_DESRING_CNT>,
+    system_timer::SystemTimer,
+>;
+
 pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
 
 #[inline(never)]
