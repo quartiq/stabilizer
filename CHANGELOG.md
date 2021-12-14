@@ -16,8 +16,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   (#475)
 * Full-rate data streaming (e.g. complete raw ADC/DAC data) via Ethernet/UDP
   (#414 #394 #380)
-* Process routine can be executed from fast closely coupled memory with wide
-  bus for faster execution (#420)
 * Compilation specifically targeting Cortex-M7 instruction set for faster
   code (#358)
 * Fast double-buffered DMA pattern for less overhead (#367)
@@ -35,6 +33,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 * Const generics, bumping the MSRV to 1.51.0 (#355 etc)
 * `lockin-internal` and `lockin-external` have been merged into `lockin` (#352)
 * Set target CPU to cortex-m7, effectively bumping the MSRV to 1.52.0
+* Process routine can be executed from fast closely coupled memory with wide
+  bus for faster execution (#420)
 
 ### Fixed
 
