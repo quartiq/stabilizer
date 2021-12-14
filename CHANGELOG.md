@@ -21,7 +21,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 * Fast double-buffered DMA pattern for less overhead ([#367](https://github.com/quartiq/stabilizer/pull/367))
 * Integrated signal generator for stimulus and scan waveform generation ([#434](https://github.com/quartiq/stabilizer/pull/434)
   [#388](https://github.com/quartiq/stabilizer/pull/388))
-* Relicensed as MIT/Apache ([#419](https://github.com/quartiq/stabilizer/pull/419) [#416](https://github.com/quartiq/stabilizer/pull/416))
 * Expanded code documentation ([#452](https://github.com/quartiq/stabilizer/pull/452) [#346](https://github.com/quartiq/stabilizer/pull/346))
 * Quick-start guide and book ([#431](https://github.com/quartiq/stabilizer/pull/431) [#430](https://github.com/quartiq/stabilizer/pull/430) [#401](https://github.com/quartiq/stabilizer/pull/401) [#404](https://github.com/quartiq/stabilizer/pull/404))
 * Expanded and revised python API including the computation of IIR coefficients
@@ -35,6 +34,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 * Set target CPU to cortex-m7, effectively bumping the MSRV to 1.52.0
 * Process routine can be executed from fast closely coupled memory with wide
   bus for faster execution ([#420](https://github.com/quartiq/stabilizer/pull/420))
+* Relicensed as MIT/Apache ([#419](https://github.com/quartiq/stabilizer/pull/419) [#416](https://github.com/quartiq/stabilizer/pull/416))
 
 ### Fixed
 
