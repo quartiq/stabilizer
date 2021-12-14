@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 * Telemetry
 * RTT logging
+* Settings structures now automatically publish after a short delay on boot
 
 ### Changed
 
