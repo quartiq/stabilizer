@@ -53,7 +53,7 @@ use stabilizer::{
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Miniconf,
-        serde::Deserialize,
+        serde::{Deserialize, Serialize},
         telemetry::{Telemetry, TelemetryBuffer},
         NetworkState, NetworkUsers,
     },
@@ -68,7 +68,7 @@ const BATCH_SIZE_SIZE_LOG2: u8 = 3;
 // period of 1.28 uS or 781.25 KHz.
 const ADC_SAMPLE_TICKS_LOG2: u8 = 7;
 
-#[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, Miniconf)]
 enum Conf {
     /// Output the lockin magnitude.
     Magnitude,
@@ -86,7 +86,7 @@ enum Conf {
     Modulation,
 }
 
-#[derive(Copy, Clone, Debug, Miniconf, Deserialize, PartialEq)]
+#[derive(Copy, Clone, Debug, Miniconf, Serialize, Deserialize, PartialEq)]
 enum LockinMode {
     /// Utilize an internally generated reference for demodulation
     Internal,
@@ -94,7 +94,7 @@ enum LockinMode {
     External,
 }
 
-#[derive(Copy, Clone, Debug, Deserialize, Miniconf)]
+#[derive(Copy, Clone, Debug, Miniconf)]
 pub struct Settings {
     /// Configure the Analog Front End (AFE) gain.
     ///

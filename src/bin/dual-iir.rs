@@ -50,7 +50,6 @@ use stabilizer::{
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Miniconf,
-        serde::Deserialize,
         telemetry::{Telemetry, TelemetryBuffer},
         NetworkState, NetworkUsers,
     },
@@ -68,7 +67,7 @@ const BATCH_SIZE: usize = 8;
 // 128, there is 1.28uS per sample, corresponding to a sampling frequency of 781.25 KHz.
 const SAMPLE_TICKS_LOG2: u8 = 7;
 
-#[derive(Clone, Copy, Debug, Deserialize, Miniconf)]
+#[derive(Clone, Copy, Debug, Miniconf)]
 pub struct Settings {
     /// Configure the Analog Front End (AFE) gain.
     ///

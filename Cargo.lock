@@ -222,8 +222,9 @@ dependencies = [
 
 [[package]]
 name = "derive_miniconf"
-version = "0.1.1"
-source = "git+https://github.com/quartiq/miniconf?rev=eca1bf7#eca1bf7d1dac366376f5c3f8079527ef692ad982"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4bf0746ffedecccb7abefca46c550a49c50ee40fa5fd2555cfa115a1a109324a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -346,9 +347,9 @@ dependencies = [
 
 [[package]]
 name = "idsp"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ba7f8f7fa2294113c0ec55a9542465736b6906c5d12dd3d5c70a1eca89b0f11"
+checksum = "73292b6fa42085c110a8e4d4a1de6c9e8f0123da52457c16c83b293355b72160"
 dependencies = [
  "miniconf",
  "num-complex 0.4.0",
@@ -419,8 +420,9 @@ checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
 
 [[package]]
 name = "miniconf"
-version = "0.2.0"
-source = "git+https://github.com/quartiq/miniconf?rev=eca1bf7#eca1bf7d1dac366376f5c3f8079527ef692ad982"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bebe771bb9b1d6ab2735374465002f6e15db45c8d863b8b1873881e98d6da22"
 dependencies = [
  "derive_miniconf",
  "heapless",
@@ -428,13 +430,14 @@ dependencies = [
  "minimq",
  "serde",
  "serde-json-core",
+ "smlang",
 ]
 
 [[package]]
 name = "minimq"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea5e759f258bee54765698d7fc1219692b1bce77f72a77e360fe1d73fcbdeca4"
+checksum = "cf42a70baa4f1f568529bd8b9ae388cac43cd31a506197e6c26e9cf647aa9014"
 dependencies = [
  "bit_field",
  "embedded-nal",

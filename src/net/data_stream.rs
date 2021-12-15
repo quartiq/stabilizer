@@ -25,7 +25,7 @@
 use heapless::spsc::{Consumer, Producer, Queue};
 use miniconf::MiniconfAtomic;
 use num_enum::IntoPrimitive;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use smoltcp_nal::embedded_nal::{IpAddr, Ipv4Addr, SocketAddr, UdpClientStack};
 
 use heapless::pool::{Box, Init, Pool, Uninit};
@@ -63,7 +63,9 @@ static mut FRAME_DATA: [u8; FRAME_SIZE * FRAME_COUNT] =
 ///
 /// ## Example
 /// `{"ip": [192, 168,0, 1], "port": 1111}`
-#[derive(Copy, Clone, Debug, MiniconfAtomic, Deserialize, Default)]
+#[derive(
+    Copy, Clone, Debug, MiniconfAtomic, Serialize, Deserialize, Default,
+)]
 pub struct StreamTarget {
     pub ip: [u8; 4],
     pub port: u16,

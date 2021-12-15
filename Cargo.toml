@@ -41,14 +41,14 @@ nb = "1.0.0"
 asm-delay = "0.9.0"
 num_enum = { version = "0.5.4", default-features = false }
 paste = "1"
-idsp = "0.3.0"
+idsp = "0.4.0"
 ad9959 = { path = "ad9959" }
-miniconf = "0.2.0"
+miniconf = "0.3"
+smoltcp-nal = { version = "0.2", features = ["shared-stack"] }
 serde-json-core = "0.4"
 mcp23017 = "1.0"
 mutex-trait = "0.2"
-minimq = "0.5.1"
-smoltcp-nal = { version = "0.2", features = ["shared-stack"] }
+minimq = "0.5.2"
 
 # rtt-target bump
 [dependencies.rtt-logger]
@@ -63,10 +63,6 @@ rev = "70b0eb5"
 features = ["stm32h743v", "rt", "unproven", "ethernet", "xspi"]
 git = "https://github.com/stm32-rs/stm32h7xx-hal"
 branch = "v0.11.0"
-
-[patch.crates-io.miniconf]
-git = "https://github.com/quartiq/miniconf"
-rev = "eca1bf7"
 
 [patch.crates-io.heapless]
 git = "https://github.com/quartiq/heapless.git"
