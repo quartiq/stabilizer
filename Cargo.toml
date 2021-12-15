@@ -62,7 +62,7 @@ rev = "70b0eb5"
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "unproven", "ethernet", "xspi"]
 git = "https://github.com/stm32-rs/stm32h7xx-hal"
-branch = "v0.11.0"
+rev = "cc8da6b"
 
 [patch.crates-io.heapless]
 git = "https://github.com/quartiq/heapless.git"

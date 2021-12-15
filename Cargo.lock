@@ -887,7 +887,7 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.11.0"
-source = "git+https://github.com/stm32-rs/stm32h7xx-hal?branch=v0.11.0#cc8da6bae247a353ed3d64356d83b0a1621845f6"
+source = "git+https://github.com/stm32-rs/stm32h7xx-hal?rev=cc8da6b#cc8da6bae247a353ed3d64356d83b0a1621845f6"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",
