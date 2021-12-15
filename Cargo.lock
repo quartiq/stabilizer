@@ -73,7 +73,7 @@ version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5deb64efa5bd81e31fcd1938615a6d98c82eafcbcd787162b6f63b91d6bac5b3"
 dependencies = [
- "rustc_version 0.2.3",
+ "rustc_version",
 ]
 
 [[package]]
@@ -114,12 +114,9 @@ checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "cast"
-version = "0.2.7"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c24dab4283a142afa2fdca129b80ad2c6284e073930f964c3a1293c225ee39a"
-dependencies = [
- "rustc_version 0.4.0",
-]
+checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cfg-if"
@@ -154,16 +151,18 @@ dependencies = [
 
 [[package]]
 name = "cortex-m-rt"
-version = "0.6.13"
-source = "git+https://github.com/rust-embedded/cortex-m-rt.git?rev=a2e3ad5#a2e3ad54478c6b98e519a1b0946395d790c0b6c7"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c433da385b720d5bb9f52362fa2782420798e68d40d67bfe4b0d992aba5dfe7"
 dependencies = [
  "cortex-m-rt-macros",
 ]
 
 [[package]]
 name = "cortex-m-rt-macros"
-version = "0.6.11"
-source = "git+https://github.com/rust-embedded/cortex-m-rt.git?rev=a2e3ad5#a2e3ad54478c6b98e519a1b0946395d790c0b6c7"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0f6f3e36f203cfedbc78b357fb28730aa2c6dc1ab060ee5c2405e843988d3c7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -714,16 +713,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "138e3e0acb6c9fb258b19b67cb8abd63c00679d2851805ea151465464fe9030a"
 dependencies = [
- "semver 0.9.0",
-]
-
-[[package]]
-name = "rustc_version"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfa0f585226d2e68097d4f95d113b15b83a82e819ab25717ec0590d9584ef366"
-dependencies = [
- "semver 1.0.4",
+ "semver",
 ]
 
 [[package]]
@@ -746,12 +736,6 @@ checksum = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"
 dependencies = [
  "semver-parser",
 ]
-
-[[package]]
-name = "semver"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "568a8e6258aa33c13358f81fd834adb854c6f7c9468520910a9b1e8fac068012"
 
 [[package]]
 name = "semver-parser"
@@ -823,7 +807,8 @@ dependencies = [
 [[package]]
 name = "smoltcp"
 version = "0.8.0"
-source = "git+https://github.com/smoltcp-rs/smoltcp?branch=master#2dfc1598b6cf7819670666f45479a125d1cc5de9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2308a1657c8db1f5b4993bab4e620bdbe5623bd81f254cf60326767bb243237"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -832,14 +817,15 @@ dependencies = [
 
 [[package]]
 name = "smoltcp-nal"
-version = "0.1.0"
-source = "git+https://github.com/quartiq/smoltcp-nal.git?rev=a28e41f#a28e41f61c9c521fef874ef08e551101fbd7a59e"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7b22fc1e9b13e435081ae7f593ab1e5385a3884c2134c753c7fb5729d675373"
 dependencies = [
- "critical-section",
  "embedded-nal",
  "embedded-time",
  "heapless",
  "nanorand",
+ "shared-bus",
  "smoltcp",
 ]
 
@@ -876,7 +862,6 @@ dependencies = [
  "rtt-target",
  "serde",
  "serde-json-core",
- "shared-bus",
  "smoltcp-nal",
  "stm32h7xx-hal",
 ]
@@ -889,11 +874,11 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "stm32h7"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b672c837e0ee8158ecc7fce0f9a948dd0693a9c588338e728d14b73307a0b7d"
+checksum = "6f0faa648e03579befdd7267ab5c669624729028001fcf3c973832f53e310a06"
 dependencies = [
- "bare-metal 0.2.5",
+ "bare-metal 1.0.0",
  "cortex-m 0.7.3",
  "cortex-m-rt",
  "vcell",
@@ -901,13 +886,12 @@ dependencies = [
 
 [[package]]
 name = "stm32h7xx-hal"
-version = "0.9.0"
-source = "git+https://github.com/quartiq/stm32h7xx-hal.git?rev=33aa67d#33aa67d74790cb9f680a4f281b72df0664bcf03c"
+version = "0.11.0"
+source = "git+https://github.com/stm32-rs/stm32h7xx-hal?rev=cc8da6b#cc8da6bae247a353ed3d64356d83b0a1621845f6"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",
  "cortex-m 0.7.3",
- "cortex-m-rt",
  "embedded-dma",
  "embedded-hal",
  "nb 1.0.0",

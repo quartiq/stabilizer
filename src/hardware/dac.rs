@@ -59,10 +59,13 @@ use super::timers;
 
 use core::convert::TryFrom;
 
-use hal::dma::{
-    dma::{DMAReq, DmaConfig},
-    traits::TargetAddress,
-    DMAError, MemoryToPeripheral, Transfer,
+use hal::{
+    dma::{
+        dma::{DMAReq, DmaConfig},
+        traits::TargetAddress,
+        DMAError, MemoryToPeripheral, Transfer,
+    },
+    spi::{HalDisabledSpi, HalEnabledSpi, HalSpi},
 };
 
 // The following global buffers are used for the DAC code DMA transfers. Two buffers are used for

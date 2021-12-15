@@ -30,11 +30,18 @@ pub enum GpioPin {
 pub enum Error {
     Spi,
     I2c,
-    Qspi,
+    Qspi(hal::xspi::QspiError),
     Bounds,
     InvalidAddress,
     InvalidChannel,
     Adc,
+    InvalidState,
+}
+
+impl From<hal::xspi::QspiError> for Error {
+    fn from(e: hal::xspi::QspiError) -> Error {
+        Error::Qspi(e)
+    }
 }
 
 /// The numerical value (discriminant) of the Channel enum is the index in the attenuator shift
@@ -96,7 +103,7 @@ impl From<Channel> for ad9959::Channel {
 
 /// A structure for the QSPI interface for the DDS.
 pub struct QspiInterface {
-    pub qspi: hal::qspi::Qspi,
+    pub qspi: hal::xspi::Qspi<hal::stm32::QUADSPI>,
     mode: ad9959::Mode,
     streaming: bool,
 }
@@ -106,12 +113,13 @@ impl QspiInterface {
     ///
     /// Args:
     /// * `qspi` - The QSPI peripheral driver.
-    pub fn new(mut qspi: hal::qspi::Qspi) -> Result<Self, Error> {
+    pub fn new(
+        mut qspi: hal::xspi::Qspi<hal::stm32::QUADSPI>,
+    ) -> Result<Self, Error> {
         // This driver only supports operation in 4-bit mode due to bus inconsistencies between the
         // QSPI peripheral and the DDS. Instead, we will bit-bang communications in
         // single-bit-two-wire to the DDS to configure it to 4-bit operation.
-        qspi.configure_mode(hal::qspi::QspiMode::FourBit)
-            .map_err(|_| Error::Qspi)?;
+        qspi.configure_mode(hal::xspi::QspiMode::FourBit)?;
         Ok(Self {
             qspi,
             mode: ad9959::Mode::SingleBitTwoWire,
@@ -120,9 +128,7 @@ impl QspiInterface {
     }
 
     pub fn start_stream(&mut self) -> Result<(), Error> {
-        if self.qspi.is_busy() {
-            return Err(Error::Qspi);
-        }
+        self.qspi.is_busy()?;
 
         // Configure QSPI for infinite transaction mode using only a data phase (no instruction or
         // address).
@@ -232,21 +238,19 @@ impl ad9959::Interface for QspiInterface {
                     (encoded_data[0], &encoded_data[1..end_index])
                 };
 
-                self.qspi
-                    .write(encoded_address.into(), encoded_payload)
-                    .map_err(|_| Error::Qspi)
+                self.qspi.write(encoded_address.into(), encoded_payload)?;
+
+                Ok(())
             }
             ad9959::Mode::FourBitSerial => {
                 if self.streaming {
-                    Err(Error::Qspi)
+                    Err(Error::InvalidState)
                 } else {
-                    self.qspi
-                        .write(addr.into(), data)
-                        .map_err(|_| Error::Qspi)?;
+                    self.qspi.write(addr.into(), data)?;
                     Ok(())
                 }
             }
-            _ => Err(Error::Qspi),
+            _ => Err(Error::InvalidState),
         }
     }
 
@@ -257,12 +261,12 @@ impl ad9959::Interface for QspiInterface {
 
         // This implementation only supports operation (read) in four-bit-serial mode.
         if self.mode != ad9959::Mode::FourBitSerial {
-            return Err(Error::Qspi);
+            return Err(Error::InvalidState);
         }
 
-        self.qspi
-            .read((0x80_u8 | addr).into(), dest)
-            .map_err(|_| Error::Qspi)
+        self.qspi.read((0x80_u8 | addr).into(), dest)?;
+
+        Ok(())
     }
 }
 

@@ -72,11 +72,14 @@ use mutex_trait::Mutex;
 use super::design_parameters::{SampleBuffer, MAX_SAMPLE_BUFFER_SIZE};
 use super::timers;
 
-use hal::dma::{
-    config::Priority,
-    dma::{DMAReq, DmaConfig},
-    traits::TargetAddress,
-    DMAError, MemoryToPeripheral, PeripheralToMemory, Transfer,
+use hal::{
+    dma::{
+        config::Priority,
+        dma::{DMAReq, DmaConfig},
+        traits::TargetAddress,
+        DMAError, MemoryToPeripheral, PeripheralToMemory, Transfer,
+    },
+    spi::{HalDisabledSpi, HalEnabledSpi, HalSpi},
 };
 
 /// A type representing an ADC sample.
@@ -148,7 +151,9 @@ static mut ADC_BUF: [[SampleBuffer; 2]; 2] =
 macro_rules! adc_input {
     ($name:ident, $index:literal, $trigger_stream:ident, $data_stream:ident, $clear_stream:ident,
      $spi:ident, $trigger_channel:ident, $dma_req:ident, $clear_channel:ident, $dma_clear_req:ident) => {
+
         paste::paste! {
+
             /// $spi-CR is used as a type for indicating a DMA transfer into the SPI control
             /// register whenever the tim2 update dma request occurs.
             struct [< $spi CR >] {

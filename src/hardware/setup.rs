@@ -27,8 +27,7 @@ pub struct NetStorage {
     pub ip_addrs: [smoltcp::wire::IpCidr; 1],
 
     // Note: There is an additional socket set item required for the DHCP socket.
-    pub sockets:
-        [Option<smoltcp::socket::SocketSetItem<'static>>; NUM_SOCKETS + 1],
+    pub sockets: [smoltcp::iface::SocketStorage<'static>; NUM_SOCKETS + 1],
     pub tcp_socket_storage: [TcpSocketStorage; NUM_TCP_SOCKETS],
     pub udp_socket_storage: [UdpSocketStorage; NUM_UDP_SOCKETS],
     pub neighbor_cache:
@@ -85,7 +84,7 @@ impl Default for NetStorage {
             )],
             neighbor_cache: [None; 8],
             routes_cache: [None; 8],
-            sockets: [None, None, None, None, None, None],
+            sockets: [smoltcp::iface::SocketStorage::EMPTY; NUM_SOCKETS + 1],
             tcp_socket_storage: [TcpSocketStorage::new(); NUM_TCP_SOCKETS],
             udp_socket_storage: [UdpSocketStorage::new(); NUM_UDP_SOCKETS],
         }
@@ -122,7 +121,10 @@ pub struct PounderDevices {
 
 #[link_section = ".sram3.eth"]
 /// Static storage for the ethernet DMA descriptor ring.
-static mut DES_RING: ethernet::DesRing = ethernet::DesRing::new();
+static mut DES_RING: ethernet::DesRing<
+    { super::TX_DESRING_CNT },
+    { super::RX_DESRING_CNT },
+> = ethernet::DesRing::new();
 
 /// Setup ITCM and load its code from flash.
 ///
@@ -600,51 +602,6 @@ pub fn setup(
         )
     };
 
-    // Configure ethernet pins.
-    {
-        // Reset the PHY before configuring pins.
-        let mut eth_phy_nrst = gpioe.pe3.into_push_pull_output();
-        eth_phy_nrst.set_low().unwrap();
-        delay.delay_us(200u8);
-        eth_phy_nrst.set_high().unwrap();
-        let _rmii_ref_clk = gpioa
-            .pa1
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_mdio = gpioa
-            .pa2
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_mdc = gpioc
-            .pc1
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_crs_dv = gpioa
-            .pa7
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_rxd0 = gpioc
-            .pc4
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_rxd1 = gpioc
-            .pc5
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_tx_en = gpiob
-            .pb11
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_txd0 = gpiob
-            .pb12
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-        let _rmii_txd1 = gpiog
-            .pg14
-            .into_alternate_af11()
-            .set_speed(hal::gpio::Speed::VeryHigh);
-    }
-
     let mac_addr = smoltcp::wire::EthernetAddress(eeprom::read_eui48(
         &mut eeprom_i2c,
         &mut delay,
@@ -652,18 +609,76 @@ pub fn setup(
     log::info!("EUI48: {}", mac_addr);
 
     let network_devices = {
-        // Configure the ethernet controller
-        let (eth_dma, eth_mac) = unsafe {
-            ethernet::new_unchecked(
-                device.ETHERNET_MAC,
-                device.ETHERNET_MTL,
-                device.ETHERNET_DMA,
-                &mut DES_RING,
-                mac_addr,
-                ccdr.peripheral.ETH1MAC,
-                &ccdr.clocks,
+        let ethernet_pins = {
+            // Reset the PHY before configuring pins.
+            let mut eth_phy_nrst = gpioe.pe3.into_push_pull_output();
+            eth_phy_nrst.set_low().unwrap();
+            delay.delay_us(200u8);
+            eth_phy_nrst.set_high().unwrap();
+
+            let rmii_ref_clk = gpioa
+                .pa1
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let rmii_mdio = gpioa
+                .pa2
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let rmii_mdc = gpioc
+                .pc1
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let rmii_crs_dv = gpioa
+                .pa7
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let rmii_rxd0 = gpioc
+                .pc4
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let rmii_rxd1 = gpioc
+                .pc5
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let rmii_tx_en = gpiob
+                .pb11
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let rmii_txd0 = gpiob
+                .pb12
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+            let rmii_txd1 = gpiog
+                .pg14
+                .into_alternate_af11()
+                .set_speed(hal::gpio::Speed::VeryHigh);
+
+            (
+                rmii_ref_clk,
+                rmii_mdio,
+                rmii_mdc,
+                rmii_crs_dv,
+                rmii_rxd0,
+                rmii_rxd1,
+                rmii_tx_en,
+                rmii_txd0,
+                rmii_txd1,
             )
         };
+
+        // Configure the ethernet controller
+        let (eth_dma, eth_mac) = ethernet::new(
+            device.ETHERNET_MAC,
+            device.ETHERNET_MTL,
+            device.ETHERNET_DMA,
+            ethernet_pins,
+            // Note(unsafe): We only call this function once to take ownership of the
+            // descriptor ring.
+            unsafe { &mut DES_RING },
+            mac_addr,
+            ccdr.peripheral.ETH1MAC,
+            &ccdr.clocks,
+        );
 
         // Note(unsafe): We need to manually disable various ethernet interrupts so they don't
         // unintentionally hang the device. This behavior should be offloaded into the HAL in the
@@ -737,51 +752,49 @@ pub fn setup(
         let neighbor_cache =
             smoltcp::iface::NeighborCache::new(&mut store.neighbor_cache[..]);
 
-        let interface = smoltcp::iface::InterfaceBuilder::new(eth_dma)
-            .hardware_addr(smoltcp::wire::HardwareAddress::Ethernet(mac_addr))
-            .neighbor_cache(neighbor_cache)
-            .ip_addrs(&mut store.ip_addrs[..])
-            .routes(routes)
-            .finalize();
+        let mut interface = smoltcp::iface::InterfaceBuilder::new(
+            eth_dma,
+            &mut store.sockets[..],
+        )
+        .hardware_addr(smoltcp::wire::HardwareAddress::Ethernet(mac_addr))
+        .neighbor_cache(neighbor_cache)
+        .ip_addrs(&mut store.ip_addrs[..])
+        .routes(routes)
+        .finalize();
 
-        let sockets = {
-            let mut sockets =
-                smoltcp::socket::SocketSet::new(&mut store.sockets[..]);
+        interface.add_socket(smoltcp::socket::Dhcpv4Socket::new());
 
-            for storage in store.tcp_socket_storage[..].iter_mut() {
-                let tcp_socket = {
-                    let rx_buffer = smoltcp::socket::TcpSocketBuffer::new(
-                        &mut storage.rx_storage[..],
-                    );
-                    let tx_buffer = smoltcp::socket::TcpSocketBuffer::new(
-                        &mut storage.tx_storage[..],
-                    );
+        for storage in store.tcp_socket_storage[..].iter_mut() {
+            let tcp_socket = {
+                let rx_buffer = smoltcp::socket::TcpSocketBuffer::new(
+                    &mut storage.rx_storage[..],
+                );
+                let tx_buffer = smoltcp::socket::TcpSocketBuffer::new(
+                    &mut storage.tx_storage[..],
+                );
 
-                    smoltcp::socket::TcpSocket::new(rx_buffer, tx_buffer)
-                };
-                sockets.add(tcp_socket);
-            }
+                smoltcp::socket::TcpSocket::new(rx_buffer, tx_buffer)
+            };
 
-            for storage in store.udp_socket_storage[..].iter_mut() {
-                let udp_socket = {
-                    let rx_buffer = smoltcp::socket::UdpSocketBuffer::new(
-                        &mut storage.rx_metadata[..],
-                        &mut storage.rx_storage[..],
-                    );
-                    let tx_buffer = smoltcp::socket::UdpSocketBuffer::new(
-                        &mut storage.tx_metadata[..],
-                        &mut storage.tx_storage[..],
-                    );
+            interface.add_socket(tcp_socket);
+        }
 
-                    smoltcp::socket::UdpSocket::new(rx_buffer, tx_buffer)
-                };
-                sockets.add(udp_socket);
-            }
+        for storage in store.udp_socket_storage[..].iter_mut() {
+            let udp_socket = {
+                let rx_buffer = smoltcp::socket::UdpSocketBuffer::new(
+                    &mut storage.rx_metadata[..],
+                    &mut storage.rx_storage[..],
+                );
+                let tx_buffer = smoltcp::socket::UdpSocketBuffer::new(
+                    &mut storage.tx_metadata[..],
+                    &mut storage.tx_storage[..],
+                );
 
-            sockets.add(smoltcp::socket::Dhcpv4Socket::new());
+                smoltcp::socket::UdpSocket::new(rx_buffer, tx_buffer)
+            };
 
-            sockets
-        };
+            interface.add_socket(udp_socket);
+        }
 
         let random_seed = {
             let mut rng =
@@ -793,7 +806,6 @@ pub fn setup(
 
         let mut stack = smoltcp_nal::NetworkStack::new(
             interface,
-            sockets,
             system_timer::SystemTimer::default(),
         );
 
@@ -932,8 +944,7 @@ pub fn setup(
                     (clk, io0, io1, io2, io3)
                 };
 
-                let qspi = hal::qspi::Qspi::bank2(
-                    device.QUADSPI,
+                let qspi = device.QUADSPI.bank2(
                     qspi_pins,
                     design_parameters::POUNDER_QSPI_FREQUENCY,
                     &ccdr.clocks,
