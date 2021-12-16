@@ -680,49 +680,6 @@ pub fn setup(
             &ccdr.clocks,
         );
 
-        // Note(unsafe): We need to manually disable various ethernet interrupts so they don't
-        // unintentionally hang the device. This behavior should be offloaded into the HAL in the
-        // future. We have given away the ETH_MAC peripherals, so we need to conjure them up to
-        // disable the ISRs.
-        unsafe {
-            let eth_mac = &*hal::stm32::ETHERNET_MAC::ptr();
-
-            // Mask away Ethernet MAC MMC RX/TX interrupts. These are statistics counter interrupts
-            // and are enabled by default. They are intended to provide ethernet MAC-related
-            // statistics, which we are not using.
-            eth_mac.mmc_rx_interrupt_mask.modify(|_, w| {
-                w.rxlpiuscim()
-                    .set_bit()
-                    .rxucgpim()
-                    .set_bit()
-                    .rxalgnerpim()
-                    .set_bit()
-                    .rxcrcerpim()
-                    .set_bit()
-            });
-
-            eth_mac.mmc_tx_interrupt_mask.modify(|_, w| {
-                w.txlpiuscim()
-                    .set_bit()
-                    .txgpktim()
-                    .set_bit()
-                    .txmcolgpim()
-                    .set_bit()
-                    .txscolgpim()
-                    .set_bit()
-            });
-
-            // Note: The MMC_TX/RX_INTERRUPT_MASK registers incorrectly mark LPITRCIM as read-only,
-            // so svd2rust doens't generate bindings to modify them. Instead, as a workaround, we
-            // manually manipulate the bits.
-            eth_mac
-                .mmc_tx_interrupt_mask
-                .modify(|r, w| w.bits(r.bits() | (1 << 27)));
-            eth_mac
-                .mmc_rx_interrupt_mask
-                .modify(|r, w| w.bits(r.bits() | (1 << 27)));
-        }
-
         // Reset and initialize the ethernet phy.
         let mut lan8742a =
             ethernet::phy::LAN8742A::new(eth_mac.set_phy_addr(0));
