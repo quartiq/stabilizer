@@ -55,14 +55,10 @@ minimq = "0.5.2"
 git = "https://github.com/quartiq/rtt-logger.git"
 rev = "70b0eb5"
 
-# The following modifications of the HAL are being used:
-# * fast double buffered DMA without poisoning and buffer swapping
-# * Utilize `master` branch of smoltcp
-# * Utilize `master` branch of HAL
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "unproven", "ethernet", "xspi"]
 git = "https://github.com/stm32-rs/stm32h7xx-hal"
-rev = "cc8da6b"
+rev = "257e4c7"
 
 [patch.crates-io.heapless]
 git = "https://github.com/quartiq/heapless.git"
