@@ -47,7 +47,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9a69a963b70ddacfcd382524f72a4576f359af9334b3bf48a79566590bb8bfa"
 dependencies = [
  "bitrate",
- "cortex-m 0.7.3",
+ "cortex-m 0.6.7",
  "embedded-hal",
 ]
 
@@ -133,15 +133,15 @@ dependencies = [
  "aligned",
  "bare-metal 0.2.5",
  "bitfield",
- "cortex-m 0.7.3",
+ "cortex-m 0.7.4",
  "volatile-register",
 ]
 
 [[package]]
 name = "cortex-m"
-version = "0.7.3"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ac919ef424449ec8c08d515590ce15d9262c0ca5f0da5b0c901e971a3b783b3"
+checksum = "37ff967e867ca14eba0c34ac25cd71ea98c678e741e3915d923999bb2fe7c826"
 dependencies = [
  "bare-metal 0.2.5",
  "bitfield",
@@ -176,7 +176,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "248b2f20fd8f885f8fa802766ea3f076692eb8d57e611c8afd1b82d3000cfe9a"
 dependencies = [
  "bare-metal 1.0.0",
- "cortex-m 0.7.3",
+ "cortex-m 0.7.4",
  "cortex-m-rtic-macros",
  "heapless",
  "rtic-core",
@@ -205,7 +205,7 @@ checksum = "673b836c1c5a73bd981805236f46dfddbe1092a6a829b22464bd40d7ceefd2f9"
 dependencies = [
  "bare-metal 1.0.0",
  "cfg-if",
- "cortex-m 0.7.3",
+ "cortex-m 0.7.4",
  "riscv",
 ]
 
@@ -691,7 +691,7 @@ version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "065d6058bb1204f51a562a67209e1817cf714759d5cf845aa45c75fa7b0b9d9b"
 dependencies = [
- "cortex-m 0.7.3",
+ "cortex-m 0.7.4",
  "ufmt-write",
 ]
 
@@ -832,7 +832,7 @@ version = "0.5.0"
 dependencies = [
  "ad9959",
  "asm-delay",
- "cortex-m 0.7.3",
+ "cortex-m 0.7.4",
  "cortex-m-rt",
  "cortex-m-rtic",
  "embedded-hal",
@@ -867,7 +867,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f0faa648e03579befdd7267ab5c669624729028001fcf3c973832f53e310a06"
 dependencies = [
  "bare-metal 1.0.0",
- "cortex-m 0.7.3",
+ "cortex-m 0.7.4",
  "cortex-m-rt",
  "vcell",
 ]
@@ -880,7 +880,7 @@ checksum = "926bfa26b1d97aa0579ade46411cbf5d0680704323c8b9db9a2413e3feae8d3b"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",
- "cortex-m 0.7.3",
+ "cortex-m 0.7.4",
  "embedded-dma",
  "embedded-hal",
  "nb 1.0.0",
