@@ -4,6 +4,9 @@ timeout_sec = 1200
 status = [
   "style",
   "compile (stable)",
+  "compile (stable, pounder_v1_1)",
+  "compile (1.52.0)",
+  "compile (1.52.0, pounder_v1_1)",
   "doc",
   "HITL Run Status"
 ]
