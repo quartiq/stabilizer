@@ -238,7 +238,7 @@ impl ad9959::Interface for QspiInterface {
                     (encoded_data[0], &encoded_data[1..end_index])
                 };
 
-                self.qspi.write(encoded_address.into(), encoded_payload)?;
+                self.qspi.write(encoded_address, encoded_payload)?;
 
                 Ok(())
             }
@@ -246,7 +246,7 @@ impl ad9959::Interface for QspiInterface {
                 if self.streaming {
                     Err(Error::InvalidState)
                 } else {
-                    self.qspi.write(addr.into(), data)?;
+                    self.qspi.write(addr, data)?;
                     Ok(())
                 }
             }
@@ -264,7 +264,7 @@ impl ad9959::Interface for QspiInterface {
             return Err(Error::InvalidState);
         }
 
-        self.qspi.read((0x80_u8 | addr).into(), dest)?;
+        self.qspi.read(0x80 | addr, dest)?;
 
         Ok(())
     }
