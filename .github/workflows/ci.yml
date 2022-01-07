@@ -52,13 +52,11 @@ jobs:
     continue-on-error: ${{ matrix.toolchain == 'nightly' }}
     strategy:
       matrix:
-        toolchain: [stable]
-        features: ['']
+        toolchain: [stable, '1.52.0']
+        features: ['', pounder_v1_1]
         include:
           - toolchain: beta
             features: ''
-          - toolchain: stable
-            features: pounder_v1_1
           - toolchain: nightly
             features: nightly
     steps:
