@@ -133,19 +133,10 @@ impl Default for Config {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SignalGenerator {
     phase_accumulator: i32,
     config: Config,
-}
-
-impl Default for SignalGenerator {
-    fn default() -> Self {
-        Self {
-            config: Config::default(),
-            phase_accumulator: 0,
-        }
-    }
 }
 
 impl SignalGenerator {

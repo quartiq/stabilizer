@@ -336,7 +336,7 @@ impl<I: Interface> Ad9959<I> {
         &mut self,
         channel: Channel,
         register: Register,
-        mut data: &mut [u8],
+        data: &mut [u8],
     ) -> Result<(), Error> {
         // Disable all other channels in the CSR so that we can read the configuration register of
         // only the desired channel.
@@ -348,7 +348,7 @@ impl<I: Interface> Ad9959<I> {
         new_csr[0].set_bit(4 + channel as usize, true);
 
         self.write(Register::CSR, &new_csr)?;
-        self.read(register, &mut data)?;
+        self.read(register, data)?;
 
         // Restore the previous CSR. Note that the re-enable of the channel happens immediately, so
         // the CSR update does not need to be latched.
