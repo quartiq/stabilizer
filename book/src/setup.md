@@ -28,6 +28,10 @@ Stabilizer uses DHCP to obtain its network configuration information. Ensure the
 properly configured DHCP server running on the network segment that Stabilizer is
 connected to.
 
+> **Note:** If you have a direct Ethernet connection to an Ubuntu system you can set the IPv4 settings
+of the ethernet connection to "Shared to other computers".
+
+
 ## MQTT Broker
 
 Stabilizer requires an MQTT broker that supports MQTTv5.
