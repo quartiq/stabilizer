@@ -29,7 +29,7 @@ properly configured DHCP server running on the network segment that Stabilizer i
 connected to.
 
 > **Note:** If you have a direct Ethernet connection to an Ubuntu system you can set the IPv4 settings
-of the ethernet connection to "Shared to other computers".
+of the Ethernet connection to "Shared to other computers".
 
 ## MQTT Broker
 
