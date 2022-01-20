@@ -47,7 +47,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9a69a963b70ddacfcd382524f72a4576f359af9334b3bf48a79566590bb8bfa"
 dependencies = [
  "bitrate",
- "cortex-m 0.6.7",
+ "cortex-m 0.7.4",
  "embedded-hal",
 ]
 
@@ -336,9 +336,9 @@ dependencies = [
 
 [[package]]
 name = "idsp"
-version = "0.4.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73292b6fa42085c110a8e4d4a1de6c9e8f0123da52457c16c83b293355b72160"
+checksum = "867448d316a60f8b5491b42ab2b3d2c85a296fab905de95830440f2518297d82"
 dependencies = [
  "miniconf",
  "num-complex 0.4.0",
