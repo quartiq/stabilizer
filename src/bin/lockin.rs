@@ -61,12 +61,12 @@ use stabilizer::{
 
 // The logarithm of the number of samples in each batch process. This corresponds with 2^3 samples
 // per batch = 8 samples
-const BATCH_SIZE_SIZE_LOG2: u8 = 3;
+const BATCH_SIZE_SIZE_LOG2: u32 = 3;
 
 // The logarithm of the number of 100MHz timer ticks between each sample. This corresponds with a
 // sampling period of 2^7 = 128 ticks. At 100MHz, 10ns per tick, this corresponds to a sampling
 // period of 1.28 uS or 781.25 KHz.
-const ADC_SAMPLE_TICKS_LOG2: u8 = 7;
+const ADC_SAMPLE_TICKS_LOG2: u32 = 7;
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, Miniconf)]
 enum Conf {
@@ -124,8 +124,8 @@ pub struct Settings {
     /// * <n> specifies which channel to configure. <n> := [0, 1]
     ///
     /// # Value
-    /// The PLL time constant as an unsigned byte (0-255).
-    pll_tc: [u8; 2],
+    /// The PLL time constant exponent (1-31).
+    pll_tc: [u32; 2],
 
     /// Specifies the lockin time constant.
     ///
@@ -134,7 +134,7 @@ pub struct Settings {
     ///
     /// # Value
     /// The lockin low-pass time constant as an unsigned byte (0-255).
-    lockin_tc: u8,
+    lockin_tc: u32,
 
     /// Specifies which harmonic to use for the lockin.
     ///
