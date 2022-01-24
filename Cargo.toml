@@ -41,7 +41,7 @@ nb = "1.0.0"
 asm-delay = "0.9.0"
 num_enum = { version = "0.5.6", default-features = false }
 paste = "1"
-idsp = "0.6.0"
+idsp = "0.7.0"
 ad9959 = { path = "ad9959" }
 miniconf = "0.3"
 smoltcp-nal = { version = "0.2", features = ["shared-stack"] }
