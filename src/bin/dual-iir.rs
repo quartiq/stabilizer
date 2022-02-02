@@ -33,8 +33,8 @@ use core::sync::atomic::{fence, Ordering};
 
 use mutex_trait::prelude::*;
 
+use fugit::ExtU32;
 use idsp::iir;
-use rtic::time::duration::Extensions;
 use stabilizer::{
     hardware::{
         self,
@@ -441,7 +441,7 @@ mod app {
 
         // Schedule the telemetry task in the future.
         telemetry_task::Monotonic::spawn_after(
-            (telemetry_period as u32).seconds(),
+            (telemetry_period as u32).secs(),
         )
         .unwrap();
     }
@@ -451,7 +451,7 @@ mod app {
         c.shared
             .network
             .lock(|network| network.processor.handle_link());
-        ethernet_link::Monotonic::spawn_after(1u32.seconds()).unwrap();
+        ethernet_link::Monotonic::spawn_after(1u32.secs()).unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]

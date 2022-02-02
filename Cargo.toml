@@ -35,7 +35,7 @@ log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"
 rtt-target = { version = "0.3", features = ["cortex-m"] }
 serde = { version = "1.0", features = ["derive"], default-features = false }
 heapless = { version = "0.7", features = ["serde"] }
-cortex-m-rtic = "0.6.0-alpha.5"
+cortex-m-rtic = "1.0"
 embedded-hal = "0.2.6"
 nb = "1.0.0"
 asm-delay = "0.9.0"
@@ -49,6 +49,7 @@ serde-json-core = "0.4"
 mcp23017 = "1.0"
 mutex-trait = "0.2"
 minimq = "0.5.2"
+fugit = "0.3"
 
 # rtt-target bump
 [dependencies.rtt-logger]

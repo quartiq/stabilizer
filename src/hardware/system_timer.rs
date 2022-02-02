@@ -6,11 +6,9 @@
 ///! than the CPU clock. This allows for longer scheduling periods with less resolution. This is
 ///! needed for infrequent (e.g. multiple second) telemetry periods.
 use hal::prelude::*;
-use rtic::{
-    time::{clock::Error, fraction::Fraction, Clock, Instant},
-    Monotonic,
-};
 use stm32h7xx_hal as hal;
+
+use minimq::embedded_time::{clock::Error, fraction::Fraction, Clock, Instant};
 
 // A global buffer indicating how many times the internal counter has overflowed.
 static mut OVERFLOWS: u32 = 0;
@@ -43,15 +41,8 @@ impl SystemTimer {
 
         timer.resume();
     }
-}
 
-impl Clock for SystemTimer {
-    type T = u32;
-
-    // The duration of each tick in seconds.
-    const SCALING_FACTOR: Fraction = Fraction::new(1, 10_000);
-
-    fn try_now(&self) -> Result<Instant<Self>, Error> {
+    pub fn get_ticks(&self) -> u32 {
         // Note(unsafe): Multiple interrupt contexts have access to the underlying timer, so care
         // is taken when reading and modifying register values.
         let regs = unsafe { &*hal::device::TIM15::ptr() };
@@ -78,22 +69,44 @@ impl Clock for SystemTimer {
                 if regs.sr.read().uif().bit_is_clear() {
                     // Note(unsafe): We are in a critical section, so it is safe to read the
                     // global variable.
-                    unsafe {
-                        Some(Instant::new(
-                            ((OVERFLOWS << 16) + current_value) as u32,
-                        ))
-                    }
+                    unsafe { Some(((OVERFLOWS << 16) + current_value) as u32) }
                 } else {
                     None
                 }
             }) {
-                return Ok(instant);
+                return instant;
             }
         }
     }
 }
 
-impl Monotonic for SystemTimer {
+impl Clock for SystemTimer {
+    type T = u32;
+
+    // The duration of each tick in seconds.
+    const SCALING_FACTOR: Fraction = Fraction::new(1, 10_000);
+
+    fn try_now(&self) -> Result<Instant<Self>, Error> {
+        Ok(Instant::new(self.get_ticks()))
+    }
+}
+
+impl rtic::Monotonic for SystemTimer {
+    type Instant = fugit::Instant<
+        u32,
+        { *<SystemTimer as Clock>::SCALING_FACTOR.numerator() },
+        { *<SystemTimer as Clock>::SCALING_FACTOR.denominator() },
+    >;
+    type Duration = fugit::Duration<
+        u32,
+        { *<SystemTimer as Clock>::SCALING_FACTOR.numerator() },
+        { *<SystemTimer as Clock>::SCALING_FACTOR.denominator() },
+    >;
+
+    fn zero() -> Self::Instant {
+        Self::Instant::from_ticks(0)
+    }
+
     /// Reset the timer count.
     unsafe fn reset(&mut self) {
         // Note: The timer must be safely configured in `SystemTimer::initialize()`.
@@ -103,15 +116,18 @@ impl Monotonic for SystemTimer {
         regs.cnt.reset();
     }
 
-    fn set_compare(&mut self, instant: &Instant<Self>) {
+    fn now(&mut self) -> Self::Instant {
+        Self::Instant::from_ticks(self.get_ticks())
+    }
+
+    fn set_compare(&mut self, instant: Self::Instant) {
         let regs = unsafe { &*hal::device::TIM15::ptr() };
 
-        let now = self.try_now().unwrap();
-        match now.checked_duration_until(instant) {
+        match instant.checked_duration_since(self.now()) {
             // If the scheduled instant is too far in the future, we can't set an exact
             // deadline because it's too far in the future. Instead, just set a time in the
             // future and retry then.
-            Some(duration) if duration.integer() > (1 << 16) => {
+            Some(duration) if duration.ticks() > (1 << 16) => {
                 // Set the deadline and enable the interrupt
                 regs.ccr1.write(|w| w.ccr().bits(0xFFFF));
                 regs.dier.modify(|_, w| w.cc1ie().set_bit());
@@ -121,8 +137,7 @@ impl Monotonic for SystemTimer {
                 // Else, the instant is within a single overflow. Set it for the future.
                 // Ignore the duration and truncate the overflow (top 16 bits) of the final
                 // deadline. We just checked that we can fit within a single overflow.
-                let deadline_ticks =
-                    instant.duration_since_epoch().integer() as u16;
+                let deadline_ticks = instant.ticks() as u16;
 
                 // Set the deadline and enable the interrupt
                 regs.ccr1.write(|w| w.ccr().bits(deadline_ticks));
@@ -139,7 +154,7 @@ impl Monotonic for SystemTimer {
         // the future. This checks for a race condition of the timer stepping past the deadline
         // while we are configuring it. If we've proceeded past the dealdine, reschedule the
         // compare to occur immediately.
-        if self.try_now().unwrap() > *instant {
+        if self.now() > instant {
             self.clear_compare_flag();
             cortex_m::peripheral::NVIC::pend(hal::interrupt::TIM15);
         }

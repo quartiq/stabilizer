@@ -35,8 +35,8 @@ use core::{
 
 use mutex_trait::prelude::*;
 
+use fugit::ExtU32;
 use idsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
-use rtic::time::duration::Extensions;
 use stabilizer::{
     hardware::{
         self,
@@ -503,14 +503,14 @@ mod app {
         });
 
         // Schedule the telemetry task in the future.
-        telemetry::Monotonic::spawn_after((telemetry_period as u32).seconds())
+        telemetry::Monotonic::spawn_after((telemetry_period as u32).secs())
             .unwrap();
     }
 
     #[task(priority = 1, shared=[network])]
     fn ethernet_link(mut c: ethernet_link::Context) {
         c.shared.network.lock(|net| net.processor.handle_link());
-        ethernet_link::Monotonic::spawn_after(1u32.seconds()).unwrap();
+        ethernet_link::Monotonic::spawn_after(1u32.secs()).unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]
