@@ -10,9 +10,8 @@ keywords = ["ethernet", "stm32h7", "adc", "dac", "physics"]
 repository = "https://github.com/quartiq/stabilizer"
 readme = "README.md"
 documentation = "https://docs.rs/stabilizer/"
-edition = "2018"
+edition = "2021"
 exclude = [
-	".travis.yml",
 	".gitignore",
 	"doc/",
 	"doc/*"
