@@ -52,6 +52,7 @@ jobs:
     continue-on-error: ${{ matrix.toolchain == 'nightly' }}
     strategy:
       matrix:
+        # keep MSRV in sync in ci.yaml, bors.toml, and setup.md
         toolchain: [stable, '1.57.0']
         features: ['', pounder_v1_1]
         include:
