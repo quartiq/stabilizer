@@ -66,7 +66,7 @@ docker run -p 1883:1883 --name mosquitto -v ${pwd}/mosquitto.conf:/mosquitto/con
 ## Building
 
 1. Get and install [rustup](https://rustup.rs/) and use it to install a current stable Rust toolchain.
-    The minimum supported Rust version (MSRV) is 1.52.0.
+    The minimum supported Rust version (MSRV) is 1.57.0 (2021 edition).
 1. Install target support
     ```bash
     rustup target add thumbv7em-none-eabihf

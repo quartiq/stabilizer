@@ -31,10 +31,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 * Const generics, bumping the MSRV to 1.51.0 ([#355](https://github.com/quartiq/stabilizer/pull/355) etc)
 * `lockin-internal` and `lockin-external` have been merged into `lockin` ([#352](https://github.com/quartiq/stabilizer/pull/352))
-* Set target CPU to cortex-m7, effectively bumping the MSRV to 1.52.0
+* Set target CPU to cortex-m7
 * Process routine can be executed from fast closely coupled memory with wide
   bus for faster execution ([#420](https://github.com/quartiq/stabilizer/pull/420))
 * Relicensed as MIT/Apache ([#419](https://github.com/quartiq/stabilizer/pull/419) [#416](https://github.com/quartiq/stabilizer/pull/416))
+* Minimum supported Rust version bumped to 1.57
 
 ### Fixed
 
