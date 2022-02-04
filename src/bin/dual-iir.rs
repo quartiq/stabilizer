@@ -184,12 +184,11 @@ mod app {
     #[local]
     struct Local {
         digital_inputs: (DigitalInput0, DigitalInput1),
-        adcs: (Adc0Input, Adc1Input),
-        dacs: (Dac0Output, Dac1Output),
         afes: (AFE0, AFE1),
-        generator: FrameGenerator,
-
+        adcs: (Adc0Input, Adc1Input),
         iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
+        dacs: (Dac0Output, Dac1Output),
+        generator: FrameGenerator,
     }
 
     #[init]
@@ -216,20 +215,6 @@ mod app {
         let generator = network
             .configure_streaming(StreamFormat::AdcDacData, BATCH_SIZE as u8);
 
-        // Spawn a settings update for default settings.
-        settings_update::spawn().unwrap();
-        telemetry_task::spawn().unwrap();
-        ethernet_link::spawn().unwrap();
-
-        // Enable ADC/DAC events
-        stabilizer.adcs.0.start();
-        stabilizer.adcs.1.start();
-        stabilizer.dacs.0.start();
-        stabilizer.dacs.1.start();
-
-        // Start sampling ADCs.
-        stabilizer.adc_dac_timer.start();
-
         let settings = Settings::default();
 
         let shared = Shared {
@@ -250,7 +235,7 @@ mod app {
             ],
         };
 
-        let local = Local {
+        let mut local = Local {
             iir_state: [[[0.; 5]; IIR_CASCADE_LENGTH]; 2],
             digital_inputs: stabilizer.digital_inputs,
             adcs: stabilizer.adcs,
@@ -259,10 +244,24 @@ mod app {
             afes: stabilizer.afes,
         };
 
+        // Spawn a settings update for default settings.
+        settings_update::spawn().unwrap();
+        telemetry::spawn().unwrap();
+        ethernet_link::spawn().unwrap();
+
+        // Enable ADC/DAC events
+        local.adcs.0.start();
+        local.adcs.1.start();
+        local.dacs.0.start();
+        local.dacs.1.start();
+
+        // Start sampling ADCs.
+        stabilizer.adc_dac_timer.start();
+
         (shared, local, init::Monotonics(SystemTimer::default()))
     }
 
-    /// Main DSP processing routine for Stabilizer.
+    /// Main DSP processing routine.
     ///
     /// # Note
     /// Processing time for the DSP application code is bounded by the following constraints:
@@ -391,10 +390,7 @@ mod app {
     #[task(priority = 1, local=[afes], shared=[network, settings, signal_generator])]
     fn settings_update(mut c: settings_update::Context) {
         // Update the IIR channels.
-        let settings = c
-            .shared
-            .network
-            .lock(|network| *network.miniconf.settings());
+        let settings = c.shared.network.lock(|net| *net.miniconf.settings());
         c.shared.settings.lock(|current| *current = settings);
 
         // Update AFEs
@@ -418,13 +414,11 @@ mod app {
         }
 
         let target = settings.stream_target.into();
-        c.shared
-            .network
-            .lock(|network| network.direct_stream(target));
+        c.shared.network.lock(|net| net.direct_stream(target));
     }
 
     #[task(priority = 1, shared=[network, settings, telemetry])]
-    fn telemetry_task(mut c: telemetry_task::Context) {
+    fn telemetry(mut c: telemetry::Context) {
         let telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
 
@@ -433,25 +427,20 @@ mod app {
             .settings
             .lock(|settings| (settings.afe, settings.telemetry_period));
 
-        c.shared.network.lock(|network| {
-            network
-                .telemetry
+        c.shared.network.lock(|net| {
+            net.telemetry
                 .publish(&telemetry.finalize(gains[0], gains[1]))
         });
 
         // Schedule the telemetry task in the future.
-        telemetry_task::Monotonic::spawn_after(
-            (telemetry_period as u32).secs(),
-        )
-        .unwrap();
+        telemetry::Monotonic::spawn_after((telemetry_period as u32).secs())
+            .unwrap();
     }
 
     #[task(priority = 1, shared=[network])]
     fn ethernet_link(mut c: ethernet_link::Context) {
-        c.shared
-            .network
-            .lock(|network| network.processor.handle_link());
-        ethernet_link::Monotonic::spawn_after(1u32.secs()).unwrap();
+        c.shared.network.lock(|net| net.processor.handle_link());
+        ethernet_link::Monotonic::spawn_after(1.secs()).unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]
