@@ -192,33 +192,6 @@ pub fn setup(
     batch_size: usize,
     sample_ticks: u32,
 ) -> (StabilizerDevices, Option<PounderDevices>) {
-    let pwr = device.PWR.constrain();
-    let vos = pwr.freeze();
-
-    // Enable SRAM3 for the ethernet descriptor ring.
-    device.RCC.ahb2enr.modify(|_, w| w.sram3en().set_bit());
-
-    // Clear reset flags.
-    device.RCC.rsr.write(|w| w.rmvf().set_bit());
-
-    // Select the PLLs for SPI.
-    device
-        .RCC
-        .d2ccip1r
-        .modify(|_, w| w.spi123sel().pll2_p().spi45sel().pll2_q());
-
-    device.RCC.d1ccipr.modify(|_, w| w.qspisel().rcc_hclk3());
-
-    let rcc = device.RCC.constrain();
-    let ccdr = rcc
-        .use_hse(8.mhz())
-        .sysclk(400.mhz())
-        .hclk(200.mhz())
-        .per_ck(100.mhz())
-        .pll2_p_ck(100.mhz())
-        .pll2_q_ck(100.mhz())
-        .freeze(vos, &device.SYSCFG);
-
     // Set up RTT logging
     {
         // Enable debug during WFE/WFI-induced sleep
@@ -261,6 +234,33 @@ pub fn setup(
             .unwrap();
         log::info!("Starting");
     }
+
+    let pwr = device.PWR.constrain();
+    let vos = pwr.freeze();
+
+    // Enable SRAM3 for the ethernet descriptor ring.
+    device.RCC.ahb2enr.modify(|_, w| w.sram3en().set_bit());
+
+    // Clear reset flags.
+    device.RCC.rsr.write(|w| w.rmvf().set_bit());
+
+    // Select the PLLs for SPI.
+    device
+        .RCC
+        .d2ccip1r
+        .modify(|_, w| w.spi123sel().pll2_p().spi45sel().pll2_q());
+
+    device.RCC.d1ccipr.modify(|_, w| w.qspisel().rcc_hclk3());
+
+    let rcc = device.RCC.constrain();
+    let ccdr = rcc
+        .use_hse(8.mhz())
+        .sysclk(400.mhz())
+        .hclk(200.mhz())
+        .per_ck(100.mhz())
+        .pll2_p_ck(100.mhz())
+        .pll2_q_ck(100.mhz())
+        .freeze(vos, &device.SYSCFG);
 
     // Before being able to call any code in ITCM, load that code from flash.
     load_itcm();
