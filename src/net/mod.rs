@@ -13,9 +13,7 @@ pub mod data_stream;
 pub mod network_processor;
 pub mod telemetry;
 
-use crate::hardware::{
-    system_timer::SystemTimer, EthernetPhy, NetworkManager, NetworkStack,
-};
+use crate::hardware::{EthernetPhy, NetworkManager, NetworkStack, SystemTimer};
 use data_stream::{DataStream, FrameGenerator};
 use minimq::embedded_nal::IpAddr;
 use network_processor::NetworkProcessor;

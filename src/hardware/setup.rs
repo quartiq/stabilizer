@@ -15,8 +15,8 @@ use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use super::{
     adc, afe, dac, design_parameters, eeprom, input_stamper::InputStamper,
-    pounder, pounder::dds_output::DdsOutput, system_timer::SystemTimer, timers,
-    DigitalInput0, DigitalInput1, EthernetPhy, NetworkStack, AFE0, AFE1,
+    pounder, pounder::dds_output::DdsOutput, timers, DigitalInput0,
+    DigitalInput1, EthernetPhy, NetworkStack, SystemTimer, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -177,7 +177,7 @@ fn load_itcm() {
 ///
 /// # Args
 /// * `device` - The microcontroller peripherals to be configured.
-/// * `clock` - A `SystemTimer` implementing `Clock`.
+/// * `clock` - `Clock` implementation.
 /// * `batch_size` - The size of each ADC/DAC batch.
 /// * `sample_ticks` - The number of timer ticks between each sample.
 ///

@@ -44,8 +44,7 @@ use stabilizer::{
         embedded_hal::digital::v2::InputPin,
         hal,
         signal_generator::{self, SignalGenerator},
-        system_timer::SystemTimer,
-        DigitalInput0, DigitalInput1, AFE0, AFE1,
+        DigitalInput0, DigitalInput1, SystemTimer, AFE0, AFE1,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -195,7 +194,7 @@ mod app {
     #[init]
     fn init(mut c: init::Context) -> (Shared, Local, init::Monotonics) {
         let mono = Systick::new(c.core.SYST, 400_000_000);
-        let clock = SystemTimer::new(|| monotonics::now().ticks());
+        let clock = SystemTimer::new(|| monotonics::now().ticks() as u32);
 
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup::setup(

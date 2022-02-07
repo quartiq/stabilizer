@@ -10,7 +10,6 @@ pub mod input_stamper;
 pub mod pounder;
 pub mod setup;
 pub mod signal_generator;
-pub mod system_timer;
 
 mod eeprom;
 mod timers;
@@ -44,16 +43,19 @@ const RX_DESRING_CNT: usize = 4;
 pub type NetworkStack = smoltcp_nal::NetworkStack<
     'static,
     hal::ethernet::EthernetDMA<'static, TX_DESRING_CNT, RX_DESRING_CNT>,
-    system_timer::SystemTimer,
+    SystemTimer,
 >;
 
 pub type NetworkManager = smoltcp_nal::shared::NetworkManager<
     'static,
     hal::ethernet::EthernetDMA<'static, TX_DESRING_CNT, RX_DESRING_CNT>,
-    system_timer::SystemTimer,
+    SystemTimer,
 >;
 
 pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
+
+pub use mono_clock::MonoClock;
+pub type SystemTimer = MonoClock<u32, 1_000>;
 
 #[inline(never)]
 #[panic_handler]

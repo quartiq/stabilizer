@@ -455,6 +455,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mono-clock"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9255f82d355f9ab3607c99beb1b28dd5e484d998500bb1dbe9037d1dd5ff1af"
+dependencies = [
+ "embedded-time",
+]
+
+[[package]]
 name = "mutex-trait"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -858,6 +867,7 @@ dependencies = [
  "mcp23017",
  "miniconf",
  "minimq",
+ "mono-clock",
  "mutex-trait",
  "nb 1.0.0",
  "num_enum",

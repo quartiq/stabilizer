@@ -15,9 +15,7 @@ use minimq::{QoS, Retain};
 use serde::Serialize;
 
 use super::NetworkReference;
-use crate::hardware::{
-    adc::AdcCode, afe::Gain, dac::DacCode, system_timer::SystemTimer,
-};
+use crate::hardware::{adc::AdcCode, afe::Gain, dac::DacCode, SystemTimer};
 use minimq::embedded_nal::IpAddr;
 
 /// The telemetry client for reporting telemetry data over MQTT.
@@ -96,7 +94,7 @@ impl<T: Serialize> TelemetryClient<T> {
     ///
     /// # Args
     /// * `stack` - A reference to the (shared) underlying network stack.
-    /// * `clock` - A `SystemTimer` implementing `Clock`.
+    /// * `clock` - A `MonoClock`.
     /// * `client_id` - The MQTT client ID of the telemetry client.
     /// * `prefix` - The device prefix to use for MQTT telemetry reporting.
     /// * `broker` - The IP address of the MQTT broker to use.
