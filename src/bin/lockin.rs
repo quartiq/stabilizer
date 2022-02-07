@@ -35,7 +35,7 @@ use core::{
 
 use mutex_trait::prelude::*;
 
-use fugit::ExtU32;
+use fugit::ExtU64;
 use idsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
 use stabilizer::{
     hardware::{
@@ -58,6 +58,7 @@ use stabilizer::{
         NetworkState, NetworkUsers,
     },
 };
+use systick_monotonic::Systick;
 
 // The logarithm of the number of samples in each batch process. This corresponds with 2^3 samples
 // per batch = 8 samples
@@ -213,8 +214,8 @@ impl Default for Settings {
 mod app {
     use super::*;
 
-    #[monotonic(binds = TIM15)]
-    type Monotonic = SystemTimer;
+    #[monotonic(binds = SysTick, default = true)]
+    type Monotonic = Systick<1_000>;
 
     #[shared]
     struct Shared {
@@ -237,14 +238,20 @@ mod app {
     }
 
     #[init]
-    fn init(c: init::Context) -> (Shared, Local, init::Monotonics) {
+    fn init(mut c: init::Context) -> (Shared, Local, init::Monotonics) {
+        let mono = Systick::new(c.core.SYST, 400_000_000);
+        let clock = SystemTimer::new(|| monotonics::now().ticks());
+
         // Configure the microcontroller
         let (mut stabilizer, _pounder) =
-            hardware::setup::setup(c.core, c.device, BATCH_SIZE, SAMPLE_TICKS);
+            hardware::setup::setup(c.device, clock, BATCH_SIZE, SAMPLE_TICKS);
+
+        c.core.SCB.enable_icache();
 
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
+            clock,
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
             option_env!("BROKER")
@@ -314,7 +321,7 @@ mod app {
         // Enable the timestamper.
         local.timestamper.start();
 
-        (shared, local, init::Monotonics(SystemTimer::default()))
+        (shared, local, init::Monotonics(mono))
     }
 
     /// Main DSP processing routine.
@@ -489,7 +496,7 @@ mod app {
         });
 
         // Schedule the telemetry task in the future.
-        telemetry::Monotonic::spawn_after((telemetry_period as u32).secs())
+        telemetry::Monotonic::spawn_after((telemetry_period as u64).secs())
             .unwrap();
     }
 

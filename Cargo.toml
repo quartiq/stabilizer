@@ -49,6 +49,7 @@ mcp23017 = "1.0"
 mutex-trait = "0.2"
 minimq = "0.5.2"
 fugit = "0.3"
+systick-monotonic = "1.0"
 
 # rtt-target bump
 [dependencies.rtt-logger]

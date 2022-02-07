@@ -104,17 +104,13 @@ impl<T: Serialize> TelemetryClient<T> {
     /// A new telemetry client.
     pub fn new(
         stack: NetworkReference,
+        clock: SystemTimer,
         client_id: &str,
         prefix: &str,
         broker: IpAddr,
     ) -> Self {
-        let mqtt = minimq::Minimq::new(
-            broker,
-            client_id,
-            stack,
-            SystemTimer::default(),
-        )
-        .unwrap();
+        let mqtt =
+            minimq::Minimq::new(broker, client_id, stack, clock).unwrap();
 
         let mut telemetry_topic: String<128> = String::from(prefix);
         telemetry_topic.push_str("/telemetry").unwrap();

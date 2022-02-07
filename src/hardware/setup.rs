@@ -15,7 +15,7 @@ use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use super::{
     adc, afe, dac, design_parameters, eeprom, input_stamper::InputStamper,
-    pounder, pounder::dds_output::DdsOutput, system_timer, timers,
+    pounder, pounder::dds_output::DdsOutput, system_timer::SystemTimer, timers,
     DigitalInput0, DigitalInput1, EthernetPhy, NetworkStack, AFE0, AFE1,
 };
 
@@ -176,7 +176,6 @@ fn load_itcm() {
 /// Refer to [design_parameters::TIMER_FREQUENCY] to determine the frequency of the sampling timer.
 ///
 /// # Args
-/// * `core` - The RTIC core for configuring the cortex-M core of the device.
 /// * `device` - The microcontroller peripherals to be configured.
 /// * `batch_size` - The size of each ADC/DAC batch.
 /// * `sample_ticks` - The number of timer ticks between each sample.
@@ -187,8 +186,8 @@ fn load_itcm() {
 /// `Some(devices)` if pounder is detected, where `devices` is a `PounderDevices` structure
 /// containing all of the pounder hardware interfaces in a disabled state.
 pub fn setup(
-    mut core: rtic::export::Peripherals,
     device: stm32h7xx_hal::stm32::Peripherals,
+    clock: SystemTimer,
     batch_size: usize,
     sample_ticks: u32,
 ) -> (StabilizerDevices, Option<PounderDevices>) {
@@ -264,15 +263,6 @@ pub fn setup(
 
     // Before being able to call any code in ITCM, load that code from flash.
     load_itcm();
-
-    // Set up the system timer for RTIC scheduling.
-    {
-        let tim15 =
-            device
-                .TIM15
-                .timer(10.khz(), ccdr.peripheral.TIM15, &ccdr.clocks);
-        system_timer::SystemTimer::initialize(tim15);
-    }
 
     let mut delay = asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(
         ccdr.clocks.c_ck().0,
@@ -761,10 +751,7 @@ pub fn setup(
             data
         };
 
-        let mut stack = smoltcp_nal::NetworkStack::new(
-            interface,
-            system_timer::SystemTimer::default(),
-        );
+        let mut stack = smoltcp_nal::NetworkStack::new(interface, clock);
 
         stack.seed_random_port(&random_seed);
 
@@ -1039,9 +1026,6 @@ pub fn setup(
         timestamp_timer,
         digital_inputs,
     };
-
-    // Enable the instruction cache.
-    core.SCB.enable_icache();
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
     // info!("Built on {}", build_info::BUILT_TIME_UTC);
