@@ -1,7 +1,7 @@
 //! # Lockin
 //!
 //! The `lockin` application implements a lock-in amplifier using either an external or internally
-//! generated
+//! generated reference.
 //!
 //! ## Features
 //! * Up to 800 kHz sampling
