@@ -1,7 +1,7 @@
 //! # Lockin
 //!
-//! THe `lockin` application implements a lock-in amplifier using either an external or internally
-//! generated
+//! The `lockin` application implements a lock-in amplifier using either an external or internally
+//! generated reference.
 //!
 //! ## Features
 //! * Up to 800 kHz sampling
@@ -61,12 +61,14 @@ use stabilizer::{
 
 // The logarithm of the number of samples in each batch process. This corresponds with 2^3 samples
 // per batch = 8 samples
-const BATCH_SIZE_SIZE_LOG2: u32 = 3;
+const BATCH_SIZE_LOG2: u32 = 3;
+const BATCH_SIZE: usize = 1 << BATCH_SIZE_LOG2;
 
 // The logarithm of the number of 100MHz timer ticks between each sample. This corresponds with a
 // sampling period of 2^7 = 128 ticks. At 100MHz, 10ns per tick, this corresponds to a sampling
 // period of 1.28 uS or 781.25 KHz.
-const ADC_SAMPLE_TICKS_LOG2: u32 = 7;
+const SAMPLE_TICKS_LOG2: u32 = 7;
+const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, Miniconf)]
 enum Conf {
@@ -223,27 +225,22 @@ mod app {
 
     #[local]
     struct Local {
-        afes: (AFE0, AFE1),
-        generator: FrameGenerator,
         digital_inputs: (DigitalInput0, DigitalInput1),
+        timestamper: InputStamper,
+        afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        signal_generator: signal_generator::SignalGenerator,
-
-        timestamper: InputStamper,
         pll: RPLL,
         lockin: Lockin<4>,
+        signal_generator: signal_generator::SignalGenerator,
+        generator: FrameGenerator,
     }
 
     #[init]
     fn init(c: init::Context) -> (Shared, Local, init::Monotonics) {
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) = hardware::setup::setup(
-            c.core,
-            c.device,
-            1 << BATCH_SIZE_SIZE_LOG2,
-            1 << ADC_SAMPLE_TICKS_LOG2,
-        );
+        let (mut stabilizer, _pounder) =
+            hardware::setup::setup(c.core, c.device, BATCH_SIZE, SAMPLE_TICKS);
 
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
@@ -256,38 +253,17 @@ mod app {
                 .unwrap(),
         );
 
-        let generator = network.configure_streaming(
-            StreamFormat::AdcDacData,
-            1u8 << BATCH_SIZE_SIZE_LOG2,
-        );
+        let generator = network
+            .configure_streaming(StreamFormat::AdcDacData, BATCH_SIZE as _);
 
-        let settings = Settings::default();
-
-        let pll = RPLL::new(ADC_SAMPLE_TICKS_LOG2 + BATCH_SIZE_SIZE_LOG2);
-
-        // Spawn a settings and telemetry update for default settings.
-        settings_update::spawn().unwrap();
-        telemetry::spawn().unwrap();
-        ethernet_link::spawn().unwrap();
-
-        // Enable ADC/DAC events
-        stabilizer.adcs.0.start();
-        stabilizer.adcs.1.start();
-        stabilizer.dacs.0.start();
-        stabilizer.dacs.1.start();
-
-        // Start recording digital input timestamps.
-        stabilizer.timestamp_timer.start();
-
-        // Start sampling ADCs.
-        stabilizer.adc_dac_timer.start();
-
-        // Enable the timestamper.
-        stabilizer.timestamper.start();
+        let shared = Shared {
+            network,
+            telemetry: TelemetryBuffer::default(),
+            settings: Settings::default(),
+        };
 
         let signal_config = {
-            let frequency_tuning_word =
-                (1u64 << (32 - BATCH_SIZE_SIZE_LOG2)) as i32;
+            let frequency_tuning_word = (1u64 << (32 - BATCH_SIZE_LOG2)) as i32;
 
             signal_generator::Config {
                 // Same frequency as batch size.
@@ -302,28 +278,41 @@ mod app {
             }
         };
 
-        let shared = Shared {
-            network,
-            telemetry: TelemetryBuffer::default(),
-
-            settings,
-        };
-
-        let local = Local {
+        let mut local = Local {
             digital_inputs: stabilizer.digital_inputs,
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
             timestamper: stabilizer.timestamper,
 
+            pll: RPLL::new(SAMPLE_TICKS_LOG2 + BATCH_SIZE_LOG2),
+            lockin: Lockin::default(),
             signal_generator: signal_generator::SignalGenerator::new(
                 signal_config,
             ),
 
-            pll,
             generator,
-            lockin: Lockin::default(),
         };
+
+        // Spawn a settings and telemetry update for default settings.
+        settings_update::spawn().unwrap();
+        telemetry::spawn().unwrap();
+        ethernet_link::spawn().unwrap();
+
+        // Enable ADC/DAC events
+        local.adcs.0.start();
+        local.adcs.1.start();
+        local.dacs.0.start();
+        local.dacs.1.start();
+
+        // Start recording digital input timestamps.
+        stabilizer.timestamp_timer.start();
+
+        // Start sampling ADCs.
+        stabilizer.adc_dac_timer.start();
+
+        // Enable the timestamper.
+        local.timestamper.start();
 
         (shared, local, init::Monotonics(SystemTimer::default()))
     }
@@ -338,40 +327,39 @@ mod app {
     #[task(binds=DMA1_STR4, shared=[settings, telemetry], local=[adcs, dacs, lockin, timestamper, pll, generator, signal_generator], priority=2)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
-        let process::LocalResources {
-            adcs: (ref mut adc0, ref mut adc1),
-            dacs: (ref mut dac0, ref mut dac1),
-            lockin,
-            pll,
-            timestamper,
-            generator,
-            signal_generator,
-        } = c.local;
-
         let process::SharedResources {
             settings,
             telemetry,
         } = c.shared;
 
+        let process::LocalResources {
+            timestamper,
+            adcs: (adc0, adc1),
+            dacs: (dac0, dac1),
+            pll,
+            lockin,
+            signal_generator,
+            generator,
+        } = c.local;
+
         (settings, telemetry).lock(|settings, telemetry| {
-            let (reference_phase, reference_frequency) = match settings
-                .lockin_mode
-            {
-                LockinMode::External => {
-                    let timestamp =
-                        timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
-                    let (pll_phase, pll_frequency) = pll.update(
-                        timestamp.map(|t| t as i32),
-                        settings.pll_tc[0],
-                        settings.pll_tc[1],
-                    );
-                    (pll_phase, (pll_frequency >> BATCH_SIZE_SIZE_LOG2) as i32)
-                }
-                LockinMode::Internal => {
-                    // Reference phase and frequency are known.
-                    (1i32 << 30, 1i32 << (32 - BATCH_SIZE_SIZE_LOG2))
-                }
-            };
+            let (reference_phase, reference_frequency) =
+                match settings.lockin_mode {
+                    LockinMode::External => {
+                        let timestamp =
+                            timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
+                        let (pll_phase, pll_frequency) = pll.update(
+                            timestamp.map(|t| t as i32),
+                            settings.pll_tc[0],
+                            settings.pll_tc[1],
+                        );
+                        (pll_phase, (pll_frequency >> BATCH_SIZE_LOG2) as i32)
+                    }
+                    LockinMode::Internal => {
+                        // Reference phase and frequency are known.
+                        (1i32 << 30, 1i32 << (32 - BATCH_SIZE_LOG2))
+                    }
+                };
 
             let sample_frequency =
                 reference_frequency.wrapping_mul(settings.lockin_harmonic);
@@ -425,8 +413,7 @@ mod app {
                 }
 
                 // Stream the data.
-                const N: usize =
-                    (1 << BATCH_SIZE_SIZE_LOG2) * core::mem::size_of::<u16>();
+                const N: usize = BATCH_SIZE * core::mem::size_of::<u16>();
                 generator.add::<_, { N * 4 }>(|buf| {
                     for (data, buf) in adc_samples
                         .iter()
@@ -472,11 +459,10 @@ mod app {
     #[task(priority = 1, local=[afes], shared=[network, settings])]
     fn settings_update(mut c: settings_update::Context) {
         let settings = c.shared.network.lock(|net| *net.miniconf.settings());
+        c.shared.settings.lock(|current| *current = settings);
 
         c.local.afes.0.set_gain(settings.afe[0]);
         c.local.afes.1.set_gain(settings.afe[1]);
-
-        c.shared.settings.lock(|current| *current = settings);
 
         let target = settings.stream_target.into();
         c.shared.network.lock(|net| net.direct_stream(target));
@@ -510,7 +496,7 @@ mod app {
     #[task(priority = 1, shared=[network])]
     fn ethernet_link(mut c: ethernet_link::Context) {
         c.shared.network.lock(|net| net.processor.handle_link());
-        ethernet_link::Monotonic::spawn_after(1u32.secs()).unwrap();
+        ethernet_link::Monotonic::spawn_after(1.secs()).unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]
