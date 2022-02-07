@@ -49,10 +49,7 @@ mcp23017 = "1.0"
 mutex-trait = "0.2"
 minimq = "0.5.2"
 fugit = "0.3"
-
-# rtt-target bump
-[dependencies.rtt-logger]
-git = "https://github.com/drogue-iot/rtt-logger.git"
+rtt-logger = "0.2"
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "unproven", "ethernet", "xspi"]
