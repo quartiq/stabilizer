@@ -214,7 +214,7 @@ impl Default for Settings {
 mod app {
     use super::*;
 
-    #[monotonic(binds = SysTick, default = true)]
+    #[monotonic(binds = SysTick, default = true, priority = 1)]
     type Monotonic = Systick<1_000>;
 
     #[shared]
