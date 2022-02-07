@@ -175,10 +175,10 @@ mod app {
     #[shared]
     struct Shared {
         network: NetworkUsers<Settings, Telemetry>,
-        signal_generator: [SignalGenerator; 2],
 
         settings: Settings,
         telemetry: TelemetryBuffer,
+        signal_generator: [SignalGenerator; 2],
     }
 
     #[local]
@@ -186,8 +186,8 @@ mod app {
         digital_inputs: (DigitalInput0, DigitalInput1),
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
-        iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
         dacs: (Dac0Output, Dac1Output),
+        iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
         generator: FrameGenerator,
     }
 
@@ -213,14 +213,14 @@ mod app {
         );
 
         let generator = network
-            .configure_streaming(StreamFormat::AdcDacData, BATCH_SIZE as u8);
+            .configure_streaming(StreamFormat::AdcDacData, BATCH_SIZE as _);
 
         let settings = Settings::default();
 
         let shared = Shared {
             network,
-            telemetry: TelemetryBuffer::default(),
             settings,
+            telemetry: TelemetryBuffer::default(),
             signal_generator: [
                 SignalGenerator::new(
                     settings.signal_generator[0]
@@ -236,12 +236,12 @@ mod app {
         };
 
         let mut local = Local {
-            iir_state: [[[0.; 5]; IIR_CASCADE_LENGTH]; 2],
             digital_inputs: stabilizer.digital_inputs,
+            afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
+            iir_state: [[[0.; 5]; IIR_CASCADE_LENGTH]; 2],
             generator,
-            afes: stabilizer.afes,
         };
 
         // Spawn a settings update for default settings.
@@ -279,7 +279,7 @@ mod app {
     /// the same time bounds, meeting one also means the other is also met.
     #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[settings, signal_generator, telemetry], priority=2)]
     #[link_section = ".itcm.process"]
-    fn process(mut c: process::Context) {
+    fn process(c: process::Context) {
         let process::SharedResources {
             settings,
             telemetry,
@@ -287,11 +287,11 @@ mod app {
         } = c.shared;
 
         let process::LocalResources {
-            ref digital_inputs,
-            adcs: (ref mut adc0, ref mut adc1),
-            dacs: (ref mut dac0, ref mut dac1),
-            ref mut generator,
-            ref mut iir_state,
+            digital_inputs,
+            adcs: (adc0, adc1),
+            dacs: (dac0, dac1),
+            iir_state,
+            generator,
         } = c.local;
 
         (settings, telemetry, signal_generator).lock(
@@ -389,11 +389,9 @@ mod app {
 
     #[task(priority = 1, local=[afes], shared=[network, settings, signal_generator])]
     fn settings_update(mut c: settings_update::Context) {
-        // Update the IIR channels.
         let settings = c.shared.network.lock(|net| *net.miniconf.settings());
         c.shared.settings.lock(|current| *current = settings);
 
-        // Update AFEs
         c.local.afes.0.set_gain(settings.afe[0]);
         c.local.afes.1.set_gain(settings.afe[1]);
 
