@@ -33,10 +33,11 @@ use core::{
     sync::atomic::{fence, Ordering},
 };
 
+use fugit::ExtU64;
 use mutex_trait::prelude::*;
 
-use fugit::ExtU64;
 use idsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
+
 use stabilizer::{
     hardware::{
         self,
@@ -48,7 +49,7 @@ use stabilizer::{
         input_stamper::InputStamper,
         signal_generator,
         timers::SamplingTimer,
-        DigitalInput0, DigitalInput1, SystemTimer, AFE0, AFE1, HZ,
+        DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -58,7 +59,6 @@ use stabilizer::{
         NetworkState, NetworkUsers,
     },
 };
-use systick_monotonic::Systick;
 
 // The logarithm of the number of samples in each batch process. This corresponds with 2^3 samples
 // per batch = 8 samples
@@ -214,8 +214,8 @@ impl Default for Settings {
 mod app {
     use super::*;
 
-    #[monotonic(binds = SysTick, default = true, priority = 1)]
-    type Monotonic = Systick<HZ>;
+    #[monotonic(binds = SysTick, default = true, priority = 2)]
+    type Monotonic = Systick;
 
     #[shared]
     struct Shared {
@@ -239,15 +239,17 @@ mod app {
     }
 
     #[init]
-    fn init(mut c: init::Context) -> (Shared, Local, init::Monotonics) {
-        let mono = Systick::new(c.core.SYST, 400_000_000);
+    fn init(c: init::Context) -> (Shared, Local, init::Monotonics) {
         let clock = SystemTimer::new(|| monotonics::now().ticks() as u32);
 
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) =
-            hardware::setup::setup(c.device, clock, BATCH_SIZE, SAMPLE_TICKS);
-
-        c.core.SCB.enable_icache();
+        let (mut stabilizer, _pounder) = hardware::setup::setup(
+            c.core,
+            c.device,
+            clock,
+            BATCH_SIZE,
+            SAMPLE_TICKS,
+        );
 
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
@@ -321,7 +323,7 @@ mod app {
         // Enable the timestamper.
         local.timestamper.start();
 
-        (shared, local, init::Monotonics(mono))
+        (shared, local, init::Monotonics(stabilizer.systick))
     }
 
     #[task(priority = 1, local=[sampling_timer])]
@@ -337,7 +339,7 @@ mod app {
     /// This is an implementation of a externally (DI0) referenced PLL lockin on the ADC0 signal.
     /// It outputs either I/Q or power/phase on DAC0/DAC1. Data is normalized to full scale.
     /// PLL bandwidth, filter bandwidth, slope, and x/y or power/phase post-filters are available.
-    #[task(binds=DMA1_STR4, shared=[settings, telemetry], local=[adcs, dacs, lockin, timestamper, pll, generator, signal_generator], priority=2)]
+    #[task(binds=DMA1_STR4, shared=[settings, telemetry], local=[adcs, dacs, lockin, timestamper, pll, generator, signal_generator], priority=3)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {

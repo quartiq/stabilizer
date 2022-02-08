@@ -31,10 +31,11 @@
 
 use core::sync::atomic::{fence, Ordering};
 
+use fugit::ExtU64;
 use mutex_trait::prelude::*;
 
-use fugit::ExtU64;
 use idsp::iir;
+
 use stabilizer::{
     hardware::{
         self,
@@ -45,7 +46,7 @@ use stabilizer::{
         hal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
-        DigitalInput0, DigitalInput1, SystemTimer, AFE0, AFE1, HZ,
+        DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -54,7 +55,6 @@ use stabilizer::{
         NetworkState, NetworkUsers,
     },
 };
-use systick_monotonic::Systick;
 
 const SCALE: f32 = i16::MAX as _;
 
@@ -166,12 +166,12 @@ impl Default for Settings {
     }
 }
 
-#[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, SDMMC])]
+#[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
     use super::*;
 
-    #[monotonic(binds = SysTick, default = true, priority = 1)]
-    type Monotonic = Systick<HZ>;
+    #[monotonic(binds = SysTick, default = true, priority = 2)]
+    type Monotonic = Systick;
 
     #[shared]
     struct Shared {
@@ -194,19 +194,17 @@ mod app {
     }
 
     #[init]
-    fn init(mut c: init::Context) -> (Shared, Local, init::Monotonics) {
-        let mono = Systick::new(c.core.SYST, 400_000_000);
-        let clock = SystemTimer::new(|| monotonics::now().ticks() as u32);
+    fn init(c: init::Context) -> (Shared, Local, init::Monotonics) {
+        let clock = SystemTimer::new(|| monotonics::now().ticks() as _);
 
         // Configure the microcontroller
         let (stabilizer, _pounder) = hardware::setup::setup(
+            c.core,
             c.device,
             clock,
             BATCH_SIZE,
             1 << SAMPLE_TICKS_LOG2,
         );
-
-        c.core.SCB.enable_icache();
 
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
@@ -265,7 +263,7 @@ mod app {
         ethernet_link::spawn().unwrap();
         start::spawn_after(100.millis()).unwrap();
 
-        (shared, local, init::Monotonics(mono))
+        (shared, local, init::Monotonics(stabilizer.systick))
     }
 
     #[task(priority = 1, local=[sampling_timer])]
@@ -290,7 +288,7 @@ mod app {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[settings, signal_generator, telemetry], priority=2)]
+    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[settings, signal_generator, telemetry], priority=3)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
@@ -459,22 +457,22 @@ mod app {
         unsafe { hal::ethernet::interrupt_handler() }
     }
 
-    #[task(binds = SPI2, priority = 3)]
+    #[task(binds = SPI2, priority = 4)]
     fn spi2(_: spi2::Context) {
         panic!("ADC0 SPI error");
     }
 
-    #[task(binds = SPI3, priority = 3)]
+    #[task(binds = SPI3, priority = 4)]
     fn spi3(_: spi3::Context) {
         panic!("ADC1 SPI error");
     }
 
-    #[task(binds = SPI4, priority = 3)]
+    #[task(binds = SPI4, priority = 4)]
     fn spi4(_: spi4::Context) {
         panic!("DAC0 SPI error");
     }
 
-    #[task(binds = SPI5, priority = 3)]
+    #[task(binds = SPI5, priority = 4)]
     fn spi5(_: spi5::Context) {
         panic!("DAC1 SPI error");
     }

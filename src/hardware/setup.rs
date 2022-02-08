@@ -16,7 +16,7 @@ use embedded_hal::digital::v2::{InputPin, OutputPin};
 use super::{
     adc, afe, dac, design_parameters, eeprom, input_stamper::InputStamper,
     pounder, pounder::dds_output::DdsOutput, timers, DigitalInput0,
-    DigitalInput1, EthernetPhy, NetworkStack, SystemTimer, AFE0, AFE1,
+    DigitalInput1, EthernetPhy, NetworkStack, SystemTimer, Systick, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -100,6 +100,7 @@ pub struct NetworkDevices {
 
 /// The available hardware interfaces on Stabilizer.
 pub struct StabilizerDevices {
+    pub systick: Systick,
     pub afes: (AFE0, AFE1),
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
     pub dacs: (dac::Dac0Output, dac::Dac1Output),
@@ -176,6 +177,7 @@ fn load_itcm() {
 /// Refer to [design_parameters::TIMER_FREQUENCY] to determine the frequency of the sampling timer.
 ///
 /// # Args
+/// * `core` - The cortex-m peripherals.
 /// * `device` - The microcontroller peripherals to be configured.
 /// * `clock` - A `SystemTimer` implementing `Clock`.
 /// * `batch_size` - The size of each ADC/DAC batch.
@@ -187,6 +189,7 @@ fn load_itcm() {
 /// `Some(devices)` if pounder is detected, where `devices` is a `PounderDevices` structure
 /// containing all of the pounder hardware interfaces in a disabled state.
 pub fn setup(
+    mut core: stm32h7xx_hal::stm32::CorePeripherals,
     device: stm32h7xx_hal::stm32::Peripherals,
     clock: SystemTimer,
     batch_size: usize,
@@ -255,15 +258,19 @@ pub fn setup(
     let rcc = device.RCC.constrain();
     let ccdr = rcc
         .use_hse(8.mhz())
-        .sysclk(400.mhz())
+        .sysclk(design_parameters::SYSCLK)
         .hclk(200.mhz())
-        .per_ck(100.mhz())
+        .per_ck(design_parameters::TIMER_FREQUENCY)
         .pll2_p_ck(100.mhz())
         .pll2_q_ck(100.mhz())
         .freeze(vos, &device.SYSCFG);
 
     // Before being able to call any code in ITCM, load that code from flash.
     load_itcm();
+
+    let systick = Systick::new(core.SYST, ccdr.clocks.sysclk().0);
+
+    core.SCB.enable_icache();
 
     let mut delay = asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(
         ccdr.clocks.c_ck().0,
@@ -279,6 +286,14 @@ pub fn setup(
 
     let dma_streams =
         hal::dma::dma::StreamsTuple::new(device.DMA1, ccdr.peripheral.DMA1);
+
+    // Verify that batch period does not exceed RTIC Monotonic timer period.
+    /* TODO: merge #501
+    assert!(
+        (batch_size as u32 * sample_ticks) as f32 * design_parameters::TIMER_PERIOD
+            < design_parameters::HZ as f32
+    );
+    */
 
     // Configure timer 2 to trigger conversions for the ADC
     let mut sampling_timer = {
@@ -1018,6 +1033,7 @@ pub fn setup(
     };
 
     let stabilizer = StabilizerDevices {
+        systick,
         afes,
         adcs,
         dacs,

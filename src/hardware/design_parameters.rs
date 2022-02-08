@@ -1,5 +1,8 @@
 use stm32h7xx_hal::time::MegaHertz;
 
+/// The system clock, used in various timer calculations
+pub const SYSCLK: MegaHertz = MegaHertz(400);
+
 /// The ADC setup time is the number of seconds after the CSn line goes low before the serial clock
 /// may begin. This is used for performing the internal ADC conversion.
 pub const ADC_SETUP_TIME: f32 = 220e-9;
