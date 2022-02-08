@@ -70,9 +70,6 @@ const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 const SAMPLE_PERIOD: f32 =
     SAMPLE_TICKS as f32 * hardware::design_parameters::TIMER_PERIOD;
 
-// DAC full scale output voltage
-const DAC_FULL_SCALE: f32 = i16::MIN as f32 * -DacCode::VOLT_PER_LSB;
-
 #[derive(Clone, Copy, Debug, Miniconf)]
 pub struct Settings {
     /// Configure the Analog Front End (AFE) gain.
@@ -226,12 +223,12 @@ mod app {
             signal_generator: [
                 SignalGenerator::new(
                     settings.signal_generator[0]
-                        .try_into_config(SAMPLE_PERIOD, DAC_FULL_SCALE)
+                        .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),
                 SignalGenerator::new(
                     settings.signal_generator[1]
-                        .try_into_config(SAMPLE_PERIOD, DAC_FULL_SCALE)
+                        .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),
             ],
@@ -399,7 +396,7 @@ mod app {
 
         // Update the signal generators
         for (i, &config) in settings.signal_generator.iter().enumerate() {
-            match config.try_into_config(SAMPLE_PERIOD, DAC_FULL_SCALE) {
+            match config.try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE) {
                 Ok(config) => {
                     c.shared
                         .signal_generator

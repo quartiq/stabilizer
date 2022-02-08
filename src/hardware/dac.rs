@@ -83,7 +83,8 @@ pub struct DacCode(pub u16);
 impl DacCode {
     // The DAC output range in bipolar mode (including the external output op-amp) is +/- 4.096
     // V with 16-bit resolution. The anti-aliasing filter has an additional gain of 2.5.
-    pub const VOLT_PER_LSB: f32 = -4.096 * 2.5 / i16::MIN as f32;
+    pub const FULL_SCALE: f32 = 4.096 * 2.5;
+    pub const VOLT_PER_LSB: f32 = -Self::FULL_SCALE / i16::MIN as f32;
     pub const LSB_PER_VOLT: f32 = 1. / Self::VOLT_PER_LSB;
 }
 
