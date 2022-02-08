@@ -19,7 +19,6 @@ impl NetworkProcessor {
     /// # Args
     /// * `stack` - A reference to the shared network stack
     /// * `phy` - The ethernet PHY used for the network.
-    /// * `clock` - The clock used for providing time to the network.
     ///
     /// # Returns
     /// The newly constructed processor.

@@ -47,7 +47,7 @@ use stabilizer::{
         hal,
         input_stamper::InputStamper,
         signal_generator, DigitalInput0, DigitalInput1, SystemTimer, AFE0,
-        AFE1,
+        AFE1, HZ,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -214,7 +214,7 @@ mod app {
     use super::*;
 
     #[monotonic(binds = SysTick, default = true, priority = 1)]
-    type Monotonic = Systick<1_000>;
+    type Monotonic = Systick<HZ>;
 
     #[shared]
     struct Shared {

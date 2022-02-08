@@ -44,7 +44,7 @@ use stabilizer::{
         embedded_hal::digital::v2::InputPin,
         hal,
         signal_generator::{self, SignalGenerator},
-        DigitalInput0, DigitalInput1, SystemTimer, AFE0, AFE1,
+        DigitalInput0, DigitalInput1, SystemTimer, AFE0, AFE1, HZ,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -170,7 +170,7 @@ mod app {
     use super::*;
 
     #[monotonic(binds = SysTick, default = true, priority = 1)]
-    type Monotonic = Systick<1_000>;
+    type Monotonic = Systick<HZ>;
 
     #[shared]
     struct Shared {

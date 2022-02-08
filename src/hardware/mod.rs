@@ -54,8 +54,9 @@ pub type NetworkManager = smoltcp_nal::shared::NetworkManager<
 
 pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
 
+pub const HZ: u32 = 1_000;
 pub use mono_clock::MonoClock;
-pub type SystemTimer = MonoClock<u32, 1_000>;
+pub type SystemTimer = MonoClock<u32, HZ>;
 
 #[inline(never)]
 #[panic_handler]

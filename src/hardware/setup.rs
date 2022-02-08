@@ -177,7 +177,7 @@ fn load_itcm() {
 ///
 /// # Args
 /// * `device` - The microcontroller peripherals to be configured.
-/// * `clock` - `Clock` implementation.
+/// * `clock` - A `SystemTimer` implementing `Clock`.
 /// * `batch_size` - The size of each ADC/DAC batch.
 /// * `sample_ticks` - The number of timer ticks between each sample.
 ///

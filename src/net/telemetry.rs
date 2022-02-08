@@ -94,7 +94,7 @@ impl<T: Serialize> TelemetryClient<T> {
     ///
     /// # Args
     /// * `stack` - A reference to the (shared) underlying network stack.
-    /// * `clock` - A `MonoClock`.
+    /// * `clock` - A `SystemTimer` implementing `Clock`.
     /// * `client_id` - The MQTT client ID of the telemetry client.
     /// * `prefix` - The device prefix to use for MQTT telemetry reporting.
     /// * `broker` - The IP address of the MQTT broker to use.
