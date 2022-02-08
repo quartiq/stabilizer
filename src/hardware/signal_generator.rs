@@ -1,7 +1,3 @@
-use crate::{
-    hardware::dac::DacCode, hardware::design_parameters::TIMER_FREQUENCY,
-};
-use core::convert::TryFrom;
 use miniconf::Miniconf;
 use serde::{Deserialize, Serialize};
 
@@ -64,11 +60,12 @@ impl BasicConfig {
     /// Convert configuration into signal generator values.
     ///
     /// # Args
-    /// * `sample_ticks_log2` - The logarithm of the number of timer sample ticks between each
-    /// sample.
+    /// * `sample_period` - The time in seconds between samples.
+    /// * `full_scale` - The full scale output voltage.
     pub fn try_into_config(
         self,
-        sample_ticks_log2: u8,
+        sample_period: f32,
+        full_scale: f32,
     ) -> Result<Config, Error> {
         let symmetry_complement = 1.0 - self.symmetry;
         // Validate symmetry
@@ -76,9 +73,7 @@ impl BasicConfig {
             return Err(Error::InvalidSymmetry);
         }
 
-        let lsb_per_hertz: f32 = (1u64 << (31 + sample_ticks_log2)) as f32
-            / (TIMER_FREQUENCY.0 * 1_000_000) as f32;
-        let ftw = self.frequency * lsb_per_hertz;
+        let ftw = self.frequency * sample_period;
 
         // Validate base frequency tuning word to be below Nyquist.
         const NYQUIST: f32 = (1u32 << 31) as _;
@@ -101,10 +96,13 @@ impl BasicConfig {
             } as i32,
         ];
 
+        let amplitude = self.amplitude * (i16::MIN as f32 / -full_scale);
+        if !(i16::MIN as f32..=i16::MAX as f32).contains(&amplitude) {
+            return Err(Error::InvalidAmplitude);
+        }
+
         Ok(Config {
-            amplitude: DacCode::try_from(self.amplitude)
-                .or(Err(Error::InvalidAmplitude))?
-                .into(),
+            amplitude: amplitude as i16,
             signal: self.signal,
             frequency_tuning_word,
         })
