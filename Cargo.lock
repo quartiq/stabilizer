@@ -702,8 +702,9 @@ dependencies = [
 
 [[package]]
 name = "rtt-logger"
-version = "0.1.1"
-source = "git+https://github.com/drogue-iot/rtt-logger.git#f43b6d1954d4f52fcaa7e798ed9ce2f7fda632e7"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c83752c03884a6a08abe7aa352f468ff2dc2b3dd4e5a32bdcc34b1cfbef4b6b"
 dependencies = [
  "log",
  "rtt-target",
