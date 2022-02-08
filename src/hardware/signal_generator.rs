@@ -191,14 +191,12 @@ impl core::iter::Iterator for SignalGenerator {
             Signal::Cosine => (idsp::cossin(phase).0 >> 16),
             Signal::Square => {
                 if sign {
-                    -1 << 15
+                    i16::MIN as i32
                 } else {
-                    1 << 15
+                    -(i16::MIN as i32)
                 }
             }
-            Signal::Triangle => {
-                (self.phase_accumulator >> 15).abs() - (1 << 15)
-            }
+            Signal::Triangle => i16::MIN as i32 + (phase >> 15).abs(),
         };
 
         // Calculate the final output result as an i16.
