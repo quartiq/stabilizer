@@ -1,9 +1,6 @@
 pub use embedded_hal;
-pub use mono_clock::MonoClock;
 ///! Module for all hardware-specific setup of Stabilizer
 pub use stm32h7xx_hal as hal;
-
-use systick_monotonic;
 
 pub mod adc;
 pub mod afe;
@@ -60,7 +57,7 @@ pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
 /// System timer (RTIC Monotonic) tick frequency
 pub const HZ: u32 = 1_000;
 pub type Systick = systick_monotonic::Systick<HZ>;
-pub type SystemTimer = MonoClock<u32, HZ>;
+pub type SystemTimer = mono_clock::MonoClock<u32, HZ>;
 
 #[inline(never)]
 #[panic_handler]
