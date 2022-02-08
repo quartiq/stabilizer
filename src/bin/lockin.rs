@@ -46,8 +46,9 @@ use stabilizer::{
         embedded_hal::digital::v2::InputPin,
         hal,
         input_stamper::InputStamper,
-        signal_generator, DigitalInput0, DigitalInput1, SystemTimer, AFE0,
-        AFE1, HZ,
+        signal_generator,
+        timers::SamplingTimer,
+        DigitalInput0, DigitalInput1, SystemTimer, AFE0, AFE1, HZ,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -225,6 +226,7 @@ mod app {
 
     #[local]
     struct Local {
+        sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         timestamper: InputStamper,
         afes: (AFE0, AFE1),
@@ -285,6 +287,7 @@ mod app {
         };
 
         let mut local = Local {
+            sampling_timer: stabilizer.adc_dac_timer,
             digital_inputs: stabilizer.digital_inputs,
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
@@ -300,27 +303,31 @@ mod app {
             generator,
         };
 
-        // Spawn a settings and telemetry update for default settings.
-        settings_update::spawn().unwrap();
-        telemetry::spawn().unwrap();
-        ethernet_link::spawn().unwrap();
-
         // Enable ADC/DAC events
         local.adcs.0.start();
         local.adcs.1.start();
         local.dacs.0.start();
         local.dacs.1.start();
 
+        // Spawn a settings and telemetry update for default settings.
+        settings_update::spawn().unwrap();
+        telemetry::spawn().unwrap();
+        ethernet_link::spawn().unwrap();
+        start::spawn_after(100.millis()).unwrap();
+
         // Start recording digital input timestamps.
         stabilizer.timestamp_timer.start();
-
-        // Start sampling ADCs.
-        stabilizer.adc_dac_timer.start();
 
         // Enable the timestamper.
         local.timestamper.start();
 
         (shared, local, init::Monotonics(mono))
+    }
+
+    #[task(priority = 1, local=[sampling_timer])]
+    fn start(c: start::Context) {
+        // Start sampling ADCs and DACs.
+        c.local.sampling_timer.start();
     }
 
     /// Main DSP processing routine.

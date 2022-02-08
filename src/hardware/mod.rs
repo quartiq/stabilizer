@@ -10,9 +10,9 @@ pub mod input_stamper;
 pub mod pounder;
 pub mod setup;
 pub mod signal_generator;
+pub mod timers;
 
 mod eeprom;
-mod timers;
 
 // Type alias for the analog front-end (AFE) for ADC0.
 pub type AFE0 = afe::ProgrammableGainAmplifier<

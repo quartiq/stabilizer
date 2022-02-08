@@ -214,7 +214,8 @@ macro_rules! timer_channels {
                 impl Channels {
                     /// Construct a new set of channels.
                     ///
-                    /// Note(unsafe): This is only safe to call once.
+                    /// # Safety
+                    /// This is only safe to call once.
                     #[allow(dead_code)]
                     pub unsafe fn new() -> Self {
                         Self {
