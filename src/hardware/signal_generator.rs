@@ -32,6 +32,9 @@ pub struct BasicConfig {
 
     /// The amplitude of the output signal in volts.
     pub amplitude: f32,
+
+    /// The phase of the output signal in turns.
+    pub phase: f32,
 }
 
 impl Default for BasicConfig {
@@ -41,6 +44,7 @@ impl Default for BasicConfig {
             symmetry: 0.5,
             signal: Signal::Cosine,
             amplitude: 0.0,
+            phase: 0.0,
         }
     }
 }
@@ -83,7 +87,7 @@ impl BasicConfig {
 
         // Calculate the frequency tuning words.
         // Clip both frequency tuning words to within Nyquist before rounding.
-        let frequency_tuning_word = [
+        let phase_increment = [
             if self.symmetry * NYQUIST > ftw {
                 ftw / self.symmetry
             } else {
@@ -101,10 +105,13 @@ impl BasicConfig {
             return Err(Error::InvalidAmplitude);
         }
 
+        let phase = self.phase * (1u64 << 32) as f32;
+
         Ok(Config {
             amplitude: amplitude as i16,
             signal: self.signal,
-            frequency_tuning_word,
+            phase_increment,
+            phase_offset: phase as i32,
         })
     }
 }
@@ -118,7 +125,10 @@ pub struct Config {
     pub amplitude: i16,
 
     /// The frequency tuning word of the signal. Phase is incremented by this amount
-    pub frequency_tuning_word: [i32; 2],
+    pub phase_increment: [i32; 2],
+
+    /// The phase offset
+    pub phase_offset: i32,
 }
 
 impl Default for Config {
@@ -126,7 +136,8 @@ impl Default for Config {
         Self {
             signal: Signal::Cosine,
             amplitude: 0,
-            frequency_tuning_word: [0, 0],
+            phase_increment: [0, 0],
+            phase_offset: 0,
         }
     }
 }
@@ -156,6 +167,11 @@ impl SignalGenerator {
     pub fn update_waveform(&mut self, new_config: Config) {
         self.config = new_config;
     }
+
+    /// Clear the phase accumulator.
+    pub fn clear_phase_accumulator(&mut self) {
+        self.phase_accumulator = 0;
+    }
 }
 
 impl core::iter::Iterator for SignalGenerator {
@@ -163,13 +179,16 @@ impl core::iter::Iterator for SignalGenerator {
 
     /// Get the next value in the generator sequence.
     fn next(&mut self) -> Option<i16> {
-        let sign = self.phase_accumulator.is_negative();
+        let phase = self
+            .phase_accumulator
+            .wrapping_add(self.config.phase_offset);
+        let sign = phase.is_negative();
         self.phase_accumulator = self
             .phase_accumulator
-            .wrapping_add(self.config.frequency_tuning_word[sign as usize]);
+            .wrapping_add(self.config.phase_increment[sign as usize]);
 
         let scale = match self.config.signal {
-            Signal::Cosine => (idsp::cossin(self.phase_accumulator).0 >> 16),
+            Signal::Cosine => (idsp::cossin(phase).0 >> 16),
             Signal::Square => {
                 if sign {
                     -1 << 15

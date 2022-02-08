@@ -262,20 +262,13 @@ mod app {
             settings: Settings::default(),
         };
 
-        let signal_config = {
-            let frequency_tuning_word = (1u64 << (32 - BATCH_SIZE_LOG2)) as i32;
-
-            signal_generator::Config {
-                // Same frequency as batch size.
-                frequency_tuning_word: [
-                    frequency_tuning_word,
-                    frequency_tuning_word,
-                ],
-                // 1V Amplitude
-                amplitude: DacCode::try_from(1.0).unwrap().into(),
-
-                signal: signal_generator::Signal::Cosine,
-            }
+        let signal_config = signal_generator::Config {
+            // Same frequency as batch size.
+            phase_increment: [1 << (32 - BATCH_SIZE_LOG2); 2],
+            // 1V Amplitude
+            amplitude: DacCode::try_from(1.0).unwrap().into(),
+            signal: signal_generator::Signal::Cosine,
+            phase_offset: 0,
         };
 
         let mut local = Local {
