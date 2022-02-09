@@ -291,7 +291,8 @@ pub fn setup(
     assert!(
         (batch_size as u32 * sample_ticks) as f32
             * design_parameters::TIMER_PERIOD
-            < super::HZ as f32
+            * (super::HZ as f32)
+            < 1.
     );
 
     // Configure timer 2 to trigger conversions for the ADC
