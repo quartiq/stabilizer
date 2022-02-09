@@ -86,6 +86,14 @@ use hal::{
 #[derive(Copy, Clone)]
 pub struct AdcCode(pub u16);
 
+impl AdcCode {
+    // The ADC has a differential input with a range of +/- 4.096 V and 16-bit resolution.
+    // The gain into the two inputs is 1/5.
+    const FULL_SCALE: f32 = 5.0 / 2.0 * 4.096;
+    const VOLT_PER_LSB: f32 = -Self::FULL_SCALE / i16::MIN as f32;
+    const LSB_PER_VOLT: f32 = 1. / Self::VOLT_PER_LSB;
+}
+
 impl From<u16> for AdcCode {
     /// Construct an ADC code from a provided binary (ADC-formatted) code.
     fn from(value: u16) -> Self {
@@ -120,11 +128,20 @@ impl From<AdcCode> for f32 {
     /// # Note
     /// This does not account for the programmable gain amplifier at the signal input.
     fn from(code: AdcCode) -> f32 {
-        // The ADC has a differential input with a range of +/- 4.096 V and 16-bit resolution.
-        // The gain into the two inputs is 1/5.
-        let adc_volts_per_lsb = 5.0 / 2.0 * 4.096 / (1u16 << 15) as f32;
+        i16::from(code) as f32 * AdcCode::VOLT_PER_LSB
+    }
+}
 
-        i16::from(code) as f32 * adc_volts_per_lsb
+impl TryFrom<f32> for AdcCode {
+    type Error = ();
+
+    fn try_from(voltage: f32) -> Result<AdcCode, ()> {
+        let code = voltage * Self::LSB_PER_VOLT;
+        if !(i16::MIN as f32..=i16::MAX as f32).contains(&code) {
+            Err(())
+        } else {
+            Ok(AdcCode::from(code as i16))
+        }
     }
 }
 

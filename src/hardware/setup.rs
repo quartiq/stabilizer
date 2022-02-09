@@ -288,12 +288,11 @@ pub fn setup(
         hal::dma::dma::StreamsTuple::new(device.DMA1, ccdr.peripheral.DMA1);
 
     // Verify that batch period does not exceed RTIC Monotonic timer period.
-    /* TODO: merge #501
     assert!(
-        (batch_size as u32 * sample_ticks) as f32 * design_parameters::TIMER_PERIOD
-            < design_parameters::HZ as f32
+        (batch_size as u32 * sample_ticks) as f32
+            * design_parameters::TIMER_PERIOD
+            < super::HZ as f32
     );
-    */
 
     // Configure timer 2 to trigger conversions for the ADC
     let mut sampling_timer = {
