@@ -80,32 +80,30 @@ static mut DAC_BUF: [[SampleBuffer; 2]; 2] =
 /// The internal integer is the raw code written to the DAC output register.
 #[derive(Copy, Clone)]
 pub struct DacCode(pub u16);
+impl DacCode {
+    // The DAC output range in bipolar mode (including the external output op-amp) is +/- 4.096
+    // V with 16-bit resolution. The anti-aliasing filter has an additional gain of 2.5.
+    pub const FULL_SCALE: f32 = 4.096 * 2.5;
+    pub const VOLT_PER_LSB: f32 = -Self::FULL_SCALE / i16::MIN as f32;
+    pub const LSB_PER_VOLT: f32 = 1. / Self::VOLT_PER_LSB;
+}
 
 impl TryFrom<f32> for DacCode {
     type Error = ();
 
     fn try_from(voltage: f32) -> Result<DacCode, ()> {
-        // The DAC output range in bipolar mode (including the external output op-amp) is +/- 4.096
-        // V with 16-bit resolution. The anti-aliasing filter has an additional gain of 2.5.
-        let dac_range = 4.096 * 2.5;
-
-        if voltage > dac_range || voltage < -1. * dac_range {
+        let code = voltage * Self::LSB_PER_VOLT;
+        if !(i16::MIN as f32..=i16::MAX as f32).contains(&code) {
             Err(())
         } else {
-            Ok(DacCode::from(
-                (voltage * (i16::MAX as f32 / dac_range)) as i16,
-            ))
+            Ok(DacCode::from(code as i16))
         }
     }
 }
 
 impl From<DacCode> for f32 {
     fn from(code: DacCode) -> f32 {
-        // The DAC output range in bipolar mode (including the external output op-amp) is +/- 4.096
-        // V with 16-bit resolution. The anti-aliasing filter has an additional gain of 2.5.
-        let dac_volts_per_lsb = 4.096 * 2.5 / (1u16 << 15) as f32;
-
-        (code.0 as i16).wrapping_add(i16::MIN) as f32 * dac_volts_per_lsb
+        i16::from(code) as f32 * DacCode::VOLT_PER_LSB
     }
 }
 

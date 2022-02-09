@@ -9,6 +9,7 @@ pub const ADC_DAC_SCK_MAX: MegaHertz = MegaHertz(50);
 
 /// The optimal counting frequency of the hardware timers used for timestamping and sampling.
 pub const TIMER_FREQUENCY: MegaHertz = MegaHertz(100);
+pub const TIMER_PERIOD: f32 = 1. / ((TIMER_FREQUENCY.0 * 1_000_000) as f32);
 
 /// The QSPI frequency for communicating with the pounder DDS.
 pub const POUNDER_QSPI_FREQUENCY: MegaHertz = MegaHertz(50);

@@ -1,7 +1,3 @@
-use crate::{
-    hardware::dac::DacCode, hardware::design_parameters::TIMER_FREQUENCY,
-};
-use core::convert::TryFrom;
 use miniconf::Miniconf;
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +32,9 @@ pub struct BasicConfig {
 
     /// The amplitude of the output signal in volts.
     pub amplitude: f32,
+
+    /// The phase of the output signal in turns.
+    pub phase: f32,
 }
 
 impl Default for BasicConfig {
@@ -45,6 +44,7 @@ impl Default for BasicConfig {
             symmetry: 0.5,
             signal: Signal::Cosine,
             amplitude: 0.0,
+            phase: 0.0,
         }
     }
 }
@@ -64,11 +64,12 @@ impl BasicConfig {
     /// Convert configuration into signal generator values.
     ///
     /// # Args
-    /// * `sample_ticks_log2` - The logarithm of the number of timer sample ticks between each
-    /// sample.
+    /// * `sample_period` - The time in seconds between samples.
+    /// * `full_scale` - The full scale output voltage.
     pub fn try_into_config(
         self,
-        sample_ticks_log2: u8,
+        sample_period: f32,
+        full_scale: f32,
     ) -> Result<Config, Error> {
         let symmetry_complement = 1.0 - self.symmetry;
         // Validate symmetry
@@ -76,9 +77,7 @@ impl BasicConfig {
             return Err(Error::InvalidSymmetry);
         }
 
-        let lsb_per_hertz: f32 = (1u64 << (31 + sample_ticks_log2)) as f32
-            / (TIMER_FREQUENCY.0 * 1_000_000) as f32;
-        let ftw = self.frequency * lsb_per_hertz;
+        let ftw = self.frequency * sample_period;
 
         // Validate base frequency tuning word to be below Nyquist.
         const NYQUIST: f32 = (1u32 << 31) as _;
@@ -88,7 +87,7 @@ impl BasicConfig {
 
         // Calculate the frequency tuning words.
         // Clip both frequency tuning words to within Nyquist before rounding.
-        let frequency_tuning_word = [
+        let phase_increment = [
             if self.symmetry * NYQUIST > ftw {
                 ftw / self.symmetry
             } else {
@@ -101,12 +100,18 @@ impl BasicConfig {
             } as i32,
         ];
 
+        let amplitude = self.amplitude * (i16::MIN as f32 / -full_scale);
+        if !(i16::MIN as f32..=i16::MAX as f32).contains(&amplitude) {
+            return Err(Error::InvalidAmplitude);
+        }
+
+        let phase = self.phase * (1u64 << 32) as f32;
+
         Ok(Config {
-            amplitude: DacCode::try_from(self.amplitude)
-                .or(Err(Error::InvalidAmplitude))?
-                .into(),
+            amplitude: amplitude as i16,
             signal: self.signal,
-            frequency_tuning_word,
+            phase_increment,
+            phase_offset: phase as i32,
         })
     }
 }
@@ -120,7 +125,10 @@ pub struct Config {
     pub amplitude: i16,
 
     /// The frequency tuning word of the signal. Phase is incremented by this amount
-    pub frequency_tuning_word: [i32; 2],
+    pub phase_increment: [i32; 2],
+
+    /// The phase offset
+    pub phase_offset: i32,
 }
 
 impl Default for Config {
@@ -128,7 +136,8 @@ impl Default for Config {
         Self {
             signal: Signal::Cosine,
             amplitude: 0,
-            frequency_tuning_word: [0, 0],
+            phase_increment: [0, 0],
+            phase_offset: 0,
         }
     }
 }
@@ -158,6 +167,11 @@ impl SignalGenerator {
     pub fn update_waveform(&mut self, new_config: Config) {
         self.config = new_config;
     }
+
+    /// Clear the phase accumulator.
+    pub fn clear_phase_accumulator(&mut self) {
+        self.phase_accumulator = 0;
+    }
 }
 
 impl core::iter::Iterator for SignalGenerator {
@@ -165,23 +179,24 @@ impl core::iter::Iterator for SignalGenerator {
 
     /// Get the next value in the generator sequence.
     fn next(&mut self) -> Option<i16> {
-        let sign = self.phase_accumulator.is_negative();
+        let phase = self
+            .phase_accumulator
+            .wrapping_add(self.config.phase_offset);
+        let sign = phase.is_negative();
         self.phase_accumulator = self
             .phase_accumulator
-            .wrapping_add(self.config.frequency_tuning_word[sign as usize]);
+            .wrapping_add(self.config.phase_increment[sign as usize]);
 
         let scale = match self.config.signal {
-            Signal::Cosine => (idsp::cossin(self.phase_accumulator).0 >> 16),
+            Signal::Cosine => (idsp::cossin(phase).0 >> 16),
             Signal::Square => {
                 if sign {
-                    -1 << 15
+                    i16::MIN as i32
                 } else {
-                    1 << 15
+                    -(i16::MIN as i32)
                 }
             }
-            Signal::Triangle => {
-                (self.phase_accumulator >> 15).abs() - (1 << 15)
-            }
+            Signal::Triangle => i16::MIN as i32 + (phase >> 15).abs(),
         };
 
         // Calculate the final output result as an i16.
