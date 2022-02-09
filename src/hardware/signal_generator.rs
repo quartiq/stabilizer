@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 /// Types of signals that can be generated.
 #[derive(Copy, Clone, Debug, Deserialize, Serialize, Miniconf)]
 pub enum Signal {
+    Sine,
     Cosine,
     Square,
     Triangle,
@@ -189,6 +190,7 @@ impl core::iter::Iterator for SignalGenerator {
 
         let scale = match self.config.signal {
             Signal::Cosine => (idsp::cossin(phase).0 >> 16),
+            Signal::Sine => (idsp::cossin(phase).1 >> 16),
             Signal::Square => {
                 if sign {
                     i16::MIN as i32
