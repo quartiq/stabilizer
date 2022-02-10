@@ -270,6 +270,7 @@ pub fn setup(
 
     let systick = Systick::new(core.SYST, ccdr.clocks.sysclk().0);
 
+    // After ITCM loading.
     core.SCB.enable_icache();
 
     let mut delay = asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(
@@ -291,7 +292,7 @@ pub fn setup(
     assert!(
         (batch_size as u32 * sample_ticks) as f32
             * design_parameters::TIMER_PERIOD
-            * (super::HZ as f32)
+            * (super::MONOTONIC_FREQUENCY as f32)
             < 1.
     );
 
