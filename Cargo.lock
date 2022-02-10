@@ -455,6 +455,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mono-clock"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1f9d58e3308e8a9fec7a9d96c6ddf7b079c95af9a9ce8dca236c1d8a64166a8"
+dependencies = [
+ "embedded-time",
+]
+
+[[package]]
 name = "mutex-trait"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -859,6 +868,7 @@ dependencies = [
  "mcp23017",
  "miniconf",
  "minimq",
+ "mono-clock",
  "mutex-trait",
  "nb 1.0.0",
  "num_enum",
@@ -869,6 +879,7 @@ dependencies = [
  "serde-json-core",
  "smoltcp-nal",
  "stm32h7xx-hal",
+ "systick-monotonic",
 ]
 
 [[package]]
@@ -916,6 +927,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-xid",
+]
+
+[[package]]
+name = "systick-monotonic"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57e71d8e4587d8f434b88b9aef901987f46164df813a3a1d6bdf3a58debf67f0"
+dependencies = [
+ "cortex-m 0.7.4",
+ "fugit",
+ "rtic-monotonic",
 ]
 
 [[package]]

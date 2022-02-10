@@ -13,9 +13,7 @@ pub mod data_stream;
 pub mod network_processor;
 pub mod telemetry;
 
-use crate::hardware::{
-    system_timer::SystemTimer, EthernetPhy, NetworkManager, NetworkStack,
-};
+use crate::hardware::{EthernetPhy, NetworkManager, NetworkStack, SystemTimer};
 use data_stream::{DataStream, FrameGenerator};
 use minimq::embedded_nal::IpAddr;
 use network_processor::NetworkProcessor;
@@ -64,6 +62,7 @@ where
     /// # Args
     /// * `stack` - The network stack that will be used to share with all network users.
     /// * `phy` - The ethernet PHY connecting the network.
+    /// * `clock` - A `SystemTimer` implementing `Clock`.
     /// * `app` - The name of the application.
     /// * `mac` - The MAC address of the network.
     /// * `broker` - The IP address of the MQTT broker to use.
@@ -73,6 +72,7 @@ where
     pub fn new(
         stack: NetworkStack,
         phy: EthernetPhy,
+        clock: SystemTimer,
         app: &str,
         mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
         broker: IpAddr,
@@ -91,12 +91,13 @@ where
             &get_client_id(app, "settings", mac),
             &prefix,
             broker,
-            SystemTimer::default(),
+            clock,
         )
         .unwrap();
 
         let telemetry = TelemetryClient::new(
             stack_manager.acquire_stack(),
+            clock,
             &get_client_id(app, "tlm", mac),
             &prefix,
             broker,

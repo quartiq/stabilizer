@@ -33,10 +33,11 @@ use core::{
     sync::atomic::{fence, Ordering},
 };
 
+use fugit::ExtU64;
 use mutex_trait::prelude::*;
 
-use fugit::ExtU32;
 use idsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
+
 use stabilizer::{
     hardware::{
         self,
@@ -47,8 +48,8 @@ use stabilizer::{
         hal,
         input_stamper::InputStamper,
         signal_generator,
-        system_timer::SystemTimer,
-        DigitalInput0, DigitalInput1, AFE0, AFE1,
+        timers::SamplingTimer,
+        DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -213,8 +214,8 @@ impl Default for Settings {
 mod app {
     use super::*;
 
-    #[monotonic(binds = TIM15)]
-    type Monotonic = SystemTimer;
+    #[monotonic(binds = SysTick, default = true, priority = 2)]
+    type Monotonic = Systick;
 
     #[shared]
     struct Shared {
@@ -225,6 +226,7 @@ mod app {
 
     #[local]
     struct Local {
+        sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         timestamper: InputStamper,
         afes: (AFE0, AFE1),
@@ -238,13 +240,21 @@ mod app {
 
     #[init]
     fn init(c: init::Context) -> (Shared, Local, init::Monotonics) {
+        let clock = SystemTimer::new(|| monotonics::now().ticks() as u32);
+
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) =
-            hardware::setup::setup(c.core, c.device, BATCH_SIZE, SAMPLE_TICKS);
+        let (mut stabilizer, _pounder) = hardware::setup::setup(
+            c.core,
+            c.device,
+            clock,
+            BATCH_SIZE,
+            SAMPLE_TICKS,
+        );
 
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
+            clock,
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
             option_env!("BROKER")
@@ -272,6 +282,7 @@ mod app {
         };
 
         let mut local = Local {
+            sampling_timer: stabilizer.adc_dac_timer,
             digital_inputs: stabilizer.digital_inputs,
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
@@ -287,27 +298,31 @@ mod app {
             generator,
         };
 
-        // Spawn a settings and telemetry update for default settings.
-        settings_update::spawn().unwrap();
-        telemetry::spawn().unwrap();
-        ethernet_link::spawn().unwrap();
-
         // Enable ADC/DAC events
         local.adcs.0.start();
         local.adcs.1.start();
         local.dacs.0.start();
         local.dacs.1.start();
 
+        // Spawn a settings and telemetry update for default settings.
+        settings_update::spawn().unwrap();
+        telemetry::spawn().unwrap();
+        ethernet_link::spawn().unwrap();
+        start::spawn_after(100.millis()).unwrap();
+
         // Start recording digital input timestamps.
         stabilizer.timestamp_timer.start();
-
-        // Start sampling ADCs.
-        stabilizer.adc_dac_timer.start();
 
         // Enable the timestamper.
         local.timestamper.start();
 
-        (shared, local, init::Monotonics(SystemTimer::default()))
+        (shared, local, init::Monotonics(stabilizer.systick))
+    }
+
+    #[task(priority = 1, local=[sampling_timer])]
+    fn start(c: start::Context) {
+        // Start sampling ADCs and DACs.
+        c.local.sampling_timer.start();
     }
 
     /// Main DSP processing routine.
@@ -317,7 +332,7 @@ mod app {
     /// This is an implementation of a externally (DI0) referenced PLL lockin on the ADC0 signal.
     /// It outputs either I/Q or power/phase on DAC0/DAC1. Data is normalized to full scale.
     /// PLL bandwidth, filter bandwidth, slope, and x/y or power/phase post-filters are available.
-    #[task(binds=DMA1_STR4, shared=[settings, telemetry], local=[adcs, dacs, lockin, timestamper, pll, generator, signal_generator], priority=2)]
+    #[task(binds=DMA1_STR4, shared=[settings, telemetry], local=[adcs, dacs, lockin, timestamper, pll, generator, signal_generator], priority=3)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
@@ -482,7 +497,7 @@ mod app {
         });
 
         // Schedule the telemetry task in the future.
-        telemetry::Monotonic::spawn_after((telemetry_period as u32).secs())
+        telemetry::Monotonic::spawn_after((telemetry_period as u64).secs())
             .unwrap();
     }
 

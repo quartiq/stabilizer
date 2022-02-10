@@ -15,8 +15,8 @@ use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use super::{
     adc, afe, dac, design_parameters, eeprom, input_stamper::InputStamper,
-    pounder, pounder::dds_output::DdsOutput, system_timer, timers,
-    DigitalInput0, DigitalInput1, EthernetPhy, NetworkStack, AFE0, AFE1,
+    pounder, pounder::dds_output::DdsOutput, timers, DigitalInput0,
+    DigitalInput1, EthernetPhy, NetworkStack, SystemTimer, Systick, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -100,6 +100,7 @@ pub struct NetworkDevices {
 
 /// The available hardware interfaces on Stabilizer.
 pub struct StabilizerDevices {
+    pub systick: Systick,
     pub afes: (AFE0, AFE1),
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
     pub dacs: (dac::Dac0Output, dac::Dac1Output),
@@ -176,8 +177,9 @@ fn load_itcm() {
 /// Refer to [design_parameters::TIMER_FREQUENCY] to determine the frequency of the sampling timer.
 ///
 /// # Args
-/// * `core` - The RTIC core for configuring the cortex-M core of the device.
+/// * `core` - The cortex-m peripherals.
 /// * `device` - The microcontroller peripherals to be configured.
+/// * `clock` - A `SystemTimer` implementing `Clock`.
 /// * `batch_size` - The size of each ADC/DAC batch.
 /// * `sample_ticks` - The number of timer ticks between each sample.
 ///
@@ -187,8 +189,9 @@ fn load_itcm() {
 /// `Some(devices)` if pounder is detected, where `devices` is a `PounderDevices` structure
 /// containing all of the pounder hardware interfaces in a disabled state.
 pub fn setup(
-    mut core: rtic::export::Peripherals,
+    mut core: stm32h7xx_hal::stm32::CorePeripherals,
     device: stm32h7xx_hal::stm32::Peripherals,
+    clock: SystemTimer,
     batch_size: usize,
     sample_ticks: u32,
 ) -> (StabilizerDevices, Option<PounderDevices>) {
@@ -255,9 +258,9 @@ pub fn setup(
     let rcc = device.RCC.constrain();
     let ccdr = rcc
         .use_hse(8.mhz())
-        .sysclk(400.mhz())
+        .sysclk(design_parameters::SYSCLK)
         .hclk(200.mhz())
-        .per_ck(100.mhz())
+        .per_ck(design_parameters::TIMER_FREQUENCY)
         .pll2_p_ck(100.mhz())
         .pll2_q_ck(100.mhz())
         .freeze(vos, &device.SYSCFG);
@@ -265,14 +268,10 @@ pub fn setup(
     // Before being able to call any code in ITCM, load that code from flash.
     load_itcm();
 
-    // Set up the system timer for RTIC scheduling.
-    {
-        let tim15 =
-            device
-                .TIM15
-                .timer(10.khz(), ccdr.peripheral.TIM15, &ccdr.clocks);
-        system_timer::SystemTimer::initialize(tim15);
-    }
+    let systick = Systick::new(core.SYST, ccdr.clocks.sysclk().0);
+
+    // After ITCM loading.
+    core.SCB.enable_icache();
 
     let mut delay = asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(
         ccdr.clocks.c_ck().0,
@@ -288,6 +287,14 @@ pub fn setup(
 
     let dma_streams =
         hal::dma::dma::StreamsTuple::new(device.DMA1, ccdr.peripheral.DMA1);
+
+    // Verify that batch period does not exceed RTIC Monotonic timer period.
+    assert!(
+        (batch_size as u32 * sample_ticks) as f32
+            * design_parameters::TIMER_PERIOD
+            * (super::MONOTONIC_FREQUENCY as f32)
+            < 1.
+    );
 
     // Configure timer 2 to trigger conversions for the ADC
     let mut sampling_timer = {
@@ -761,10 +768,7 @@ pub fn setup(
             data
         };
 
-        let mut stack = smoltcp_nal::NetworkStack::new(
-            interface,
-            system_timer::SystemTimer::default(),
-        );
+        let mut stack = smoltcp_nal::NetworkStack::new(interface, clock);
 
         stack.seed_random_port(&random_seed);
 
@@ -1030,6 +1034,7 @@ pub fn setup(
     };
 
     let stabilizer = StabilizerDevices {
+        systick,
         afes,
         adcs,
         dacs,
@@ -1039,9 +1044,6 @@ pub fn setup(
         timestamp_timer,
         digital_inputs,
     };
-
-    // Enable the instruction cache.
-    core.SCB.enable_icache();
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
     // info!("Built on {}", build_info::BUILT_TIME_UTC);

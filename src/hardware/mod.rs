@@ -10,10 +10,9 @@ pub mod input_stamper;
 pub mod pounder;
 pub mod setup;
 pub mod signal_generator;
-pub mod system_timer;
+pub mod timers;
 
 mod eeprom;
-mod timers;
 
 // Type alias for the analog front-end (AFE) for ADC0.
 pub type AFE0 = afe::ProgrammableGainAmplifier<
@@ -44,16 +43,21 @@ const RX_DESRING_CNT: usize = 4;
 pub type NetworkStack = smoltcp_nal::NetworkStack<
     'static,
     hal::ethernet::EthernetDMA<'static, TX_DESRING_CNT, RX_DESRING_CNT>,
-    system_timer::SystemTimer,
+    SystemTimer,
 >;
 
 pub type NetworkManager = smoltcp_nal::shared::NetworkManager<
     'static,
     hal::ethernet::EthernetDMA<'static, TX_DESRING_CNT, RX_DESRING_CNT>,
-    system_timer::SystemTimer,
+    SystemTimer,
 >;
 
 pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
+
+/// System timer (RTIC Monotonic) tick frequency
+pub const MONOTONIC_FREQUENCY: u32 = 1_000;
+pub type Systick = systick_monotonic::Systick<MONOTONIC_FREQUENCY>;
+pub type SystemTimer = mono_clock::MonoClock<u32, MONOTONIC_FREQUENCY>;
 
 #[inline(never)]
 #[panic_handler]
