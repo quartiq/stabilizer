@@ -55,9 +55,9 @@ pub type NetworkManager = smoltcp_nal::shared::NetworkManager<
 pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
 
 /// System timer (RTIC Monotonic) tick frequency
-pub const HZ: u32 = 1_000;
-pub type Systick = systick_monotonic::Systick<HZ>;
-pub type SystemTimer = mono_clock::MonoClock<u32, HZ>;
+pub const MONOTONIC_FREQUENCY: u32 = 1_000;
+pub type Systick = systick_monotonic::Systick<MONOTONIC_FREQUENCY>;
+pub type SystemTimer = mono_clock::MonoClock<u32, MONOTONIC_FREQUENCY>;
 
 #[inline(never)]
 #[panic_handler]
