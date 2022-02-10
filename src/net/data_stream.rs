@@ -34,7 +34,8 @@ use smoltcp_nal::embedded_nal::{IpAddr, Ipv4Addr, SocketAddr, UdpClientStack};
 
 use super::NetworkReference;
 
-const MAGIC_WORD: u16 = 0x057B;
+// Magic first bytes indicating a UDP frame of straming data
+const MAGIC: u16 = 0x057B;
 
 // The size of the header, calculated in words.
 // The header has a 16-bit magic word, an 8-bit format, 8-bit batch-size, and 32-bit sequence
@@ -148,17 +149,16 @@ struct StreamFrame {
 impl StreamFrame {
     pub fn new(
         buffer: Box<Frame, Uninit>,
-        format: u8,
-        buffer_size: u8,
+        format_id: u8,
+        batch_size: u8,
         sequence_number: u32,
     ) -> Self {
         let mut buffer = buffer.init([MaybeUninit::uninit(); FRAME_SIZE]);
-        let magic = MAGIC_WORD.to_ne_bytes();
-        buffer[0].write(
-            u32::from_ne_bytes([magic[0], magic[1], format, buffer_size])
-                .to_be(),
-        );
-        buffer[1].write(sequence_number.to_be());
+        let magic = MAGIC.to_le_bytes();
+        buffer[0].write(u32::from_le_bytes([
+            batch_size, format_id, magic[0], magic[1],
+        ]));
+        buffer[1].write(sequence_number.to_le());
         Self {
             buffer,
             offset: HEADER_SIZE,
