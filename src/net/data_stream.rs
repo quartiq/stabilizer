@@ -154,11 +154,11 @@ impl StreamFrame {
         sequence_number: u32,
     ) -> Self {
         let mut buffer = buffer.init([MaybeUninit::uninit(); FRAME_SIZE]);
-        let magic = MAGIC.to_le_bytes();
+        let magic = MAGIC.to_ne_bytes();
         buffer[0].write(u32::from_le_bytes([
             magic[0], magic[1], format_id, batch_size,
         ]));
-        buffer[1].write(sequence_number.to_le());
+        buffer[1].write(sequence_number);
         Self {
             buffer,
             offset: HEADER_SIZE,
