@@ -2,7 +2,10 @@
 name = "stabilizer"
 version = "0.5.0"
 resolver = "2"
-authors = ["Robert Jördens <rj@quartiq.de>"]
+authors = [
+	"Robert Jördens <rj@quartiq.de>",
+	"Ryan Summers <ryan.summers@vertigo-designs.com>",
+]
 description = "Firmware for the Sinara Stabilizer board (stm32h743, eth, poe, 2 adc, 2 dac)"
 categories = ["embedded", "no-std", "hardware-support", "science"]
 license = "MIT OR Apache-2.0"
