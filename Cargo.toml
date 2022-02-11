@@ -62,7 +62,6 @@ branch = "feature/assume-init"
 [features]
 nightly = ["cortex-m/inline-asm"]
 pounder_v1_1 = [ ]
-static_ip = [ ]
 
 [profile.dev]
 codegen-units = 1

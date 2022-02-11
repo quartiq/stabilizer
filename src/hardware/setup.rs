@@ -23,20 +23,11 @@ const NUM_TCP_SOCKETS: usize = 4;
 const NUM_UDP_SOCKETS: usize = 1;
 const NUM_SOCKETS: usize = NUM_UDP_SOCKETS + NUM_TCP_SOCKETS;
 
-const IPADDR: [u8; 4] = [192, 168, 137, 17];
-
-// Omit DHCP socket, if static IP is used
-#[cfg(feature = "static_ip")]
-const NUM_DHCP_SOCKETS: usize = 0;
-#[cfg(not(feature = "static_ip"))]
-const NUM_DHCP_SOCKETS: usize = 1;
-
 pub struct NetStorage {
     pub ip_addrs: [smoltcp::wire::IpCidr; 1],
 
     // Note: There is an additional socket set item required for the DHCP socket.
-    pub sockets: [smoltcp::iface::SocketStorage<'static>;
-        NUM_SOCKETS + NUM_DHCP_SOCKETS],
+    pub sockets: [smoltcp::iface::SocketStorage<'static>; NUM_SOCKETS + 1],
     pub tcp_socket_storage: [TcpSocketStorage; NUM_TCP_SOCKETS],
     pub udp_socket_storage: [UdpSocketStorage; NUM_UDP_SOCKETS],
     pub neighbor_cache:
@@ -93,8 +84,7 @@ impl Default for NetStorage {
             )],
             neighbor_cache: [None; 8],
             routes_cache: [None; 8],
-            sockets: [smoltcp::iface::SocketStorage::EMPTY;
-                NUM_SOCKETS + NUM_DHCP_SOCKETS],
+            sockets: [smoltcp::iface::SocketStorage::EMPTY; NUM_SOCKETS + 1],
             tcp_socket_storage: [TcpSocketStorage::new(); NUM_TCP_SOCKETS],
             udp_socket_storage: [UdpSocketStorage::new(); NUM_UDP_SOCKETS],
         }
@@ -699,31 +689,25 @@ pub fn setup(
         unsafe { ethernet::enable_interrupt() };
 
         // Configure IP address according to DHCP socket availability
-        let ip_addrs: smoltcp::wire::IpCidr;
-        if NUM_DHCP_SOCKETS == 1 {
-            ip_addrs = smoltcp::wire::IpCidr::new(
-                smoltcp::wire::IpAddress::Ipv4(
-                    smoltcp::wire::Ipv4Address::UNSPECIFIED,
-                ),
-                0,
-            );
-        } else {
-            ip_addrs = smoltcp::wire::IpCidr::new(
-                smoltcp::wire::IpAddress::Ipv4(
-                    smoltcp::wire::Ipv4Address::new(
-                        IPADDR[0], IPADDR[1], IPADDR[2], IPADDR[3],
-                    ),
-                ),
-                24,
-            );
-        }
+        let ip_addrs: smoltcp::wire::IpAddress = option_env!("STATIC_IP")
+            .unwrap_or("UNSPECIFIED")
+            .parse()
+            .unwrap();
 
         // Note(unwrap): The hardware configuration function is only allowed to be called once.
         // Unwrapping is intended to panic if called again to prevent re-use of global memory.
         let store =
             cortex_m::singleton!(: NetStorage = NetStorage::default()).unwrap();
 
-        store.ip_addrs[0] = ip_addrs;
+        store.ip_addrs[0] = match ip_addrs.is_unspecified() {
+            true => smoltcp::wire::IpCidr::new(
+                smoltcp::wire::IpAddress::Ipv4(
+                    smoltcp::wire::Ipv4Address::UNSPECIFIED,
+                ),
+                0,
+            ),
+            false => smoltcp::wire::IpCidr::new(ip_addrs, 24),
+        };
 
         let mut routes =
             smoltcp::iface::Routes::new(&mut store.routes_cache[..]);
@@ -744,7 +728,7 @@ pub fn setup(
         .routes(routes)
         .finalize();
 
-        if NUM_DHCP_SOCKETS == 1 {
+        if ip_addrs.is_unspecified() {
             interface.add_socket(smoltcp::socket::Dhcpv4Socket::new());
         }
 
