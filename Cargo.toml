@@ -33,7 +33,7 @@ cortex-m-rt = { version = "0.7", features = ["device"] }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
 rtt-target = { version = "0.3", features = ["cortex-m"] }
 serde = { version = "1.0", features = ["derive"], default-features = false }
-heapless = { version = "0.7", features = ["serde"] }
+heapless = { version = "0.7.10", features = ["serde"] }
 cortex-m-rtic = "1.0"
 embedded-hal = "0.2.7"
 nb = "1.0.0"
@@ -56,10 +56,6 @@ mono-clock = "0.1"
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "unproven", "ethernet", "xspi"]
 version = "0.11.0"
-
-[patch.crates-io.heapless]
-git = "https://github.com/quartiq/heapless.git"
-branch = "feature/assume-init"
 
 [features]
 nightly = ["cortex-m/inline-asm"]

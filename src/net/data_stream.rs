@@ -22,36 +22,43 @@
 //! # Example
 //! A sample Python script is available in `scripts/stream_throughput.py` to demonstrate reception
 //! of livestreamed data.
-use heapless::spsc::{Consumer, Producer, Queue};
+use core::mem::MaybeUninit;
+use heapless::{
+    pool::{Box, Init, Pool, Uninit},
+    spsc::{Consumer, Producer, Queue},
+};
 use miniconf::MiniconfAtomic;
 use num_enum::IntoPrimitive;
 use serde::{Deserialize, Serialize};
 use smoltcp_nal::embedded_nal::{IpAddr, Ipv4Addr, SocketAddr, UdpClientStack};
 
-use heapless::pool::{Box, Init, Pool, Uninit};
-
 use super::NetworkReference;
 
-const MAGIC_WORD: u16 = 0x057B;
+// Magic first bytes indicating a UDP frame of straming data
+const MAGIC: u16 = 0x057B;
 
-// The size of the header, calculated in bytes.
+// The size of the header, calculated in words.
 // The header has a 16-bit magic word, an 8-bit format, 8-bit batch-size, and 32-bit sequence
-// number, which corresponds to 8 bytes total.
-const HEADER_SIZE: usize = 8;
+// number, which corresponds to 8 bytes or 2 words total.
+const HEADER_SIZE: usize = 2;
 
 // The number of frames that can be buffered.
 const FRAME_COUNT: usize = 4;
 
-// The size of each livestream frame in bytes.
-const FRAME_SIZE: usize = 1024 + HEADER_SIZE;
+// The size of each livestream frame in words.
+const FRAME_SIZE: usize = 256 + HEADER_SIZE;
 
 // The size of the frame queue must be at least as large as the number of frame buffers. Every
 // allocated frame buffer should fit in the queue.
 const FRAME_QUEUE_SIZE: usize = FRAME_COUNT * 2;
 
 // Static storage used for a heapless::Pool of frame buffers.
-static mut FRAME_DATA: [u8; FRAME_SIZE * FRAME_COUNT] =
-    [0; FRAME_SIZE * FRAME_COUNT];
+static mut FRAME_DATA: [u8; core::mem::size_of::<u32>()
+    * FRAME_SIZE
+    * FRAME_COUNT] =
+    [0; core::mem::size_of::<u32>() * FRAME_SIZE * FRAME_COUNT];
+
+type Frame = [MaybeUninit<u32>; FRAME_SIZE];
 
 /// Represents the destination for the UDP stream to send data to.
 ///
@@ -120,8 +127,7 @@ pub fn setup_streaming(
             .unwrap();
     let (producer, consumer) = queue.split();
 
-    let frame_pool =
-        cortex_m::singleton!(: Pool<[u8; FRAME_SIZE]>= Pool::new()).unwrap();
+    let frame_pool = cortex_m::singleton!(: Pool<Frame> = Pool::new()).unwrap();
 
     // Note(unsafe): We guarantee that FRAME_DATA is only accessed once in this function.
     let memory = unsafe { &mut FRAME_DATA };
@@ -136,22 +142,23 @@ pub fn setup_streaming(
 
 #[derive(Debug)]
 struct StreamFrame {
-    buffer: Box<[u8; FRAME_SIZE], Init>,
+    buffer: Box<Frame, Init>,
     offset: usize,
 }
 
 impl StreamFrame {
     pub fn new(
-        buffer: Box<[u8; FRAME_SIZE], Uninit>,
-        format: u8,
-        buffer_size: u8,
+        buffer: Box<Frame, Uninit>,
+        format_id: u8,
+        batch_size: u8,
         sequence_number: u32,
     ) -> Self {
-        let mut buffer = unsafe { buffer.assume_init() };
-        buffer[0..2].copy_from_slice(&MAGIC_WORD.to_ne_bytes());
-        buffer[2] = format;
-        buffer[3] = buffer_size;
-        buffer[4..8].copy_from_slice(&sequence_number.to_ne_bytes());
+        let mut buffer = buffer.init([MaybeUninit::uninit(); FRAME_SIZE]);
+        let magic = MAGIC.to_ne_bytes();
+        buffer[0].write(u32::from_le_bytes([
+            magic[0], magic[1], format_id, batch_size,
+        ]));
+        buffer[1].write(sequence_number);
         Self {
             buffer,
             offset: HEADER_SIZE,
@@ -160,7 +167,7 @@ impl StreamFrame {
 
     pub fn add_batch<F, const T: usize>(&mut self, mut f: F)
     where
-        F: FnMut(&mut [u8]),
+        F: FnMut(&mut [MaybeUninit<u32>]),
     {
         f(&mut self.buffer[self.offset..self.offset + T]);
 
@@ -171,7 +178,7 @@ impl StreamFrame {
         self.offset + T > self.buffer.len()
     }
 
-    pub fn finish(&mut self) -> &[u8] {
+    pub fn finish(&self) -> &[MaybeUninit<u32>] {
         &self.buffer[..self.offset]
     }
 }
@@ -179,7 +186,7 @@ impl StreamFrame {
 /// The data generator for a stream.
 pub struct FrameGenerator {
     queue: Producer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
-    pool: &'static Pool<[u8; FRAME_SIZE]>,
+    pool: &'static Pool<Frame>,
     current_frame: Option<StreamFrame>,
     sequence_number: u32,
     format: u8,
@@ -189,7 +196,7 @@ pub struct FrameGenerator {
 impl FrameGenerator {
     fn new(
         queue: Producer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
-        pool: &'static Pool<[u8; FRAME_SIZE]>,
+        pool: &'static Pool<Frame>,
     ) -> Self {
         Self {
             queue,
@@ -223,7 +230,7 @@ impl FrameGenerator {
     ///   be the size of the `T` template argument.
     pub fn add<F, const T: usize>(&mut self, f: F)
     where
-        F: FnMut(&mut [u8]),
+        F: FnMut(&mut [MaybeUninit<u32>]),
     {
         let sequence_number = self.sequence_number;
         self.sequence_number = self.sequence_number.wrapping_add(1);
@@ -264,7 +271,7 @@ pub struct DataStream {
     stack: NetworkReference,
     socket: Option<<NetworkReference as UdpClientStack>::UdpSocket>,
     queue: Consumer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
-    frame_pool: &'static Pool<[u8; FRAME_SIZE]>,
+    frame_pool: &'static Pool<Frame>,
     remote: SocketAddr,
 }
 
@@ -278,7 +285,7 @@ impl DataStream {
     fn new(
         stack: NetworkReference,
         consumer: Consumer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
-        frame_pool: &'static Pool<[u8; FRAME_SIZE]>,
+        frame_pool: &'static Pool<Frame>,
     ) -> Self {
         Self {
             stack,
@@ -343,9 +350,17 @@ impl DataStream {
                 }
             }
             Some(handle) => {
-                if let Some(mut frame) = self.queue.dequeue() {
+                if let Some(frame) = self.queue.dequeue() {
                     // Transmit the frame and return it to the pool.
-                    self.stack.send(handle, frame.finish()).ok();
+                    let buf = frame.finish();
+                    let data = unsafe {
+                        core::slice::from_raw_parts(
+                            buf.as_ptr() as *const u8,
+                            buf.len()
+                                * core::mem::size_of::<MaybeUninit<u32>>(),
+                        )
+                    };
+                    self.stack.send(handle, data).ok();
                     self.frame_pool.free(frame.buffer)
                 }
             }

@@ -29,6 +29,7 @@
 #![no_std]
 #![no_main]
 
+use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
 
 use fugit::ExtU64;
@@ -353,7 +354,8 @@ mod app {
                     }
 
                     // Stream the data.
-                    const N: usize = BATCH_SIZE * core::mem::size_of::<u16>();
+                    const N: usize = BATCH_SIZE * core::mem::size_of::<i16>()
+                        / core::mem::size_of::<MaybeUninit<u32>>();
                     generator.add::<_, { N * 4 }>(|buf| {
                         for (data, buf) in adc_samples
                             .iter()
@@ -362,14 +364,13 @@ mod app {
                         {
                             let data = unsafe {
                                 core::slice::from_raw_parts(
-                                    data.as_ptr() as *const u8,
+                                    data.as_ptr() as *const MaybeUninit<u32>,
                                     N,
                                 )
                             };
                             buf.copy_from_slice(data)
                         }
                     });
-
                     // Update telemetry measurements.
                     telemetry.adcs = [
                         AdcCode(adc_samples[0][0]),
