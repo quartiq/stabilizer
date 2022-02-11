@@ -5,7 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## Unreleased
+
+### Added
+### Removed
+### Changed
+### Fixed
+
+## [v0.6.0] - 2022-02-11
 
 ### Added
 
@@ -22,10 +29,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 * Integrated signal generator for stimulus and scan waveform generation ([#434](https://github.com/quartiq/stabilizer/pull/434)
   [#388](https://github.com/quartiq/stabilizer/pull/388))
 * Expanded code documentation ([#452](https://github.com/quartiq/stabilizer/pull/452) [#346](https://github.com/quartiq/stabilizer/pull/346))
-* Quick-start guide and book ([#431](https://github.com/quartiq/stabilizer/pull/431) [#430](https://github.com/quartiq/stabilizer/pull/430) [#401](https://github.com/quartiq/stabilizer/pull/401) [#404](https://github.com/quartiq/stabilizer/pull/404))
+* Quick-start guide and book ([#431](https://github.com/quartiq/stabilizer/pull/431) [#430](https://github.com/quartiq/stabilizer/pull/430) [#401](https://github.com/quartiq/stabilizer/pull/401) [#404](https://github.com/quartiq/stabilizer/pull/404) [#483](https://github.com/quartiq/stabilizer/pull/483))
 * Expanded and revised python API including the computation of IIR coefficients
   from PID gains ([#472](https://github.com/quartiq/stabilizer/pull/472) [#471](https://github.com/quartiq/stabilizer/pull/471) [#451](https://github.com/quartiq/stabilizer/pull/451) [#427](https://github.com/quartiq/stabilizer/pull/427))
 * Device MQTT broker connection status indicated via MQTT ([#468](https://github.com/quartiq/stabilizer/pull/468) [#441](https://github.com/quartiq/stabilizer/pull/441))
+* The signal generator supports adjusting its phase ([#505](https://github.com/quartiq/stabilizer/pull/505))
 
 ### Changed
 
@@ -110,7 +118,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 * First bits of code published
 
-[Unreleased]: https://github.com/quartiq/stabilizer/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/quartiq/stabilizer/compare/v0.6.0...HEAD
+[v0.6.0]: https://github.com/quartiq/stabilizer/compare/v0.5.0...v0.6.0
 [v0.5.0]: https://github.com/quartiq/stabilizer/compare/v0.4.1...v0.5.0
 [v0.4.1]: https://github.com/quartiq/stabilizer/compare/v0.4.0...v0.4.1
 [v0.4.0]: https://github.com/quartiq/stabilizer/compare/v0.3.0...v0.4.0
