@@ -281,9 +281,9 @@ dependencies = [
 
 [[package]]
 name = "fugit"
-version = "0.3.3"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22e489f95411a50db661b18e072459bbdc084de522a8530e4709bef593bf3c18"
+checksum = "f6d8595783d5ca52f0e9830036b3d24f359fae0fcc6bb5fde41f2dd82997cb58"
 dependencies = [
  "gcd",
 ]
