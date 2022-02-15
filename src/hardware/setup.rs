@@ -690,7 +690,7 @@ pub fn setup(
 
         // Configure IP address according to DHCP socket availability
         let ip_addrs: smoltcp::wire::IpAddress = option_env!("STATIC_IP")
-            .unwrap_or("UNSPECIFIED")
+            .unwrap_or("0.0.0.0")
             .parse()
             .unwrap();
 
@@ -699,15 +699,7 @@ pub fn setup(
         let store =
             cortex_m::singleton!(: NetStorage = NetStorage::default()).unwrap();
 
-        store.ip_addrs[0] = match ip_addrs.is_unspecified() {
-            true => smoltcp::wire::IpCidr::new(
-                smoltcp::wire::IpAddress::Ipv4(
-                    smoltcp::wire::Ipv4Address::UNSPECIFIED,
-                ),
-                0,
-            ),
-            false => smoltcp::wire::IpCidr::new(ip_addrs, 24),
-        };
+        store.ip_addrs[0] = smoltcp::wire::IpCidr::new(ip_addrs, 24);
 
         let mut routes =
             smoltcp::iface::Routes::new(&mut store.routes_cache[..]);
