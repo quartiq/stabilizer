@@ -27,6 +27,8 @@ Stabilizer supports 10Base-T or 100Base-T with Auto MDI-X.
 Stabilizer uses DHCP to obtain its network configuration information. Ensure there is a
 properly configured DHCP server running on the network segment that Stabilizer is
 connected to.
+Alternatively, a static IP can be enforced in the firmware build command by specifying
+the environmental variable `STATIC_IP` analogous to how a specific broker IP is set.
 
 > **Note:** If Stabilizer is connected directly to an Ubuntu system (for example using a USB-Ethernet dongle) 
 you can set the IPv4 settings of this Ethernet connection in the Ubuntu network settings to
