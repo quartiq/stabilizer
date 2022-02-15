@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+* Optional specification of a static IP address ([#509](https://github.com/quartiq/stabilizer/pull/509))
 * Telemetry ([#341](https://github.com/quartiq/stabilizer/pull/341))
 * Logging via RTT (real time tracing) over SWD/JTAG instead of semihosting
   for fast and low-overhead debugging ([#393](https://github.com/quartiq/stabilizer/pull/393) [#391](https://github.com/quartiq/stabilizer/pull/391) [#358](https://github.com/quartiq/stabilizer/pull/358))

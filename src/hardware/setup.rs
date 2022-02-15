@@ -695,17 +695,18 @@ pub fn setup(
 
         unsafe { ethernet::enable_interrupt() };
 
+        // Configure IP address according to DHCP socket availability
+        let ip_addrs: smoltcp::wire::IpAddress = option_env!("STATIC_IP")
+            .unwrap_or("0.0.0.0")
+            .parse()
+            .unwrap();
+
         // Note(unwrap): The hardware configuration function is only allowed to be called once.
         // Unwrapping is intended to panic if called again to prevent re-use of global memory.
         let store =
             cortex_m::singleton!(: NetStorage = NetStorage::default()).unwrap();
 
-        store.ip_addrs[0] = smoltcp::wire::IpCidr::new(
-            smoltcp::wire::IpAddress::Ipv4(
-                smoltcp::wire::Ipv4Address::UNSPECIFIED,
-            ),
-            0,
-        );
+        store.ip_addrs[0] = smoltcp::wire::IpCidr::new(ip_addrs, 24);
 
         let mut routes =
             smoltcp::iface::Routes::new(&mut store.routes_cache[..]);
@@ -726,7 +727,9 @@ pub fn setup(
         .routes(routes)
         .finalize();
 
-        interface.add_socket(smoltcp::socket::Dhcpv4Socket::new());
+        if ip_addrs.is_unspecified() {
+            interface.add_socket(smoltcp::socket::Dhcpv4Socket::new());
+        }
 
         for storage in store.tcp_socket_storage[..].iter_mut() {
             let tcp_socket = {
