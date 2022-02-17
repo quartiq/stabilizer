@@ -8,7 +8,7 @@ use crate::hardware::EthernetPhy;
 
 /// Processor for managing network hardware.
 pub struct NetworkProcessor {
-    stack: NetworkReference,
+    pub stack: NetworkReference,
     phy: EthernetPhy,
     network_was_reset: bool,
 }
