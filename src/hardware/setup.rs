@@ -36,6 +36,7 @@ pub struct NetStorage {
         [Option<(smoltcp::wire::IpCidr, smoltcp::iface::Route)>; 8],
 }
 
+#[derive(Copy, Clone)]
 pub struct UdpSocketStorage {
     rx_storage: [u8; 1024],
     tx_storage: [u8; 2048],
