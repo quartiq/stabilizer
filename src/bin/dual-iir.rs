@@ -43,7 +43,6 @@ use stabilizer::{
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
-        embedded_hal::digital::v2::InputPin,
         hal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
@@ -311,10 +310,8 @@ mod app {
 
         (settings, telemetry, signal_generator).lock(
             |settings, telemetry, signal_generator| {
-                let digital_inputs = [
-                    digital_inputs.0.is_high().unwrap(),
-                    digital_inputs.1.is_high().unwrap(),
-                ];
+                let digital_inputs =
+                    [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
                 telemetry.digital_inputs = digital_inputs;
 
                 let hold = settings.force_hold

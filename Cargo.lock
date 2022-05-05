@@ -221,9 +221,9 @@ dependencies = [
 
 [[package]]
 name = "embedded-dma"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46c8c02e4347a0267ca60813c952017f4c5948c232474c6010a381a337f1bda4"
+checksum = "994f7e5b5cb23521c22304927195f236813053eb9c065dd2226a32ba64695446"
 dependencies = [
  "stable_deref_trait",
 ]
@@ -905,15 +905,16 @@ dependencies = [
 
 [[package]]
 name = "stm32h7xx-hal"
-version = "0.11.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "926bfa26b1d97aa0579ade46411cbf5d0680704323c8b9db9a2413e3feae8d3b"
+checksum = "0b8b90bf0214fc4aa8300ba720de372ec1307f27158e2823f561900ca430a522"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",
  "cortex-m 0.7.4",
  "embedded-dma",
  "embedded-hal",
+ "fugit",
  "nb 1.0.0",
  "paste",
  "smoltcp",

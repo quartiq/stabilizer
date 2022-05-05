@@ -388,14 +388,14 @@ impl rf_power::PowerMeasurementInterface for PounderDevices {
                     .adc1
                     .read(&mut self.adc1_in_p)
                     .map_err(|_| Error::Adc)?;
-                adc_reading as f32 / self.adc1.max_sample() as f32
+                adc_reading as f32 / self.adc1.slope() as f32
             }
             Channel::In1 => {
                 let adc_reading: u32 = self
                     .adc2
                     .read(&mut self.adc2_in_p)
                     .map_err(|_| Error::Adc)?;
-                adc_reading as f32 / self.adc2.max_sample() as f32
+                adc_reading as f32 / self.adc2.slope() as f32
             }
             _ => return Err(Error::InvalidChannel),
         };

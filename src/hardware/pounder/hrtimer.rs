@@ -65,7 +65,7 @@ impl HighResTimerE {
         // is the APB bus clock.
         let minimum_duration = set_duration + set_offset;
 
-        let source_frequency: u32 = self.clocks.timy_ker_ck().0;
+        let source_frequency: u32 = self.clocks.timy_ker_ck().to_Hz();
         let source_cycles =
             (minimum_duration * source_frequency as f32) as u32 + 1;
 
