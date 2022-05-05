@@ -41,9 +41,7 @@ impl Timestamper {
         mut timestamp_timer: timers::PounderTimestampTimer,
         capture_channel: timers::tim8::Channel1,
         sampling_timer: &mut timers::SamplingTimer,
-        _clock_input: hal::gpio::gpioa::PA0<
-            hal::gpio::Alternate<hal::gpio::AF3>,
-        >,
+        _clock_input: hal::gpio::gpioa::PA0<hal::gpio::Alternate<3>>,
         batch_size: usize,
     ) -> Self {
         // The sampling timer should generate a trigger output when CH1 comparison occurs.

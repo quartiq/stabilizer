@@ -6,12 +6,11 @@ use core::{ptr, slice};
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
+    gpio::Speed,
     prelude::*,
 };
 
 use smoltcp_nal::smoltcp;
-
-use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 use super::{
     adc, afe, dac, design_parameters, eeprom, input_stamper::InputStamper,
@@ -258,24 +257,24 @@ pub fn setup(
 
     let rcc = device.RCC.constrain();
     let ccdr = rcc
-        .use_hse(8.mhz())
-        .sysclk(design_parameters::SYSCLK)
-        .hclk(200.mhz())
-        .per_ck(design_parameters::TIMER_FREQUENCY)
-        .pll2_p_ck(100.mhz())
-        .pll2_q_ck(100.mhz())
+        .use_hse(8.MHz())
+        .sysclk(design_parameters::SYSCLK.convert())
+        .hclk(200.MHz())
+        .per_ck(design_parameters::TIMER_FREQUENCY.convert())
+        .pll2_p_ck(100.MHz())
+        .pll2_q_ck(100.MHz())
         .freeze(vos, &device.SYSCFG);
 
     // Before being able to call any code in ITCM, load that code from flash.
     load_itcm();
 
-    let systick = Systick::new(core.SYST, ccdr.clocks.sysclk().0);
+    let systick = Systick::new(core.SYST, ccdr.clocks.sysclk().to_Hz());
 
     // After ITCM loading.
     core.SCB.enable_icache();
 
     let mut delay = asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(
-        ccdr.clocks.c_ck().0,
+        ccdr.clocks.c_ck().to_Hz(),
     ));
 
     let gpioa = device.GPIOA.split(ccdr.peripheral.GPIOA);
@@ -304,12 +303,12 @@ pub fn setup(
         let mut timer2 =
             device
                 .TIM2
-                .timer(1.khz(), ccdr.peripheral.TIM2, &ccdr.clocks);
+                .timer(1.kHz(), ccdr.peripheral.TIM2, &ccdr.clocks);
 
         // Configure the timer to count at the designed tick rate. We will manually set the
         // period below.
         timer2.pause();
-        timer2.set_tick_freq(design_parameters::TIMER_FREQUENCY);
+        timer2.set_tick_freq(design_parameters::TIMER_FREQUENCY.convert());
 
         let mut sampling_timer = timers::SamplingTimer::new(timer2);
         sampling_timer.set_period_ticks(sample_ticks - 1);
@@ -326,13 +325,13 @@ pub fn setup(
         let mut timer3 =
             device
                 .TIM3
-                .timer(1.khz(), ccdr.peripheral.TIM3, &ccdr.clocks);
+                .timer(1.kHz(), ccdr.peripheral.TIM3, &ccdr.clocks);
 
         // Configure the timer to count at the designed tick rate. We will manually set the
         // period below.
         timer3.pause();
         timer3.reset_counter();
-        timer3.set_tick_freq(design_parameters::TIMER_FREQUENCY);
+        timer3.set_tick_freq(design_parameters::TIMER_FREQUENCY.convert());
 
         let mut shadow_sampling_timer =
             timers::ShadowSamplingTimer::new(timer3);
@@ -360,12 +359,12 @@ pub fn setup(
         let mut timer5 =
             device
                 .TIM5
-                .timer(1.khz(), ccdr.peripheral.TIM5, &ccdr.clocks);
+                .timer(1.kHz(), ccdr.peripheral.TIM5, &ccdr.clocks);
 
         // Configure the timer to count at the designed tick rate. We will manually set the
         // period below.
         timer5.pause();
-        timer5.set_tick_freq(design_parameters::TIMER_FREQUENCY);
+        timer5.set_tick_freq(design_parameters::TIMER_FREQUENCY.convert());
 
         // The timestamp timer runs at the counter cycle period as the sampling timers.
         // To accomodate this, we manually set the prescaler identical to the sample
@@ -385,18 +384,9 @@ pub fn setup(
     // Configure the SPI interfaces to the ADCs and DACs.
     let adcs = {
         let adc0 = {
-            let spi_miso = gpiob
-                .pb14
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let spi_sck = gpiob
-                .pb10
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let spi_nss = gpiob
-                .pb9
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
+            let miso = gpiob.pb14.into_alternate().speed(Speed::VeryHigh);
+            let sck = gpiob.pb10.into_alternate().speed(Speed::VeryHigh);
+            let nss = gpiob.pb9.into_alternate().speed(Speed::VeryHigh);
 
             let config = hal::spi::Config::new(hal::spi::Mode {
                 polarity: hal::spi::Polarity::IdleHigh,
@@ -410,9 +400,9 @@ pub fn setup(
             .communication_mode(hal::spi::CommunicationMode::Receiver);
 
             let spi: hal::spi::Spi<_, _, u16> = device.SPI2.spi(
-                (spi_sck, spi_miso, hal::spi::NoMosi, spi_nss),
+                (sck, miso, hal::spi::NoMosi, nss),
                 config,
-                design_parameters::ADC_DAC_SCK_MAX,
+                design_parameters::ADC_DAC_SCK_MAX.convert(),
                 ccdr.peripheral.SPI2,
                 &ccdr.clocks,
             );
@@ -429,18 +419,9 @@ pub fn setup(
         };
 
         let adc1 = {
-            let spi_miso = gpiob
-                .pb4
-                .into_alternate_af6()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let spi_sck = gpioc
-                .pc10
-                .into_alternate_af6()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let spi_nss = gpioa
-                .pa15
-                .into_alternate_af6()
-                .set_speed(hal::gpio::Speed::VeryHigh);
+            let miso = gpiob.pb4.into_alternate().speed(Speed::VeryHigh);
+            let sck = gpioc.pc10.into_alternate().speed(Speed::VeryHigh);
+            let nss = gpioa.pa15.into_alternate().speed(Speed::VeryHigh);
 
             let config = hal::spi::Config::new(hal::spi::Mode {
                 polarity: hal::spi::Polarity::IdleHigh,
@@ -454,9 +435,9 @@ pub fn setup(
             .communication_mode(hal::spi::CommunicationMode::Receiver);
 
             let spi: hal::spi::Spi<_, _, u16> = device.SPI3.spi(
-                (spi_sck, spi_miso, hal::spi::NoMosi, spi_nss),
+                (sck, miso, hal::spi::NoMosi, nss),
                 config,
-                design_parameters::ADC_DAC_SCK_MAX,
+                design_parameters::ADC_DAC_SCK_MAX.convert(),
                 ccdr.peripheral.SPI3,
                 &ccdr.clocks,
             );
@@ -477,21 +458,12 @@ pub fn setup(
 
     let dacs = {
         let mut dac_clr_n = gpioe.pe12.into_push_pull_output();
-        dac_clr_n.set_high().unwrap();
+        dac_clr_n.set_high();
 
         let dac0_spi = {
-            let spi_miso = gpioe
-                .pe5
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let spi_sck = gpioe
-                .pe2
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let spi_nss = gpioe
-                .pe4
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
+            let miso = gpioe.pe5.into_alternate().speed(Speed::VeryHigh);
+            let sck = gpioe.pe2.into_alternate().speed(Speed::VeryHigh);
+            let nss = gpioe.pe4.into_alternate().speed(Speed::VeryHigh);
 
             let config = hal::spi::Config::new(hal::spi::Mode {
                 polarity: hal::spi::Polarity::IdleHigh,
@@ -506,27 +478,18 @@ pub fn setup(
             .swap_mosi_miso();
 
             device.SPI4.spi(
-                (spi_sck, spi_miso, hal::spi::NoMosi, spi_nss),
+                (sck, miso, hal::spi::NoMosi, nss),
                 config,
-                design_parameters::ADC_DAC_SCK_MAX,
+                design_parameters::ADC_DAC_SCK_MAX.convert(),
                 ccdr.peripheral.SPI4,
                 &ccdr.clocks,
             )
         };
 
         let dac1_spi = {
-            let spi_miso = gpiof
-                .pf8
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let spi_sck = gpiof
-                .pf7
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let spi_nss = gpiof
-                .pf6
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
+            let miso = gpiof.pf8.into_alternate().speed(Speed::VeryHigh);
+            let sck = gpiof.pf7.into_alternate().speed(Speed::VeryHigh);
+            let nss = gpiof.pf6.into_alternate().speed(Speed::VeryHigh);
 
             let config = hal::spi::Config::new(hal::spi::Mode {
                 polarity: hal::spi::Polarity::IdleHigh,
@@ -541,9 +504,9 @@ pub fn setup(
             .swap_mosi_miso();
 
             device.SPI5.spi(
-                (spi_sck, spi_miso, hal::spi::NoMosi, spi_nss),
+                (sck, miso, hal::spi::NoMosi, nss),
                 config,
-                design_parameters::ADC_DAC_SCK_MAX,
+                design_parameters::ADC_DAC_SCK_MAX.convert(),
                 ccdr.peripheral.SPI5,
                 &ccdr.clocks,
             )
@@ -562,19 +525,17 @@ pub fn setup(
             batch_size,
         );
 
-        dac_clr_n.set_low().unwrap();
-        let _dac0_ldac_n =
-            gpioe.pe11.into_push_pull_output().set_low().unwrap();
-        let _dac1_ldac_n =
-            gpioe.pe15.into_push_pull_output().set_low().unwrap();
-        dac_clr_n.set_high().unwrap();
+        dac_clr_n.set_low();
+        let _dac0_ldac_n = gpioe.pe11.into_push_pull_output().set_low();
+        let _dac1_ldac_n = gpioe.pe15.into_push_pull_output().set_low();
+        dac_clr_n.set_high();
 
         (dac0, dac1)
     };
 
     let afes = {
         // AFE_PWR_ON on hardware revision v1.3.2
-        gpioe.pe1.into_push_pull_output().set_high().unwrap();
+        gpioe.pe1.into_push_pull_output().set_high();
 
         let afe0 = {
             let a0_pin = gpiof.pf2.into_push_pull_output();
@@ -592,7 +553,7 @@ pub fn setup(
     };
 
     let input_stamper = {
-        let trigger = gpioa.pa3.into_alternate_af2();
+        let trigger = gpioa.pa3.into_alternate();
         InputStamper::new(trigger, timestamp_timer_channels.ch4)
     };
 
@@ -603,11 +564,11 @@ pub fn setup(
     };
 
     let mut eeprom_i2c = {
-        let sda = gpiof.pf0.into_alternate_af4().set_open_drain();
-        let scl = gpiof.pf1.into_alternate_af4().set_open_drain();
+        let sda = gpiof.pf0.into_alternate().set_open_drain();
+        let scl = gpiof.pf1.into_alternate().set_open_drain();
         device.I2C2.i2c(
             (scl, sda),
-            100.khz(),
+            100.kHz(),
             ccdr.peripheral.I2C2,
             &ccdr.clocks,
         )
@@ -623,58 +584,21 @@ pub fn setup(
         let ethernet_pins = {
             // Reset the PHY before configuring pins.
             let mut eth_phy_nrst = gpioe.pe3.into_push_pull_output();
-            eth_phy_nrst.set_low().unwrap();
+            eth_phy_nrst.set_low();
             delay.delay_us(200u8);
-            eth_phy_nrst.set_high().unwrap();
+            eth_phy_nrst.set_high();
 
-            let rmii_ref_clk = gpioa
-                .pa1
-                .into_alternate_af11()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let rmii_mdio = gpioa
-                .pa2
-                .into_alternate_af11()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let rmii_mdc = gpioc
-                .pc1
-                .into_alternate_af11()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let rmii_crs_dv = gpioa
-                .pa7
-                .into_alternate_af11()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let rmii_rxd0 = gpioc
-                .pc4
-                .into_alternate_af11()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let rmii_rxd1 = gpioc
-                .pc5
-                .into_alternate_af11()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let rmii_tx_en = gpiob
-                .pb11
-                .into_alternate_af11()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let rmii_txd0 = gpiob
-                .pb12
-                .into_alternate_af11()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let rmii_txd1 = gpiog
-                .pg14
-                .into_alternate_af11()
-                .set_speed(hal::gpio::Speed::VeryHigh);
+            let ref_clk = gpioa.pa1.into_alternate().speed(Speed::VeryHigh);
+            let mdio = gpioa.pa2.into_alternate().speed(Speed::VeryHigh);
+            let mdc = gpioc.pc1.into_alternate().speed(Speed::VeryHigh);
+            let crs_dv = gpioa.pa7.into_alternate().speed(Speed::VeryHigh);
+            let rxd0 = gpioc.pc4.into_alternate().speed(Speed::VeryHigh);
+            let rxd1 = gpioc.pc5.into_alternate().speed(Speed::VeryHigh);
+            let tx_en = gpiob.pb11.into_alternate().speed(Speed::VeryHigh);
+            let txd0 = gpiob.pb12.into_alternate().speed(Speed::VeryHigh);
+            let txd1 = gpiog.pg14.into_alternate().speed(Speed::VeryHigh);
 
-            (
-                rmii_ref_clk,
-                rmii_mdio,
-                rmii_mdc,
-                rmii_crs_dv,
-                rmii_rxd0,
-                rmii_rxd1,
-                rmii_tx_en,
-                rmii_txd0,
-                rmii_txd1,
-            )
+            (ref_clk, mdio, mdc, crs_dv, rxd0, rxd1, tx_en, txd0, txd1)
         };
 
         // Configure the ethernet controller
@@ -791,23 +715,23 @@ pub fn setup(
     let mut fp_led_2 = gpiog.pg4.into_push_pull_output();
     let mut fp_led_3 = gpiod.pd12.into_push_pull_output();
 
-    fp_led_0.set_low().unwrap();
-    fp_led_1.set_low().unwrap();
-    fp_led_2.set_low().unwrap();
-    fp_led_3.set_low().unwrap();
+    fp_led_0.set_low();
+    fp_led_1.set_low();
+    fp_led_2.set_low();
+    fp_led_3.set_low();
 
     // Measure the Pounder PGOOD output to detect if pounder is present on Stabilizer.
     let pounder_pgood = gpiob.pb13.into_pull_down_input();
     delay.delay_ms(2u8);
-    let pounder = if pounder_pgood.is_high().unwrap() {
+    let pounder = if pounder_pgood.is_high() {
         log::info!("Found Pounder");
 
         let io_expander = {
-            let sda = gpiob.pb7.into_alternate_af4().set_open_drain();
-            let scl = gpiob.pb8.into_alternate_af4().set_open_drain();
+            let sda = gpiob.pb7.into_alternate().set_open_drain();
+            let scl = gpiob.pb8.into_alternate().set_open_drain();
             let i2c1 = device.I2C1.i2c(
                 (scl, sda),
-                400.khz(),
+                400.kHz(),
                 ccdr.peripheral.I2C1,
                 &ccdr.clocks,
             );
@@ -815,18 +739,9 @@ pub fn setup(
         };
 
         let spi = {
-            let spi_mosi = gpiod
-                .pd7
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let spi_miso = gpioa
-                .pa6
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
-            let spi_sck = gpiog
-                .pg11
-                .into_alternate_af5()
-                .set_speed(hal::gpio::Speed::VeryHigh);
+            let mosi = gpiod.pd7.into_alternate();
+            let miso = gpioa.pa6.into_alternate();
+            let sck = gpiog.pg11.into_alternate();
 
             let config = hal::spi::Config::new(hal::spi::Mode {
                 polarity: hal::spi::Polarity::IdleHigh,
@@ -836,9 +751,9 @@ pub fn setup(
             // The maximum frequency of this SPI must be limited due to capacitance on the MISO
             // line causing a long RC decay.
             device.SPI1.spi(
-                (spi_sck, spi_miso, spi_mosi),
+                (sck, miso, mosi),
                 config,
-                5.mhz(),
+                5.MHz(),
                 ccdr.peripheral.SPI1,
                 &ccdr.clocks,
             )
@@ -883,38 +798,22 @@ pub fn setup(
             let qspi_interface = {
                 // Instantiate the QUADSPI pins and peripheral interface.
                 let qspi_pins = {
-                    let _qspi_ncs = gpioc
-                        .pc11
-                        .into_alternate_af9()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
+                    let _ncs =
+                        gpioc.pc11.into_alternate::<9>().speed(Speed::VeryHigh);
 
-                    let clk = gpiob
-                        .pb2
-                        .into_alternate_af9()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
-                    let io0 = gpioe
-                        .pe7
-                        .into_alternate_af10()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
-                    let io1 = gpioe
-                        .pe8
-                        .into_alternate_af10()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
-                    let io2 = gpioe
-                        .pe9
-                        .into_alternate_af10()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
-                    let io3 = gpioe
-                        .pe10
-                        .into_alternate_af10()
-                        .set_speed(hal::gpio::Speed::VeryHigh);
+                    let clk = gpiob.pb2.into_alternate().speed(Speed::VeryHigh);
+                    let io0 = gpioe.pe7.into_alternate().speed(Speed::VeryHigh);
+                    let io1 = gpioe.pe8.into_alternate().speed(Speed::VeryHigh);
+                    let io2 = gpioe.pe9.into_alternate().speed(Speed::VeryHigh);
+                    let io3 =
+                        gpioe.pe10.into_alternate().speed(Speed::VeryHigh);
 
                     (clk, io0, io1, io2, io3)
                 };
 
                 let qspi = device.QUADSPI.bank2(
                     qspi_pins,
-                    design_parameters::POUNDER_QSPI_FREQUENCY,
+                    design_parameters::POUNDER_QSPI_FREQUENCY.convert(),
                     &ccdr.clocks,
                     ccdr.peripheral.QSPI,
                 );
@@ -929,16 +828,13 @@ pub fn setup(
 
             let mut io_update = gpiog.pg7.into_push_pull_output();
 
-            let ref_clk: hal::time::Hertz =
-                design_parameters::DDS_REF_CLK.into();
-
             let mut ad9959 = ad9959::Ad9959::new(
                 qspi_interface,
                 reset_pin,
                 &mut io_update,
                 &mut delay,
                 ad9959::Mode::FourBitSerial,
-                ref_clk.0 as f32,
+                design_parameters::DDS_REF_CLK.to_Hz() as f32,
                 design_parameters::DDS_MULTIPLIER,
             )
             .unwrap();
@@ -953,10 +849,8 @@ pub fn setup(
 
         let dds_output = {
             let io_update_trigger = {
-                let _io_update = gpiog
-                    .pg7
-                    .into_alternate_af2()
-                    .set_speed(hal::gpio::Speed::VeryHigh);
+                let _io_update =
+                    gpiog.pg7.into_alternate::<2>().speed(Speed::VeryHigh);
 
                 // Configure the IO_Update signal for the DDS.
                 let mut hrtimer = pounder::hrtimer::HighResTimerE::new(
@@ -978,9 +872,8 @@ pub fn setup(
 
                 // Ensure that we have enough time for an IO-update every sample.
                 let sample_frequency = {
-                    let timer_frequency: hal::time::Hertz =
-                        design_parameters::TIMER_FREQUENCY.into();
-                    timer_frequency.0 as f32 / sample_ticks as f32
+                    design_parameters::TIMER_FREQUENCY.to_Hz() as f32
+                        / sample_ticks as f32
                 };
 
                 let sample_period = 1.0 / sample_frequency;
@@ -998,14 +891,14 @@ pub fn setup(
         #[cfg(feature = "pounder_v1_1")]
         let pounder_stamper = {
             log::info!("Assuming Pounder v1.1 or later");
-            let etr_pin = gpioa.pa0.into_alternate_af3();
+            let etr_pin = gpioa.pa0.into_alternate();
 
             // The frequency in the constructor is dont-care, as we will modify the period + clock
             // source manually below.
             let tim8 =
                 device
                     .TIM8
-                    .timer(1.khz(), ccdr.peripheral.TIM8, &ccdr.clocks);
+                    .timer(1.kHz(), ccdr.peripheral.TIM8, &ccdr.clocks);
             let mut timestamp_timer = timers::PounderTimestampTimer::new(tim8);
 
             // Pounder is configured to generate a 500MHz reference clock, so a 125MHz sync-clock is

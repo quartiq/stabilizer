@@ -45,7 +45,6 @@ use stabilizer::{
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
-        embedded_hal::digital::v2::InputPin,
         hal,
         input_stamper::InputStamper,
         signal_generator,
@@ -484,8 +483,8 @@ mod app {
             c.shared.telemetry.lock(|telemetry| *telemetry);
 
         telemetry.digital_inputs = [
-            c.local.digital_inputs.0.is_high().unwrap(),
-            c.local.digital_inputs.1.is_high().unwrap(),
+            c.local.digital_inputs.0.is_high(),
+            c.local.digital_inputs.1.is_high(),
         ];
 
         let (gains, telemetry_period) = c

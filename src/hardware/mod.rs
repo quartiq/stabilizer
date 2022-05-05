@@ -27,12 +27,10 @@ pub type AFE1 = afe::ProgrammableGainAmplifier<
 >;
 
 // Type alias for digital input 0 (DI0).
-pub type DigitalInput0 =
-    hal::gpio::gpiog::PG9<hal::gpio::Input<hal::gpio::Floating>>;
+pub type DigitalInput0 = hal::gpio::gpiog::PG9<hal::gpio::Input>;
 
 // Type alias for digital input 1 (DI1).
-pub type DigitalInput1 =
-    hal::gpio::gpioc::PC15<hal::gpio::Input<hal::gpio::Floating>>;
+pub type DigitalInput1 = hal::gpio::gpioc::PC15<hal::gpio::Input>;
 
 // Number of TX descriptors in the ethernet descriptor ring.
 const TX_DESRING_CNT: usize = 4;

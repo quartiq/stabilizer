@@ -28,7 +28,7 @@ use super::{hal, timers};
 
 /// The timestamper for DI0 reference clock inputs.
 pub struct InputStamper {
-    _di0_trigger: hal::gpio::gpioa::PA3<hal::gpio::Alternate<hal::gpio::AF2>>,
+    _di0_trigger: hal::gpio::gpioa::PA3<hal::gpio::Alternate<2>>,
     capture_channel: timers::tim5::Channel4InputCapture,
 }
 
@@ -39,7 +39,7 @@ impl InputStamper {
     /// * `trigger` - The capture trigger input pin.
     /// * `timer_channel - The timer channel used for capturing timestamps.
     pub fn new(
-        trigger: hal::gpio::gpioa::PA3<hal::gpio::Alternate<hal::gpio::AF2>>,
+        trigger: hal::gpio::gpioa::PA3<hal::gpio::Alternate<2>>,
         timer_channel: timers::tim5::Channel4,
     ) -> Self {
         // Utilize the TIM5 CH4 as an input capture channel - use TI4 (the DI0 input trigger) as the
