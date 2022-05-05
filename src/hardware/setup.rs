@@ -573,6 +573,9 @@ pub fn setup(
     };
 
     let afes = {
+        // AFE_PWR_ON on hardware revision v1.3.2
+        gpioe.pe1.into_push_pull_output().set_high.unwrap();
+
         let afe0 = {
             let a0_pin = gpiof.pf2.into_push_pull_output();
             let a1_pin = gpiof.pf5.into_push_pull_output();
