@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Removed
 ### Changed
+
+* Minimum supported Rust version bumped to 1.59
+
 ### Fixed
 
 ## [v0.6.0] - 2022-02-11
