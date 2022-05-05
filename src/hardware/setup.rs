@@ -891,14 +891,14 @@ pub fn setup(
         #[cfg(feature = "pounder_v1_1")]
         let pounder_stamper = {
             log::info!("Assuming Pounder v1.1 or later");
-            let etr_pin = gpioa.pa0.into_alternate_af3();
+            let etr_pin = gpioa.pa0.into_alternate();
 
             // The frequency in the constructor is dont-care, as we will modify the period + clock
             // source manually below.
             let tim8 =
                 device
                     .TIM8
-                    .timer(1.khz(), ccdr.peripheral.TIM8, &ccdr.clocks);
+                    .timer(1.kHz(), ccdr.peripheral.TIM8, &ccdr.clocks);
             let mut timestamp_timer = timers::PounderTimestampTimer::new(tim8);
 
             // Pounder is configured to generate a 500MHz reference clock, so a 125MHz sync-clock is
