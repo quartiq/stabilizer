@@ -59,7 +59,7 @@ mono-clock = "0.1"
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "ethernet", "xspi"]
-version = "0.12.1"
+version = "0.12.2"
 
 [features]
 nightly = ["cortex-m/inline-asm"]
