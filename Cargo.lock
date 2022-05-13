@@ -220,6 +220,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_miniconf"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c587b2363b948e4035fc1e8ac33278dc6fda9a40190a22abe55839fcaeda161"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "embedded-dma"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -359,7 +370,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f927d7401864366355cf291c4407d5ea321cbcc40362623b06a00e41d2217be"
 dependencies = [
- "miniconf",
+ "miniconf 0.3.0",
  "num-complex 0.4.1",
  "num-traits",
  "serde",
@@ -433,7 +444,22 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5bebe771bb9b1d6ab2735374465002f6e15db45c8d863b8b1873881e98d6da22"
 dependencies = [
- "derive_miniconf",
+ "derive_miniconf 0.3.0",
+ "heapless",
+ "log",
+ "minimq",
+ "serde",
+ "serde-json-core",
+ "smlang",
+]
+
+[[package]]
+name = "miniconf"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76ba55ad97c893ffe5293ea3c0d19c505e164f6628ead64d25dada828deb3673"
+dependencies = [
+ "derive_miniconf 0.5.0",
  "heapless",
  "log",
  "minimq",
@@ -885,7 +911,7 @@ dependencies = [
  "idsp",
  "log",
  "mcp23017",
- "miniconf",
+ "miniconf 0.5.0",
  "minimq",
  "mono-clock",
  "mutex-trait",
