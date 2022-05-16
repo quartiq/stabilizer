@@ -211,9 +211,9 @@ dependencies = [
 
 [[package]]
 name = "derive_miniconf"
-version = "0.3.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bf0746ffedecccb7abefca46c550a49c50ee40fa5fd2555cfa115a1a109324a"
+checksum = "9c587b2363b948e4035fc1e8ac33278dc6fda9a40190a22abe55839fcaeda161"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -356,8 +356,7 @@ dependencies = [
 [[package]]
 name = "idsp"
 version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f927d7401864366355cf291c4407d5ea321cbcc40362623b06a00e41d2217be"
+source = "git+https://github.com/quartiq/idsp?rev=00967f01ef2e11af3d3c5a4e9e7815d59dba3806#00967f01ef2e11af3d3c5a4e9e7815d59dba3806"
 dependencies = [
  "miniconf",
  "num-complex 0.4.0",
@@ -428,9 +427,9 @@ checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
 
 [[package]]
 name = "miniconf"
-version = "0.3.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bebe771bb9b1d6ab2735374465002f6e15db45c8d863b8b1873881e98d6da22"
+checksum = "76ba55ad97c893ffe5293ea3c0d19c505e164f6628ead64d25dada828deb3673"
 dependencies = [
  "derive_miniconf",
  "heapless",
