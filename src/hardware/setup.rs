@@ -13,9 +13,8 @@ use stm32h7xx_hal::{
 use smoltcp_nal::smoltcp;
 
 use super::{
-    trace,
     adc, afe, dac, design_parameters, eeprom, input_stamper::InputStamper,
-    pounder, pounder::dds_output::DdsOutput, timers, DigitalInput0,
+    pounder, pounder::dds_output::DdsOutput, timers, trace, DigitalInput0,
     DigitalInput1, EthernetPhy, NetworkStack, SystemTimer, Systick, AFE0, AFE1,
 };
 
@@ -200,7 +199,10 @@ pub fn setup(
     {
         // Enable debug during WFE/WFI-induced sleep
         // Also enable tracing.
-        device.DBGMCU.cr.modify(|_, w| w.dbgsleep_d1().set_bit().traceclken().set_bit());
+        device
+            .DBGMCU
+            .cr
+            .modify(|_, w| w.dbgsleep_d1().set_bit().traceclken().set_bit());
 
         // Set up RTT channel to use for `rprintln!()` as "best effort".
         // This removes a critical section around the logging and thus allows
@@ -272,7 +274,10 @@ pub fn setup(
     load_itcm();
 
     core.DCB.enable_trace();
-    trace::configure_tpiu(&mut core.TPIU, ccdr.clocks.pll1_r_ck().unwrap().raw());
+    trace::configure_tpiu(
+        &mut core.TPIU,
+        ccdr.clocks.pll1_r_ck().unwrap().raw(),
+    );
     trace::configure_itm(&mut core.ITM);
     trace::configure_dwt(&mut core.DWT);
 

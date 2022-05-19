@@ -56,7 +56,6 @@ fugit = "0.3"
 rtt-logger = "0.2"
 systick-monotonic = "1.0"
 mono-clock = "0.1"
-itertools = { version = "0.10", default-features = false }
 
 [package.metadata.rtic-scope]
 pac_name = "stm32h7"
