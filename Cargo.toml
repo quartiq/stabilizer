@@ -56,6 +56,19 @@ fugit = "0.3"
 rtt-logger = "0.2"
 systick-monotonic = "1.0"
 mono-clock = "0.1"
+itertools = { version = "0.10", default-features = false }
+
+[package.metadata.rtic-scope]
+pac_name = "stm32h7"
+pac_features = ["stm32h743v"]
+pac_version = "0.14.0"
+tpiu_freq = 100000000
+tpiu_baud = 115200
+lts_prescaler = 1
+dwt_enter_id = 1
+dwt_exit_id = 2
+expect_malformed = true
+interrupt_path = "stm32h7::Interrupt"
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "ethernet", "xspi"]

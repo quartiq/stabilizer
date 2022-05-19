@@ -11,6 +11,7 @@ pub mod pounder;
 pub mod setup;
 pub mod signal_generator;
 pub mod timers;
+pub mod trace;
 
 mod eeprom;
 

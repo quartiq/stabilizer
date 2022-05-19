@@ -13,6 +13,7 @@ use stm32h7xx_hal::{
 use smoltcp_nal::smoltcp;
 
 use super::{
+    trace,
     adc, afe, dac, design_parameters, eeprom, input_stamper::InputStamper,
     pounder, pounder::dds_output::DdsOutput, timers, DigitalInput0,
     DigitalInput1, EthernetPhy, NetworkStack, SystemTimer, Systick, AFE0, AFE1,
@@ -198,7 +199,8 @@ pub fn setup(
     // Set up RTT logging
     {
         // Enable debug during WFE/WFI-induced sleep
-        device.DBGMCU.cr.modify(|_, w| w.dbgsleep_d1().set_bit());
+        // Also enable tracing.
+        device.DBGMCU.cr.modify(|_, w| w.dbgsleep_d1().set_bit().traceclken().set_bit());
 
         // Set up RTT channel to use for `rprintln!()` as "best effort".
         // This removes a critical section around the logging and thus allows
@@ -263,10 +265,16 @@ pub fn setup(
         .per_ck(design_parameters::TIMER_FREQUENCY.convert())
         .pll2_p_ck(100.MHz())
         .pll2_q_ck(100.MHz())
+        .pll1_r_ck(100.MHz())
         .freeze(vos, &device.SYSCFG);
 
     // Before being able to call any code in ITCM, load that code from flash.
     load_itcm();
+
+    core.DCB.enable_trace();
+    trace::configure_tpiu(&mut core.TPIU, ccdr.clocks.pll1_r_ck().unwrap().raw());
+    trace::configure_itm(&mut core.ITM);
+    trace::configure_dwt(&mut core.DWT);
 
     let systick = Systick::new(core.SYST, ccdr.clocks.sysclk().to_Hz());
 
@@ -295,6 +303,14 @@ pub fn setup(
             * (super::MONOTONIC_FREQUENCY as f32)
             < 1.
     );
+
+    // Enable debug pins
+    let mut usart3_tx =
+        gpiod.pd8.into_push_pull_output().speed(Speed::VeryHigh);
+    let mut usart3_rx =
+        gpiod.pd9.into_push_pull_output().speed(Speed::VeryHigh);
+    usart3_tx.set_low();
+    usart3_rx.set_low();
 
     // Configure timer 2 to trigger conversions for the ADC
     let mut sampling_timer = {
