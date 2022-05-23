@@ -89,12 +89,12 @@ impl BasicConfig {
         // Clip both frequency tuning words to within Nyquist before rounding.
         let phase_increment = [
             if self.symmetry * NYQUIST > ftw {
-                ftw / self.symmetry
+                (ftw / self.symmetry) * (1u32 << 31) as f32
             } else {
                 NYQUIST
             } as i32,
             if symmetry_complement * NYQUIST > ftw {
-                ftw / symmetry_complement
+                (ftw / symmetry_complement) * (1u32 << 31) as f32
             } else {
                 NYQUIST
             } as i32,
