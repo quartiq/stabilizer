@@ -39,26 +39,25 @@ const MAGIC: u16 = 0x057B;
 
 // The size of the header, calculated in words.
 // The header has a 16-bit magic word, an 8-bit format, 8-bit batch-size, and 32-bit sequence
-// number, which corresponds to 8 bytes or 2 words total.
-const HEADER_SIZE: usize = 2;
+// number, which corresponds to 8 bytes.
+const HEADER_SIZE: usize = 8;
 
 // The number of frames that can be buffered.
 const FRAME_COUNT: usize = 4;
 
-// The size of each livestream frame in words.
-const FRAME_SIZE: usize = 256 + HEADER_SIZE;
+// The size of each livestream frame in bytes.
+const FRAME_SIZE: usize = 1024 + HEADER_SIZE;
 
 // The size of the frame queue must be at least as large as the number of frame buffers. Every
 // allocated frame buffer should fit in the queue.
 const FRAME_QUEUE_SIZE: usize = FRAME_COUNT * 2;
 
 // Static storage used for a heapless::Pool of frame buffers.
-static mut FRAME_DATA: [u8; core::mem::size_of::<u32>()
+static mut FRAME_DATA: [u8; core::mem::size_of::<u8>()
     * FRAME_SIZE
-    * FRAME_COUNT] =
-    [0; core::mem::size_of::<u32>() * FRAME_SIZE * FRAME_COUNT];
+    * FRAME_COUNT] = [0; core::mem::size_of::<u8>() * FRAME_SIZE * FRAME_COUNT];
 
-type Frame = [MaybeUninit<u32>; FRAME_SIZE];
+type Frame = [MaybeUninit<u8>; FRAME_SIZE];
 
 /// Represents the destination for the UDP stream to send data to.
 ///
@@ -154,11 +153,17 @@ impl StreamFrame {
         sequence_number: u32,
     ) -> Self {
         let mut buffer = buffer.init([MaybeUninit::uninit(); FRAME_SIZE]);
-        let magic = MAGIC.to_ne_bytes();
-        buffer[0].write(u32::from_le_bytes([
-            magic[0], magic[1], format_id, batch_size,
-        ]));
-        buffer[1].write(sequence_number);
+
+        for (offset, byte) in MAGIC
+            .to_le_bytes()
+            .iter()
+            .chain(&[format_id, batch_size])
+            .chain(sequence_number.to_le_bytes().iter())
+            .enumerate()
+        {
+            buffer[offset].write(*byte);
+        }
+
         Self {
             buffer,
             offset: HEADER_SIZE,
@@ -167,7 +172,7 @@ impl StreamFrame {
 
     pub fn add_batch<F, const T: usize>(&mut self, mut f: F)
     where
-        F: FnMut(&mut [MaybeUninit<u32>]),
+        F: FnMut(&mut [MaybeUninit<u8>]),
     {
         f(&mut self.buffer[self.offset..self.offset + T]);
 
@@ -178,7 +183,7 @@ impl StreamFrame {
         self.offset + T > self.buffer.len()
     }
 
-    pub fn finish(&self) -> &[MaybeUninit<u32>] {
+    pub fn finish(&self) -> &[MaybeUninit<u8>] {
         &self.buffer[..self.offset]
     }
 }
@@ -230,7 +235,7 @@ impl FrameGenerator {
     ///   be the size of the `T` template argument.
     pub fn add<F, const T: usize>(&mut self, f: F)
     where
-        F: FnMut(&mut [MaybeUninit<u32>]),
+        F: FnMut(&mut [MaybeUninit<u8>]),
     {
         let sequence_number = self.sequence_number;
         self.sequence_number = self.sequence_number.wrapping_add(1);
@@ -356,8 +361,7 @@ impl DataStream {
                     let data = unsafe {
                         core::slice::from_raw_parts(
                             buf.as_ptr() as *const u8,
-                            buf.len()
-                                * core::mem::size_of::<MaybeUninit<u32>>(),
+                            buf.len() * core::mem::size_of::<MaybeUninit<u8>>(),
                         )
                     };
                     self.stack.send(handle, data).ok();

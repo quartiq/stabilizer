@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 * Minimum supported Rust version bumped to 1.59
 
 ### Fixed
+* Fixed panics when using a batch size of 1 ([#540](https://github.com/quartiq/stabilizer/issues/540))
 
 ## [v0.6.0] - 2022-02-11
 
