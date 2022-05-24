@@ -77,10 +77,10 @@ impl BasicConfig {
             return Err(Error::InvalidSymmetry);
         }
 
-        let ftw = self.frequency * sample_period;
+        const NYQUIST: f32 = (1u32 << 31) as _;
+        let ftw = self.frequency * sample_period * NYQUIST;
 
         // Validate base frequency tuning word to be below Nyquist.
-        const NYQUIST: f32 = (1u32 << 31) as _;
         if ftw < 0.0 || 2.0 * ftw > NYQUIST {
             return Err(Error::InvalidFrequency);
         }
