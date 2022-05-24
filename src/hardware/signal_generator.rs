@@ -77,10 +77,10 @@ impl BasicConfig {
             return Err(Error::InvalidSymmetry);
         }
 
-        let ftw = self.frequency * sample_period;
+        const NYQUIST: f32 = (1u32 << 31) as _;
+        let ftw = self.frequency * sample_period * NYQUIST;
 
         // Validate base frequency tuning word to be below Nyquist.
-        const NYQUIST: f32 = (1u32 << 31) as _;
         if ftw < 0.0 || 2.0 * ftw > NYQUIST {
             return Err(Error::InvalidFrequency);
         }
@@ -89,12 +89,12 @@ impl BasicConfig {
         // Clip both frequency tuning words to within Nyquist before rounding.
         let phase_increment = [
             if self.symmetry * NYQUIST > ftw {
-                (ftw / self.symmetry) * (1u32 << 31) as f32
+                ftw / self.symmetry
             } else {
                 NYQUIST
             } as i32,
             if symmetry_complement * NYQUIST > ftw {
-                (ftw / symmetry_complement) * (1u32 << 31) as f32
+                ftw / symmetry_complement
             } else {
                 NYQUIST
             } as i32,
