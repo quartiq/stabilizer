@@ -44,7 +44,7 @@ nb = "1.0.0"
 asm-delay = "0.9.0"
 num_enum = { version = "0.5.7", default-features = false }
 paste = "1"
-idsp = "0.7.1"
+idsp = "0.8"
 ad9959 = { path = "ad9959", version = "0.1.0" }
 miniconf = "0.5"
 smoltcp-nal = { version = "0.2", features = ["shared-stack"] }
@@ -56,11 +56,6 @@ fugit = "0.3"
 rtt-logger = "0.2"
 systick-monotonic = "1.0"
 mono-clock = "0.1"
-
-[patch.crates-io.idsp]
-# Patched to utilize Miniconf 0.5
-git = "https://github.com/quartiq/idsp"
-rev = "00967f01ef2e11af3d3c5a4e9e7815d59dba3806"
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "ethernet", "xspi"]
