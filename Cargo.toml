@@ -32,7 +32,7 @@ default-target = "thumbv7em-none-eabihf"
 members = ["ad9959"]
 
 [dependencies]
-cortex-m = { version = "0.7" }
+cortex-m = { version = "0.7", features = ["inline-asm"] }
 cortex-m-rt = { version = "0.7", features = ["device"] }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
 rtt-target = { version = "0.3", features = ["cortex-m"] }
@@ -67,7 +67,7 @@ features = ["stm32h743v", "rt", "ethernet", "xspi"]
 version = "0.12.2"
 
 [features]
-nightly = ["cortex-m/inline-asm"]
+nightly = [ ]
 pounder_v1_1 = [ ]
 
 [profile.dev]
