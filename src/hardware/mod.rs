@@ -6,6 +6,7 @@ pub mod adc;
 pub mod afe;
 pub mod dac;
 pub mod design_parameters;
+pub mod driver;
 pub mod input_stamper;
 pub mod pounder;
 pub mod setup;
