@@ -8,8 +8,6 @@ use stm32h7xx_hal::{
     ethernet::{self, PHY},
     gpio::Speed,
     prelude::*,
-    xspi::XspiExt,
-    xspi,
 };
 
 use smoltcp_nal::smoltcp;

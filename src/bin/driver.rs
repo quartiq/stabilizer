@@ -140,7 +140,7 @@ impl Default for Settings {
             // Force suppress filter output updates.
             force_hold: false,
             // The default telemetry period in seconds.
-            telemetry_period: 10,
+            telemetry_period: 1,
 
             signal_generator: [signal_generator::BasicConfig::default(); 2],
 
@@ -163,7 +163,6 @@ mod app {
         settings: Settings,
         telemetry: TelemetryBuffer,
         signal_generator: [SignalGenerator; 2],
-        ltc2320: driver::ltc2320::Ltc2320,
     }
 
     #[local]
@@ -175,6 +174,7 @@ mod app {
         dacs: (Dac0Output, Dac1Output),
         iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
         generator: FrameGenerator,
+        ltc2320: driver::ltc2320::Ltc2320,
     }
 
     #[init]
@@ -225,7 +225,6 @@ mod app {
                         .unwrap(),
                 ),
             ],
-            ltc2320: driver.ltc2320,
         };
 
         let mut local = Local {
@@ -236,6 +235,7 @@ mod app {
             dacs: stabilizer.dacs,
             iir_state: [[[0.; 5]; IIR_CASCADE_LENGTH]; 2],
             generator,
+            ltc2320: driver.ltc2320,
         };
 
         // Enable ADC/DAC events
@@ -411,7 +411,7 @@ mod app {
         c.shared.network.lock(|net| net.direct_stream(target));
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry, ltc2320])]
+    #[task(priority = 1, shared=[network, settings, telemetry], local= [ltc2320])]
     fn telemetry(mut c: telemetry::Context) {
         let telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
@@ -426,7 +426,9 @@ mod app {
                 .publish(&telemetry.finalize(gains[0], gains[1]))
         });
 
-        c.shared.ltc2320.lock(|ltc| ltc.convert());
+        let data = c.local.ltc2320.convert();
+        log::info!("{data}");
+
         // Schedule the telemetry task in the future.
         telemetry::Monotonic::spawn_after((telemetry_period as u64).secs())
             .unwrap();

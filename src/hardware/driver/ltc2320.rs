@@ -1,12 +1,11 @@
-
 ///! LTC2320 Driver
 ///!
 use super::super::hal::{
+    device::QUADSPI,
     gpio::{self, gpiob, gpioc, gpioe},
     prelude::*,
     rcc, stm32,
-    xspi::{Qspi, XspiExt, QspiMode},
-    device::QUADSPI
+    xspi::{Qspi, QspiMode, XspiExt},
 };
 
 pub struct Ltc2320Pins {
@@ -30,12 +29,22 @@ impl Ltc2320 {
         clocks: &rcc::CoreClocks,
         qspi_rec: rcc::rec::Qspi,
         qspi_peripheral: stm32::QUADSPI,
-        pins: Ltc2320Pins,
+        mut pins: Ltc2320Pins,
     ) -> Self {
         let mut qspi =
             qspi_peripheral.bank2(pins.spi, 3u32.MHz(), clocks, qspi_rec);
-        
+
         qspi.configure_mode(QspiMode::OneBit).unwrap();
+
+        
+        qspi.inner_mut().ccr.modify(|_, w| unsafe {
+            w.dcyc().bits(0); // set nr dummy cycles to 0 (disable dummy phase)
+            w.abmode().bits(0); // disable alternate-bytes phase
+            w.admode().bits(0); // disable address phase
+            w.imode().bits(0) // disable instruction phase
+        });
+
+        pins.cnv.set_high();
 
         Self {
             qspi,
@@ -43,7 +52,11 @@ impl Ltc2320 {
         }
     }
 
-    pub fn convert(&mut self){
-        self.qspi.write(0b10101111, &[0x8f, 0x81]).unwrap();
+    pub fn convert(&mut self) -> u8 {
+        self.cnv.set_high();
+        let mut data: [u8; 1] = [0; 1];
+        self.qspi.read(0xff, &mut data).unwrap();
+        self.cnv.set_low();
+        data[0]
     }
 }
