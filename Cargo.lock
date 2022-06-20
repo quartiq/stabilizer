@@ -355,9 +355,9 @@ dependencies = [
 
 [[package]]
 name = "idsp"
-version = "0.8.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d826d202fb96247932cb25c8dea1b6f23db42043b21bedb0322a870346fc188"
+checksum = "0f7aea3278d518a045f00460496b5f9284e8800ade26521eb640691d9cd97f4d"
 dependencies = [
  "miniconf",
  "num-complex 0.4.1",
