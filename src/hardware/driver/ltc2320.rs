@@ -69,77 +69,7 @@ impl Ltc2320 {
         cortex_m::asm::delay(500);
         self.cnv.set_low();
         let mut data: [u8; 1] = [0; 1];
-        self.read(&mut data).unwrap();
+        self.qspi.read(0, &mut data).unwrap();
         data[0]
-    }
-
-    pub fn read(&mut self, dest: &mut [u8]) -> Result<(), QspiError> {
-        self.qspi.is_busy()?;
-
-        // Clear the transfer complete flag.
-        self.qspi.inner_mut().fcr.write(|w| w.ctcf().set_bit());
-
-        // Write the length that should be read.
-        self.qspi
-            .inner_mut()
-            .dlr
-            .write(|w| unsafe { w.dl().bits(dest.len() as u32 - 1) });
-
-        // Read data from the FIFO in a byte-wise manner.
-        let mut dummy: [u8; 1] = [0; 1];
-        unsafe {
-            for location in &mut dummy {
-                *location = ptr::read_volatile(
-                    &self.qspi.inner().dr as *const _ as *const u8,
-                );
-            }
-        }
-        log::info!("pos1 {:#b}", self.qspi.inner().sr.read().bits());
-
-       
-        self.qspi.inner_mut().ccr.modify(|_, w| unsafe {
-            w.admode().bits(0b0) // disable adress mode
-        });
-
-        // Write the address to force the read to start.
-        // self.qspi.inner_mut().ar.write(|w| unsafe { w.address().bits(0x00) });
-
-        cortex_m::asm::delay(1000000);
-        log::info!("pos2 {:#b}", self.qspi.inner().sr.read().bits());
-
-        // Write the address to force the read to start.
-        // self.qspi.inner_mut().ar.write(|w| unsafe { w.address().bits(0x01) });
-
-        // self.qspi.is_busy()?;
-
-        // // set fmode to indirect read
-        // self.qspi.inner_mut().ccr.modify(|_, w| unsafe {
-        //     w.instruction().bits(0b1) // set some inst
-        // });
-
-        // Wait for the transaction to complete
-        // while self.qspi.inner().sr.read().tcf().bit_is_clear() {
-        //     log::info!("{:#b}", self.qspi.inner().sr.read().bits())
-        // }
-
-        // // clear fmode
-        // self.qspi.inner_mut().ccr.modify(|_, w| unsafe {
-        //     w.fmode().bits(0b00) // set to indirect write mode
-        // });
-
-        // Check for underflow on the FIFO.
-        if (self.qspi.inner().sr.read().flevel().bits() as usize) < dest.len() {
-            return Err(QspiError::Underflow);
-        }
-
-        // Read data from the FIFO in a byte-wise manner.
-        unsafe {
-            for location in dest {
-                *location = ptr::read_volatile(
-                    &self.qspi.inner().dr as *const _ as *const u8,
-                );
-            }
-        }
-        Ok(())
     }
 }
