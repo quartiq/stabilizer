@@ -159,10 +159,11 @@ mod app {
     #[shared]
     struct Shared {
         network: NetworkUsers<Settings, Telemetry>,
-
         settings: Settings,
         telemetry: TelemetryBuffer,
         signal_generator: [SignalGenerator; 2],
+        ltc2320: driver::ltc2320::Ltc2320,
+        ltc2320_data: [u16; 8],
     }
 
     #[local]
@@ -174,7 +175,6 @@ mod app {
         dacs: (Dac0Output, Dac1Output),
         iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
         generator: FrameGenerator,
-        ltc2320: driver::ltc2320::Ltc2320,
     }
 
     #[init]
@@ -225,6 +225,8 @@ mod app {
                         .unwrap(),
                 ),
             ],
+            ltc2320: driver.ltc2320,
+            ltc2320_data: [0u16; 8],
         };
 
         let mut local = Local {
@@ -235,7 +237,6 @@ mod app {
             dacs: stabilizer.dacs,
             iir_state: [[[0.; 5]; IIR_CASCADE_LENGTH]; 2],
             generator,
-            ltc2320: driver.ltc2320,
         };
 
         // Enable ADC/DAC events
@@ -248,6 +249,7 @@ mod app {
         settings_update::spawn().unwrap();
         telemetry::spawn().unwrap();
         ethernet_link::spawn().unwrap();
+        ltc2320_start_conversion::spawn().unwrap();
         start::spawn_after(100.millis()).unwrap();
 
         (shared, local, init::Monotonics(stabilizer.systick))
@@ -411,7 +413,7 @@ mod app {
         c.shared.network.lock(|net| net.direct_stream(target));
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry], local= [ltc2320])]
+    #[task(priority = 1, shared=[network, settings, telemetry])]
     fn telemetry(mut c: telemetry::Context) {
         let telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
@@ -434,6 +436,24 @@ mod app {
     fn ethernet_link(mut c: ethernet_link::Context) {
         c.shared.network.lock(|net| net.processor.handle_link());
         ethernet_link::Monotonic::spawn_after(1.secs()).unwrap();
+    }
+
+    #[task(priority = 1, shared=[ltc2320])]
+    fn ltc2320_start_conversion(mut c: ltc2320_start_conversion::Context) {
+        // schedule next conversion for 100 kHz sample rate
+        ltc2320_start_conversion::Monotonic::spawn_after(10.micros()).unwrap();
+        c.shared.ltc2320.lock(|ltc| ltc.start_conversion());
+    }
+
+    #[task(binds = TIM7, priority = 1, shared=[ltc2320])]
+    fn ltc2320_conv_done(mut c: ltc2320_conv_done::Context) {
+        c.shared.ltc2320.lock(|ltc| ltc.handle_conv_done_irq());
+    }
+
+    #[task(binds = QUADSPI, priority = 1, shared=[ltc2320, ltc2320_data])]
+    fn ltc2320_transfer_done(c: ltc2320_transfer_done::Context) {
+        (c.shared.ltc2320, c.shared.ltc2320_data)
+            .lock(|ltc, data| ltc.handle_transfer_done_irq(data));
     }
 
     #[task(binds = ETH, priority = 1)]

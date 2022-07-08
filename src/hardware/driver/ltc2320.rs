@@ -2,6 +2,7 @@
 ///!
 ///! QSPI bug (2.4.3):
 ///! https://www.st.com/resource/en/errata_sheet/es0392-stm32h742xig-and-stm32h743xig-device-limitations-stmicroelectronics.pdf
+// Todo: Errors
 use super::super::hal::{
     device::QUADSPI,
     gpio::{self, gpiob, gpioc, gpioe},
@@ -91,13 +92,14 @@ impl Ltc2320 {
             .start(NanoSeconds::from_ticks(Ltc2320::TCONV).into_rate())
     }
 
-    /// start qspi read of ADC data
-    pub fn start_readout(&mut self) {
+    /// start qspi read of ADC data and clear timer interrupt
+    pub fn handle_conv_done_irq(&mut self) {
+        self.timer.clear_irq();
         self.qspi.begin_read(0, Ltc2320::N_BYTES).unwrap();
     }
 
     /// set nCNV high, readout qspi buffer, bitshuffle
-    pub fn retrieve_data(&mut self, data: &mut [u16]) {
+    pub fn handle_transfer_done_irq(&mut self, data: &mut [u16]) {
         self.cnv.set_high(); // TCNVH: has to be high for at least 30 ns (8 cycles)
 
         let mut buffer = [0u8; Ltc2320::N_BYTES];
