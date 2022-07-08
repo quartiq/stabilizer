@@ -954,6 +954,8 @@ pub fn setup(
             &ccdr.clocks,
             ccdr.peripheral.QSPI,
             device.QUADSPI,
+            ccdr.peripheral.TIM7,
+            device.TIM7,
             ltc2320_pins,
         );
         (None, Some(driver::DriverDevices { ltc2320 }))

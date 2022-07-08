@@ -425,10 +425,6 @@ mod app {
             net.telemetry
                 .publish(&telemetry.finalize(gains[0], gains[1]))
         });
-
-        let data = c.local.ltc2320.convert();
-        log::info!("{data}");
-
         // Schedule the telemetry task in the future.
         telemetry::Monotonic::spawn_after((telemetry_period as u64).secs())
             .unwrap();
