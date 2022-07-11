@@ -1,3 +1,5 @@
+use cortex_m::delay;
+
 ///! LTC2320 Driver
 ///!
 ///! QSPI bug (2.4.3):
@@ -60,15 +62,11 @@ impl Ltc2320 {
                 .fmode()
                 .bits(0b01)
         });
+        qspi.inner_mut().cr.modify(
+            |_, w| w.tcie().bit(true), // enable transfer complete interrupt
+        );
 
-        qspi.inner_mut().cr.modify(|_, w| unsafe {
-            w.ftie()
-                .bit(true) // enable fifo threshold interrupt
-                .fthres()
-                .bits(Ltc2320::N_BYTES as u8) // set fifo threshold to number of bytes
-        });
-
-        pins.cnv.set_low();
+        pins.cnv.set_high();
         let mut timer = timer_peripheral.timer(400.MHz(), timer_rec, clocks);
         timer.pause();
         timer.reset_counter();
@@ -92,15 +90,22 @@ impl Ltc2320 {
             .start(NanoSeconds::from_ticks(Ltc2320::TCONV).into_rate())
     }
 
-    /// start qspi read of ADC data and clear timer interrupt
+    /// clear timer interrupt start qspi read of ADC data
     pub fn handle_conv_done_irq(&mut self) {
+        log::info!("cdone irq");
+        self.timer.pause();
+        self.timer.reset_counter();
         self.timer.clear_irq();
         self.qspi.begin_read(0, Ltc2320::N_BYTES).unwrap();
     }
 
     /// set nCNV high, readout qspi buffer, bitshuffle
     pub fn handle_transfer_done_irq(&mut self, data: &mut [u16]) {
+        log::info!("transfer done irq");
         self.cnv.set_high(); // TCNVH: has to be high for at least 30 ns (8 cycles)
+        self.qspi.inner_mut().fcr.modify(
+            |_, w| w.ctcf().bit(true), // clear transfer complete flag
+        );
 
         let mut buffer = [0u8; Ltc2320::N_BYTES];
 
@@ -112,10 +117,10 @@ impl Ltc2320 {
                 );
             }
         }
+        log::info!("buffer: {:?}", buffer);
         // Todo: This is temporary. Unshuffle bits here.
         for (i, sample) in data.iter_mut().enumerate() {
-            *sample =
-                ((buffer[2 * i + 1] as u16) << 8) | buffer[2 * i + 2] as u16;
+            *sample = ((buffer[2 * i + 1] as u16) << 8) | buffer[2 * i] as u16;
         }
     }
 }
