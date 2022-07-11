@@ -1,5 +1,3 @@
-use cortex_m::delay;
-
 ///! LTC2320 Driver
 ///!
 ///! QSPI bug (2.4.3):
@@ -8,13 +6,12 @@ use cortex_m::delay;
 use super::super::hal::{
     device::QUADSPI,
     gpio::{self, gpiob, gpioc, gpioe},
-    hal::blocking::delay::DelayUs,
     pac,
     prelude::*,
     rcc, stm32,
     time::NanoSeconds,
     timer::{self, Timer},
-    xspi::{Qspi, QspiError, QspiMode, XspiExt},
+    xspi::{Qspi, QspiMode, XspiExt},
 };
 use core::ptr;
 
@@ -36,7 +33,7 @@ pub struct Ltc2320 {
 }
 
 impl Ltc2320 {
-    const N_BYTES: usize = 17; // Number of bytes to be transfered (one byte extra to account for address phase)
+    const N_BYTES: usize = 17; // Number of bytes to be transfered. One extra to account for dummy address.
     const TCONV: u32 = 450; // minimum conversion time according to datasheet
     pub fn new(
         clocks: &rcc::CoreClocks,
@@ -47,7 +44,7 @@ impl Ltc2320 {
         mut pins: Ltc2320Pins,
     ) -> Self {
         let mut qspi =
-            qspi_peripheral.bank2(pins.spi, 3u32.MHz(), clocks, qspi_rec);
+            qspi_peripheral.bank2(pins.spi, 1u32.MHz(), clocks, qspi_rec);
         qspi.configure_mode(QspiMode::OneBit).unwrap();
         qspi.is_busy().unwrap(); // panic if qspi busy
         qspi.inner_mut().ccr.modify(|_, w| unsafe {
@@ -60,7 +57,7 @@ impl Ltc2320 {
                 .imode()
                 .bits(0) // disable instruction phase
                 .fmode()
-                .bits(0b01)
+                .bits(0b01) // indirect read mode
         });
         qspi.inner_mut().cr.modify(
             |_, w| w.tcie().bit(true), // enable transfer complete interrupt
@@ -84,6 +81,7 @@ impl Ltc2320 {
     }
 
     /// set nCNV low and setup timer to wait for 450 ns
+    /// Restarting conversions faster than (T_readout + TCONV + TCNVH) leads to undefiened behaviour!
     pub fn start_conversion(&mut self) {
         self.cnv.set_low();
         self.timer
@@ -92,23 +90,20 @@ impl Ltc2320 {
 
     /// clear timer interrupt start qspi read of ADC data
     pub fn handle_conv_done_irq(&mut self) {
-        log::info!("cdone irq");
         self.timer.pause();
         self.timer.reset_counter();
         self.timer.clear_irq();
+        // zero dummy address due to qspi silicon bug
         self.qspi.begin_read(0, Ltc2320::N_BYTES).unwrap();
     }
 
     /// set nCNV high, readout qspi buffer, bitshuffle
     pub fn handle_transfer_done_irq(&mut self, data: &mut [u16]) {
-        log::info!("transfer done irq");
         self.cnv.set_high(); // TCNVH: has to be high for at least 30 ns (8 cycles)
         self.qspi.inner_mut().fcr.modify(
             |_, w| w.ctcf().bit(true), // clear transfer complete flag
         );
-
         let mut buffer = [0u8; Ltc2320::N_BYTES];
-
         // Read data from the FIFO in a byte-wise manner.
         unsafe {
             for location in &mut buffer {
@@ -117,10 +112,12 @@ impl Ltc2320 {
                 );
             }
         }
-        log::info!("buffer: {:?}", buffer);
-        // Todo: This is temporary. Unshuffle bits here.
+        // Todo: Unshuffle bits for four data lanes.
         for (i, sample) in data.iter_mut().enumerate() {
-            *sample = ((buffer[2 * i + 1] as u16) << 8) | buffer[2 * i] as u16;
+            // Drop the first byte (second byte of first channel data). See QSPI bug.
+            *sample = u16::from_be_bytes(
+                buffer[(2 * i) + 1..(2 * i) + 3].try_into().unwrap(),
+            );
         }
     }
 }
