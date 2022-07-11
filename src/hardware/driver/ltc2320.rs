@@ -14,7 +14,6 @@
 use super::super::hal::{
     device::QUADSPI,
     gpio::{self, gpiob, gpioc, gpioe},
-    pac,
     prelude::*,
     rcc, stm32,
     time::NanoSeconds,
@@ -41,7 +40,7 @@ pub struct Ltc2320 {
 }
 
 impl Ltc2320 {
-    const N_BYTES: usize = 17; // Number of bytes to be transfered. One extra to account for dummy address.
+    const N_BYTES: usize = 16; // Number of bytes to be transfered. One extra to account for dummy address.
     const TCONV: u32 = 450; // minimum conversion time according to datasheet
     pub fn new(
         clocks: &rcc::CoreClocks,
@@ -62,6 +61,8 @@ impl Ltc2320 {
                 .bits(0) // disable alternate-bytes phase
                 .admode()
                 .bits(1) // enable address phase
+                .adsize()
+                .bits(0b01) // set to 16 bit address to gain readback data alignment
                 .imode()
                 .bits(0) // disable instruction phase
                 .fmode()
@@ -70,16 +71,10 @@ impl Ltc2320 {
         qspi.inner_mut().cr.modify(
             |_, w| w.tcie().bit(true), // enable transfer complete interrupt
         );
-
         pins.cnv.set_high();
         let mut timer = timer_peripheral.timer(400.MHz(), timer_rec, clocks);
         timer.pause();
         timer.reset_counter();
-        // Todo: Understand how interrupt prio works with RTIC
-        unsafe {
-            pac::NVIC::unmask(pac::interrupt::TIM7);
-            pac::NVIC::unmask(pac::interrupt::QUADSPI)
-        }
         timer.listen(timer::Event::TimeOut);
         Self {
             qspi,
@@ -110,21 +105,13 @@ impl Ltc2320 {
         self.qspi.inner_mut().fcr.modify(
             |_, w| w.ctcf().bit(true), // clear transfer complete flag
         );
-        let mut buffer = [0u8; Ltc2320::N_BYTES];
-        // Read data from the FIFO in a byte-wise manner.
+        // Read data from the FIFO.
         unsafe {
-            for location in &mut buffer {
+            for location in data {
                 *location = ptr::read_volatile(
-                    &self.qspi.inner().dr as *const _ as *const u8,
+                    &self.qspi.inner().dr as *const _ as *const u16,
                 );
             }
-        }
-        // Todo: Unshuffle bits for four data lanes.
-        for (i, sample) in data.iter_mut().enumerate() {
-            // Drop the first byte (second byte of first channel data). See QSPI bug.
-            *sample = u16::from_be_bytes(
-                buffer[(2 * i) + 1..(2 * i) + 3].try_into().unwrap(),
-            );
         }
     }
 }
