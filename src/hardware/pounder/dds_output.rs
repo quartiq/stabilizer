@@ -120,14 +120,8 @@ impl DdsOutput {
         }
 
         for word in profile.iter() {
-            // Note(unsafe): We are writing to the SPI TX FIFO in a raw manner for performance. This
-            // is safe because we know the data register is a valid address to write to.
-            unsafe {
-                core::ptr::write_volatile(
-                    &regs.dr as *const _ as *mut u32,
-                    *word,
-                );
-            }
+            // Note(unsafe): any bit pattern is valid for a TX FIFO write.
+            regs.dr.write(|w| unsafe { w.bits(*word) });
         }
 
         // Trigger the IO_update signal generating timer to asynchronous create the IO_Update pulse.
