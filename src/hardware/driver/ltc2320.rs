@@ -2,7 +2,15 @@
 ///!
 ///! QSPI bug (2.4.3):
 ///! https://www.st.com/resource/en/errata_sheet/es0392-stm32h742xig-and-stm32h743xig-device-limitations-stmicroelectronics.pdf
-// Todo: Errors
+///!
+///! This driver is intended to be used in the following manner:
+///! 1. Trigger a new LTC2320 conversion with start_conversion(). This sets nCNV low and starts
+///!    a hardware timer to trigger en interrupt when TCONV has passed.
+///! 2. Call handle_conv_done_irq() in the timer ISR to stop and reset the timer and start the
+///!    QSPI readout. The QSPI peripheral will trigger another interrupt once that transfer is done.
+///! 3. Call handle_transfer_done_irq() in the QSPI ISR to retrieve the ADC data and set nCNV high again.
+///!
+///! Restarting conversions faster than (T_readout + TCONV + TCNVH) can lead to undefiened behaviour!
 use super::super::hal::{
     device::QUADSPI,
     gpio::{self, gpiob, gpioc, gpioe},
@@ -81,7 +89,6 @@ impl Ltc2320 {
     }
 
     /// set nCNV low and setup timer to wait for 450 ns
-    /// Restarting conversions faster than (T_readout + TCONV + TCNVH) leads to undefiened behaviour!
     pub fn start_conversion(&mut self) {
         self.cnv.set_low();
         self.timer
