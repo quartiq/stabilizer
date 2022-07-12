@@ -46,8 +46,9 @@ const HEADER_SIZE: usize = 8;
 const FRAME_COUNT: usize = 4;
 
 // The size of each livestream frame in bytes.
-// Ensure this is below the network MTU (e.g. 1500 - ip and udp header)
-const FRAME_SIZE: usize = 4 * 8 * 2 * 22 + HEADER_SIZE;
+// Ensure the resulting ethernet frame is within the MTU:
+// 1500 MTU - 40 IP6 header - 20 UDP header
+const FRAME_SIZE: usize = 1500 - 40 - 20 - HEADER_SIZE;
 
 // The size of the frame queue must be at least as large as the number of frame buffers. Every
 // allocated frame buffer should fit in the queue.
