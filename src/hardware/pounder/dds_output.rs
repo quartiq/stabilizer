@@ -56,13 +56,13 @@ use log::warn;
 use stm32h7xx_hal as hal;
 
 use super::{hrtimer::HighResTimerE, QspiInterface};
-use ad9959::{Channel, DdsConfig, ProfileSerializer};
+use ad9959::{Channel, Mode, ProfileSerializer};
 
 /// The DDS profile update stream.
 pub struct DdsOutput {
     _qspi: QspiInterface,
     io_update_trigger: HighResTimerE,
-    config: DdsConfig,
+    mode: Mode,
 }
 
 impl DdsOutput {
@@ -80,11 +80,11 @@ impl DdsOutput {
     pub fn new(
         mut qspi: QspiInterface,
         io_update_trigger: HighResTimerE,
-        config: DdsConfig,
+        mode: Mode,
     ) -> Self {
         qspi.start_stream().unwrap();
         Self {
-            config,
+            mode,
             _qspi: qspi,
             io_update_trigger,
         }
@@ -93,10 +93,10 @@ impl DdsOutput {
     /// Get a builder for serializing a Pounder DDS profile.
     #[allow(dead_code)]
     pub fn builder(&mut self) -> ProfileBuilder {
-        let serializer = self.config.serializer();
+        let mode = self.mode;
         ProfileBuilder {
             dds_output: self,
-            serializer,
+            serializer: ProfileSerializer::new(mode),
         }
     }
 
@@ -109,7 +109,7 @@ impl DdsOutput {
     ///
     /// # Args
     /// * `profile` - The serialized DDS profile to write.
-    fn write_profile(&mut self, profile: &[u32]) {
+    pub fn write(&mut self, profile: &[u32]) {
         // Note(unsafe): We own the QSPI interface, so it is safe to access the registers in a raw
         // fashion.
         let regs = unsafe { &*hal::stm32::QUADSPI::ptr() };
@@ -145,13 +145,14 @@ impl<'a> ProfileBuilder<'a> {
     /// * `acr` - If provided, indicates the amplitude control register for the channels. The
     ///   24-bits of the ACR should be stored in the last 3 LSB.
     #[allow(dead_code)]
+    #[inline]
     pub fn update_channels(
-        mut self,
-        channels: &[Channel],
+        &mut self,
+        channels: Channel,
         ftw: Option<u32>,
         pow: Option<u16>,
         acr: Option<u32>,
-    ) -> Self {
+    ) -> &mut Self {
         self.serializer.update_channels(channels, ftw, pow, acr);
         self
     }
@@ -159,8 +160,7 @@ impl<'a> ProfileBuilder<'a> {
     /// Write the profile to the DDS asynchronously.
     #[allow(dead_code)]
     #[inline]
-    pub fn write_profile(mut self) {
-        let profile = self.serializer.finalize();
-        self.dds_output.write_profile(profile);
+    pub fn write(&mut self) {
+        self.dds_output.write(self.serializer.finalize());
     }
 }
