@@ -866,11 +866,11 @@ pub fn setup(
                 // there is additional margin.
                 hrtimer.configure_single_shot(
                     pounder::hrtimer::Channel::Two,
-                    design_parameters::POUNDER_IO_UPDATE_DURATION,
                     design_parameters::POUNDER_IO_UPDATE_DELAY,
+                    design_parameters::POUNDER_IO_UPDATE_DURATION,
                 );
 
-                // Ensure that we have enough time for an IO-update every sample.
+                // Ensure that we have enough time for an IO-update every batch.
                 let sample_frequency = {
                     design_parameters::TIMER_FREQUENCY.to_Hz() as f32
                         / sample_ticks as f32
@@ -878,7 +878,8 @@ pub fn setup(
 
                 let sample_period = 1.0 / sample_frequency;
                 assert!(
-                    sample_period > design_parameters::POUNDER_IO_UPDATE_DELAY
+                    sample_period * batch_size as f32
+                        > design_parameters::POUNDER_IO_UPDATE_DELAY
                 );
 
                 hrtimer
