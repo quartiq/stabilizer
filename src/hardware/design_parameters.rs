@@ -22,7 +22,7 @@ pub const POUNDER_QSPI_FREQUENCY: MegaHertz = MegaHertz::MHz(50);
 // with 2 cycles required per byte, coming out to a total of 64 QSPI clock cycles.
 // The QSPI is configured for 50MHz, so this comes out to an offset
 // of 1280 ns. We use 1300 ns to be safe.
-pub const POUNDER_IO_UPDATE_DELAY: f32 = 1300e-9;
+pub const POUNDER_IO_UPDATE_DELAY: f32 = 1_300e-9;
 
 /// The duration to assert IO_Update for the pounder DDS.
 // IO_Update should be latched for 4 SYNC_CLK cycles after the QSPI profile write. With pounder
