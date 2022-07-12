@@ -884,7 +884,6 @@ version = "0.6.0"
 dependencies = [
  "ad9959",
  "asm-delay",
- "bitflags",
  "cortex-m 0.7.5",
  "cortex-m-rt",
  "cortex-m-rtic",
