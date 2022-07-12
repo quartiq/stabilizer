@@ -866,8 +866,8 @@ pub fn setup(
                 // there is additional margin.
                 hrtimer.configure_single_shot(
                     pounder::hrtimer::Channel::Two,
-                    design_parameters::POUNDER_IO_UPDATE_DURATION,
                     design_parameters::POUNDER_IO_UPDATE_DELAY,
+                    design_parameters::POUNDER_IO_UPDATE_DURATION,
                 );
 
                 // Ensure that we have enough time for an IO-update every batch.
