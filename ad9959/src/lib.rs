@@ -600,7 +600,7 @@ impl ProfileSerializer {
     /// # Returns
     /// A slice of `u32` words representing the serialized profile.
     #[inline]
-    pub fn finalize<'a>(&'a mut self) -> &'a [u32] {
+    pub fn finalize(&mut self) -> &[u32] {
         self.pad();
         bytemuck::cast_slice(&self.data[..self.index])
     }
