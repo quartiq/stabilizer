@@ -438,21 +438,21 @@ mod app {
         ethernet_link::Monotonic::spawn_after(1.secs()).unwrap();
     }
 
-    #[task(priority = 1, shared=[ltc2320])]
+    #[task(priority = 2, shared=[ltc2320])]
     fn ltc2320_start_conversion(mut c: ltc2320_start_conversion::Context) {
         // schedule next conversion for 1 Hz sample rate
-        ltc2320_start_conversion::Monotonic::spawn_after(1.secs()).unwrap();
+        ltc2320_start_conversion::Monotonic::spawn_after(500.micros()).unwrap();
         c.shared.ltc2320.lock(|ltc| ltc.start_conversion()).unwrap(); // panic if LTC2320 timer is already running
     }
 
-    #[task(binds = TIM7, priority = 1, shared=[ltc2320])]
+    #[task(binds = TIM7, priority = 2, shared=[ltc2320])]
     fn ltc2320_conv_done(mut c: ltc2320_conv_done::Context) {
         c.shared
             .ltc2320
             .lock(|ltc| ltc.handle_conv_done_irq().unwrap()); // panic if last QSPI transfer not complete
     }
 
-    #[task(binds = QUADSPI, priority = 1, shared=[ltc2320, ltc2320_data])]
+    #[task(binds = QUADSPI, priority = 2, shared=[ltc2320, ltc2320_data])]
     fn ltc2320_transfer_done(c: ltc2320_transfer_done::Context) {
         (c.shared.ltc2320, c.shared.ltc2320_data).lock(|ltc, data| {
             ltc.handle_transfer_done_irq(data);

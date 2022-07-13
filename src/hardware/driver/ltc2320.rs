@@ -25,7 +25,7 @@ use core::ptr;
 use fugit::Hertz;
 
 #[derive(Copy, Clone, Debug)]
-pub struct TimerRunningError;
+pub struct TimerBusyError;
 
 pub struct Ltc2320Pins {
     pub spi: (
@@ -91,14 +91,14 @@ impl Ltc2320 {
         }
     }
 
-    /// et nCNV low and setup timer to wait for 450 ns.
+    /// Set nCNV low and setup timer to wait for TCONV.
     /// Note that the CPU overhead for handling the irq leads to additional delay.
-    pub fn start_conversion(&mut self) -> Result<(), TimerRunningError> {
+    pub fn start_conversion(&mut self) -> Result<(), TimerBusyError> {
         self.cnv.set_low();
         // check if the timer is running
         let cr1 = self.timer.inner().cr1.read();
         if cr1.cen().bit() == true {
-            return Err(TimerRunningError);
+            return Err(TimerBusyError);
         }
         self.timer.start(Ltc2320::TCONV.into_rate());
         Ok(())
