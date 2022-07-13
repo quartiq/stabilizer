@@ -5,12 +5,13 @@
 ///!
 ///! This driver is intended to be used in the following manner:
 ///! 1. Trigger a new LTC2320 conversion with start_conversion(). This sets nCNV low and starts
-///!    a hardware timer to trigger en interrupt when TCONV has passed.
+///!    a hardware timer to trigger an interrupt when TCONV has passed.
 ///! 2. Call handle_conv_done_irq() in the timer ISR to stop and reset the timer and start the
 ///!    QSPI readout. The QSPI peripheral will trigger another interrupt once that transfer is done.
 ///! 3. Call handle_transfer_done_irq() in the QSPI ISR to retrieve the ADC data and set nCNV high again.
 ///!
-///! Restarting conversions faster than (T_readout + TCONV + TCNVH) can lead to undefiened behaviour!
+///! Only works under the following condition:
+///! Conversions are not restarted faster than (T_readout + TCONV + TCNVH + readout/irq CPU overhead).
 use super::super::hal::{
     device::QUADSPI,
     gpio::{self, gpiob, gpioc, gpioe},
@@ -18,9 +19,13 @@ use super::super::hal::{
     rcc, stm32,
     time::NanoSeconds,
     timer::{self, Timer},
-    xspi::{Qspi, QspiMode, XspiExt},
+    xspi::{Qspi, QspiError, QspiMode, XspiExt},
 };
 use core::ptr;
+use fugit::Hertz;
+
+#[derive(Copy, Clone, Debug)]
+pub struct TimerRunningError;
 
 pub struct Ltc2320Pins {
     pub spi: (
@@ -40,18 +45,20 @@ pub struct Ltc2320 {
 }
 
 impl Ltc2320 {
-    const N_BYTES: usize = 16; // Number of bytes to be transfered. One extra to account for dummy address.
-    const TCONV: u32 = 450; // minimum conversion time according to datasheet
+    const N_BYTES: usize = 16; // Number of bytes to be transfered.
+    const TCONV: NanoSeconds = NanoSeconds::from_ticks(450u32); // minimum conversion time according to datasheet
     pub fn new(
         clocks: &rcc::CoreClocks,
         qspi_rec: rcc::rec::Qspi,
         qspi_peripheral: stm32::QUADSPI,
+        qspi_frequency: Hertz<u32>,
         timer_rec: rcc::rec::Tim7,
         timer_peripheral: stm32::TIM7,
+        timer_frequency: Hertz<u32>,
         mut pins: Ltc2320Pins,
     ) -> Self {
         let mut qspi =
-            qspi_peripheral.bank2(pins.spi, 1u32.MHz(), clocks, qspi_rec);
+            qspi_peripheral.bank2(pins.spi, qspi_frequency, clocks, qspi_rec);
         qspi.configure_mode(QspiMode::OneBit).unwrap();
         qspi.is_busy().unwrap(); // panic if qspi busy
         qspi.inner_mut().ccr.modify(|_, w| unsafe {
@@ -72,9 +79,10 @@ impl Ltc2320 {
             |_, w| w.tcie().bit(true), // enable transfer complete interrupt
         );
         pins.cnv.set_high();
-        let mut timer = timer_peripheral.timer(400.MHz(), timer_rec, clocks);
+        // Setup timer with dummy timeout. Timer tick frequency updated below.
+        let mut timer = timer_peripheral.timer(1.kHz(), timer_rec, clocks);
         timer.pause();
-        timer.reset_counter();
+        timer.set_tick_freq(timer_frequency);
         timer.listen(timer::Event::TimeOut);
         Self {
             qspi,
@@ -83,23 +91,29 @@ impl Ltc2320 {
         }
     }
 
-    /// set nCNV low and setup timer to wait for 450 ns
-    pub fn start_conversion(&mut self) {
+    /// et nCNV low and setup timer to wait for 450 ns.
+    /// Note that the CPU overhead for handling the irq leads to additional delay.
+    pub fn start_conversion(&mut self) -> Result<(), TimerRunningError> {
         self.cnv.set_low();
-        self.timer
-            .start(NanoSeconds::from_ticks(Ltc2320::TCONV).into_rate())
+        // check if the timer is running
+        let cr1 = self.timer.inner().cr1.read();
+        if cr1.cen().bit() == true {
+            return Err(TimerRunningError);
+        }
+        self.timer.start(Ltc2320::TCONV.into_rate());
+        Ok(())
     }
 
-    /// clear timer interrupt start qspi read of ADC data
-    pub fn handle_conv_done_irq(&mut self) {
+    /// Clear timer interrupt start QSPI read of ADC data.
+    pub fn handle_conv_done_irq(&mut self) -> Result<(), QspiError> {
         self.timer.pause();
         self.timer.reset_counter();
         self.timer.clear_irq();
-        // zero dummy address due to qspi silicon bug
-        self.qspi.begin_read(0, Ltc2320::N_BYTES).unwrap();
+        // zero dummy address due to QSPI silicon bug
+        self.qspi.begin_read(0, Ltc2320::N_BYTES)
     }
 
-    /// set nCNV high, readout qspi buffer, bitshuffle
+    /// Set nCNV high, readout QSPI buffer, bitshuffle.
     pub fn handle_transfer_done_irq(&mut self, data: &mut [u16]) {
         self.cnv.set_high(); // TCNVH: has to be high for at least 30 ns (8 cycles)
         self.qspi.inner_mut().fcr.modify(

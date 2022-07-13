@@ -236,7 +236,7 @@ pub fn setup(
         }
 
         static LOGGER: rtt_logger::RTTLogger =
-            rtt_logger::RTTLogger::new(log::LevelFilter::Info);
+            rtt_logger::RTTLogger::new(log::LevelFilter::Debug);
         log::set_logger(&LOGGER)
             .map(|()| log::set_max_level(log::LevelFilter::Trace))
             .unwrap();
@@ -954,8 +954,10 @@ pub fn setup(
             &ccdr.clocks,
             ccdr.peripheral.QSPI,
             device.QUADSPI,
+            design_parameters::DRIVER_QSPI_FREQUENCY.convert(),
             ccdr.peripheral.TIM7,
             device.TIM7,
+            design_parameters::TIMER_FREQUENCY.convert(),
             ltc2320_pins,
         );
         (None, Some(driver::DriverDevices { ltc2320 }))

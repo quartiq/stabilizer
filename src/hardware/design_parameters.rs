@@ -17,6 +17,9 @@ pub const TIMER_PERIOD: f32 = 1. / (TIMER_FREQUENCY.to_Hz() as f32);
 /// The QSPI frequency for communicating with the pounder DDS.
 pub const POUNDER_QSPI_FREQUENCY: MegaHertz = MegaHertz::MHz(50);
 
+/// The QSPI frequency for LTC2320 readout.
+pub const DRIVER_QSPI_FREQUENCY: MegaHertz = MegaHertz::MHz(1);
+
 /// The delay after initiating a QSPI transfer before asserting the IO_Update for the pounder DDS.
 // Pounder Profile writes are up to 16 bytes, with 2 cycles required per byte, coming out to a
 // total of 32 QSPI clock cycles. The QSPI is configured for 50MHz, so this comes out to an offset

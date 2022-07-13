@@ -442,13 +442,14 @@ mod app {
     fn ltc2320_start_conversion(mut c: ltc2320_start_conversion::Context) {
         // schedule next conversion for 1 Hz sample rate
         ltc2320_start_conversion::Monotonic::spawn_after(1.secs()).unwrap();
-        log::info!("start conversion");
-        c.shared.ltc2320.lock(|ltc| ltc.start_conversion());
+        c.shared.ltc2320.lock(|ltc| ltc.start_conversion()).unwrap(); // panic if LTC2320 timer is already running
     }
 
     #[task(binds = TIM7, priority = 1, shared=[ltc2320])]
     fn ltc2320_conv_done(mut c: ltc2320_conv_done::Context) {
-        c.shared.ltc2320.lock(|ltc| ltc.handle_conv_done_irq());
+        c.shared
+            .ltc2320
+            .lock(|ltc| ltc.handle_conv_done_irq().unwrap()); // panic if last QSPI transfer not complete
     }
 
     #[task(binds = QUADSPI, priority = 1, shared=[ltc2320, ltc2320_data])]
