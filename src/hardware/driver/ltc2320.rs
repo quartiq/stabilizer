@@ -4,21 +4,20 @@
 ///! https://www.st.com/resource/en/errata_sheet/es0392-stm32h742xig-and-stm32h743xig-device-limitations-stmicroelectronics.pdf
 ///!
 ///! This driver is intended to be used in the following manner:
-///! 1. Trigger a new LTC2320 conversion with start_conversion(). This sets nCNV low and starts
-///!    a hardware timer to trigger an interrupt when TCONV has passed.
-///! 2. Call handle_conv_done_irq() in the timer ISR to stop and reset the timer and start the
-///!    QSPI readout. The QSPI peripheral will trigger another interrupt once that transfer is done.
-///! 3. Call handle_transfer_done_irq() in the QSPI ISR to retrieve the ADC data and set nCNV high again.
+///! 1. Trigger a new LTC2320 conversion with start_conversion(). This sets nCNV low and waits until TCONV has passed.
+///!    Then it pases the timer and starts the qspi readout.
+///! 2. Call handle_transfer_done_irq() in the QSPI ISR to retrieve the ADC data and set nCNV high again.
 ///!
 ///! Only works under the following condition:
 ///! Conversions are not restarted faster than (T_readout + TCONV + TCNVH + readout/irq CPU overhead).
+///! You will always see an error
 use super::super::hal::{
     device::QUADSPI,
     gpio::{self, gpiob, gpioc, gpioe},
     prelude::*,
     rcc, stm32,
     time::NanoSeconds,
-    timer::{self, Timer},
+    timer::Timer,
     xspi::{Qspi, QspiError, QspiMode, XspiExt},
 };
 use core::ptr;
@@ -118,18 +117,11 @@ impl Ltc2320 {
             .map_err(|err| err.into())
     }
 
-    /// Clear timer interrupt start QSPI read of ADC data.
-    pub fn handle_conv_done_irq(&mut self) -> Result<(), QspiError> {
-        self.timer.pause();
-        self.timer.reset_counter();
-        self.timer.clear_irq();
-        // zero dummy address due to QSPI silicon bug
-        self.qspi.begin_read(0, Ltc2320::N_BYTES)
-    }
-
     /// Set nCNV high, readout QSPI buffer, bitshuffle.
     pub fn handle_transfer_done_irq(&mut self, data: &mut [u16]) {
-        self.cnv.set_high(); // TCNVH: has to be high for at least 30 ns (8 cycles)
+        // TCNVH: has to be high for at least 30 ns.
+        // Given at normal MCU clockspeeds since this function takes > 10 cycles.
+        self.cnv.set_high();
         self.qspi.inner_mut().fcr.modify(
             |_, w| w.ctcf().bit(true), // clear transfer complete flag
         );
