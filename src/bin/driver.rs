@@ -455,12 +455,12 @@ mod app {
         .unwrap();
     }
 
-    #[task(binds = TIM7, priority = 2, shared=[ltc2320])]
-    fn ltc2320_conv_done(mut c: ltc2320_conv_done::Context) {
-        c.shared
-            .ltc2320
-            .lock(|ltc| ltc.handle_conv_done_irq().unwrap()); // panic if last QSPI transfer not complete
-    }
+    // #[task(binds = TIM7, priority = 2, shared=[ltc2320])]
+    // fn ltc2320_conv_done(mut c: ltc2320_conv_done::Context) {
+    //     c.shared
+    //         .ltc2320
+    //         .lock(|ltc| ltc.handle_conv_done_irq().unwrap()); // panic if last QSPI transfer not complete
+    // }
 
     #[task(binds = QUADSPI, priority = 2, shared=[ltc2320, ltc2320_data])]
     fn ltc2320_transfer_done(c: ltc2320_transfer_done::Context) {

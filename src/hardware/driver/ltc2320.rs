@@ -23,9 +23,19 @@ use super::super::hal::{
 };
 use core::ptr;
 use fugit::Hertz;
+use nb::block;
 
 #[derive(Copy, Clone, Debug)]
-pub struct TimerBusyError;
+pub enum Error<E> {
+    TimerBusyError,
+    QspiError(E),
+}
+
+impl<E> From<E> for Error<E> {
+    fn from(err: E) -> Error<E> {
+        Error::QspiError(err)
+    }
+}
 
 pub struct Ltc2320Pins {
     pub spi: (
@@ -83,7 +93,7 @@ impl Ltc2320 {
         let mut timer = timer_peripheral.timer(1.kHz(), timer_rec, clocks);
         timer.pause();
         timer.set_tick_freq(timer_frequency);
-        timer.listen(timer::Event::TimeOut);
+        // timer.listen(timer::Event::TimeOut);
         Self {
             qspi,
             cnv: pins.cnv,
@@ -93,15 +103,19 @@ impl Ltc2320 {
 
     /// Set nCNV low and setup timer to wait for TCONV.
     /// Note that the CPU overhead for handling the irq leads to additional delay.
-    pub fn start_conversion(&mut self) -> Result<(), TimerBusyError> {
+    pub fn start_conversion(&mut self) -> Result<(), Error<QspiError>> {
         self.cnv.set_low();
         // check if the timer is running
         let cr1 = self.timer.inner().cr1.read();
         if cr1.cen().bit() == true {
-            return Err(TimerBusyError);
+            return Err(Error::TimerBusyError);
         }
         self.timer.start(Ltc2320::TCONV.into_rate());
-        Ok(())
+        block!(self.timer.wait()).ok();
+        self.timer.pause();
+        self.qspi
+            .begin_read(0, Ltc2320::N_BYTES)
+            .map_err(|err| err.into())
     }
 
     /// Clear timer interrupt start QSPI read of ADC data.
