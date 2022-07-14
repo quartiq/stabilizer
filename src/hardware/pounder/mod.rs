@@ -7,7 +7,7 @@ pub mod dds_output;
 pub mod hrtimer;
 pub mod rf_power;
 
-#[cfg(feature = "pounder_v1_1")]
+#[cfg(not(feature = "pounder_v1_0"))]
 pub mod timestamp;
 
 pub enum GpioPin {

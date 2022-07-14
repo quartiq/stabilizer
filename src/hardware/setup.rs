@@ -116,7 +116,7 @@ pub struct PounderDevices {
     pub pounder: pounder::PounderDevices,
     pub dds_output: DdsOutput,
 
-    #[cfg(feature = "pounder_v1_1")]
+    #[cfg(not(feature = "pounder_v1_0"))]
     pub timestamper: pounder::timestamp::Timestamper,
 }
 
@@ -821,9 +821,9 @@ pub fn setup(
                 pounder::QspiInterface::new(qspi).unwrap()
             };
 
-            #[cfg(feature = "pounder_v1_1")]
+            #[cfg(not(feature = "pounder_v1_0"))]
             let reset_pin = gpiog.pg6.into_push_pull_output();
-            #[cfg(not(feature = "pounder_v1_1"))]
+            #[cfg(feature = "pounder_v1_0")]
             let reset_pin = gpioa.pa0.into_push_pull_output();
 
             let mut io_update = gpiog.pg7.into_push_pull_output();
@@ -889,7 +889,7 @@ pub fn setup(
             DdsOutput::new(qspi, io_update_trigger, config)
         };
 
-        #[cfg(feature = "pounder_v1_1")]
+        #[cfg(not(feature = "pounder_v1_0"))]
         let pounder_stamper = {
             log::info!("Assuming Pounder v1.1 or later");
             let etr_pin = gpioa.pa0.into_alternate();
@@ -927,7 +927,7 @@ pub fn setup(
             pounder: pounder_devices,
             dds_output,
 
-            #[cfg(feature = "pounder_v1_1")]
+            #[cfg(not(feature = "pounder_v1_0"))]
             timestamper: pounder_stamper,
         })
     } else {

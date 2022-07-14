@@ -63,7 +63,7 @@ version = "0.12.2"
 
 [features]
 nightly = [ ]
-pounder_v1_1 = [ ]
+pounder_v1_0 = [ ]
 
 [profile.dev]
 codegen-units = 1

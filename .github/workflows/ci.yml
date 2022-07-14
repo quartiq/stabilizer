@@ -54,7 +54,7 @@ jobs:
       matrix:
         # keep MSRV in sync in ci.yaml, bors.toml, and setup.md
         toolchain: [stable, '1.59.0']
-        features: ['', pounder_v1_1]
+        features: ['']
         include:
           - toolchain: beta
             features: ''
