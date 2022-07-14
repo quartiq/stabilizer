@@ -12,7 +12,7 @@
 use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
 
-use fugit::ExtU64;
+use fugit::{ExtU64, TimerInstantU64};
 use mutex_trait::prelude::*;
 
 use idsp::iir;
@@ -151,6 +151,8 @@ impl Default for Settings {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
+    use stabilizer::hardware::design_parameters;
+
     use super::*;
 
     #[monotonic(binds = SysTick, default = true, priority = 2)]
@@ -175,6 +177,7 @@ mod app {
         dacs: (Dac0Output, Dac1Output),
         iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
         generator: FrameGenerator,
+        ltc2320_conversion_scheduled: TimerInstantU64<10_000>, // auxillary local variable for exact scheduling
     }
 
     #[init]
@@ -182,7 +185,7 @@ mod app {
         let clock = SystemTimer::new(|| monotonics::now().ticks() as u32);
 
         // Configure the microcontroller
-        let (stabilizer, _pounder, driver) = hardware::setup::setup(
+        let (mut stabilizer, _pounder, driver) = hardware::setup::setup(
             c.core,
             c.device,
             clock,
@@ -237,6 +240,7 @@ mod app {
             dacs: stabilizer.dacs,
             iir_state: [[[0.; 5]; IIR_CASCADE_LENGTH]; 2],
             generator,
+            ltc2320_conversion_scheduled: stabilizer.systick.now(),
         };
 
         // Enable ADC/DAC events
@@ -438,11 +442,17 @@ mod app {
         ethernet_link::Monotonic::spawn_after(1.secs()).unwrap();
     }
 
-    #[task(priority = 2, shared=[ltc2320])]
+    #[task(priority = 2, shared=[ltc2320], local=[ltc2320_conversion_scheduled])]
     fn ltc2320_start_conversion(mut c: ltc2320_start_conversion::Context) {
         // schedule next conversion for 1 Hz sample rate
-        ltc2320_start_conversion::Monotonic::spawn_after(500.micros()).unwrap();
         c.shared.ltc2320.lock(|ltc| ltc.start_conversion()).unwrap(); // panic if LTC2320 timer is already running
+        *c.local.ltc2320_conversion_scheduled =
+            *c.local.ltc2320_conversion_scheduled
+                + design_parameters::LTC2320_PERIOD.convert(); // update time at which the next conversion is scheduled
+        ltc2320_start_conversion::Monotonic::spawn_at(
+            *c.local.ltc2320_conversion_scheduled,
+        )
+        .unwrap();
     }
 
     #[task(binds = TIM7, priority = 2, shared=[ltc2320])]

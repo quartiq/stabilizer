@@ -20,6 +20,10 @@ pub const POUNDER_QSPI_FREQUENCY: MegaHertz = MegaHertz::MHz(50);
 /// The QSPI frequency for LTC2320 readout.
 pub const DRIVER_QSPI_FREQUENCY: MegaHertz = MegaHertz::MHz(1);
 
+/// Driver LTC2320 sampling period
+pub const LTC2320_PERIOD: fugit::MicrosDurationU64 =
+    fugit::MicrosDurationU64::micros(500);
+
 /// The delay after initiating a QSPI transfer before asserting the IO_Update for the pounder DDS.
 // Pounder Profile writes are up to 16 bytes, with 2 cycles required per byte, coming out to a
 // total of 32 QSPI clock cycles. The QSPI is configured for 50MHz, so this comes out to an offset
