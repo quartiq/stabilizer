@@ -126,6 +126,7 @@ impl Ltc2320 {
             |_, w| w.ctcf().bit(true), // clear transfer complete flag
         );
         // Read data from the FIFO.
+        // Should ultimately be 32 bit reads into a bytemuck::cast_slice_mut(data).
         unsafe {
             for location in data {
                 *location = ptr::read_volatile(
