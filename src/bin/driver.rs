@@ -27,6 +27,7 @@ use stabilizer::{
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
+        MONOTONIC_FREQUENCY,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -177,7 +178,7 @@ mod app {
         dacs: (Dac0Output, Dac1Output),
         iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
         generator: FrameGenerator,
-        ltc2320_conversion_scheduled: TimerInstantU64<10_000>, // auxillary local variable for exact scheduling
+        ltc2320_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
     }
 
     #[init]
