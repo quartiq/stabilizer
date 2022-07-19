@@ -92,7 +92,6 @@ impl Ltc2320 {
         let mut timer = timer_peripheral.timer(1.kHz(), timer_rec, clocks);
         timer.pause();
         timer.set_tick_freq(timer_frequency);
-        // timer.listen(timer::Event::TimeOut);
         Self {
             qspi,
             cnv: pins.cnv,

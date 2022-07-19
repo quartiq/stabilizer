@@ -185,7 +185,7 @@ mod app {
         let clock = SystemTimer::new(|| monotonics::now().ticks() as u32);
 
         // Configure the microcontroller
-        let (mut stabilizer, _pounder, driver) = hardware::setup::setup(
+        let (mut stabilizer, mezzanine) = hardware::setup::setup(
             c.core,
             c.device,
             clock,
@@ -210,7 +210,7 @@ mod app {
 
         let settings = Settings::default();
 
-        let driver = driver.unwrap();
+        let driver = mezzanine.unwrap().get_driver();
 
         let shared = Shared {
             network,

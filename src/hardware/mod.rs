@@ -15,6 +15,9 @@ pub mod timers;
 
 mod eeprom;
 
+pub use driver::DriverDevices;
+pub use setup::PounderDevices;
+
 // Type alias for the analog front-end (AFE) for ADC0.
 pub type AFE0 = afe::ProgrammableGainAmplifier<
     hal::gpio::gpiof::PF2<hal::gpio::Output<hal::gpio::PushPull>>,
@@ -57,6 +60,28 @@ pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
 pub const MONOTONIC_FREQUENCY: u32 = 10_000;
 pub type Systick = systick_monotonic::Systick<MONOTONIC_FREQUENCY>;
 pub type SystemTimer = mono_clock::MonoClock<u32, MONOTONIC_FREQUENCY>;
+
+// Define possible Stabilizer Mezzanines
+pub enum Mezzanine {
+    Pounder(PounderDevices),
+    Driver(DriverDevices),
+}
+
+impl Mezzanine {
+    pub fn get_pounder(self) -> PounderDevices {
+        match self {
+            Mezzanine::Pounder(pounder) => pounder,
+            _ => panic!("Pounder not found"),
+        }
+    }
+
+    pub fn get_driver(self) -> DriverDevices {
+        match self {
+            Mezzanine::Driver(driver) => driver,
+            _ => panic!("Driver not found"),
+        }
+    }
+}
 
 #[inline(never)]
 #[panic_handler]

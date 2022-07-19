@@ -3,6 +3,7 @@
 ///! This file contains all of the hardware-specific configuration of Stabilizer.
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{ptr, slice};
+use driver::DriverDevices;
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
@@ -11,6 +12,8 @@ use stm32h7xx_hal::{
 };
 
 use smoltcp_nal::smoltcp;
+
+use crate::hardware::Mezzanine;
 
 use super::{
     adc, afe, dac, design_parameters, driver, eeprom,
@@ -195,11 +198,7 @@ pub fn setup(
     clock: SystemTimer,
     batch_size: usize,
     sample_ticks: u32,
-) -> (
-    StabilizerDevices,
-    Option<PounderDevices>,
-    Option<driver::DriverDevices>,
-) {
+) -> (StabilizerDevices, Option<Mezzanine>) {
     // Set up RTT logging
     {
         // Enable debug during WFE/WFI-induced sleep
@@ -728,7 +727,7 @@ pub fn setup(
     // Measure the Pounder PGOOD output to detect if pounder is present on Stabilizer.
     let pounder_pgood = gpiob.pb13.into_pull_down_input();
     delay.delay_ms(2u8);
-    let (pounder, driver) = if pounder_pgood.is_high() {
+    let mezzanine = if pounder_pgood.is_high() {
         log::info!("Found Pounder");
 
         let io_expander = {
@@ -927,16 +926,13 @@ pub fn setup(
             )
         };
 
-        (
-            Some(PounderDevices {
-                pounder: pounder_devices,
-                dds_output,
+        Some(Mezzanine::Pounder(PounderDevices {
+            pounder: pounder_devices,
+            dds_output,
 
-                #[cfg(feature = "pounder_v1_1")]
-                timestamper: pounder_stamper,
-            }),
-            None,
-        )
+            #[cfg(feature = "pounder_v1_1")]
+            timestamper: pounder_stamper,
+        }))
     // If Driver detected
     } else if true {
         log::info!("driver init");
@@ -960,9 +956,9 @@ pub fn setup(
             design_parameters::TIMER_FREQUENCY.convert(),
             ltc2320_pins,
         );
-        (None, Some(driver::DriverDevices { ltc2320 }))
+        Some(Mezzanine::Driver(DriverDevices { ltc2320 }))
     } else {
-        (None, None)
+        None
     };
 
     let stabilizer = StabilizerDevices {
@@ -982,5 +978,5 @@ pub fn setup(
     // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
     log::info!("setup() complete");
 
-    (stabilizer, pounder, driver)
+    (stabilizer, mezzanine)
 }
