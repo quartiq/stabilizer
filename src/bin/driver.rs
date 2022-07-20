@@ -152,7 +152,7 @@ impl Default for Settings {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
-    use stabilizer::hardware::design_parameters;
+    use stabilizer::hardware::{design_parameters, driver::OutputChannelIdx};
 
     use super::*;
 
@@ -167,6 +167,7 @@ mod app {
         signal_generator: [SignalGenerator; 2],
         ltc2320: driver::ltc2320::Ltc2320,
         ltc2320_data: [u16; 8],
+        adc_internal: driver::adc_internal::AdcInternal,
     }
 
     #[local]
@@ -231,6 +232,7 @@ mod app {
             ],
             ltc2320: driver.ltc2320,
             ltc2320_data: [0u16; 8],
+            adc_internal: driver.adc_internal,
         };
 
         let mut local = Local {
@@ -418,7 +420,7 @@ mod app {
         c.shared.network.lock(|net| net.direct_stream(target));
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry])]
+    #[task(priority = 1, shared=[network, settings, telemetry, adc_internal])]
     fn telemetry(mut c: telemetry::Context) {
         let telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
@@ -435,6 +437,15 @@ mod app {
         // Schedule the telemetry task in the future.
         telemetry::Monotonic::spawn_after((telemetry_period as u64).secs())
             .unwrap();
+        log::info!(
+            "internal adc values: {:?}",
+            c.shared.adc_internal.lock(|adc| [
+                adc.read_output_current(OutputChannelIdx::Zero),
+                adc.read_output_current(OutputChannelIdx::One),
+                adc.read_output_voltage(OutputChannelIdx::Zero),
+                adc.read_output_voltage(OutputChannelIdx::One),
+            ])
+        );
     }
 
     #[task(priority = 1, shared=[network])]
@@ -459,7 +470,7 @@ mod app {
     fn ltc2320_transfer_done(c: ltc2320_transfer_done::Context) {
         (c.shared.ltc2320, c.shared.ltc2320_data).lock(|ltc, data| {
             ltc.handle_transfer_done_irq(data);
-            log::info!("data: {:?}", data);
+            // log::info!("data: {:?}", data);
         });
     }
 
