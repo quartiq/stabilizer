@@ -13,7 +13,6 @@ use stm32h7xx_hal::{
 
 use smoltcp_nal::smoltcp;
 
-use crate::hardware::driver::adc_internal;
 use crate::hardware::Mezzanine;
 
 use super::{
@@ -582,7 +581,7 @@ pub fn setup(
     let mac_addr = smoltcp::wire::EthernetAddress(eeprom::read_eui48(
         &mut eeprom_i2c,
         &mut delay,
-    ));
+    ).unwrap());
     log::info!("EUI48: {}", mac_addr);
 
     let network_devices = {
@@ -725,23 +724,29 @@ pub fn setup(
     fp_led_2.set_low();
     fp_led_3.set_low();
 
+    let mut i2c1 = {
+        let sda = gpiob.pb7.into_alternate().set_open_drain();
+        let scl = gpiob.pb8.into_alternate().set_open_drain();
+        device.I2C1.i2c(
+            (scl, sda),
+            100.kHz(),
+            ccdr.peripheral.I2C1,
+            &ccdr.clocks,
+        )
+    };
+
+    let driver_mac_addr = eeprom::read_eui48(
+        &mut i2c1, &mut delay,
+    );
+    log::info!("Driver EUI48: {:?}", driver_mac_addr);
+
     // Measure the Pounder PGOOD output to detect if pounder is present on Stabilizer.
     let pounder_pgood = gpiob.pb13.into_pull_down_input();
     delay.delay_ms(2u8);
     let mezzanine = if pounder_pgood.is_high() {
         log::info!("Found Pounder");
 
-        let io_expander = {
-            let sda = gpiob.pb7.into_alternate().set_open_drain();
-            let scl = gpiob.pb8.into_alternate().set_open_drain();
-            let i2c1 = device.I2C1.i2c(
-                (scl, sda),
-                400.kHz(),
-                ccdr.peripheral.I2C1,
-                &ccdr.clocks,
-            );
-            mcp23017::MCP23017::default(i2c1).unwrap()
-        };
+        let io_expander = mcp23017::MCP23017::default(i2c1).unwrap();
 
         let spi = {
             let mosi = gpiod.pd7.into_alternate();

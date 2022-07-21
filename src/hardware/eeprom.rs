@@ -6,7 +6,10 @@ const I2C_ADDR: u8 = 0x50;
 // The MAC address is stored in the last 6 bytes of the 256 byte address space.
 const MAC_POINTER: u8 = 0xFA;
 
-pub fn read_eui48<T>(i2c: &mut T, delay: &mut impl DelayMs<u8>) -> [u8; 6]
+#[derive(Copy, Clone, Debug)]
+pub struct EuiReadError;
+
+pub fn read_eui48<T>(i2c: &mut T, delay: &mut impl DelayMs<u8>) -> Result<[u8; 6], EuiReadError>
 where
     T: WriteRead,
 {
@@ -25,7 +28,7 @@ where
         {
             if let Some(old_read) = previous_read {
                 if old_read == buffer {
-                    return buffer;
+                    return Ok(buffer);
                 }
             }
 
@@ -38,5 +41,5 @@ where
         delay.delay_ms(100);
     }
 
-    panic!("Failed to read MAC address");
+    Err(EuiReadError)
 }
