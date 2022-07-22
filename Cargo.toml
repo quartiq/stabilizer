@@ -60,7 +60,7 @@ enum-iterator = "0.7.0"
 microchip-24aa02e48 = {path = "../microchip-24aa02e48"}
 
 [dependencies.stm32h7xx-hal]
-features = ["stm32h743v", "rt", "ethernet", "xspi"]
+features = ["stm32h743v", "rt", "ethernet", "xspi", "log"]
 version = "0.12.2"
 
 [features]

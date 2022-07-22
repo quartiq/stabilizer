@@ -581,6 +581,7 @@ pub fn setup(
     let mac_addr = smoltcp::wire::EthernetAddress(eeprom::read_eui48(
         &mut eeprom_i2c,
         &mut delay,
+        40 // Try a maximum of 40 times to account for turn-on transients.
     ).unwrap());
     log::info!("EUI48: {}", mac_addr);
 
@@ -736,7 +737,7 @@ pub fn setup(
     };
 
     let driver_mac_addr = eeprom::read_eui48(
-        &mut i2c1, &mut delay,
+        &mut i2c1, &mut delay, 1 // just try once
     );
     log::info!("Driver EUI48: {:?}", driver_mac_addr);
 

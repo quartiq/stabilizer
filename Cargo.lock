@@ -960,6 +960,7 @@ dependencies = [
  "embedded-dma",
  "embedded-hal",
  "fugit",
+ "log",
  "nb 1.0.0",
  "paste",
  "smoltcp",
