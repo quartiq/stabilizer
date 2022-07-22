@@ -408,6 +408,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33a33a362ce288760ec6a508b94caaec573ae7d3bbbd91b87aa0bad4456839db"
 
 [[package]]
+name = "lm75"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f05acdc7a7d6da7b9be48c2d1de2f9757d37d3a83564aa82b4ae6d7ad15d0db6"
+dependencies = [
+ "embedded-hal",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -446,13 +455,6 @@ name = "memchr"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
-
-[[package]]
-name = "microchip-24aa02e48"
-version = "0.1.0"
-dependencies = [
- "embedded-hal",
-]
 
 [[package]]
 name = "miniconf"
@@ -844,6 +846,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared-bus-rtic"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb1899470d03c5728db375f63be8f2bbfb93d8c35ec932061f3b593434c2273b"
+dependencies = [
+ "embedded-hal",
+ "nb 1.0.0",
+]
+
+[[package]]
 name = "smlang"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -911,9 +923,9 @@ dependencies = [
  "fugit",
  "heapless",
  "idsp",
+ "lm75",
  "log",
  "mcp23017",
- "microchip-24aa02e48",
  "miniconf",
  "minimq",
  "mono-clock",
@@ -925,6 +937,7 @@ dependencies = [
  "rtt-target",
  "serde",
  "serde-json-core",
+ "shared-bus-rtic",
  "smoltcp-nal",
  "stm32h7xx-hal",
  "systick-monotonic",

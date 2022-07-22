@@ -3,7 +3,7 @@
 ///! This file contains all of the hardware-specific configuration of Stabilizer.
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{ptr, slice};
-use driver::DriverDevices;
+use driver::{DriverDevices, DriverI2cDevices};
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
@@ -13,6 +13,7 @@ use stm32h7xx_hal::{
 
 use smoltcp_nal::smoltcp;
 
+use crate::hardware::driver::relays;
 use crate::hardware::Mezzanine;
 
 use super::{
@@ -578,11 +579,14 @@ pub fn setup(
         )
     };
 
-    let mac_addr = smoltcp::wire::EthernetAddress(eeprom::read_eui48(
-        &mut eeprom_i2c,
-        &mut delay,
-        40 // Try a maximum of 40 times to account for turn-on transients.
-    ).unwrap());
+    let mac_addr = smoltcp::wire::EthernetAddress(
+        eeprom::read_eui48(
+            &mut eeprom_i2c,
+            &mut delay,
+            40, // Try a maximum of 40 times to account for turn-on transients.
+        )
+        .unwrap(),
+    );
     log::info!("EUI48: {}", mac_addr);
 
     let network_devices = {
@@ -737,7 +741,7 @@ pub fn setup(
     };
 
     let driver_mac_addr = eeprom::read_eui48(
-        &mut i2c1, &mut delay, 1 // just try once
+        &mut i2c1, &mut delay, 1, // just try once
     );
     log::info!("Driver EUI48: {:?}", driver_mac_addr);
 
@@ -974,9 +978,23 @@ pub fn setup(
             (device.ADC1, device.ADC2, device.ADC3),
             adc_internal_pins,
         );
+
+        let i2c_manager =
+            shared_bus_rtic::new!(i2c1, hal::i2c::I2c<hal::stm32::I2C1>);
+
+        let driver_i2c_devices = DriverI2cDevices {
+            lm75: lm75::Lm75::new(
+                i2c_manager.acquire(),
+                lm75::Address::default(),
+            ),
+
+            relays: relays::Relays::new(i2c_manager.acquire()),
+        };
+
         Some(Mezzanine::Driver(DriverDevices {
             ltc2320,
             adc_internal,
+            driver_i2c_devices,
         }))
     } else {
         None

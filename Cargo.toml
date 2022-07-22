@@ -57,7 +57,8 @@ rtt-logger = "0.2"
 systick-monotonic = "1.0"
 mono-clock = "0.1"
 enum-iterator = "0.7.0"
-microchip-24aa02e48 = {path = "../microchip-24aa02e48"}
+shared-bus-rtic = "0.2"
+lm75 = "0.2"
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "ethernet", "xspi", "log"]

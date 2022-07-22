@@ -9,7 +9,11 @@ const MAC_POINTER: u8 = 0xFA;
 #[derive(Copy, Clone, Debug)]
 pub struct EuiReadError;
 
-pub fn read_eui48<T>(i2c: &mut T, delay: &mut impl DelayMs<u8>, trys: u8) -> Result<[u8; 6], EuiReadError>
+pub fn read_eui48<T>(
+    i2c: &mut T,
+    delay: &mut impl DelayMs<u8>,
+    trys: u8,
+) -> Result<[u8; 6], EuiReadError>
 where
     T: WriteRead,
 {
