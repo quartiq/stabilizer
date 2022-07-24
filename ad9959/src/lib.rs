@@ -3,6 +3,7 @@
 use bit_field::BitField;
 use bitflags::bitflags;
 use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
+use heapless::Vec;
 
 /// A device driver for the AD9959 direct digital synthesis (DDS) chip.
 ///
@@ -516,8 +517,7 @@ impl<I: Interface> Ad9959<I> {
 /// Represents a means of serializing a DDS profile for writing to a stream.
 pub struct ProfileSerializer {
     // heapless::Vec<u8, 32>, especially its extend_from_slice() is slow
-    data: [u8; 32],
-    index: usize,
+    data: Vec<u8, 32>,
     mode: Mode,
 }
 
@@ -529,8 +529,7 @@ impl ProfileSerializer {
     pub fn new(mode: Mode) -> Self {
         Self {
             mode,
-            data: [0; 32],
-            index: 0,
+            data: Vec::new(),
         }
     }
 
@@ -569,10 +568,8 @@ impl ProfileSerializer {
 
     /// Add a register write to the serialization data.
     fn add_write(&mut self, register: Register, value: &[u8]) {
-        let data = &mut self.data[self.index..];
-        data[0] = register as u8;
-        data[1..][..value.len()].copy_from_slice(value);
-        self.index += value.len() + 1;
+        self.data.push(register as u8).unwrap();
+        self.data.extend_from_slice(value).unwrap();
     }
 
     #[inline]
@@ -580,15 +577,15 @@ impl ProfileSerializer {
         // Pad the buffer to 32-bit (4 byte) alignment by adding dummy writes to CSR and LSRR.
         // In the case of 1 byte padding, this instead pads with 5 bytes as there is no
         // valid single-byte write that could be used.
-        if self.index & 1 != 0 {
+        if self.data.len() & 1 != 0 {
             // Pad with 3 bytes
             self.add_write(Register::LSRR, &[0, 0]);
         }
-        if self.index & 2 != 0 {
+        if self.data.len() & 2 != 0 {
             // Pad with 2 bytes
             self.add_write(Register::CSR, &[self.mode as _]);
         }
-        debug_assert_eq!(self.index & 3, 0);
+        debug_assert_eq!(self.data.len() & 3, 0);
     }
 
     /// Get the serialized profile as a slice of 32-bit words.
@@ -602,6 +599,6 @@ impl ProfileSerializer {
     #[inline]
     pub fn finalize(&mut self) -> &[u32] {
         self.pad();
-        bytemuck::cast_slice(&self.data[..self.index])
+        bytemuck::cast_slice(&self.data.as_slice())
     }
 }
