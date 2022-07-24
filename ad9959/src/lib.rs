@@ -516,9 +516,9 @@ impl<I: Interface> Ad9959<I> {
 
 /// Represents a means of serializing a DDS profile for writing to a stream.
 pub struct ProfileSerializer {
-    // heapless::Vec<u8, 32>, especially its extend_from_slice() is slow
+    // Make mode u32 because of https://github.com/japaric/heapless/issues/305
+    mode: u32,
     data: Vec<u8, 32>,
-    mode: Mode,
 }
 
 impl ProfileSerializer {
@@ -528,7 +528,7 @@ impl ProfileSerializer {
     /// * `mode` - The communication mode of the DDS.
     pub fn new(mode: Mode) -> Self {
         Self {
-            mode,
+            mode: mode as u32,
             data: Vec::new(),
         }
     }
