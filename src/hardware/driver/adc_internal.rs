@@ -1,4 +1,5 @@
-// Todo: Scales, Pins
+// This is a dummy driver for the Driver analog reads of the output Voltage and Current.
+// Exact Sacales and Pinout will be filled in once we have HW.
 
 use super::super::hal::{
     adc,
@@ -10,7 +11,7 @@ use super::super::hal::{
 };
 
 const V_REF: f32 = 2.048; // ADC reference voltage
-const R_SENSE: f32 = 0.1; // Driver output current sense resistor
+const R_SENSE: f32 = 0.1; // Driver output current sense resistor (Will maybe be something else on HW)
 
 pub enum AdcChannel {
     OutputVoltage(OutputChannelIdx),
