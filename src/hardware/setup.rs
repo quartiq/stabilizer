@@ -13,13 +13,10 @@ use stm32h7xx_hal::{
 
 use smoltcp_nal::smoltcp;
 
-use crate::hardware::driver::adc_internal;
-use crate::hardware::Mezzanine;
-
 use super::{
     adc, afe, dac, design_parameters, driver, eeprom,
     input_stamper::InputStamper, pounder, pounder::dds_output::DdsOutput,
-    timers, DigitalInput0, DigitalInput1, EthernetPhy, NetworkStack,
+    timers, DigitalInput0, DigitalInput1, EthernetPhy, Mezzanine, NetworkStack,
     SystemTimer, Systick, AFE0, AFE1,
 };
 
@@ -199,7 +196,7 @@ pub fn setup(
     clock: SystemTimer,
     batch_size: usize,
     sample_ticks: u32,
-) -> (StabilizerDevices, Option<Mezzanine>) {
+) -> (StabilizerDevices, Mezzanine) {
     // Set up RTT logging
     {
         // Enable debug during WFE/WFI-induced sleep
@@ -927,18 +924,18 @@ pub fn setup(
             )
         };
 
-        Some(Mezzanine::Pounder(PounderDevices {
+        Mezzanine::Pounder(PounderDevices {
             pounder: pounder_devices,
             dds_output,
 
             #[cfg(feature = "pounder_v1_1")]
             timestamper: pounder_stamper,
-        }))
+        })
     // If Driver detected
     } else if true {
         log::info!("driver init");
         let ltc2320_pins = driver::ltc2320::Ltc2320Pins {
-            spi: (
+            qspi: (
                 gpiob.pb2.into_alternate(),
                 gpioe.pe7.into_alternate(),
                 gpioe.pe8.into_alternate(),
@@ -951,10 +948,6 @@ pub fn setup(
             &ccdr.clocks,
             ccdr.peripheral.QSPI,
             device.QUADSPI,
-            design_parameters::DRIVER_QSPI_FREQUENCY.convert(),
-            ccdr.peripheral.TIM7,
-            device.TIM7,
-            design_parameters::TIMER_FREQUENCY.convert(),
             ltc2320_pins,
         );
         let adc_internal_pins = driver::adc_internal::AdcInternalPins {
@@ -968,12 +961,12 @@ pub fn setup(
             (device.ADC1, device.ADC2, device.ADC3),
             adc_internal_pins,
         );
-        Some(Mezzanine::Driver(DriverDevices {
+        Mezzanine::Driver(DriverDevices {
             ltc2320,
             adc_internal,
-        }))
+        })
     } else {
-        None
+        Mezzanine::None
     };
 
     let stabilizer = StabilizerDevices {

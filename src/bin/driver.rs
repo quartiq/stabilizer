@@ -23,11 +23,12 @@ use stabilizer::{
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
-        driver, hal,
+        design_parameters, driver, hal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
         MONOTONIC_FREQUENCY,
+        driver::OutputChannelIdx
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -152,8 +153,6 @@ impl Default for Settings {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
-    use stabilizer::hardware::{design_parameters, driver::OutputChannelIdx};
-
     use super::*;
 
     #[monotonic(binds = SysTick, default = true, priority = 2)]
@@ -165,9 +164,9 @@ mod app {
         settings: Settings,
         telemetry: TelemetryBuffer,
         signal_generator: [SignalGenerator; 2],
-        ltc2320: driver::ltc2320::Ltc2320,
-        ltc2320_data: [u16; 8],
         adc_internal: driver::adc_internal::AdcInternal,
+        header_adc: driver::ltc2320::Ltc2320,
+        header_adc_data: [u16; 8],
     }
 
     #[local]
@@ -179,7 +178,7 @@ mod app {
         dacs: (Dac0Output, Dac1Output),
         iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
         generator: FrameGenerator,
-        ltc2320_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
+        header_adc_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
     }
 
     #[init]
@@ -212,7 +211,7 @@ mod app {
 
         let settings = Settings::default();
 
-        let driver = mezzanine.unwrap().get_driver();
+        let driver = mezzanine.get_driver();
 
         let shared = Shared {
             network,
@@ -230,9 +229,9 @@ mod app {
                         .unwrap(),
                 ),
             ],
-            ltc2320: driver.ltc2320,
-            ltc2320_data: [0u16; 8],
             adc_internal: driver.adc_internal,
+            header_adc: driver.ltc2320,
+            header_adc_data: [0u16; 8],
         };
 
         let mut local = Local {
@@ -243,7 +242,7 @@ mod app {
             dacs: stabilizer.dacs,
             iir_state: [[[0.; 5]; IIR_CASCADE_LENGTH]; 2],
             generator,
-            ltc2320_conversion_scheduled: stabilizer.systick.now(),
+            header_adc_conversion_scheduled: stabilizer.systick.now(),
         };
 
         // Enable ADC/DAC events
@@ -256,7 +255,7 @@ mod app {
         settings_update::spawn().unwrap();
         telemetry::spawn().unwrap();
         ethernet_link::spawn().unwrap();
-        ltc2320_start_conversion::spawn().unwrap();
+        header_adc_start_conversion::spawn().unwrap();
         start::spawn_after(100.millis()).unwrap();
 
         (shared, local, init::Monotonics(stabilizer.systick))
@@ -454,23 +453,27 @@ mod app {
         ethernet_link::Monotonic::spawn_after(1.secs()).unwrap();
     }
 
-    #[task(priority = 2, shared=[ltc2320], local=[ltc2320_conversion_scheduled])]
-    fn ltc2320_start_conversion(mut c: ltc2320_start_conversion::Context) {
-        c.shared.ltc2320.lock(|ltc| ltc.start_conversion()).unwrap(); // panic if LTC2320 timing is not met
-        *c.local.ltc2320_conversion_scheduled =
-            *c.local.ltc2320_conversion_scheduled
-                + design_parameters::LTC2320_PERIOD.convert(); // update time at which the next conversion is scheduled
-        ltc2320_start_conversion::Monotonic::spawn_at(
-            *c.local.ltc2320_conversion_scheduled,
+    #[task(priority = 2, shared=[header_adc], local=[header_adc_conversion_scheduled])]
+    fn header_adc_start_conversion(
+        mut c: header_adc_start_conversion::Context,
+    ) {
+        c.shared
+            .header_adc
+            .lock(|ltc| ltc.start_conversion())
+            .unwrap(); // panic if header_adc timing is not met
+        *c.local.header_adc_conversion_scheduled +=
+            design_parameters::HEADER_ADC_PERIOD.convert(); // update time at which the next conversion is scheduled
+        header_adc_start_conversion::Monotonic::spawn_at(
+            *c.local.header_adc_conversion_scheduled,
         )
         .unwrap();
     }
 
-    #[task(binds = QUADSPI, priority = 2, shared=[ltc2320, ltc2320_data])]
-    fn ltc2320_transfer_done(c: ltc2320_transfer_done::Context) {
-        (c.shared.ltc2320, c.shared.ltc2320_data).lock(|ltc, data| {
-            ltc.handle_transfer_done_irq(data);
-            // log::info!("data: {:?}", data);
+    #[task(binds = QUADSPI, priority = 2, shared=[header_adc, header_adc_data])]
+    fn header_adc_transfer_done(c: header_adc_transfer_done::Context) {
+        (c.shared.header_adc, c.shared.header_adc_data).lock(|ltc, data| {
+            ltc.handle_transfer_done(data);
+            log::info!("data: {:?}", data);
         });
     }
 
