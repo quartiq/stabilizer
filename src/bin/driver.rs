@@ -1,30 +1,10 @@
-//! # Dual IIR
+//! # Driver
 //!
-//! The Dual IIR application exposes two configurable channels. Stabilizer samples input at a fixed
-//! rate, digitally filters the data, and then generates filtered output signals on the respective
-//! channel outputs.
+//! Firmware for "Driver", an intelligent, high performance laser current driver.
+//! Driver is a mezzanine module to Stabilizer, on which the firmware is deployed.
 //!
-//! ## Features
-//! * Two indpenendent channels
-//! * up to 800 kHz rate, timed sampling
-//! * Run-time filter configuration
-//! * Input/Output data streaming
-//! * Down to 2 µs latency
-//! * f32 IIR math
-//! * Generic biquad (second order) IIR filter
-//! * Anti-windup
-//! * Derivative kick avoidance
-//!
-//! ## Settings
-//! Refer to the [Settings] structure for documentation of run-time configurable settings for this
-//! application.
-//!
-//! ## Telemetry
-//! Refer to [Telemetry] for information about telemetry reported by this application.
-//!
-//! ## Livestreaming
-//! This application streams raw ADC and DAC data over UDP. Refer to
-//! [stabilizer::net::data_stream](../stabilizer/net/data_stream/index.html) for more information.
+//! This software is currently just the groundwork for the future developments.
+
 #![deny(warnings)]
 #![no_std]
 #![no_main]
@@ -32,7 +12,7 @@
 use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
 
-use fugit::ExtU64;
+use fugit::{ExtU64, TimerInstantU64};
 use mutex_trait::prelude::*;
 
 use idsp::iir;
@@ -43,10 +23,11 @@ use stabilizer::{
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
-        hal,
+        design_parameters, driver, hal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
+        MONOTONIC_FREQUENCY,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -160,7 +141,7 @@ impl Default for Settings {
             // Force suppress filter output updates.
             force_hold: false,
             // The default telemetry period in seconds.
-            telemetry_period: 10,
+            telemetry_period: 1,
 
             signal_generator: [signal_generator::BasicConfig::default(); 2],
 
@@ -179,10 +160,11 @@ mod app {
     #[shared]
     struct Shared {
         network: NetworkUsers<Settings, Telemetry>,
-
         settings: Settings,
         telemetry: TelemetryBuffer,
         signal_generator: [SignalGenerator; 2],
+        header_adc: driver::ltc2320::Ltc2320,
+        header_adc_data: [u16; 8],
     }
 
     #[local]
@@ -194,6 +176,7 @@ mod app {
         dacs: (Dac0Output, Dac1Output),
         iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
         generator: FrameGenerator,
+        header_adc_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
     }
 
     #[init]
@@ -201,7 +184,7 @@ mod app {
         let clock = SystemTimer::new(|| monotonics::now().ticks() as u32);
 
         // Configure the microcontroller
-        let (stabilizer, _pounder) = hardware::setup::setup(
+        let (mut stabilizer, mezzanine) = hardware::setup::setup(
             c.core,
             c.device,
             clock,
@@ -226,6 +209,8 @@ mod app {
 
         let settings = Settings::default();
 
+        let driver = mezzanine.get_driver();
+
         let shared = Shared {
             network,
             settings,
@@ -242,6 +227,8 @@ mod app {
                         .unwrap(),
                 ),
             ],
+            header_adc: driver.ltc2320,
+            header_adc_data: [0u16; 8],
         };
 
         let mut local = Local {
@@ -252,6 +239,7 @@ mod app {
             dacs: stabilizer.dacs,
             iir_state: [[[0.; 5]; IIR_CASCADE_LENGTH]; 2],
             generator,
+            header_adc_conversion_scheduled: stabilizer.systick.now(),
         };
 
         // Enable ADC/DAC events
@@ -264,6 +252,7 @@ mod app {
         settings_update::spawn().unwrap();
         telemetry::spawn().unwrap();
         ethernet_link::spawn().unwrap();
+        header_adc_start_conversion::spawn().unwrap();
         start::spawn_after(100.millis()).unwrap();
 
         (shared, local, init::Monotonics(stabilizer.systick))
@@ -441,7 +430,6 @@ mod app {
             net.telemetry
                 .publish(&telemetry.finalize(gains[0], gains[1]))
         });
-
         // Schedule the telemetry task in the future.
         telemetry::Monotonic::spawn_after((telemetry_period as u64).secs())
             .unwrap();
@@ -451,6 +439,30 @@ mod app {
     fn ethernet_link(mut c: ethernet_link::Context) {
         c.shared.network.lock(|net| net.processor.handle_link());
         ethernet_link::Monotonic::spawn_after(1.secs()).unwrap();
+    }
+
+    #[task(priority = 2, shared=[header_adc], local=[header_adc_conversion_scheduled])]
+    fn header_adc_start_conversion(
+        mut c: header_adc_start_conversion::Context,
+    ) {
+        c.shared
+            .header_adc
+            .lock(|ltc| ltc.start_conversion())
+            .unwrap(); // panic if header_adc timing is not met
+        *c.local.header_adc_conversion_scheduled +=
+            design_parameters::HEADER_ADC_PERIOD.convert(); // update time at which the next conversion is scheduled
+        header_adc_start_conversion::Monotonic::spawn_at(
+            *c.local.header_adc_conversion_scheduled,
+        )
+        .unwrap();
+    }
+
+    #[task(binds = QUADSPI, priority = 2, shared=[header_adc, header_adc_data])]
+    fn header_adc_transfer_done(c: header_adc_transfer_done::Context) {
+        (c.shared.header_adc, c.shared.header_adc_data).lock(|ltc, data| {
+            ltc.handle_transfer_done(data);
+            log::info!("data: {:?}", data);
+        });
     }
 
     #[task(binds = ETH, priority = 1)]

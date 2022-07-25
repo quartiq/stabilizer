@@ -6,6 +6,7 @@ pub mod adc;
 pub mod afe;
 pub mod dac;
 pub mod design_parameters;
+pub mod driver;
 pub mod input_stamper;
 pub mod pounder;
 pub mod setup;
@@ -13,6 +14,9 @@ pub mod signal_generator;
 pub mod timers;
 
 mod eeprom;
+
+pub use driver::DriverDevices;
+pub use setup::PounderDevices;
 
 // Type alias for the analog front-end (AFE) for ADC0.
 pub type AFE0 = afe::ProgrammableGainAmplifier<
@@ -53,9 +57,33 @@ pub type NetworkManager = smoltcp_nal::shared::NetworkManager<
 pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
 
 /// System timer (RTIC Monotonic) tick frequency
-pub const MONOTONIC_FREQUENCY: u32 = 1_000;
+// Sets maximum rtic scheduling frequency and therefore eg. maximum sample rate for Driver header adc.
+pub const MONOTONIC_FREQUENCY: u32 = 10_000;
 pub type Systick = systick_monotonic::Systick<MONOTONIC_FREQUENCY>;
 pub type SystemTimer = mono_clock::MonoClock<u32, MONOTONIC_FREQUENCY>;
+
+// Define possible Stabilizer Mezzanines
+pub enum Mezzanine {
+    Pounder(PounderDevices),
+    Driver(DriverDevices),
+    None,
+}
+
+impl Mezzanine {
+    pub fn get_pounder(self) -> PounderDevices {
+        match self {
+            Mezzanine::Pounder(pounder) => pounder,
+            _ => panic!("Pounder not found"),
+        }
+    }
+
+    pub fn get_driver(self) -> DriverDevices {
+        match self {
+            Mezzanine::Driver(driver) => driver,
+            _ => panic!("Driver not found"),
+        }
+    }
+}
 
 #[inline(never)]
 #[panic_handler]
