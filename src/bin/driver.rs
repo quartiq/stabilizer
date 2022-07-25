@@ -23,7 +23,7 @@ use stabilizer::{
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
-        driver, hal,
+        design_parameters, driver, hal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
@@ -152,8 +152,6 @@ impl Default for Settings {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
-    use stabilizer::hardware::design_parameters;
-
     use super::*;
 
     #[monotonic(binds = SysTick, default = true, priority = 2)]
@@ -457,7 +455,7 @@ mod app {
     #[task(binds = QUADSPI, priority = 2, shared=[ltc2320, ltc2320_data])]
     fn ltc2320_transfer_done(c: ltc2320_transfer_done::Context) {
         (c.shared.ltc2320, c.shared.ltc2320_data).lock(|ltc, data| {
-            ltc.handle_transfer_done_irq(data);
+            ltc.handle_transfer_done(data);
             log::info!("data: {:?}", data);
         });
     }

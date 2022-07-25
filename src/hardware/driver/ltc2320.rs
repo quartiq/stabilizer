@@ -6,7 +6,7 @@
 ///! This driver is intended to be used in the following manner:
 ///! 1. Trigger a new LTC2320 conversion with start_conversion(). This sets nCNV low and waits until TCONV has passed.
 ///!    Then it pases the timer and starts the qspi readout.
-///! 2. Call handle_transfer_done_irq() in the QSPI ISR to retrieve the ADC data and set nCNV high again.
+///! 2. Call handle_transfer_done() in the QSPI ISR to retrieve the ADC data and set nCNV high again.
 ///!
 ///! Only works under the following condition:
 ///! Conversions are not restarted faster than (T_readout + TCONV + TCNVH + readout/irq CPU overhead).
@@ -14,15 +14,11 @@
 use super::super::hal::{
     device::QUADSPI,
     gpio::{self, gpiob, gpioc, gpioe},
-    prelude::*,
     rcc, stm32,
-    time::NanoSeconds,
-    timer::Timer,
-    xspi::{Qspi, QspiError, QspiMode, XspiExt},
+    time::MegaHertz,
+    xspi::{Event, Qspi, QspiError, QspiMode, XspiExt},
 };
 use core::ptr;
-use fugit::Hertz;
-use nb::block;
 
 #[derive(Copy, Clone, Debug)]
 pub enum Error<E> {
@@ -51,27 +47,30 @@ pub struct Ltc2320Pins {
 pub struct Ltc2320 {
     qspi: Qspi<QUADSPI>,
     cnv: gpioc::PC11<gpio::Output<gpio::PushPull>>,
-    timer: Timer<stm32::TIM7>,
+    delay_cycles: u32, // Number of cycles to wait for an equivalent time of TCONV.
 }
 
 impl Ltc2320 {
     const N_BYTES: usize = 16; // Number of bytes to be transfered.
-    const TCONV: NanoSeconds = NanoSeconds::from_ticks(450u32); // minimum conversion time according to datasheet
-    #[allow(clippy::too_many_arguments)]
+    const TCONV: f32 = 450e-9; // minimum conversion time in seconds according to datasheet
+    /// The QSPI frequency for LTC2320 readout.
+    const DRIVER_QSPI_FREQUENCY: MegaHertz = MegaHertz::MHz(1); // Use slow 1 MHz for now. This will change.
     pub fn new(
         clocks: &rcc::CoreClocks,
         qspi_rec: rcc::rec::Qspi,
         qspi_peripheral: stm32::QUADSPI,
-        qspi_frequency: Hertz<u32>,
-        timer_rec: rcc::rec::Tim7,
-        timer_peripheral: stm32::TIM7,
-        timer_frequency: Hertz<u32>,
         mut pins: Ltc2320Pins,
     ) -> Self {
-        let mut qspi =
-            qspi_peripheral.bank2(pins.spi, qspi_frequency, clocks, qspi_rec);
+        let mut qspi = qspi_peripheral.bank2(
+            pins.spi,
+            Ltc2320::DRIVER_QSPI_FREQUENCY.convert(),
+            clocks,
+            qspi_rec,
+        );
         qspi.configure_mode(QspiMode::OneBit).unwrap();
         qspi.is_busy().unwrap(); // panic if qspi busy
+                                 // qspi.setup_extended() could do the same but is a private function and can therefore not be used.
+                                 // qspi.begin_read_extended() uses setup_extended() but also starts the read right away.
         qspi.inner_mut().ccr.modify(|_, w| unsafe {
             w.dcyc()
                 .bits(0) // set nr dummy cycles to 0 (disable dummy phase)
@@ -86,40 +85,28 @@ impl Ltc2320 {
                 .fmode()
                 .bits(0b01) // indirect read mode
         });
-        qspi.inner_mut().cr.modify(
-            |_, w| w.tcie().bit(true), // enable transfer complete interrupt
-        );
+        qspi.listen(Event::Complete);
         pins.cnv.set_high();
-        // Setup timer with dummy timeout. Timer tick frequency updated below.
-        let mut timer = timer_peripheral.timer(1.kHz(), timer_rec, clocks);
-        timer.pause();
-        timer.set_tick_freq(timer_frequency);
+        // calculate the number of cycles equivalent to TCONV
+        let delay_cycles = (clocks.c_ck().to_Hz() as f32 * Ltc2320::TCONV) as u32;
         Self {
             qspi,
             cnv: pins.cnv,
-            timer,
+            delay_cycles,
         }
     }
 
-    /// Set nCNV low and setup timer to wait for TCONV.
-    /// Note that the CPU overhead for handling the irq leads to additional delay.
+    /// Set nCNV low, wait TCONV and start QSPI transfer.
     pub fn start_conversion(&mut self) -> Result<(), Error<QspiError>> {
         self.cnv.set_low();
-        // check if the timer is running
-        let cr1 = self.timer.inner().cr1.read();
-        if cr1.cen().bit() {
-            return Err(Error::TimerBusyError);
-        }
-        self.timer.start(Ltc2320::TCONV.into_rate());
-        block!(self.timer.wait()).ok();
-        self.timer.pause();
+        cortex_m::asm::delay(self.delay_cycles);
         self.qspi
             .begin_read(0, Ltc2320::N_BYTES)
             .map_err(|err| err.into())
     }
 
     /// Set nCNV high, readout QSPI buffer, bitshuffle.
-    pub fn handle_transfer_done_irq(&mut self, data: &mut [u16]) {
+    pub fn handle_transfer_done(&mut self, data: &mut [u16]) {
         // TCNVH: has to be high for at least 30 ns.
         // Given at normal MCU clockspeeds since this function takes > 10 cycles.
         self.cnv.set_high();
