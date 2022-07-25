@@ -37,6 +37,7 @@ impl<E> From<E> for Error<E> {
 }
 
 pub struct Ltc2320Pins {
+    #[allow(clippy::complexity)]
     pub spi: (
         gpiob::PB2<gpio::Alternate<9>>,
         gpioe::PE7<gpio::Alternate<10>>,
@@ -56,6 +57,7 @@ pub struct Ltc2320 {
 impl Ltc2320 {
     const N_BYTES: usize = 16; // Number of bytes to be transfered.
     const TCONV: NanoSeconds = NanoSeconds::from_ticks(450u32); // minimum conversion time according to datasheet
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         clocks: &rcc::CoreClocks,
         qspi_rec: rcc::rec::Qspi,
@@ -105,7 +107,7 @@ impl Ltc2320 {
         self.cnv.set_low();
         // check if the timer is running
         let cr1 = self.timer.inner().cr1.read();
-        if cr1.cen().bit() == true {
+        if cr1.cen().bit() {
             return Err(Error::TimerBusyError);
         }
         self.timer.start(Ltc2320::TCONV.into_rate());

@@ -446,9 +446,8 @@ mod app {
     #[task(priority = 2, shared=[ltc2320], local=[ltc2320_conversion_scheduled])]
     fn ltc2320_start_conversion(mut c: ltc2320_start_conversion::Context) {
         c.shared.ltc2320.lock(|ltc| ltc.start_conversion()).unwrap(); // panic if LTC2320 timing is not met
-        *c.local.ltc2320_conversion_scheduled =
-            *c.local.ltc2320_conversion_scheduled
-                + design_parameters::LTC2320_PERIOD.convert(); // update time at which the next conversion is scheduled
+        *c.local.ltc2320_conversion_scheduled +=
+            design_parameters::LTC2320_PERIOD.convert(); // update time at which the next conversion is scheduled
         ltc2320_start_conversion::Monotonic::spawn_at(
             *c.local.ltc2320_conversion_scheduled,
         )
