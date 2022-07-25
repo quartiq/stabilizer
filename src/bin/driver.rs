@@ -23,12 +23,13 @@ use stabilizer::{
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
-        design_parameters, driver, hal,
+        design_parameters, driver,
+        driver::OutputChannelIdx,
+        hal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
         MONOTONIC_FREQUENCY,
-        driver::OutputChannelIdx
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
