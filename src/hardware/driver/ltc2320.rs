@@ -4,13 +4,15 @@
 ///! https://www.st.com/resource/en/errata_sheet/es0392-stm32h742xig-and-stm32h743xig-device-limitations-stmicroelectronics.pdf
 ///!
 ///! This driver is intended to be used in the following manner:
-///! 1. Trigger a new LTC2320 conversion with start_conversion(). This sets nCNV low and waits until TCONV has passed.
-///!    Then it pases the timer and starts the qspi readout.
+///! 1. Trigger a new LTC2320 conversion with start_conversion(). This sets nCNV low and waits until TCONV has passed
+///!    and starts the qspi readout.
 ///! 2. Call handle_transfer_done() in the QSPI ISR to retrieve the ADC data and set nCNV high again.
 ///!
 ///! Only works under the following condition:
 ///! Conversions are not restarted faster than (T_readout + TCONV + TCNVH + readout/irq CPU overhead).
-///! You will always see an error
+///!
+///! The driver will always return an error if conversions are re-started too quickly and timings are not met.
+///! The user has to ensure that the QSPI speed and number of lanes are adequate for the sampling period.
 use super::super::hal::{
     device::QUADSPI,
     gpio::{self, gpiob, gpioc, gpioe},
