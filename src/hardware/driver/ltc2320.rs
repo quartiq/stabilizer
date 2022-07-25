@@ -22,18 +22,6 @@ use super::super::hal::{
 };
 use core::ptr;
 
-#[derive(Copy, Clone, Debug)]
-pub enum Error<E> {
-    TimerBusyError,
-    QspiError(E),
-}
-
-impl<E> From<E> for Error<E> {
-    fn from(err: E) -> Error<E> {
-        Error::QspiError(err)
-    }
-}
-
 pub struct Ltc2320Pins {
     #[allow(clippy::complexity)]
     pub qspi: (
@@ -102,12 +90,10 @@ impl Ltc2320 {
     }
 
     /// Set nCNV low, wait TCONV and start QSPI transfer.
-    pub fn start_conversion(&mut self) -> Result<(), Error<QspiError>> {
+    pub fn start_conversion(&mut self) -> Result<(), QspiError> {
         self.cnv.set_low();
         cortex_m::asm::delay(self.tconv_delay_cycles);
-        self.qspi
-            .begin_read(0, Ltc2320::N_BYTES)
-            .map_err(|err| err.into())
+        self.qspi.begin_read(0, Ltc2320::N_BYTES)
     }
 
     /// Set nCNV high, readout QSPI buffer, bitshuffle.
