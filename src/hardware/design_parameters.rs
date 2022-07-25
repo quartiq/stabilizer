@@ -17,9 +17,8 @@ pub const TIMER_PERIOD: f32 = 1. / (TIMER_FREQUENCY.to_Hz() as f32);
 /// The QSPI frequency for communicating with the pounder DDS.
 pub const POUNDER_QSPI_FREQUENCY: MegaHertz = MegaHertz::MHz(50);
 
-
-/// Driver LTC2320 sampling period
-pub const LTC2320_PERIOD: fugit::MicrosDurationU64 =
+/// Driver header adc sampling period
+pub const HEADER_ADC_PERIOD: fugit::MicrosDurationU64 =
     fugit::MicrosDurationU64::micros(500);
 
 /// The delay after initiating a QSPI transfer before asserting the IO_Update for the pounder DDS.

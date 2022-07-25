@@ -65,6 +65,7 @@ pub type SystemTimer = mono_clock::MonoClock<u32, MONOTONIC_FREQUENCY>;
 pub enum Mezzanine {
     Pounder(PounderDevices),
     Driver(DriverDevices),
+    None,
 }
 
 impl Mezzanine {

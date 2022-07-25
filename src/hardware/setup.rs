@@ -196,7 +196,7 @@ pub fn setup(
     clock: SystemTimer,
     batch_size: usize,
     sample_ticks: u32,
-) -> (StabilizerDevices, Option<Mezzanine>) {
+) -> (StabilizerDevices, Mezzanine) {
     // Set up RTT logging
     {
         // Enable debug during WFE/WFI-induced sleep
@@ -924,18 +924,18 @@ pub fn setup(
             )
         };
 
-        Some(Mezzanine::Pounder(PounderDevices {
+        Mezzanine::Pounder(PounderDevices {
             pounder: pounder_devices,
             dds_output,
 
             #[cfg(feature = "pounder_v1_1")]
             timestamper: pounder_stamper,
-        }))
+        })
     // If Driver detected
     } else if true {
         log::info!("driver init");
         let ltc2320_pins = driver::ltc2320::Ltc2320Pins {
-            spi: (
+            qspi: (
                 gpiob.pb2.into_alternate(),
                 gpioe.pe7.into_alternate(),
                 gpioe.pe8.into_alternate(),
@@ -950,9 +950,9 @@ pub fn setup(
             device.QUADSPI,
             ltc2320_pins,
         );
-        Some(Mezzanine::Driver(DriverDevices { ltc2320 }))
+        Mezzanine::Driver(DriverDevices { ltc2320 })
     } else {
-        None
+        Mezzanine::None
     };
 
     let stabilizer = StabilizerDevices {

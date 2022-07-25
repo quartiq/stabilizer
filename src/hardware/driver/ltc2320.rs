@@ -34,7 +34,7 @@ impl<E> From<E> for Error<E> {
 
 pub struct Ltc2320Pins {
     #[allow(clippy::complexity)]
-    pub spi: (
+    pub qspi: (
         gpiob::PB2<gpio::Alternate<9>>,
         gpioe::PE7<gpio::Alternate<10>>,
         gpioe::PE8<gpio::Alternate<10>>,
@@ -47,7 +47,9 @@ pub struct Ltc2320Pins {
 pub struct Ltc2320 {
     qspi: Qspi<QUADSPI>,
     cnv: gpioc::PC11<gpio::Output<gpio::PushPull>>,
-    delay_cycles: u32, // Number of cycles to wait for an equivalent time of TCONV.
+    // Number of cycles to wait for an equivalent time of TCONV.
+    // The asm-delay crate can only do ms and us delays but TCONV < 1 us.
+    tconv_delay_cycles: u32,
 }
 
 impl Ltc2320 {
@@ -62,7 +64,7 @@ impl Ltc2320 {
         mut pins: Ltc2320Pins,
     ) -> Self {
         let mut qspi = qspi_peripheral.bank2(
-            pins.spi,
+            pins.qspi,
             Ltc2320::DRIVER_QSPI_FREQUENCY.convert(),
             clocks,
             qspi_rec,
@@ -88,18 +90,19 @@ impl Ltc2320 {
         qspi.listen(Event::Complete);
         pins.cnv.set_high();
         // calculate the number of cycles equivalent to TCONV
-        let delay_cycles = (clocks.c_ck().to_Hz() as f32 * Ltc2320::TCONV) as u32;
+        let tconv_delay_cycles =
+            (clocks.c_ck().to_Hz() as f32 * Ltc2320::TCONV) as u32;
         Self {
             qspi,
             cnv: pins.cnv,
-            delay_cycles,
+            tconv_delay_cycles,
         }
     }
 
     /// Set nCNV low, wait TCONV and start QSPI transfer.
     pub fn start_conversion(&mut self) -> Result<(), Error<QspiError>> {
         self.cnv.set_low();
-        cortex_m::asm::delay(self.delay_cycles);
+        cortex_m::asm::delay(self.tconv_delay_cycles);
         self.qspi
             .begin_read(0, Ltc2320::N_BYTES)
             .map_err(|err| err.into())
