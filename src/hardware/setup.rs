@@ -767,18 +767,12 @@ pub fn setup(
                 ccdr.peripheral.ADC12,
                 &ccdr.clocks,
             );
+            adc1.set_sample_time(hal::adc::AdcSampleTime::T_810);
+            adc1.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+            adc2.set_sample_time(hal::adc::AdcSampleTime::T_810);
+            adc2.set_resolution(hal::adc::Resolution::SIXTEENBIT);
 
-            let adc1 = {
-                adc1.calibrate();
-                adc1.enable()
-            };
-
-            let adc2 = {
-                adc2.calibrate();
-                adc2.enable()
-            };
-
-            (adc1, adc2)
+            (adc1.enable(), adc2.enable())
         };
 
         let adc1_in_p = gpiof.pf11.into_analog();
