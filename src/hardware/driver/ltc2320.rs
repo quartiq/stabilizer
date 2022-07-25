@@ -61,8 +61,9 @@ impl Ltc2320 {
         );
         qspi.configure_mode(QspiMode::OneBit).unwrap();
         qspi.is_busy().unwrap(); // panic if qspi busy
-                                 // qspi.setup_extended() could do the same but is a private function and can therefore not be used.
-                                 // qspi.begin_read_extended() uses setup_extended() but also starts the read right away.
+
+        // qspi.setup_extended() could do the same but is a private function and can therefore not be used.
+        // qspi.begin_read_extended() uses setup_extended() but also starts the read right away.
         qspi.inner_mut().ccr.modify(|_, w| unsafe {
             w.dcyc()
                 .bits(0) // set nr dummy cycles to 0 (disable dummy phase)
