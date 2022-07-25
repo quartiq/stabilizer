@@ -518,7 +518,8 @@ pub struct ProfileSerializer {
     // heapless::Vec<u8, 32>, especially its extend_from_slice() is slow
     data: [u8; 32],
     index: usize,
-    mode: Mode,
+    // make mode u32 to work around https://github.com/japaric/heapless/issues/305
+    mode: u32,
 }
 
 impl ProfileSerializer {
@@ -528,7 +529,7 @@ impl ProfileSerializer {
     /// * `mode` - The communication mode of the DDS.
     pub fn new(mode: Mode) -> Self {
         Self {
-            mode,
+            mode: mode as _,
             data: [0; 32],
             index: 0,
         }
