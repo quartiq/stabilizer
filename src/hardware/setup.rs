@@ -526,8 +526,10 @@ pub fn setup(
         );
 
         dac_clr_n.set_low();
-        let _dac0_ldac_n = gpioe.pe11.into_push_pull_output().set_low();
-        let _dac1_ldac_n = gpioe.pe15.into_push_pull_output().set_low();
+        // dac0_ldac_n
+        gpioe.pe11.into_push_pull_output().set_low();
+        // dac1_ldac_n
+        gpioe.pe15.into_push_pull_output().set_low();
         dac_clr_n.set_high();
 
         (dac0, dac1)
@@ -791,13 +793,8 @@ pub fn setup(
         let pounder_devices = pounder::PounderDevices::new(
             io_expander,
             spi,
-            adc1,
-            adc2,
-            adc3,
-            pwr0,
-            pwr1,
-            aux_adc0,
-            aux_adc1,
+            (adc1, adc2, adc3),
+            (pwr0, pwr1, aux_adc0, aux_adc1),
         )
         .unwrap();
 

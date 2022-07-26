@@ -288,31 +288,34 @@ impl PounderDevices {
     ///
     /// Args:
     /// * `attenuator_spi` - A SPI interface to control digital attenuators.
-    /// * `adc1` - The ADC1 peripheral for measuring power.
-    /// * `adc2` - The ADC2 peripheral for measuring power.
-    /// * `pwr0` - The input channel for the RF power measurement on IN0.
-    /// * `pwr1` - The input channel for the RF power measurement on IN1.
+    /// * `adcs` - The ADC1, ADC2, ADC3 peripherals.
+    /// * `adc_pins` - The ADC input channel pins for the RF power measurement on IN0/IN1 and AUX
+    ///     ADC0 and AUX ADC1.
     pub fn new(
         mcp23017: mcp23017::MCP23017<hal::i2c::I2c<hal::stm32::I2C1>>,
         attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
-        adc1: hal::adc::Adc<hal::stm32::ADC1, hal::adc::Enabled>,
-        adc2: hal::adc::Adc<hal::stm32::ADC2, hal::adc::Enabled>,
-        adc3: hal::adc::Adc<hal::stm32::ADC3, hal::adc::Enabled>,
-        pwr0: hal::gpio::gpiof::PF11<hal::gpio::Analog>,
-        pwr1: hal::gpio::gpiof::PF14<hal::gpio::Analog>,
-        aux_adc0: hal::gpio::gpiof::PF3<hal::gpio::Analog>,
-        aux_adc1: hal::gpio::gpiof::PF4<hal::gpio::Analog>,
+        adcs: (
+            hal::adc::Adc<hal::stm32::ADC1, hal::adc::Enabled>,
+            hal::adc::Adc<hal::stm32::ADC2, hal::adc::Enabled>,
+            hal::adc::Adc<hal::stm32::ADC3, hal::adc::Enabled>,
+        ),
+        adc_pins: (
+            hal::gpio::gpiof::PF11<hal::gpio::Analog>,
+            hal::gpio::gpiof::PF14<hal::gpio::Analog>,
+            hal::gpio::gpiof::PF3<hal::gpio::Analog>,
+            hal::gpio::gpiof::PF4<hal::gpio::Analog>,
+        ),
     ) -> Result<Self, Error> {
         let mut devices = Self {
             mcp23017,
             attenuator_spi,
-            adc1,
-            adc2,
-            adc3,
-            pwr0,
-            pwr1,
-            aux_adc0,
-            aux_adc1,
+            adc1: adcs.0,
+            adc2: adcs.1,
+            adc3: adcs.2,
+            pwr0: adc_pins.0,
+            pwr1: adc_pins.1,
+            aux_adc0: adc_pins.2,
+            aux_adc1: adc_pins.3,
         };
 
         // Configure power-on-default state for pounder. All LEDs are off, on-board oscillator
@@ -332,6 +335,30 @@ impl PounderDevices {
             .map_err(|_| Error::I2c)?;
 
         Ok(devices)
+    }
+
+    pub fn sample_aux_adc(&mut self, channel: Channel) -> Result<f32, Error> {
+        let adc_scale = match channel {
+            Channel::In0 => {
+                let adc_reading: u32 = self
+                    .adc3
+                    .read(&mut self.aux_adc0)
+                    .map_err(|_| Error::Adc)?;
+                adc_reading as f32 / self.adc3.slope() as f32
+            }
+            Channel::In1 => {
+                let adc_reading: u32 = self
+                    .adc3
+                    .read(&mut self.aux_adc1)
+                    .map_err(|_| Error::Adc)?;
+                adc_reading as f32 / self.adc3.slope() as f32
+            }
+            _ => return Err(Error::InvalidChannel),
+        };
+
+        // Convert analog percentage to voltage. Note that the ADC uses an external 2.048V analog
+        // reference.
+        Ok(adc_scale * 2.048)
     }
 }
 
