@@ -257,6 +257,9 @@ pub fn setup(
 
     device.RCC.d1ccipr.modify(|_, w| w.qspisel().rcc_hclk3());
 
+    // Select PLL3r to get a 50 MHz clock input for ADCs.
+    device.RCC.d3ccipr.modify(|_, w| w.adcsel().pll3_r());
+
     let rcc = device.RCC.constrain();
     let ccdr = rcc
         .use_hse(8.MHz())
@@ -265,6 +268,8 @@ pub fn setup(
         .per_ck(design_parameters::TIMER_FREQUENCY.convert())
         .pll2_p_ck(100.MHz())
         .pll2_q_ck(100.MHz())
+        .pll3_r_ck(100.MHz())
+        .pll3_p_ck(100.MHz())
         .freeze(vos, &device.SYSCFG);
 
     // Before being able to call any code in ITCM, load that code from flash.
@@ -958,7 +963,13 @@ pub fn setup(
             &mut delay,
             &ccdr.clocks,
             (ccdr.peripheral.ADC12, ccdr.peripheral.ADC3),
-            (device.ADC1, device.ADC2, device.ADC3),
+            (
+                device.ADC1,
+                device.ADC2,
+                device.ADC3,
+                device.ADC12_COMMON,
+                device.ADC3_COMMON,
+            ),
             adc_internal_pins,
         );
         Mezzanine::Driver(DriverDevices {

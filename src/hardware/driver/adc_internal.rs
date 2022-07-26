@@ -6,8 +6,8 @@ use super::super::hal::{
     gpio::{gpiof::*, Analog},
     hal::blocking::delay::DelayUs,
     prelude::*,
-    rcc::{rec, CoreClocks},
-    stm32::{ADC1, ADC2, ADC3},
+    rcc::{rec, CoreClocks, ResetEnable},
+    stm32::{ADC1, ADC12_COMMON, ADC2, ADC3, ADC3_COMMON},
 };
 
 const V_REF: f32 = 2.048; // ADC reference voltage
@@ -35,18 +35,32 @@ impl AdcInternal {
         delay: &mut impl DelayUs<u8>,
         clocks: &CoreClocks,
         adc_rcc: (rec::Adc12, rec::Adc3),
-        adc: (ADC1, ADC2, ADC3),
+        adc: (ADC1, ADC2, ADC3, ADC12_COMMON, ADC3_COMMON),
         pins: AdcInternalPins,
     ) -> Self {
+        let adc12_rcc = adc_rcc.0.enable();
+        let adc3_rcc = adc_rcc.1.enable();
+        // Set ADC clock prescalers to divide the input clock by 10
+        adc.3.ccr.modify(|_, w| w.presc().div10());
+        adc.4.ccr.modify(|_, w| w.presc().div10());
+        adc.3.ccr.modify(|_, w| w.ckmode().asynchronous());
+        adc.4.ccr.modify(|_, w| w.ckmode().asynchronous());
+        log::info!("adc12 ccr: {:#x}", adc.3.ccr.read().bits());
+
         // Setup ADCs
-        let (adc1, _adc2) = adc::adc12(adc.0, adc.1, delay, adc_rcc.0, clocks);
-        let adc3 = adc::Adc::adc3(adc.2, delay, adc_rcc.1, clocks);
+        let (adc1, _adc2) = adc::adc12(adc.0, adc.1, delay, adc12_rcc, clocks);
+        log::info!("adc12 ccr: {:#x}", adc.3.ccr.read().bits());
+        let adc3 = adc::Adc::adc3(adc.2, delay, adc3_rcc, clocks);
 
         let mut adc1 = adc1.enable();
         adc1.set_resolution(adc::Resolution::SIXTEENBIT);
+        adc1.set_sample_time(adc::AdcSampleTime::T_810);
 
         let mut adc3 = adc3.enable();
         adc3.set_resolution(adc::Resolution::SIXTEENBIT);
+        adc3.set_sample_time(adc::AdcSampleTime::T_810);
+        log::info!("adc12 ccr: {:#x}", adc.3.ccr.read().bits());
+
 
         AdcInternal { adc1, adc3, pins }
     }
