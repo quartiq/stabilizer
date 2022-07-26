@@ -268,8 +268,8 @@ pub fn setup(
         .per_ck(design_parameters::TIMER_FREQUENCY.convert())
         .pll2_p_ck(100.MHz())
         .pll2_q_ck(100.MHz())
-        .pll3_p_ck(50.MHz())
-        .pll3_r_ck(50.MHz())
+        .pll3_p_ck(50.MHz()) // inititalization of p output is necessary for r
+        .pll3_r_ck(50.MHz()) // use for the internal ADCs
         .freeze(vos, &device.SYSCFG);
 
     // Before being able to call any code in ITCM, load that code from flash.
