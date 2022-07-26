@@ -44,12 +44,13 @@ impl AdcInternal {
 
         let mut adc1 = adc1.enable();
         adc1.set_resolution(adc::Resolution::SIXTEENBIT);
-        adc1.set_sample_time(adc::AdcSampleTime::T_810);
+        // use reasonable sampling time that gives accurate results with headroom bat is also not too slow
+        adc1.set_sample_time(adc::AdcSampleTime::T_64);
 
         let mut adc3 = adc3.enable();
         adc3.set_resolution(adc::Resolution::SIXTEENBIT);
-        adc3.set_sample_time(adc::AdcSampleTime::T_810);
-
+        // use reasonable sampling time that gives accurate results with headroom bat is also not too slow
+        adc3.set_sample_time(adc::AdcSampleTime::T_64);
 
         AdcInternal { adc1, adc3, pins }
     }
