@@ -474,7 +474,7 @@ mod app {
     fn header_adc_transfer_done(c: header_adc_transfer_done::Context) {
         (c.shared.header_adc, c.shared.header_adc_data).lock(|ltc, data| {
             ltc.handle_transfer_done(data);
-            // log::info!("data: {:?}", data);
+            log::info!("data: {:?}", data);
         });
     }
 

@@ -268,8 +268,8 @@ pub fn setup(
         .per_ck(design_parameters::TIMER_FREQUENCY.convert())
         .pll2_p_ck(100.MHz())
         .pll2_q_ck(100.MHz())
-        .pll3_r_ck(100.MHz())
-        .pll3_p_ck(100.MHz())
+        .pll3_p_ck(50.MHz())
+        .pll3_r_ck(50.MHz())
         .freeze(vos, &device.SYSCFG);
 
     // Before being able to call any code in ITCM, load that code from flash.
@@ -963,13 +963,7 @@ pub fn setup(
             &mut delay,
             &ccdr.clocks,
             (ccdr.peripheral.ADC12, ccdr.peripheral.ADC3),
-            (
-                device.ADC1,
-                device.ADC2,
-                device.ADC3,
-                device.ADC12_COMMON,
-                device.ADC3_COMMON,
-            ),
+            (device.ADC1, device.ADC2, device.ADC3),
             adc_internal_pins,
         );
         Mezzanine::Driver(DriverDevices {
