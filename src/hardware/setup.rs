@@ -759,7 +759,7 @@ pub fn setup(
             )
         };
 
-        let (adc1, adc2) = {
+        let (adc1, adc2, adc3) = {
             let (mut adc1, mut adc2) = hal::adc::adc12(
                 device.ADC1,
                 device.ADC2,
@@ -767,24 +767,37 @@ pub fn setup(
                 ccdr.peripheral.ADC12,
                 &ccdr.clocks,
             );
+            let mut adc3 = hal::adc::Adc::adc3(
+                device.ADC3,
+                &mut delay,
+                ccdr.peripheral.ADC3,
+                &ccdr.clocks,
+            );
             adc1.set_sample_time(hal::adc::AdcSampleTime::T_810);
             adc1.set_resolution(hal::adc::Resolution::SIXTEENBIT);
             adc2.set_sample_time(hal::adc::AdcSampleTime::T_810);
             adc2.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+            adc3.set_sample_time(hal::adc::AdcSampleTime::T_810);
+            adc3.set_resolution(hal::adc::Resolution::SIXTEENBIT);
 
-            (adc1.enable(), adc2.enable())
+            (adc1.enable(), adc2.enable(), adc3.enable())
         };
 
-        let adc1_in_p = gpiof.pf11.into_analog();
-        let adc2_in_p = gpiof.pf14.into_analog();
+        let pwr0 = gpiof.pf11.into_analog();
+        let pwr1 = gpiof.pf14.into_analog();
+        let aux_adc0 = gpiof.pf3.into_analog();
+        let aux_adc1 = gpiof.pf4.into_analog();
 
         let pounder_devices = pounder::PounderDevices::new(
             io_expander,
             spi,
             adc1,
             adc2,
-            adc1_in_p,
-            adc2_in_p,
+            adc3,
+            pwr0,
+            pwr1,
+            aux_adc0,
+            aux_adc1,
         )
         .unwrap();
 

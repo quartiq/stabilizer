@@ -276,8 +276,11 @@ pub struct PounderDevices {
     attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
     adc1: hal::adc::Adc<hal::stm32::ADC1, hal::adc::Enabled>,
     adc2: hal::adc::Adc<hal::stm32::ADC2, hal::adc::Enabled>,
-    adc1_in_p: hal::gpio::gpiof::PF11<hal::gpio::Analog>,
-    adc2_in_p: hal::gpio::gpiof::PF14<hal::gpio::Analog>,
+    adc3: hal::adc::Adc<hal::stm32::ADC3, hal::adc::Enabled>,
+    pwr0: hal::gpio::gpiof::PF11<hal::gpio::Analog>,
+    pwr1: hal::gpio::gpiof::PF14<hal::gpio::Analog>,
+    aux_adc0: hal::gpio::gpiof::PF3<hal::gpio::Analog>,
+    aux_adc1: hal::gpio::gpiof::PF4<hal::gpio::Analog>,
 }
 
 impl PounderDevices {
@@ -287,23 +290,29 @@ impl PounderDevices {
     /// * `attenuator_spi` - A SPI interface to control digital attenuators.
     /// * `adc1` - The ADC1 peripheral for measuring power.
     /// * `adc2` - The ADC2 peripheral for measuring power.
-    /// * `adc1_in_p` - The input channel for the RF power measurement on IN0.
-    /// * `adc2_in_p` - The input channel for the RF power measurement on IN1.
+    /// * `pwr0` - The input channel for the RF power measurement on IN0.
+    /// * `pwr1` - The input channel for the RF power measurement on IN1.
     pub fn new(
         mcp23017: mcp23017::MCP23017<hal::i2c::I2c<hal::stm32::I2C1>>,
         attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
         adc1: hal::adc::Adc<hal::stm32::ADC1, hal::adc::Enabled>,
         adc2: hal::adc::Adc<hal::stm32::ADC2, hal::adc::Enabled>,
-        adc1_in_p: hal::gpio::gpiof::PF11<hal::gpio::Analog>,
-        adc2_in_p: hal::gpio::gpiof::PF14<hal::gpio::Analog>,
+        adc3: hal::adc::Adc<hal::stm32::ADC3, hal::adc::Enabled>,
+        pwr0: hal::gpio::gpiof::PF11<hal::gpio::Analog>,
+        pwr1: hal::gpio::gpiof::PF14<hal::gpio::Analog>,
+        aux_adc0: hal::gpio::gpiof::PF3<hal::gpio::Analog>,
+        aux_adc1: hal::gpio::gpiof::PF4<hal::gpio::Analog>,
     ) -> Result<Self, Error> {
         let mut devices = Self {
             mcp23017,
             attenuator_spi,
             adc1,
             adc2,
-            adc1_in_p,
-            adc2_in_p,
+            adc3,
+            pwr0,
+            pwr1,
+            aux_adc0,
+            aux_adc1,
         };
 
         // Configure power-on-default state for pounder. All LEDs are off, on-board oscillator
@@ -384,17 +393,13 @@ impl rf_power::PowerMeasurementInterface for PounderDevices {
     fn sample_converter(&mut self, channel: Channel) -> Result<f32, Error> {
         let adc_scale = match channel {
             Channel::In0 => {
-                let adc_reading: u32 = self
-                    .adc1
-                    .read(&mut self.adc1_in_p)
-                    .map_err(|_| Error::Adc)?;
+                let adc_reading: u32 =
+                    self.adc1.read(&mut self.pwr0).map_err(|_| Error::Adc)?;
                 adc_reading as f32 / self.adc1.slope() as f32
             }
             Channel::In1 => {
-                let adc_reading: u32 = self
-                    .adc2
-                    .read(&mut self.adc2_in_p)
-                    .map_err(|_| Error::Adc)?;
+                let adc_reading: u32 =
+                    self.adc2.read(&mut self.pwr1).map_err(|_| Error::Adc)?;
                 adc_reading as f32 / self.adc2.slope() as f32
             }
             _ => return Err(Error::InvalidChannel),
