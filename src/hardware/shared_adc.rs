@@ -12,8 +12,9 @@
 /// [AdcChannel]. The [AdcChannel]'s ownership can then be moved to any required drivers.
 ///
 /// ## Synchronization
-/// Currently, the sharing of the ADC peripheral across multiple priority levels is managed by the
-/// use of a critical section.
+/// If the multiple priorities utilize the ADC that results in resource pre-emption, pre-emption is
+/// protected against through the use of an atomic bool. Attempting to utilize the ADC from a
+/// higher priority level while it is in use at a lower level will result in a [AdcError::InUse].
 use embedded_hal::adc::{Channel, OneShot};
 use stm32h7xx_hal as hal;
 
@@ -21,15 +22,16 @@ use stm32h7xx_hal as hal;
 pub enum AdcError {
     /// Indicates that the ADC channel has already been allocated.
     Allocated,
+
+    /// Indicates that the ADC is already in use
+    InUse,
 }
 
 /// A single channel on an ADC peripheral.
 pub struct AdcChannel<'a, Adc, PIN> {
     pin: PIN,
     slope: f32,
-    adc: &'a cortex_m::interrupt::Mutex<
-        core::cell::RefCell<hal::adc::Adc<Adc, hal::adc::Enabled>>,
-    >,
+    mutex: &'a spinning::Mutex<hal::adc::Adc<Adc, hal::adc::Enabled>>,
 }
 
 impl<'a, Adc, PIN> AdcChannel<'a, Adc, PIN>
@@ -43,28 +45,24 @@ where
     ///
     /// # Returns
     /// The normalized ADC measurement as a ratio of full-scale.
-    pub fn read_normalized(&mut self) -> f32 {
-        self.read_raw() as f32 / self.slope
+    pub fn read_normalized(&mut self) -> Result<f32, AdcError> {
+        self.read_raw().map(|code| code as f32 / self.slope)
     }
 
     /// Read the raw ADC sample for the channel.
     ///
     /// # Returns
     /// The raw ADC code measured on the channel.
-    pub fn read_raw(&mut self) -> u32 {
-        cortex_m::interrupt::free(|cs| {
-            let adc = self.adc.borrow(cs);
-            adc.borrow_mut().read(&mut self.pin).unwrap()
-        })
+    pub fn read_raw(&mut self) -> Result<u32, AdcError> {
+        let mut adc = self.mutex.try_lock().ok_or(AdcError::InUse)?;
+        Ok(adc.read(&mut self.pin).unwrap())
     }
 }
 
 /// An ADC peripheral that can provide ownership of individual channels for sharing between
 /// drivers.
 pub struct SharedAdc<Adc> {
-    mutex: cortex_m::interrupt::Mutex<
-        core::cell::RefCell<hal::adc::Adc<Adc, hal::adc::Enabled>>,
-    >,
+    mutex: spinning::Mutex<hal::adc::Adc<Adc, hal::adc::Enabled>>,
     allocated_channels: core::cell::RefCell<[bool; 20]>,
     slope: f32,
 }
@@ -78,9 +76,7 @@ impl<Adc> SharedAdc<Adc> {
     pub fn new(slope: f32, adc: hal::adc::Adc<Adc, hal::adc::Enabled>) -> Self {
         Self {
             slope,
-            mutex: cortex_m::interrupt::Mutex::new(core::cell::RefCell::new(
-                adc,
-            )),
+            mutex: spinning::Mutex::new(adc),
             allocated_channels: core::cell::RefCell::new([false; 20]),
         }
     }
@@ -106,7 +102,7 @@ impl<Adc> SharedAdc<Adc> {
         Ok(AdcChannel {
             pin,
             slope: self.slope,
-            adc: &self.mutex,
+            mutex: &self.mutex,
         })
     }
 }

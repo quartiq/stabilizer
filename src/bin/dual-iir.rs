@@ -443,7 +443,7 @@ mod app {
             net.telemetry.publish(&telemetry.finalize(
                 gains[0],
                 gains[1],
-                c.local.temp_sensor.get_temperature(),
+                c.local.temp_sensor.get_temperature().unwrap(),
             ))
         });
 
