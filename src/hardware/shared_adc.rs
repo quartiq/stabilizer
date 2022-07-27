@@ -33,7 +33,7 @@ pub struct SharedAdc<Adc> {
     mutex: cortex_m::interrupt::Mutex<
         core::cell::RefCell<hal::adc::Adc<Adc, hal::adc::Enabled>>,
     >,
-    allocated_channels: core::cell::RefCell<[bool; 15]>,
+    allocated_channels: core::cell::RefCell<[bool; 20]>,
     slope: f32,
 }
 
@@ -44,7 +44,7 @@ impl<Adc> SharedAdc<Adc> {
             mutex: cortex_m::interrupt::Mutex::new(core::cell::RefCell::new(
                 adc,
             )),
-            allocated_channels: core::cell::RefCell::new([false; 15]),
+            allocated_channels: core::cell::RefCell::new([false; 20]),
         }
     }
 
