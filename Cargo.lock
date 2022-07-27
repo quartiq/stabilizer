@@ -879,6 +879,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "spinning"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d4f0e86297cad2658d92a707320d87bf4e6ae1050287f51d19b67ef3f153a7b"
+dependencies = [
+ "lock_api",
+]
+
+[[package]]
 name = "stabilizer"
 version = "0.6.0"
 dependencies = [
@@ -905,6 +914,7 @@ dependencies = [
  "serde",
  "serde-json-core",
  "smoltcp-nal",
+ "spinning",
  "stm32h7xx-hal",
  "systick-monotonic",
 ]

@@ -18,44 +18,6 @@
 use embedded_hal::adc::{Channel, OneShot};
 use stm32h7xx_hal as hal;
 
-struct AdcMutex<Adc> {
-    in_use: core::sync::atomic::AtomicBool,
-    adc: core::cell::RefCell<hal::adc::Adc<Adc, hal::adc::Enabled>>,
-}
-
-impl<Adc> AdcMutex<Adc> {
-    pub fn new(adc: hal::adc::Adc<Adc, hal::adc::Enabled>) -> Self {
-        Self {
-            adc: core::cell::RefCell::new(adc),
-            in_use: core::sync::atomic::AtomicBool::new(false),
-        }
-    }
-
-    pub fn lock<
-        R,
-        F: FnOnce(&mut hal::adc::Adc<Adc, hal::adc::Enabled>) -> R,
-    >(
-        &self,
-        f: F,
-    ) -> Result<R, AdcError> {
-        self.in_use
-            .compare_exchange(
-                false,
-                true,
-                core::sync::atomic::Ordering::SeqCst,
-                core::sync::atomic::Ordering::SeqCst,
-            )
-            .map_err(|_| AdcError::InUse)?;
-
-        let result = f(&mut self.adc.borrow_mut());
-
-        self.in_use
-            .store(false, core::sync::atomic::Ordering::SeqCst);
-
-        Ok(result)
-    }
-}
-
 #[derive(Debug, Copy, Clone)]
 pub enum AdcError {
     /// Indicates that the ADC channel has already been allocated.
@@ -69,7 +31,7 @@ pub enum AdcError {
 pub struct AdcChannel<'a, Adc, PIN> {
     pin: PIN,
     slope: f32,
-    mutex: &'a AdcMutex<Adc>,
+    mutex: &'a spinning::Mutex<hal::adc::Adc<Adc, hal::adc::Enabled>>,
 }
 
 impl<'a, Adc, PIN> AdcChannel<'a, Adc, PIN>
@@ -84,15 +46,15 @@ where
     /// # Returns
     /// The normalized ADC measurement as a ratio of full-scale.
     pub fn read(&mut self) -> Result<f32, AdcError> {
-        self.mutex
-            .lock(|adc| adc.read(&mut self.pin).unwrap() as f32 / self.slope)
+        let mut adc = self.mutex.try_lock().ok_or(AdcError::InUse)?;
+        Ok(adc.read(&mut self.pin).unwrap() as f32 / self.slope)
     }
 }
 
 /// An ADC peripheral that can provide ownership of individual channels for sharing between
 /// drivers.
 pub struct SharedAdc<Adc> {
-    mutex: AdcMutex<Adc>,
+    mutex: spinning::Mutex<hal::adc::Adc<Adc, hal::adc::Enabled>>,
     allocated_channels: core::cell::RefCell<[bool; 20]>,
     slope: f32,
 }
@@ -106,7 +68,7 @@ impl<Adc> SharedAdc<Adc> {
     pub fn new(slope: f32, adc: hal::adc::Adc<Adc, hal::adc::Enabled>) -> Self {
         Self {
             slope,
-            mutex: AdcMutex::new(adc),
+            mutex: spinning::Mutex::new(adc),
             allocated_channels: core::cell::RefCell::new([false; 20]),
         }
     }
