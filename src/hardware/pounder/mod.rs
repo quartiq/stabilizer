@@ -1,5 +1,6 @@
 use super::hal;
 use embedded_hal::{adc::OneShot, blocking::spi::Transfer};
+use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Serialize};
 
 pub mod attenuators;
@@ -10,6 +11,8 @@ pub mod rf_power;
 #[cfg(not(feature = "pounder_v1_0"))]
 pub mod timestamp;
 
+#[derive(Debug, Copy, Clone, TryFromPrimitive)]
+#[repr(u8)]
 pub enum GpioPin {
     Led4Green = 0,
     Led5Red = 1,
@@ -337,6 +340,7 @@ impl PounderDevices {
         Ok(devices)
     }
 
+    /// Sample one of the two auxiliary ADC channels associated with the respective RF input channel.
     pub fn sample_aux_adc(&mut self, channel: Channel) -> Result<f32, Error> {
         let adc_scale = match channel {
             Channel::In0 => {
@@ -360,20 +364,33 @@ impl PounderDevices {
         // reference.
         Ok(adc_scale * 2.048)
     }
+
+    /// Set the state (its electrical level) of the given GPIO pin on Pounder.
+    pub fn set_gpio_pin(
+        &mut self,
+        pin: GpioPin,
+        state: bool,
+    ) -> Result<(), Error> {
+        self.mcp23017
+            .digital_write(pin as _, state)
+            .map_err(|_| Error::I2c)?;
+        Ok(())
+    }
+
+    /// Select external reference clock input.
+    pub fn set_ext_clk(&mut self, enabled: bool) -> Result<(), Error> {
+        // Active low
+        self.set_gpio_pin(GpioPin::OscEnN, enabled)?;
+        self.set_gpio_pin(GpioPin::ExtClkSel, enabled)
+    }
 }
 
 impl attenuators::AttenuatorInterface for PounderDevices {
     /// Reset all of the attenuators to a power-on default state.
     fn reset_attenuators(&mut self) -> Result<(), Error> {
-        self.mcp23017
-            .write_gpio(mcp23017::Port::GPIOB, 0x0f)
-            .map_err(|_| Error::I2c)?;
-        // Duration of one I2C transaction is sufficiently long.
-        self.mcp23017
-            .write_gpio(mcp23017::Port::GPIOB, 0x2f)
-            .map_err(|_| Error::I2c)?;
-
-        Ok(())
+        // Active low
+        self.set_gpio_pin(GpioPin::AttRstN, false)?;
+        self.set_gpio_pin(GpioPin::AttRstN, true)
     }
 
     /// Latch a configuration into a digital attenuator.
@@ -381,15 +398,11 @@ impl attenuators::AttenuatorInterface for PounderDevices {
     /// Args:
     /// * `channel` - The attenuator channel to latch.
     fn latch_attenuator(&mut self, channel: Channel) -> Result<(), Error> {
-        let pin = channel as u8;
-        self.mcp23017
-            .write_gpio(mcp23017::Port::GPIOB, 0x2f & !(1 << pin))
-            .map_err(|_| Error::I2c)?;
-        // Duration of one I2C transaction is sufficiently long.
-        self.mcp23017
-            .write_gpio(mcp23017::Port::GPIOB, 0x2f)
-            .map_err(|_| Error::I2c)?;
-        Ok(())
+        let pin =
+            GpioPin::try_from(GpioPin::AttLe0 as u8 + channel as u8).unwrap();
+        // Active low
+        self.set_gpio_pin(pin, false)?;
+        self.set_gpio_pin(pin, true)
     }
 
     /// Read the raw attenuation codes stored in the attenuator shift registers.
