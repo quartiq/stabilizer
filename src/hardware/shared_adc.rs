@@ -1,11 +1,29 @@
+/// Shared Internal ADC Support
+///
+/// # Description
+/// This module provides an abstraction to share ownership of a single ADC peripheral with multiple
+/// ADC channels attached to it.
+///
+/// The design of this module mimics that of [`shared-bus`].
+///
+/// First, the shared ADC is created with the use of a macro, which places the ADC peripheral into
+/// a mutable, static (singleton) location. Then, individual channels are created by passing in the
+/// associated ADC input pin to the [SharedAdc::create_channel()] function to generate an
+/// [AdcChannel]. The [AdcChannel]'s ownership can then be moved to any required drivers.
+///
+/// ## Synchronization
+/// Currently, the sharing of the ADC peripheral across multiple priority levels is managed by the
+/// use of a critical section.
 use embedded_hal::adc::{Channel, OneShot};
 use stm32h7xx_hal as hal;
 
 #[derive(Debug, Copy, Clone)]
 pub enum AdcError {
+    /// Indicates that the ADC channel has already been allocated.
     Allocated,
 }
 
+/// A single channel on an ADC peripheral.
 pub struct AdcChannel<'a, Adc, PIN> {
     pin: PIN,
     slope: f32,
@@ -21,6 +39,10 @@ where
     <hal::adc::Adc<Adc, hal::adc::Enabled> as OneShot<Adc, u32, PIN>>::Error:
         core::fmt::Debug,
 {
+    /// Read the ADC channel.
+    ///
+    /// # Returns
+    /// The normalized ADC measurement as a ratio of full-scale.
     pub fn read(&mut self) -> f32 {
         cortex_m::interrupt::free(|cs| {
             let adc = self.adc.borrow(cs);
@@ -29,6 +51,8 @@ where
     }
 }
 
+/// An ADC peripheral that can provide ownership of individual channels for sharing between
+/// drivers.
 pub struct SharedAdc<Adc> {
     mutex: cortex_m::interrupt::Mutex<
         core::cell::RefCell<hal::adc::Adc<Adc, hal::adc::Enabled>>,
@@ -38,6 +62,11 @@ pub struct SharedAdc<Adc> {
 }
 
 impl<Adc> SharedAdc<Adc> {
+    /// Construct a new shared ADC driver.
+    ///
+    /// # Args
+    /// * `slope` - The slope of the ADC conversion transfer function.
+    /// * `adc` - The ADC peripheral to share.
     pub fn new(slope: f32, adc: hal::adc::Adc<Adc, hal::adc::Enabled>) -> Self {
         Self {
             slope,
@@ -48,6 +77,13 @@ impl<Adc> SharedAdc<Adc> {
         }
     }
 
+    /// Allocate an ADC channel for usage.
+    ///
+    /// # Args
+    /// * `pin` - The ADC input associated with the desired ADC channel. Often, this is a GPIO pin.
+    ///
+    /// # Returns
+    /// An instantiated [AdcChannel] whose ownership can be transferred to other drivers.
     pub fn create_channel<PIN: Channel<Adc, ID = u8>>(
         &self,
         pin: PIN,
@@ -77,4 +113,5 @@ macro_rules! new_shared_adc {
     }};
 }
 
+/// Construct a shared ADC driver into a global, mutable singleton.
 pub(crate) use new_shared_adc;
