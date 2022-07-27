@@ -371,21 +371,8 @@ impl PounderDevices {
         pin: GpioPin,
         state: bool,
     ) -> Result<(), Error> {
-        let mut pin = pin as u8;
-        let port = if pin < 8 {
-            mcp23017::Port::GPIOA
-        } else {
-            pin -= 8;
-            mcp23017::Port::GPIOB
-        };
-        let mut reg = self.mcp23017.read_gpio(port).map_err(|_| Error::I2c)?;
-        if state {
-            reg |= 1 << pin;
-        } else {
-            reg &= !(1 << pin);
-        }
         self.mcp23017
-            .write_gpio(port, reg)
+            .digital_write(pin as _, state)
             .map_err(|_| Error::I2c)?;
         Ok(())
     }
