@@ -360,8 +360,8 @@ impl PounderDevices {
 
     pub fn sample_aux_adc(&mut self, channel: Channel) -> Result<f32, Error> {
         let adc_scale = match channel {
-            Channel::In0 => self.aux_adc0.read(),
-            Channel::In1 => self.aux_adc1.read(),
+            Channel::In0 => self.aux_adc0.read_normalized(),
+            Channel::In1 => self.aux_adc1.read_normalized(),
             _ => return Err(Error::InvalidChannel),
         };
 
@@ -428,8 +428,8 @@ impl rf_power::PowerMeasurementInterface for PounderDevices {
     /// The sampled voltage of the specified channel.
     fn sample_converter(&mut self, channel: Channel) -> Result<f32, Error> {
         let adc_scale = match channel {
-            Channel::In0 => self.pwr0.read(),
-            Channel::In1 => self.pwr1.read(),
+            Channel::In0 => self.pwr0.read_normalized(),
+            Channel::In1 => self.pwr1.read_normalized(),
             _ => return Err(Error::InvalidChannel),
         };
 

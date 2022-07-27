@@ -236,6 +236,7 @@ mod app {
         lockin: Lockin<4>,
         signal_generator: signal_generator::SignalGenerator,
         generator: FrameGenerator,
+        temp_sensor: stabilizer::hardware::temp_sensor::CpuTempSensor,
     }
 
     #[init]
@@ -296,6 +297,7 @@ mod app {
             ),
 
             generator,
+            temp_sensor: stabilizer.temperature_sensor,
         };
 
         // Enable ADC/DAC events
@@ -477,7 +479,7 @@ mod app {
         c.shared.network.lock(|net| net.direct_stream(target));
     }
 
-    #[task(priority = 1, local=[digital_inputs], shared=[network, settings, telemetry])]
+    #[task(priority = 1, local=[digital_inputs, temp_sensor], shared=[network, settings, telemetry])]
     fn telemetry(mut c: telemetry::Context) {
         let mut telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
@@ -493,8 +495,11 @@ mod app {
             .lock(|settings| (settings.afe, settings.telemetry_period));
 
         c.shared.network.lock(|net| {
-            net.telemetry
-                .publish(&telemetry.finalize(gains[0], gains[1]))
+            net.telemetry.publish(&telemetry.finalize(
+                gains[0],
+                gains[1],
+                c.local.temp_sensor.get_temperature(),
+            ))
         });
 
         // Schedule the telemetry task in the future.

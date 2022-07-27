@@ -14,8 +14,9 @@ use smoltcp_nal::smoltcp;
 
 use super::{
     adc, afe, dac, design_parameters, eeprom, input_stamper::InputStamper,
-    pounder, pounder::dds_output::DdsOutput, shared_adc, timers, DigitalInput0,
-    DigitalInput1, EthernetPhy, NetworkStack, SystemTimer, Systick, AFE0, AFE1,
+    pounder, pounder::dds_output::DdsOutput, shared_adc,
+    temp_sensor::CpuTempSensor, timers, DigitalInput0, DigitalInput1,
+    EthernetPhy, NetworkStack, SystemTimer, Systick, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -101,6 +102,7 @@ pub struct NetworkDevices {
 /// The available hardware interfaces on Stabilizer.
 pub struct StabilizerDevices {
     pub systick: Systick,
+    pub temperature_sensor: CpuTempSensor,
     pub afes: (AFE0, AFE1),
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
     pub dacs: (dac::Dac0Output, dac::Dac1Output),
@@ -951,6 +953,9 @@ pub fn setup(
         afes,
         adcs,
         dacs,
+        temperature_sensor: CpuTempSensor::new(
+            adc3.create_channel(hal::adc::Temperature::new()).unwrap(),
+        ),
         timestamper: input_stamper,
         net: network_devices,
         adc_dac_timer: sampling_timer,
