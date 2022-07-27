@@ -398,7 +398,7 @@ impl attenuators::AttenuatorInterface for PounderDevices {
     /// Args:
     /// * `channel` - The attenuator channel to latch.
     fn latch_attenuator(&mut self, channel: Channel) -> Result<(), Error> {
-        let pin = GpioPin::try_from(8 + channel as u8).unwrap();
+        let pin = GpioPin::try_from(GpioPin::AttLe0 as u8 + channel as u8).unwrap();
         // Active low
         self.set_gpio_pin(pin, false)?;
         self.set_gpio_pin(pin, true)
