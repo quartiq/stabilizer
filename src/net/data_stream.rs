@@ -46,7 +46,9 @@ const HEADER_SIZE: usize = 8;
 const FRAME_COUNT: usize = 4;
 
 // The size of each livestream frame in bytes.
-const FRAME_SIZE: usize = 1024 + HEADER_SIZE;
+// Ensure the resulting ethernet frame is within the MTU:
+// 1500 MTU - 40 IP6 header - 20 UDP header
+const FRAME_SIZE: usize = 1500 - 40 - 20 - HEADER_SIZE;
 
 // The size of the frame queue must be at least as large as the number of frame buffers. Every
 // allocated frame buffer should fit in the queue.
@@ -92,6 +94,10 @@ pub enum StreamFormat {
     /// <ADC0[0]> <ADC0[1]> <ADC1[0]> <ADC1[1]> <DAC0[0]> <DAC0[1]> <DAC1[0]> <DAC1[1]>
     /// ```
     AdcDacData = 1,
+
+    /// Streamed data in FLS (fiber length stabilization) format. See the FLS application for
+    /// detailed definition.
+    Fls = 2,
 }
 
 impl From<StreamTarget> for SocketAddr {

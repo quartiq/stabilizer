@@ -22,10 +22,11 @@ pub const HEADER_ADC_PERIOD: fugit::MicrosDurationU64 =
     fugit::MicrosDurationU64::micros(500);
 
 /// The delay after initiating a QSPI transfer before asserting the IO_Update for the pounder DDS.
-// Pounder Profile writes are up to 16 bytes, with 2 cycles required per byte, coming out to a
-// total of 32 QSPI clock cycles. The QSPI is configured for 50MHz, so this comes out to an offset
-// of 640 ns. We use 800 ns to be safe.
-pub const POUNDER_IO_UPDATE_DELAY: f32 = 800e-9;
+// Pending Pounder Profile writes are up to 32 bytes (QSPI FIFO depth),
+// with 2 cycles required per byte, coming out to a total of 64 QSPI clock cycles.
+// The QSPI is configured for 50MHz, so this comes out to an offset
+// of 1280 ns. We use 1300 ns to be safe.
+pub const POUNDER_IO_UPDATE_DELAY: f32 = 1_300e-9;
 
 /// The duration to assert IO_Update for the pounder DDS.
 // IO_Update should be latched for 4 SYNC_CLK cycles after the QSPI profile write. With pounder

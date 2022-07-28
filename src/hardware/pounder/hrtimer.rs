@@ -54,8 +54,8 @@ impl HighResTimerE {
     pub fn configure_single_shot(
         &mut self,
         channel: Channel,
-        set_duration: f32,
-        set_offset: f32,
+        delay: f32,
+        duration: f32,
     ) {
         // Disable the timer before configuration.
         self.master.mcr.modify(|_, w| w.tecen().clear_bit());
@@ -63,28 +63,23 @@ impl HighResTimerE {
         // Configure the desired timer for single shot mode with set and reset of the specified
         // channel at the desired durations. The HRTIM is on APB2 (D2 domain), and the kernel clock
         // is the APB bus clock.
-        let minimum_duration = set_duration + set_offset;
-
-        let source_frequency: u32 = self.clocks.timy_ker_ck().to_Hz();
-        let source_cycles =
-            (minimum_duration * source_frequency as f32) as u32 + 1;
+        let clk = self.clocks.timy_ker_ck().to_Hz() as f32;
+        let end = ((delay + duration) * clk) as u32 + 1;
 
         // Determine the clock divider, which may be 1, 2, or 4. We will choose a clock divider that
         // allows us the highest resolution per tick, so lower dividers are favored.
-        let setting: u8 = if source_cycles < 0xFFDF {
+        let div: u8 = if end < 0xFFDF {
             1
-        } else if (source_cycles / 2) < 0xFFDF {
+        } else if (end / 2) < 0xFFDF {
             2
-        } else if (source_cycles / 4) < 0xFFDF {
+        } else if (end / 4) < 0xFFDF {
             3
         } else {
             panic!("Unattainable timing parameters!");
         };
 
-        let divider = 1 << (setting - 1);
-
         // The period register must be greater than or equal to 3 cycles.
-        let period = (source_cycles / divider as u32) as u16;
+        let period = (end / (1 << (div - 1)) as u32) as u16;
         assert!(period > 2);
 
         // We now have the prescaler and the period registers. Configure the timer.
@@ -93,20 +88,20 @@ impl HighResTimerE {
         // all valid values.
         self.timer
             .timecr
-            .modify(|_, w| unsafe { w.ck_pscx().bits(setting + 4) });
+            .modify(|_, w| unsafe { w.ck_pscx().bits(div + 4) });
 
         // Note(unsafe): The period register is guaranteed to be a 16-bit value, which will fit in
         // this register.
         self.timer.perer.write(|w| unsafe { w.perx().bits(period) });
 
         // Configure the comparator 1 level.
-        let offset = (set_offset * source_frequency as f32) as u16;
+        let delay = (delay * clk) as u16;
         // Note(unsafe): The offset is always a 16-bit value, so is always valid for values >= 3, as
         // specified by the datasheet.
-        assert!(offset >= 3);
+        assert!(delay >= 3);
         self.timer
             .cmp1er
-            .write(|w| unsafe { w.cmp1x().bits(offset) });
+            .write(|w| unsafe { w.cmp1x().bits(delay) });
 
         // Configure the set/reset signals.
         // Set on compare with CMP1, reset upon reaching PER
