@@ -1,3 +1,8 @@
+//! STM32 Temperature Sensor Driver
+//!
+//! # Description
+//! This file provides an API for measuring the internal STM32 temperature sensor. This temperature
+//! sensor measures the silicon junction temperature (Tj) and is connected via an internal ADC.
 use stm32h7xx_hal::{
     self as hal,
     signature::{TS_CAL_110, TS_CAL_30},
@@ -5,12 +10,14 @@ use stm32h7xx_hal::{
 
 use super::shared_adc::{AdcChannel, AdcError};
 
+/// Helper utility to convert raw codes into temperature measurements.
 struct Calibration {
     slope: f32,
     offset: f32,
 }
 
 impl Calibration {
+    /// Construct the calibration utility.
     pub fn new() -> Self {
         let ts_cal2 = TS_CAL_110::read();
         let ts_cal1 = TS_CAL_30::read();
@@ -28,12 +35,17 @@ impl Calibration {
     }
 }
 
+/// A driver to access the CPU temeprature sensor.
 pub struct CpuTempSensor {
     sensor: AdcChannel<'static, hal::stm32::ADC3, hal::adc::Temperature>,
     calibration: Calibration,
 }
 
 impl CpuTempSensor {
+    /// Construct the temperature sensor.
+    ///
+    /// # Args
+    /// * `sensor` - The ADC channel of the integrated temperature sensor.
     pub fn new(
         sensor: AdcChannel<'static, hal::stm32::ADC3, hal::adc::Temperature>,
     ) -> Self {
