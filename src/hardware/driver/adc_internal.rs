@@ -32,9 +32,11 @@ pub struct AdcInternal {
 
 impl AdcInternal {
     // ADC sampling time (aka time to charge the sampling capacitor).
-    // For the RC circuit on the Stabilizer CPU ADC hearder, sampling times of more than
+    // For the RC circuit on the Stabilizer CPU ADC header, sampling times of more than
     // 160 ns were not observed to have an effect on the sampled values.
-    // 64 cycles with a 50 MHz ADC clock gives 1.28 us, which should be on the safe side.
+    // According to the datasheet the slow ADC channels, of which we use some,
+    // need at least 172 ns sampling time for 16 bits accuracy.
+    // 64 cycles with a 50 MHz ADC clock gives 1.28 us.
     const STABILIZER_T_SAMP: adc::AdcSampleTime = adc::AdcSampleTime::T_64;
     pub fn new(
         delay: &mut impl DelayUs<u8>,
