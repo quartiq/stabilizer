@@ -3,7 +3,7 @@ use stm32h7xx_hal::{
     signature::{TS_CAL_110, TS_CAL_30},
 };
 
-use super::shared_adc::{AdcError, AdcChannel};
+use super::shared_adc::{AdcChannel, AdcError};
 
 struct Calibration {
     slope: f32,
@@ -45,6 +45,8 @@ impl CpuTempSensor {
 
     /// Get the temperature of the CPU in degrees Celsius.
     pub fn get_temperature(&mut self) -> Result<f32, AdcError> {
-        self.sensor.read_raw().map(|raw| self.calibration.sample_to_temperature(raw))
+        self.sensor
+            .read_raw()
+            .map(|raw| self.calibration.sample_to_temperature(raw))
     }
 }

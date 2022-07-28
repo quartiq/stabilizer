@@ -14,7 +14,7 @@ use smoltcp_nal::smoltcp;
 
 use super::{
     adc, afe, dac, design_parameters, eeprom, input_stamper::InputStamper,
-    pounder, pounder::dds_output::DdsOutput, shared_adc,
+    pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc,
     temp_sensor::CpuTempSensor, timers, DigitalInput0, DigitalInput1,
     EthernetPhy, NetworkStack, SystemTimer, Systick, AFE0, AFE1,
 };
@@ -747,12 +747,21 @@ pub fn setup(
 
         hal::adc::Temperature::new().enable(&adc3);
 
-        (adc1.enable(), adc2.enable(), adc3.enable())
-    };
+        let adc1 = adc1.enable();
+        let adc2 = adc2.enable();
+        let adc3 = adc3.enable();
 
-    let adc1 = shared_adc::new_shared_adc!(hal::stm32::ADC1 = adc1).unwrap();
-    let adc2 = shared_adc::new_shared_adc!(hal::stm32::ADC2 = adc2).unwrap();
-    let adc3 = shared_adc::new_shared_adc!(hal::stm32::ADC3 = adc3).unwrap();
+        (
+            // The ADCs must live as global, mutable singletons so that we can hand out references
+            // to the internal ADC. If they were instead to live within e.g. StabilizerDevices,
+            // they would not yet live in 'static memory, which means that we could not hand out
+            // references during initialization, since those references would be invalidated when
+            // we move StabilizerDevices into the late RTIC resources.
+            cortex_m::singleton!(: SharedAdc<hal::stm32::ADC1> = SharedAdc::new(adc1.slope() as f32, adc1)).unwrap(),
+            cortex_m::singleton!(: SharedAdc<hal::stm32::ADC2> = SharedAdc::new(adc2.slope() as f32, adc2)).unwrap(),
+            cortex_m::singleton!(: SharedAdc<hal::stm32::ADC3> = SharedAdc::new(adc3.slope() as f32, adc3)).unwrap(),
+        )
+    };
 
     // Measure the Pounder PGOOD output to detect if pounder is present on Stabilizer.
     let pounder_pgood = gpiob.pb13.into_pull_down_input();
@@ -793,10 +802,10 @@ pub fn setup(
             )
         };
 
-        let pwr0 = adc1.create_channel(gpiof.pf11.into_analog()).unwrap();
-        let pwr1 = adc2.create_channel(gpiof.pf14.into_analog()).unwrap();
-        let aux_adc0 = adc3.create_channel(gpiof.pf3.into_analog()).unwrap();
-        let aux_adc1 = adc3.create_channel(gpiof.pf4.into_analog()).unwrap();
+        let pwr0 = adc1.create_channel(gpiof.pf11.into_analog());
+        let pwr1 = adc2.create_channel(gpiof.pf14.into_analog());
+        let aux_adc0 = adc3.create_channel(gpiof.pf3.into_analog());
+        let aux_adc1 = adc3.create_channel(gpiof.pf4.into_analog());
 
         let pounder_devices = pounder::PounderDevices::new(
             io_expander,

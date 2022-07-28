@@ -20,9 +20,6 @@ use stm32h7xx_hal as hal;
 
 #[derive(Debug, Copy, Clone)]
 pub enum AdcError {
-    /// Indicates that the ADC channel has already been allocated.
-    Allocated,
-
     /// Indicates that the ADC is already in use
     InUse,
 }
@@ -31,7 +28,7 @@ pub enum AdcError {
 pub struct AdcChannel<'a, Adc, PIN> {
     pin: PIN,
     slope: f32,
-    mutex: &'a spinning::Mutex<hal::adc::Adc<Adc, hal::adc::Enabled>>,
+    mutex: &'a spin::Mutex<hal::adc::Adc<Adc, hal::adc::Enabled>>,
 }
 
 impl<'a, Adc, PIN> AdcChannel<'a, Adc, PIN>
@@ -62,8 +59,7 @@ where
 /// An ADC peripheral that can provide ownership of individual channels for sharing between
 /// drivers.
 pub struct SharedAdc<Adc> {
-    mutex: spinning::Mutex<hal::adc::Adc<Adc, hal::adc::Enabled>>,
-    allocated_channels: core::cell::RefCell<[bool; 20]>,
+    mutex: spin::Mutex<hal::adc::Adc<Adc, hal::adc::Enabled>>,
     slope: f32,
 }
 
@@ -76,8 +72,7 @@ impl<Adc> SharedAdc<Adc> {
     pub fn new(slope: f32, adc: hal::adc::Adc<Adc, hal::adc::Enabled>) -> Self {
         Self {
             slope,
-            mutex: spinning::Mutex::new(adc),
-            allocated_channels: core::cell::RefCell::new([false; 20]),
+            mutex: spin::Mutex::new(adc),
         }
     }
 
@@ -91,31 +86,11 @@ impl<Adc> SharedAdc<Adc> {
     pub fn create_channel<PIN: Channel<Adc, ID = u8>>(
         &self,
         pin: PIN,
-    ) -> Result<AdcChannel<'_, Adc, PIN>, AdcError> {
-        let mut channels = self.allocated_channels.borrow_mut();
-        if channels[PIN::channel() as usize] {
-            return Err(AdcError::Allocated);
-        }
-
-        channels[PIN::channel() as usize] = true;
-
-        Ok(AdcChannel {
+    ) -> AdcChannel<'_, Adc, PIN> {
+        AdcChannel {
             pin,
             slope: self.slope,
             mutex: &self.mutex,
-        })
+        }
     }
 }
-
-macro_rules! new_shared_adc {
-    ($adc_type:ty = $adc:expr) => {{
-        let m: Option<&'static mut _> = cortex_m::singleton!(
-            : $crate::hardware::shared_adc::SharedAdc<$adc_type> = $crate::hardware::shared_adc::SharedAdc::new($adc.slope() as f32, $adc)
-        );
-
-        m
-    }};
-}
-
-/// Construct a shared ADC driver into a global, mutable singleton.
-pub(crate) use new_shared_adc;
