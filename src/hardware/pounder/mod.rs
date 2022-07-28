@@ -1,5 +1,6 @@
 use super::hal;
-use embedded_hal::{adc::OneShot, blocking::spi::Transfer};
+use crate::hardware::shared_adc::AdcChannel;
+use embedded_hal::blocking::spi::Transfer;
 use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Serialize};
 
@@ -277,13 +278,26 @@ impl ad9959::Interface for QspiInterface {
 pub struct PounderDevices {
     mcp23017: mcp23017::MCP23017<hal::i2c::I2c<hal::stm32::I2C1>>,
     attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
-    adc1: hal::adc::Adc<hal::stm32::ADC1, hal::adc::Enabled>,
-    adc2: hal::adc::Adc<hal::stm32::ADC2, hal::adc::Enabled>,
-    adc3: hal::adc::Adc<hal::stm32::ADC3, hal::adc::Enabled>,
-    pwr0: hal::gpio::gpiof::PF11<hal::gpio::Analog>,
-    pwr1: hal::gpio::gpiof::PF14<hal::gpio::Analog>,
-    aux_adc0: hal::gpio::gpiof::PF3<hal::gpio::Analog>,
-    aux_adc1: hal::gpio::gpiof::PF4<hal::gpio::Analog>,
+    pwr0: AdcChannel<
+        'static,
+        hal::stm32::ADC1,
+        hal::gpio::gpiof::PF11<hal::gpio::Analog>,
+    >,
+    pwr1: AdcChannel<
+        'static,
+        hal::stm32::ADC2,
+        hal::gpio::gpiof::PF14<hal::gpio::Analog>,
+    >,
+    aux_adc0: AdcChannel<
+        'static,
+        hal::stm32::ADC3,
+        hal::gpio::gpiof::PF3<hal::gpio::Analog>,
+    >,
+    aux_adc1: AdcChannel<
+        'static,
+        hal::stm32::ADC3,
+        hal::gpio::gpiof::PF4<hal::gpio::Analog>,
+    >,
 }
 
 impl PounderDevices {
@@ -291,34 +305,41 @@ impl PounderDevices {
     ///
     /// Args:
     /// * `attenuator_spi` - A SPI interface to control digital attenuators.
-    /// * `adcs` - The ADC1, ADC2, ADC3 peripherals.
-    /// * `adc_pins` - The ADC input channel pins for the RF power measurement on IN0/IN1 and AUX
-    ///     ADC0 and AUX ADC1.
+    /// * `pwr0` - The ADC channel to measure the IN0 input power.
+    /// * `pwr1` - The ADC channel to measure the IN1 input power.
+    /// * `aux_adc0` - The ADC channel to measure the ADC0 auxiliary input.
+    /// * `aux_adc1` - The ADC channel to measure the ADC1 auxiliary input.
     pub fn new(
         mcp23017: mcp23017::MCP23017<hal::i2c::I2c<hal::stm32::I2C1>>,
         attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
-        adcs: (
-            hal::adc::Adc<hal::stm32::ADC1, hal::adc::Enabled>,
-            hal::adc::Adc<hal::stm32::ADC2, hal::adc::Enabled>,
-            hal::adc::Adc<hal::stm32::ADC3, hal::adc::Enabled>,
-        ),
-        adc_pins: (
+        pwr0: AdcChannel<
+            'static,
+            hal::stm32::ADC1,
             hal::gpio::gpiof::PF11<hal::gpio::Analog>,
+        >,
+        pwr1: AdcChannel<
+            'static,
+            hal::stm32::ADC2,
             hal::gpio::gpiof::PF14<hal::gpio::Analog>,
+        >,
+        aux_adc0: AdcChannel<
+            'static,
+            hal::stm32::ADC3,
             hal::gpio::gpiof::PF3<hal::gpio::Analog>,
+        >,
+        aux_adc1: AdcChannel<
+            'static,
+            hal::stm32::ADC3,
             hal::gpio::gpiof::PF4<hal::gpio::Analog>,
-        ),
+        >,
     ) -> Result<Self, Error> {
         let mut devices = Self {
             mcp23017,
             attenuator_spi,
-            adc1: adcs.0,
-            adc2: adcs.1,
-            adc3: adcs.2,
-            pwr0: adc_pins.0,
-            pwr1: adc_pins.1,
-            aux_adc0: adc_pins.2,
-            aux_adc1: adc_pins.3,
+            pwr0,
+            pwr1,
+            aux_adc0,
+            aux_adc1,
         };
 
         // Configure power-on-default state for pounder. All LEDs are off, on-board oscillator
@@ -343,20 +364,8 @@ impl PounderDevices {
     /// Sample one of the two auxiliary ADC channels associated with the respective RF input channel.
     pub fn sample_aux_adc(&mut self, channel: Channel) -> Result<f32, Error> {
         let adc_scale = match channel {
-            Channel::In0 => {
-                let adc_reading: u32 = self
-                    .adc3
-                    .read(&mut self.aux_adc0)
-                    .map_err(|_| Error::Adc)?;
-                adc_reading as f32 / self.adc3.slope() as f32
-            }
-            Channel::In1 => {
-                let adc_reading: u32 = self
-                    .adc3
-                    .read(&mut self.aux_adc1)
-                    .map_err(|_| Error::Adc)?;
-                adc_reading as f32 / self.adc3.slope() as f32
-            }
+            Channel::In0 => self.aux_adc0.read().unwrap(),
+            Channel::In1 => self.aux_adc1.read().unwrap(),
             _ => return Err(Error::InvalidChannel),
         };
 
@@ -432,16 +441,8 @@ impl rf_power::PowerMeasurementInterface for PounderDevices {
     /// The sampled voltage of the specified channel.
     fn sample_converter(&mut self, channel: Channel) -> Result<f32, Error> {
         let adc_scale = match channel {
-            Channel::In0 => {
-                let adc_reading: u32 =
-                    self.adc1.read(&mut self.pwr0).map_err(|_| Error::Adc)?;
-                adc_reading as f32 / self.adc1.slope() as f32
-            }
-            Channel::In1 => {
-                let adc_reading: u32 =
-                    self.adc2.read(&mut self.pwr1).map_err(|_| Error::Adc)?;
-                adc_reading as f32 / self.adc2.slope() as f32
-            }
+            Channel::In0 => self.pwr0.read().unwrap(),
+            Channel::In1 => self.pwr1.read().unwrap(),
             _ => return Err(Error::InvalidChannel),
         };
 

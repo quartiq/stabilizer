@@ -905,6 +905,7 @@ dependencies = [
  "serde",
  "serde-json-core",
  "smoltcp-nal",
+ "spin",
  "stm32h7xx-hal",
  "systick-monotonic",
 ]

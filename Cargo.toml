@@ -56,6 +56,7 @@ fugit = "0.3"
 rtt-logger = "0.2"
 systick-monotonic = "1.0"
 mono-clock = "0.1"
+spin = { version = "0.9", default-features = false, features = ["spin_mutex"]}
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "ethernet", "xspi"]
