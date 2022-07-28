@@ -13,10 +13,10 @@ use stm32h7xx_hal::{
 use smoltcp_nal::smoltcp;
 
 use super::{
-    adc, afe, dac, design_parameters, eeprom, input_stamper::InputStamper,
-    pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc,
-    cpu_temp_sensor::CpuTempSensor, timers, DigitalInput0, DigitalInput1,
-    EthernetPhy, NetworkStack, SystemTimer, Systick, AFE0, AFE1,
+    adc, afe, cpu_temp_sensor::CpuTempSensor, dac, design_parameters, eeprom,
+    input_stamper::InputStamper, pounder, pounder::dds_output::DdsOutput,
+    shared_adc::SharedAdc, timers, DigitalInput0, DigitalInput1, EthernetPhy,
+    NetworkStack, SystemTimer, Systick, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;

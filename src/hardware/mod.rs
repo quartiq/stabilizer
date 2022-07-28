@@ -4,6 +4,7 @@ pub use stm32h7xx_hal as hal;
 
 pub mod adc;
 pub mod afe;
+pub mod cpu_temp_sensor;
 pub mod dac;
 pub mod design_parameters;
 pub mod input_stamper;
@@ -11,7 +12,6 @@ pub mod pounder;
 pub mod setup;
 pub mod shared_adc;
 pub mod signal_generator;
-pub mod cpu_temp_sensor;
 pub mod timers;
 
 mod eeprom;
