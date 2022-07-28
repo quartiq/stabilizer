@@ -56,6 +56,9 @@ pub struct Telemetry {
 
     /// Most recent digital input assertion state.
     pub digital_inputs: [bool; 2],
+
+    /// The CPU temperature in degrees Celsius.
+    pub cpu_temp: f32,
 }
 
 impl Default for TelemetryBuffer {
@@ -74,14 +77,16 @@ impl TelemetryBuffer {
     /// # Args
     /// * `afe0` - The current AFE configuration for channel 0.
     /// * `afe1` - The current AFE configuration for channel 1.
+    /// * `cpu_temp` - The current CPU temperature.
     ///
     /// # Returns
     /// The finalized telemetry structure that can be serialized and reported.
-    pub fn finalize(self, afe0: Gain, afe1: Gain) -> Telemetry {
+    pub fn finalize(self, afe0: Gain, afe1: Gain, cpu_temp: f32) -> Telemetry {
         let in0_volts = Into::<f32>::into(self.adcs[0]) / afe0.as_multiplier();
         let in1_volts = Into::<f32>::into(self.adcs[1]) / afe1.as_multiplier();
 
         Telemetry {
+            cpu_temp,
             adcs: [in0_volts, in1_volts],
             dacs: [self.dacs[0].into(), self.dacs[1].into()],
             digital_inputs: self.digital_inputs,

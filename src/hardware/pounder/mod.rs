@@ -1,5 +1,5 @@
 use super::hal;
-use crate::hardware::shared_adc::AdcChannel;
+use crate::hardware::{shared_adc::AdcChannel, I2c1Proxy};
 use embedded_hal::blocking::spi::Transfer;
 use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Serialize};
@@ -276,7 +276,8 @@ impl ad9959::Interface for QspiInterface {
 
 /// A structure containing implementation for Pounder hardware.
 pub struct PounderDevices {
-    mcp23017: mcp23017::MCP23017<hal::i2c::I2c<hal::stm32::I2C1>>,
+    pub lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
+    mcp23017: mcp23017::MCP23017<I2c1Proxy>,
     attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
     pwr0: AdcChannel<
         'static,
@@ -304,13 +305,16 @@ impl PounderDevices {
     /// Construct and initialize pounder-specific hardware.
     ///
     /// Args:
+    /// * `lm75` - The temperature sensor on Pounder.
+    /// * `mcp23017` - The GPIO expander on Pounder.
     /// * `attenuator_spi` - A SPI interface to control digital attenuators.
     /// * `pwr0` - The ADC channel to measure the IN0 input power.
     /// * `pwr1` - The ADC channel to measure the IN1 input power.
     /// * `aux_adc0` - The ADC channel to measure the ADC0 auxiliary input.
     /// * `aux_adc1` - The ADC channel to measure the ADC1 auxiliary input.
     pub fn new(
-        mcp23017: mcp23017::MCP23017<hal::i2c::I2c<hal::stm32::I2C1>>,
+        lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
+        mcp23017: mcp23017::MCP23017<I2c1Proxy>,
         attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
         pwr0: AdcChannel<
             'static,
@@ -334,6 +338,7 @@ impl PounderDevices {
         >,
     ) -> Result<Self, Error> {
         let mut devices = Self {
+            lm75,
             mcp23017,
             attenuator_spi,
             pwr0,
@@ -364,8 +369,8 @@ impl PounderDevices {
     /// Sample one of the two auxiliary ADC channels associated with the respective RF input channel.
     pub fn sample_aux_adc(&mut self, channel: Channel) -> Result<f32, Error> {
         let adc_scale = match channel {
-            Channel::In0 => self.aux_adc0.read().unwrap(),
-            Channel::In1 => self.aux_adc1.read().unwrap(),
+            Channel::In0 => self.aux_adc0.read_normalized().unwrap(),
+            Channel::In1 => self.aux_adc1.read_normalized().unwrap(),
             _ => return Err(Error::InvalidChannel),
         };
 
@@ -441,8 +446,8 @@ impl rf_power::PowerMeasurementInterface for PounderDevices {
     /// The sampled voltage of the specified channel.
     fn sample_converter(&mut self, channel: Channel) -> Result<f32, Error> {
         let adc_scale = match channel {
-            Channel::In0 => self.pwr0.read().unwrap(),
-            Channel::In1 => self.pwr1.read().unwrap(),
+            Channel::In0 => self.pwr0.read_normalized().unwrap(),
+            Channel::In1 => self.pwr1.read_normalized().unwrap(),
             _ => return Err(Error::InvalidChannel),
         };
 

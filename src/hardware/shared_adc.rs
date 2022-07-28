@@ -38,13 +38,21 @@ where
     <hal::adc::Adc<Adc, hal::adc::Enabled> as OneShot<Adc, u32, PIN>>::Error:
         core::fmt::Debug,
 {
-    /// Read the ADC channel.
+    /// Read the ADC channel and normalize the result.
     ///
     /// # Returns
     /// The normalized ADC measurement as a ratio of full-scale.
-    pub fn read(&mut self) -> Result<f32, AdcError> {
+    pub fn read_normalized(&mut self) -> Result<f32, AdcError> {
+        self.read_raw().map(|code| code as f32 / self.slope)
+    }
+
+    /// Read the raw ADC sample for the channel.
+    ///
+    /// # Returns
+    /// The raw ADC code measured on the channel.
+    pub fn read_raw(&mut self) -> Result<u32, AdcError> {
         let mut adc = self.mutex.try_lock().ok_or(AdcError::InUse)?;
-        Ok(adc.read(&mut self.pin).unwrap() as f32 / self.slope)
+        Ok(adc.read(&mut self.pin).unwrap())
     }
 }
 

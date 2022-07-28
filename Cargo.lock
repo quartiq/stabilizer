@@ -396,6 +396,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33a33a362ce288760ec6a508b94caaec573ae7d3bbbd91b87aa0bad4456839db"
 
 [[package]]
+name = "lm75"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f05acdc7a7d6da7b9be48c2d1de2f9757d37d3a83564aa82b4ae6d7ad15d0db6"
+dependencies = [
+ "embedded-hal",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -891,6 +900,7 @@ dependencies = [
  "fugit",
  "heapless",
  "idsp",
+ "lm75",
  "log",
  "mcp23017",
  "miniconf",
@@ -904,6 +914,7 @@ dependencies = [
  "rtt-target",
  "serde",
  "serde-json-core",
+ "shared-bus",
  "smoltcp-nal",
  "spin",
  "stm32h7xx-hal",
