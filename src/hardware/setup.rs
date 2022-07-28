@@ -801,10 +801,10 @@ pub fn setup(
             )
         };
 
-        let pwr0 = adc1.create_channel(gpiof.pf11.into_analog()).unwrap();
-        let pwr1 = adc2.create_channel(gpiof.pf14.into_analog()).unwrap();
-        let aux_adc0 = adc3.create_channel(gpiof.pf3.into_analog()).unwrap();
-        let aux_adc1 = adc3.create_channel(gpiof.pf4.into_analog()).unwrap();
+        let pwr0 = adc1.create_channel(gpiof.pf11.into_analog());
+        let pwr1 = adc2.create_channel(gpiof.pf14.into_analog());
+        let aux_adc0 = adc3.create_channel(gpiof.pf3.into_analog());
+        let aux_adc1 = adc3.create_channel(gpiof.pf4.into_analog());
 
         let pounder_devices = pounder::PounderDevices::new(
             io_expander,

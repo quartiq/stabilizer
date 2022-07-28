@@ -20,9 +20,6 @@ use stm32h7xx_hal as hal;
 
 #[derive(Debug, Copy, Clone)]
 pub enum AdcError {
-    /// Indicates that the ADC channel has already been allocated.
-    Allocated,
-
     /// Indicates that the ADC is already in use
     InUse,
 }
@@ -55,7 +52,6 @@ where
 /// drivers.
 pub struct SharedAdc<Adc> {
     mutex: spin::Mutex<hal::adc::Adc<Adc, hal::adc::Enabled>>,
-    allocated_channels: core::cell::RefCell<[bool; 20]>,
     slope: f32,
 }
 
@@ -69,7 +65,6 @@ impl<Adc> SharedAdc<Adc> {
         Self {
             slope,
             mutex: spin::Mutex::new(adc),
-            allocated_channels: core::cell::RefCell::new([false; 20]),
         }
     }
 
@@ -83,18 +78,11 @@ impl<Adc> SharedAdc<Adc> {
     pub fn create_channel<PIN: Channel<Adc, ID = u8>>(
         &self,
         pin: PIN,
-    ) -> Result<AdcChannel<'_, Adc, PIN>, AdcError> {
-        let mut channels = self.allocated_channels.borrow_mut();
-        if channels[PIN::channel() as usize] {
-            return Err(AdcError::Allocated);
-        }
-
-        channels[PIN::channel() as usize] = true;
-
-        Ok(AdcChannel {
+    ) -> AdcChannel<'_, Adc, PIN> {
+        AdcChannel {
             pin,
             slope: self.slope,
             mutex: &self.mutex,
-        })
+        }
     }
 }
