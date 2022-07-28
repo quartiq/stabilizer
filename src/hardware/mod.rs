@@ -11,7 +11,7 @@ pub mod pounder;
 pub mod setup;
 pub mod shared_adc;
 pub mod signal_generator;
-pub mod temp_sensor;
+pub mod cpu_temp_sensor;
 pub mod timers;
 
 mod eeprom;
