@@ -23,7 +23,9 @@ use stabilizer::{
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
-        design_parameters, driver, hal,
+        design_parameters, driver,
+        driver::OutputChannelIdx,
+        hal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
@@ -163,6 +165,7 @@ mod app {
         settings: Settings,
         telemetry: TelemetryBuffer,
         signal_generator: [SignalGenerator; 2],
+        adc_internal: driver::adc_internal::AdcInternal,
         header_adc: driver::ltc2320::Ltc2320,
         header_adc_data: [u16; 8],
     }
@@ -227,6 +230,7 @@ mod app {
                         .unwrap(),
                 ),
             ],
+            adc_internal: driver.adc_internal,
             header_adc: driver.ltc2320,
             header_adc_data: [0u16; 8],
         };
@@ -416,7 +420,7 @@ mod app {
         c.shared.network.lock(|net| net.direct_stream(target));
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry])]
+    #[task(priority = 1, shared=[network, settings, telemetry, adc_internal])]
     fn telemetry(mut c: telemetry::Context) {
         let telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
@@ -433,6 +437,15 @@ mod app {
         // Schedule the telemetry task in the future.
         telemetry::Monotonic::spawn_after((telemetry_period as u64).secs())
             .unwrap();
+        log::info!(
+            "internal adc values: {:?}",
+            c.shared.adc_internal.lock(|adc| [
+                adc.read_output_current(OutputChannelIdx::Zero),
+                adc.read_output_current(OutputChannelIdx::One),
+                adc.read_output_voltage(OutputChannelIdx::Zero),
+                adc.read_output_voltage(OutputChannelIdx::One),
+            ])
+        );
     }
 
     #[task(priority = 1, shared=[network])]
@@ -461,7 +474,6 @@ mod app {
     fn header_adc_transfer_done(c: header_adc_transfer_done::Context) {
         (c.shared.header_adc, c.shared.header_adc_data).lock(|ltc, data| {
             ltc.handle_transfer_done(data);
-            log::info!("data: {:?}", data);
         });
     }
 

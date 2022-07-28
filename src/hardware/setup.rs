@@ -950,7 +950,28 @@ pub fn setup(
             device.QUADSPI,
             ltc2320_pins,
         );
-        Mezzanine::Driver(DriverDevices { ltc2320 })
+        let adc_internal_pins = driver::adc_internal::AdcInternalPins {
+            output_voltage: (gpiof.pf11.into_analog(), gpiof.pf3.into_analog()),
+            output_current: (gpiof.pf12.into_analog(), gpiof.pf4.into_analog()),
+        };
+        // Use default PLL2p clock input with 1/2 prescaler for 50 MHz ADC clock.
+        let adc_internal = driver::adc_internal::AdcInternal::new(
+            &mut delay,
+            &ccdr.clocks,
+            (ccdr.peripheral.ADC12, ccdr.peripheral.ADC3),
+            (
+                device.ADC1,
+                device.ADC2,
+                device.ADC3,
+                device.ADC12_COMMON,
+                device.ADC3_COMMON,
+            ),
+            adc_internal_pins,
+        );
+        Mezzanine::Driver(DriverDevices {
+            ltc2320,
+            adc_internal,
+        })
     } else {
         Mezzanine::None
     };
