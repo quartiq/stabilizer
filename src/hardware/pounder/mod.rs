@@ -1,7 +1,6 @@
 use super::hal;
 use crate::hardware::shared_adc::AdcChannel;
 use embedded_hal::blocking::spi::Transfer;
-use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Serialize};
 
 pub mod attenuators;
@@ -12,22 +11,41 @@ pub mod rf_power;
 #[cfg(not(feature = "pounder_v1_0"))]
 pub mod timestamp;
 
-#[derive(Debug, Copy, Clone, TryFromPrimitive)]
-#[repr(u8)]
+#[derive(Debug, Copy, Clone)]
 pub enum GpioPin {
-    Led4Green = 0,
-    Led5Red = 1,
-    Led6Green = 2,
-    Led7Red = 3,
-    Led8Green = 4,
-    Led9Red = 5,
-    AttLe0 = 8,
-    AttLe1 = 8 + 1,
-    AttLe2 = 8 + 2,
-    AttLe3 = 8 + 3,
-    AttRstN = 8 + 5,
-    OscEnN = 8 + 6,
-    ExtClkSel = 8 + 7,
+    Led4Green,
+    Led5Red,
+    Led6Green,
+    Led7Red,
+    Led8Green,
+    Led9Red,
+    AttLe0,
+    AttLe1,
+    AttLe2,
+    AttLe3,
+    AttRstN,
+    OscEnN,
+    ExtClkSel,
+}
+
+impl From<GpioPin> for mcp23017::Pin {
+    fn from(x: GpioPin) -> Self {
+        match x {
+            GpioPin::Led4Green => Self::A0,
+            GpioPin::Led5Red => Self::A1,
+            GpioPin::Led6Green => Self::A2,
+            GpioPin::Led7Red => Self::A3,
+            GpioPin::Led8Green => Self::A4,
+            GpioPin::Led9Red => Self::A5,
+            GpioPin::AttLe0 => Self::B0,
+            GpioPin::AttLe1 => Self::B1,
+            GpioPin::AttLe2 => Self::B2,
+            GpioPin::AttLe3 => Self::B3,
+            GpioPin::AttRstN => Self::B5,
+            GpioPin::OscEnN => Self::B6,
+            GpioPin::ExtClkSel => Self::B7,
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -57,6 +75,17 @@ pub enum Channel {
     Out0 = 1,
     In1 = 2,
     Out1 = 3,
+}
+
+impl From<Channel> for GpioPin {
+    fn from(x: Channel) -> Self {
+        match x {
+            Channel::In0 => GpioPin::AttLe0,
+            Channel::Out0 => GpioPin::AttLe1,
+            Channel::In1 => GpioPin::AttLe2,
+            Channel::Out1 => GpioPin::AttLe3,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Copy, Clone, Debug)]
@@ -347,15 +376,15 @@ impl PounderDevices {
         // output state needs to be set first to properly update the output registers.
         devices
             .mcp23017
-            .all_pin_mode(mcp23017::PinMode::OUTPUT)
+            .set_mode_all(mcp23017::Mode::Output)
             .map_err(|_| Error::I2c)?;
         devices
             .mcp23017
-            .write_gpio(mcp23017::Port::GPIOA, 0x00)
+            .write_gpio(mcp23017::Port::GpioA, 0x00)
             .map_err(|_| Error::I2c)?;
         devices
             .mcp23017
-            .write_gpio(mcp23017::Port::GPIOB, 0x2F)
+            .write_gpio(mcp23017::Port::GpioB, 0x2F)
             .map_err(|_| Error::I2c)?;
 
         Ok(devices)
@@ -380,8 +409,13 @@ impl PounderDevices {
         pin: GpioPin,
         state: bool,
     ) -> Result<(), Error> {
+        let level = if state {
+            mcp23017::Level::High
+        } else {
+            mcp23017::Level::Low
+        };
         self.mcp23017
-            .digital_write(pin as _, state)
+            .write_output_pin(mcp23017::Pin::from(pin), level)
             .map_err(|_| Error::I2c)?;
         Ok(())
     }
@@ -407,11 +441,9 @@ impl attenuators::AttenuatorInterface for PounderDevices {
     /// Args:
     /// * `channel` - The attenuator channel to latch.
     fn latch_attenuator(&mut self, channel: Channel) -> Result<(), Error> {
-        let pin =
-            GpioPin::try_from(GpioPin::AttLe0 as u8 + channel as u8).unwrap();
         // Active low
-        self.set_gpio_pin(pin, false)?;
-        self.set_gpio_pin(pin, true)
+        self.set_gpio_pin(channel.into(), false)?;
+        self.set_gpio_pin(channel.into(), true)
     }
 
     /// Read the raw attenuation codes stored in the attenuator shift registers.

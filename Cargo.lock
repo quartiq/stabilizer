@@ -423,10 +423,11 @@ checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
 [[package]]
 name = "mcp23017"
 version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c32fd6627e73f1cfa95c00ddcdcb5a6a6ddbd10b308d08588a502c018b6e12c"
+source = "git+https://github.com/quartiq/mcp23017.git?branch=refactor#9fdda4b8e02f493619eb133be7213f1ecac801bd"
 dependencies = [
+ "bit_field",
  "embedded-hal",
+ "num_enum",
 ]
 
 [[package]]
