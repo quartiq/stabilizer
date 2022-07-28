@@ -769,7 +769,7 @@ pub fn setup(
     let pounder = if pounder_pgood.is_high() {
         log::info!("Found Pounder");
 
-        let io_expander = {
+        let i2c1 = {
             let sda = gpiob.pb7.into_alternate().set_open_drain();
             let scl = gpiob.pb8.into_alternate().set_open_drain();
             let i2c1 = device.I2C1.i2c(
@@ -778,8 +778,15 @@ pub fn setup(
                 ccdr.peripheral.I2C1,
                 &ccdr.clocks,
             );
-            mcp23017::MCP23017::default(i2c1).unwrap()
+
+            shared_bus::new_atomic_check!(hal::i2c::I2c<hal::stm32::I2C1> = i2c1).unwrap()
         };
+
+        let io_expander =
+            mcp23017::MCP23017::default(i2c1.acquire_i2c()).unwrap();
+
+        let temp_sensor =
+            lm75::Lm75::new(i2c1.acquire_i2c(), lm75::Address::default());
 
         let spi = {
             let mosi = gpiod.pd7.into_alternate();
@@ -808,6 +815,7 @@ pub fn setup(
         let aux_adc1 = adc3.create_channel(gpiof.pf4.into_analog());
 
         let pounder_devices = pounder::PounderDevices::new(
+            temp_sensor,
             io_expander,
             spi,
             pwr0,
@@ -963,7 +971,7 @@ pub fn setup(
         adcs,
         dacs,
         temperature_sensor: CpuTempSensor::new(
-            adc3.create_channel(hal::adc::Temperature::new()).unwrap(),
+            adc3.create_channel(hal::adc::Temperature::new()),
         ),
         timestamper: input_stamper,
         net: network_devices,

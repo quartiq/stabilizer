@@ -59,6 +59,10 @@ pub const MONOTONIC_FREQUENCY: u32 = 1_000;
 pub type Systick = systick_monotonic::Systick<MONOTONIC_FREQUENCY>;
 pub type SystemTimer = mono_clock::MonoClock<u32, MONOTONIC_FREQUENCY>;
 
+pub type I2c1 = hal::i2c::I2c<hal::stm32::I2C1>;
+pub type I2c1Proxy =
+    shared_bus::I2cProxy<'static, shared_bus::AtomicCheckMutex<I2c1>>;
+
 #[inline(never)]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
