@@ -407,24 +407,24 @@ impl PounderDevices {
     pub fn set_gpio_pin(
         &mut self,
         pin: GpioPin,
-        state: bool,
+        level: mcp23017::Level,
     ) -> Result<(), Error> {
-        let level = if state {
-            mcp23017::Level::High
-        } else {
-            mcp23017::Level::Low
-        };
         self.mcp23017
-            .write_output_pin(mcp23017::Pin::from(pin), level)
+            .write_pin(mcp23017::Pin::from(pin), level)
             .map_err(|_| Error::I2c)?;
         Ok(())
     }
 
     /// Select external reference clock input.
     pub fn set_ext_clk(&mut self, enabled: bool) -> Result<(), Error> {
+        let level = if enabled {
+            mcp23017::Level::High
+        } else {
+            mcp23017::Level::Low
+        };
         // Active low
-        self.set_gpio_pin(GpioPin::OscEnN, enabled)?;
-        self.set_gpio_pin(GpioPin::ExtClkSel, enabled)
+        self.set_gpio_pin(GpioPin::OscEnN, level)?;
+        self.set_gpio_pin(GpioPin::ExtClkSel, level)
     }
 }
 
@@ -432,8 +432,8 @@ impl attenuators::AttenuatorInterface for PounderDevices {
     /// Reset all of the attenuators to a power-on default state.
     fn reset_attenuators(&mut self) -> Result<(), Error> {
         // Active low
-        self.set_gpio_pin(GpioPin::AttRstN, false)?;
-        self.set_gpio_pin(GpioPin::AttRstN, true)
+        self.set_gpio_pin(GpioPin::AttRstN, mcp23017::Level::Low)?;
+        self.set_gpio_pin(GpioPin::AttRstN, mcp23017::Level::High)
     }
 
     /// Latch a configuration into a digital attenuator.
@@ -441,9 +441,9 @@ impl attenuators::AttenuatorInterface for PounderDevices {
     /// Args:
     /// * `channel` - The attenuator channel to latch.
     fn latch_attenuator(&mut self, channel: Channel) -> Result<(), Error> {
-        // Active low
-        self.set_gpio_pin(channel.into(), false)?;
-        self.set_gpio_pin(channel.into(), true)
+        self.set_gpio_pin(channel.into(), mcp23017::Level::Low)?;
+        // Rising edge sensitive
+        self.set_gpio_pin(channel.into(), mcp23017::Level::High)
     }
 
     /// Read the raw attenuation codes stored in the attenuator shift registers.
