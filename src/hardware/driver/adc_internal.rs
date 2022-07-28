@@ -7,7 +7,7 @@ use super::super::hal::{
     hal::blocking::delay::DelayUs,
     prelude::*,
     rcc::{rec, CoreClocks},
-    stm32::{ADC1, ADC2, ADC3},
+    stm32::{ADC1, ADC12_COMMON, ADC2, ADC3, ADC3_COMMON},
 };
 
 const V_REF: f32 = 2.048; // ADC reference voltage
@@ -42,17 +42,21 @@ impl AdcInternal {
         delay: &mut impl DelayUs<u8>,
         clocks: &CoreClocks,
         adc_rcc: (rec::Adc12, rec::Adc3),
-        adc: (ADC1, ADC2, ADC3),
+        adc: (ADC1, ADC2, ADC3, ADC12_COMMON, ADC3_COMMON),
         pins: AdcInternalPins,
     ) -> Self {
         // Setup ADCs
-        let (adc1, _adc2) = adc::adc12(adc.0, adc.1, delay, adc_rcc.0, clocks);
-        let adc3 = adc::Adc::adc3(adc.2, delay, adc_rcc.1, clocks);
-
+        let (mut adc1, _adc2) =
+            adc::adc12(adc.0, adc.1, delay, adc_rcc.0, clocks);
+        adc.3.ccr.modify(|_, w| w.presc().div2()); // Set ADC 1/2 clock prescaler after adc init but before enable
+        adc1.calibrate(); // re-calibrate after clock has changed
         let mut adc1 = adc1.enable();
         adc1.set_resolution(adc::Resolution::SIXTEENBIT);
         adc1.set_sample_time(AdcInternal::STABILIZER_T_SAMP);
 
+        let mut adc3 = adc::Adc::adc3(adc.2, delay, adc_rcc.1, clocks);
+        adc.4.ccr.modify(|_, w| w.presc().div2()); // Set ADC 3 clock prescaler after adc init but before enable
+        adc3.calibrate(); // re-calibrate after clock has changed
         let mut adc3 = adc3.enable();
         adc3.set_resolution(adc::Resolution::SIXTEENBIT);
         adc3.set_sample_time(AdcInternal::STABILIZER_T_SAMP);
