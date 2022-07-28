@@ -10,6 +10,7 @@ pub mod driver;
 pub mod input_stamper;
 pub mod pounder;
 pub mod setup;
+pub mod shared_adc;
 pub mod signal_generator;
 pub mod timers;
 
