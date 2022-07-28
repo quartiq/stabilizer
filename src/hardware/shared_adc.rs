@@ -31,7 +31,7 @@ pub enum AdcError {
 pub struct AdcChannel<'a, Adc, PIN> {
     pin: PIN,
     slope: f32,
-    mutex: &'a spinning::Mutex<hal::adc::Adc<Adc, hal::adc::Enabled>>,
+    mutex: &'a spin::Mutex<hal::adc::Adc<Adc, hal::adc::Enabled>>,
 }
 
 impl<'a, Adc, PIN> AdcChannel<'a, Adc, PIN>
@@ -54,7 +54,7 @@ where
 /// An ADC peripheral that can provide ownership of individual channels for sharing between
 /// drivers.
 pub struct SharedAdc<Adc> {
-    mutex: spinning::Mutex<hal::adc::Adc<Adc, hal::adc::Enabled>>,
+    mutex: spin::Mutex<hal::adc::Adc<Adc, hal::adc::Enabled>>,
     allocated_channels: core::cell::RefCell<[bool; 20]>,
     slope: f32,
 }
@@ -68,7 +68,7 @@ impl<Adc> SharedAdc<Adc> {
     pub fn new(slope: f32, adc: hal::adc::Adc<Adc, hal::adc::Enabled>) -> Self {
         Self {
             slope,
-            mutex: spinning::Mutex::new(adc),
+            mutex: spin::Mutex::new(adc),
             allocated_channels: core::cell::RefCell::new([false; 20]),
         }
     }
@@ -98,16 +98,3 @@ impl<Adc> SharedAdc<Adc> {
         })
     }
 }
-
-macro_rules! new_shared_adc {
-    ($adc_type:ty = $adc:expr) => {{
-        let m: Option<&'static mut _> = cortex_m::singleton!(
-            : $crate::hardware::shared_adc::SharedAdc<$adc_type> = $crate::hardware::shared_adc::SharedAdc::new($adc.slope() as f32, $adc)
-        );
-
-        m
-    }};
-}
-
-/// Construct a shared ADC driver into a global, mutable singleton.
-pub(crate) use new_shared_adc;
