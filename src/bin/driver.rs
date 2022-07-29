@@ -168,6 +168,7 @@ mod app {
         ltc2320: driver::ltc2320::Ltc2320,
         ltc2320_data: [u16; 8],
         adc_internal: driver::adc_internal::AdcInternal,
+        driver_i2c_devices: driver::I2cDevices,
     }
 
     #[local]
@@ -233,6 +234,7 @@ mod app {
             ltc2320: driver.ltc2320,
             ltc2320_data: [0u16; 8],
             adc_internal: driver.adc_internal,
+            driver_i2c_devices: driver.i2c_devices,
         };
 
         let mut local = Local {
@@ -420,7 +422,7 @@ mod app {
         c.shared.network.lock(|net| net.direct_stream(target));
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry, adc_internal])]
+    #[task(priority = 1, shared=[network, settings, telemetry, adc_internal, driver_i2c_devices])]
     fn telemetry(mut c: telemetry::Context) {
         let telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
@@ -445,6 +447,12 @@ mod app {
                 adc.read_output_voltage(OutputChannelIdx::Zero),
                 adc.read_output_voltage(OutputChannelIdx::One),
             ])
+        );
+        log::info!(
+            "driver lm75: {:?}",
+            c.shared
+                .driver_i2c_devices
+                .lock(|i2c| i2c.lm75.read_temperature())
         );
     }
 

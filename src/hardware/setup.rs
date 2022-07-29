@@ -3,7 +3,7 @@
 ///! This file contains all of the hardware-specific configuration of Stabilizer.
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{ptr, slice};
-use driver::{DriverDevices, DriverI2cDevices};
+use driver::{DriverDevices, I2cDevices};
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
@@ -730,8 +730,11 @@ pub fn setup(
     fp_led_3.set_low();
 
     let mut i2c1 = {
-        let sda = gpiob.pb7.into_alternate().set_open_drain();
-        let scl = gpiob.pb8.into_alternate().set_open_drain();
+        let mut sda = gpiob.pb7.into_alternate().set_open_drain();
+        let mut scl = gpiob.pb8.into_alternate().set_open_drain();
+        // enable internal pullups since none are present on Stabilizer without a Mezzanine
+        sda = sda.internal_pull_up(true);
+        scl = scl.internal_pull_up(true);
         device.I2C1.i2c(
             (scl, sda),
             100.kHz(),
@@ -741,7 +744,7 @@ pub fn setup(
     };
 
     let driver_mac_addr = eeprom::read_eui48(
-        &mut i2c1, &mut delay, 1, // just try once
+        &mut i2c1, &mut delay, 5, // try a few times
     );
     log::info!("Driver EUI48: {:?}", driver_mac_addr);
 
@@ -982,7 +985,7 @@ pub fn setup(
         let i2c_manager =
             shared_bus_rtic::new!(i2c1, hal::i2c::I2c<hal::stm32::I2C1>);
 
-        let driver_i2c_devices = DriverI2cDevices {
+        let i2c_devices = I2cDevices {
             lm75: lm75::Lm75::new(
                 i2c_manager.acquire(),
                 lm75::Address::default(),
@@ -994,7 +997,7 @@ pub fn setup(
         Some(Mezzanine::Driver(DriverDevices {
             ltc2320,
             adc_internal,
-            driver_i2c_devices,
+            i2c_devices,
         }))
     } else {
         None
