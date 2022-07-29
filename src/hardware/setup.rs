@@ -16,8 +16,8 @@ use smoltcp_nal::smoltcp;
 use super::{
     adc, afe, dac, design_parameters, driver, eeprom,
     input_stamper::InputStamper, pounder, pounder::dds_output::DdsOutput,
-    timers, DigitalInput0, DigitalInput1, EthernetPhy, Mezzanine, NetworkStack,
-    SystemTimer, Systick, AFE0, AFE1,
+    shared_adc::SharedAdc, timers, DigitalInput0, DigitalInput1, EthernetPhy,
+    Mezzanine, NetworkStack, SystemTimer, Systick, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -724,6 +724,7 @@ pub fn setup(
     fp_led_2.set_low();
     fp_led_3.set_low();
 
+    // Use default PLL2p clock input with 1/2 prescaler for 50 MHz ADC clock.
     let (adc1, adc2, adc3) = {
         let (mut adc1, mut adc2) = hal::adc::adc12(
             device.ADC1,
@@ -738,12 +739,19 @@ pub fn setup(
             ccdr.peripheral.ADC3,
             &ccdr.clocks,
         );
+        // Set ADC clock prescaler after adc init but before enable
+        device.ADC12_COMMON.ccr.modify(|_, w| w.presc().div2());
+        device.ADC3_COMMON.ccr.modify(|_, w| w.presc().div2());
+
         adc1.set_sample_time(hal::adc::AdcSampleTime::T_810);
         adc1.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+        adc1.calibrate(); // re-calibrate after clock has changed
         adc2.set_sample_time(hal::adc::AdcSampleTime::T_810);
         adc2.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+        adc2.calibrate();
         adc3.set_sample_time(hal::adc::AdcSampleTime::T_810);
         adc3.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+        adc3.calibrate();
 
         hal::adc::Temperature::new().enable(&adc3);
 
@@ -972,23 +980,17 @@ pub fn setup(
             device.QUADSPI,
             ltc2320_pins,
         );
-        let adc_internal_pins = driver::adc_internal::AdcInternalPins {
-            output_voltage: (gpiof.pf11.into_analog(), gpiof.pf3.into_analog()),
-            output_current: (gpiof.pf12.into_analog(), gpiof.pf4.into_analog()),
-        };
-        // Use default PLL2p clock input with 1/2 prescaler for 50 MHz ADC clock.
+        let output_voltage = (
+            adc1.create_channel(gpiof.pf11.into_analog()),
+            adc3.create_channel(gpiof.pf3.into_analog()),
+        );
+        let output_current = (
+            adc1.create_channel(gpiof.pf12.into_analog()),
+            adc3.create_channel(gpiof.pf4.into_analog()),
+        );
         let adc_internal = driver::adc_internal::AdcInternal::new(
-            &mut delay,
-            &ccdr.clocks,
-            (ccdr.peripheral.ADC12, ccdr.peripheral.ADC3),
-            (
-                device.ADC1,
-                device.ADC2,
-                device.ADC3,
-                device.ADC12_COMMON,
-                device.ADC3_COMMON,
-            ),
-            adc_internal_pins,
+            output_voltage,
+            output_current,
         );
         Mezzanine::Driver(DriverDevices {
             ltc2320,
