@@ -59,6 +59,7 @@ mono-clock = "0.1"
 enum-iterator = "0.7.0"
 shared-bus-rtic = "0.2"
 lm75 = "0.2"
+spin = { version = "0.9", default-features = false, features = ["spin_mutex"]}
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "ethernet", "xspi", "log"]
@@ -66,7 +67,7 @@ version = "0.12.2"
 
 [features]
 nightly = [ ]
-pounder_v1_1 = [ ]
+pounder_v1_0 = [ ]
 
 [profile.dev]
 codegen-units = 1

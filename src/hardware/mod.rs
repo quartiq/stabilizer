@@ -10,6 +10,7 @@ pub mod driver;
 pub mod input_stamper;
 pub mod pounder;
 pub mod setup;
+pub mod shared_adc;
 pub mod signal_generator;
 pub mod timers;
 
@@ -57,6 +58,7 @@ pub type NetworkManager = smoltcp_nal::shared::NetworkManager<
 pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
 
 /// System timer (RTIC Monotonic) tick frequency
+// Sets maximum rtic scheduling frequency and therefore eg. maximum sample rate for Driver header adc.
 pub const MONOTONIC_FREQUENCY: u32 = 10_000;
 pub type Systick = systick_monotonic::Systick<MONOTONIC_FREQUENCY>;
 pub type SystemTimer = mono_clock::MonoClock<u32, MONOTONIC_FREQUENCY>;
@@ -65,6 +67,7 @@ pub type SystemTimer = mono_clock::MonoClock<u32, MONOTONIC_FREQUENCY>;
 pub enum Mezzanine {
     Pounder(PounderDevices),
     Driver(DriverDevices),
+    None,
 }
 
 impl Mezzanine {

@@ -14,13 +14,12 @@ use stm32h7xx_hal::{
 use smoltcp_nal::smoltcp;
 
 use crate::hardware::driver::relays;
-use crate::hardware::Mezzanine;
 
 use super::{
     adc, afe, dac, design_parameters, driver, eeprom,
     input_stamper::InputStamper, pounder, pounder::dds_output::DdsOutput,
-    timers, DigitalInput0, DigitalInput1, EthernetPhy, NetworkStack,
-    SystemTimer, Systick, AFE0, AFE1,
+    shared_adc::SharedAdc, timers, DigitalInput0, DigitalInput1, EthernetPhy,
+    Mezzanine, NetworkStack, SystemTimer, Systick, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -121,7 +120,7 @@ pub struct PounderDevices {
     pub pounder: pounder::PounderDevices,
     pub dds_output: DdsOutput,
 
-    #[cfg(feature = "pounder_v1_1")]
+    #[cfg(not(feature = "pounder_v1_0"))]
     pub timestamper: pounder::timestamp::Timestamper,
 }
 
@@ -199,7 +198,7 @@ pub fn setup(
     clock: SystemTimer,
     batch_size: usize,
     sample_ticks: u32,
-) -> (StabilizerDevices, Option<Mezzanine>) {
+) -> (StabilizerDevices, Mezzanine) {
     // Set up RTT logging
     {
         // Enable debug during WFE/WFI-induced sleep
@@ -531,8 +530,10 @@ pub fn setup(
         );
 
         dac_clr_n.set_low();
-        let _dac0_ldac_n = gpioe.pe11.into_push_pull_output().set_low();
-        let _dac1_ldac_n = gpioe.pe15.into_push_pull_output().set_low();
+        // dac0_ldac_n
+        gpioe.pe11.into_push_pull_output().set_low();
+        // dac1_ldac_n
+        gpioe.pe15.into_push_pull_output().set_low();
         dac_clr_n.set_high();
 
         (dac0, dac1)
@@ -748,6 +749,53 @@ pub fn setup(
     );
     log::info!("Driver EUI48: {:?}", driver_mac_addr);
 
+    // Use default PLL2p clock input with 1/2 prescaler for 50 MHz ADC clock.
+    let (adc1, adc2, adc3) = {
+        let (mut adc1, mut adc2) = hal::adc::adc12(
+            device.ADC1,
+            device.ADC2,
+            &mut delay,
+            ccdr.peripheral.ADC12,
+            &ccdr.clocks,
+        );
+        let mut adc3 = hal::adc::Adc::adc3(
+            device.ADC3,
+            &mut delay,
+            ccdr.peripheral.ADC3,
+            &ccdr.clocks,
+        );
+        // Set ADC clock prescaler after adc init but before enable
+        device.ADC12_COMMON.ccr.modify(|_, w| w.presc().div2());
+        device.ADC3_COMMON.ccr.modify(|_, w| w.presc().div2());
+
+        adc1.set_sample_time(hal::adc::AdcSampleTime::T_810);
+        adc1.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+        adc1.calibrate(); // re-calibrate after clock has changed
+        adc2.set_sample_time(hal::adc::AdcSampleTime::T_810);
+        adc2.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+        adc2.calibrate();
+        adc3.set_sample_time(hal::adc::AdcSampleTime::T_810);
+        adc3.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+        adc3.calibrate();
+
+        hal::adc::Temperature::new().enable(&adc3);
+
+        let adc1 = adc1.enable();
+        let adc2 = adc2.enable();
+        let adc3 = adc3.enable();
+
+        (
+            // The ADCs must live as global, mutable singletons so that we can hand out references
+            // to the internal ADC. If they were instead to live within e.g. StabilizerDevices,
+            // they would not yet live in 'static memory, which means that we could not hand out
+            // references during initialization, since those references would be invalidated when
+            // we move StabilizerDevices into the late RTIC resources.
+            cortex_m::singleton!(: SharedAdc<hal::stm32::ADC1> = SharedAdc::new(adc1.slope() as f32, adc1)).unwrap(),
+            cortex_m::singleton!(: SharedAdc<hal::stm32::ADC2> = SharedAdc::new(adc2.slope() as f32, adc2)).unwrap(),
+            cortex_m::singleton!(: SharedAdc<hal::stm32::ADC3> = SharedAdc::new(adc3.slope() as f32, adc3)).unwrap(),
+        )
+    };
+
     // Measure the Pounder PGOOD output to detect if pounder is present on Stabilizer.
     let pounder_pgood = gpiob.pb13.into_pull_down_input();
     delay.delay_ms(2u8);
@@ -777,38 +825,18 @@ pub fn setup(
             )
         };
 
-        let (adc1, adc2) = {
-            let (mut adc1, mut adc2) = hal::adc::adc12(
-                device.ADC1,
-                device.ADC2,
-                &mut delay,
-                ccdr.peripheral.ADC12,
-                &ccdr.clocks,
-            );
-
-            let adc1 = {
-                adc1.calibrate();
-                adc1.enable()
-            };
-
-            let adc2 = {
-                adc2.calibrate();
-                adc2.enable()
-            };
-
-            (adc1, adc2)
-        };
-
-        let adc1_in_p = gpiof.pf11.into_analog();
-        let adc2_in_p = gpiof.pf14.into_analog();
+        let pwr0 = adc1.create_channel(gpiof.pf11.into_analog());
+        let pwr1 = adc2.create_channel(gpiof.pf14.into_analog());
+        let aux_adc0 = adc3.create_channel(gpiof.pf3.into_analog());
+        let aux_adc1 = adc3.create_channel(gpiof.pf4.into_analog());
 
         let pounder_devices = pounder::PounderDevices::new(
             io_expander,
             spi,
-            adc1,
-            adc2,
-            adc1_in_p,
-            adc2_in_p,
+            pwr0,
+            pwr1,
+            aux_adc0,
+            aux_adc1,
         )
         .unwrap();
 
@@ -839,9 +867,9 @@ pub fn setup(
                 pounder::QspiInterface::new(qspi).unwrap()
             };
 
-            #[cfg(feature = "pounder_v1_1")]
+            #[cfg(not(feature = "pounder_v1_0"))]
             let reset_pin = gpiog.pg6.into_push_pull_output();
-            #[cfg(not(feature = "pounder_v1_1"))]
+            #[cfg(feature = "pounder_v1_0")]
             let reset_pin = gpioa.pa0.into_push_pull_output();
 
             let mut io_update = gpiog.pg7.into_push_pull_output();
@@ -884,11 +912,11 @@ pub fn setup(
                 // there is additional margin.
                 hrtimer.configure_single_shot(
                     pounder::hrtimer::Channel::Two,
-                    design_parameters::POUNDER_IO_UPDATE_DURATION,
                     design_parameters::POUNDER_IO_UPDATE_DELAY,
+                    design_parameters::POUNDER_IO_UPDATE_DURATION,
                 );
 
-                // Ensure that we have enough time for an IO-update every sample.
+                // Ensure that we have enough time for an IO-update every batch.
                 let sample_frequency = {
                     design_parameters::TIMER_FREQUENCY.to_Hz() as f32
                         / sample_ticks as f32
@@ -896,7 +924,8 @@ pub fn setup(
 
                 let sample_period = 1.0 / sample_frequency;
                 assert!(
-                    sample_period > design_parameters::POUNDER_IO_UPDATE_DELAY
+                    sample_period * batch_size as f32
+                        > design_parameters::POUNDER_IO_UPDATE_DELAY
                 );
 
                 hrtimer
@@ -906,7 +935,7 @@ pub fn setup(
             DdsOutput::new(qspi, io_update_trigger, config)
         };
 
-        #[cfg(feature = "pounder_v1_1")]
+        #[cfg(not(feature = "pounder_v1_0"))]
         let pounder_stamper = {
             log::info!("Assuming Pounder v1.1 or later");
             let etr_pin = gpioa.pa0.into_alternate();
@@ -940,18 +969,18 @@ pub fn setup(
             )
         };
 
-        Some(Mezzanine::Pounder(PounderDevices {
+        Mezzanine::Pounder(PounderDevices {
             pounder: pounder_devices,
             dds_output,
 
-            #[cfg(feature = "pounder_v1_1")]
+            #[cfg(not(feature = "pounder_v1_0"))]
             timestamper: pounder_stamper,
-        }))
+        })
     // If Driver detected
     } else if true {
         log::info!("driver init");
         let ltc2320_pins = driver::ltc2320::Ltc2320Pins {
-            spi: (
+            qspi: (
                 gpiob.pb2.into_alternate(),
                 gpioe.pe7.into_alternate(),
                 gpioe.pe8.into_alternate(),
@@ -964,22 +993,19 @@ pub fn setup(
             &ccdr.clocks,
             ccdr.peripheral.QSPI,
             device.QUADSPI,
-            design_parameters::DRIVER_QSPI_FREQUENCY.convert(),
-            ccdr.peripheral.TIM7,
-            device.TIM7,
-            design_parameters::TIMER_FREQUENCY.convert(),
             ltc2320_pins,
         );
-        let adc_internal_pins = driver::adc_internal::AdcInternalPins {
-            output_voltage: (gpiof.pf11.into_analog(), gpiof.pf3.into_analog()),
-            output_current: (gpiof.pf12.into_analog(), gpiof.pf4.into_analog()),
-        };
+        let output_voltage = (
+            adc1.create_channel(gpiof.pf11.into_analog()),
+            adc3.create_channel(gpiof.pf3.into_analog()),
+        );
+        let output_current = (
+            adc1.create_channel(gpiof.pf12.into_analog()),
+            adc3.create_channel(gpiof.pf4.into_analog()),
+        );
         let adc_internal = driver::adc_internal::AdcInternal::new(
-            &mut delay,
-            &ccdr.clocks,
-            (ccdr.peripheral.ADC12, ccdr.peripheral.ADC3),
-            (device.ADC1, device.ADC2, device.ADC3),
-            adc_internal_pins,
+            output_voltage,
+            output_current,
         );
 
         let i2c_manager =
@@ -994,13 +1020,13 @@ pub fn setup(
             relays: relays::Relays::new(i2c_manager.acquire()),
         };
 
-        Some(Mezzanine::Driver(DriverDevices {
+        Mezzanine::Driver(DriverDevices {
             ltc2320,
             adc_internal,
             i2c_devices,
-        }))
+        })
     } else {
-        None
+        Mezzanine::None
     };
 
     let stabilizer = StabilizerDevices {
