@@ -802,7 +802,9 @@ pub fn setup(
     let mezzanine = if pounder_pgood.is_high() {
         log::info!("Found Pounder");
 
-        let io_expander = mcp23017::MCP23017::default(i2c1).unwrap();
+        let io_expander =
+            mcp23017::MCP23017::new_default(i2c1, mcp23017::Variant::MCP23017)
+                .unwrap();
 
         let spi = {
             let mosi = gpiod.pd7.into_alternate();
@@ -1017,7 +1019,7 @@ pub fn setup(
                 lm75::Address::default(),
             ),
 
-            relays: relays::Relays::new(i2c_manager.acquire()),
+            relays: relays::Relay::new(i2c_manager.acquire()),
         };
 
         Mezzanine::Driver(DriverDevices {

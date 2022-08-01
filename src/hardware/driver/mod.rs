@@ -13,7 +13,7 @@ pub type I2C1 =
 // Devices on the Driver I2C bus. Used in conjunction with shared-bus-rtic to arbitrate bus.
 pub struct I2cDevices {
     pub lm75: lm75::Lm75<I2C1, lm75::ic::Lm75>,
-    pub relays: relays::Relays<I2C1>,
+    pub relays: relays::Relay<I2C1>,
 }
 pub struct DriverDevices {
     pub ltc2320: ltc2320::Ltc2320,
