@@ -1,5 +1,3 @@
-use enum_iterator::IntoEnumIterator;
-use num_enum::TryFromPrimitive;
 pub mod adc_internal;
 pub mod ltc2320;
 pub mod relay;
@@ -13,7 +11,8 @@ pub type I2C1 =
 // Devices on the Driver I2C bus. Used in conjunction with shared-bus-rtic to arbitrate bus.
 pub struct I2cDevices {
     pub lm75: lm75::Lm75<I2C1, lm75::ic::Lm75>,
-    pub relays: relay::Relay<I2C1>,
+    pub relay_ln: relay::Relay<'static, I2C1>,
+    pub relay_hp: relay::Relay<'static, I2C1>,
 }
 pub struct DriverDevices {
     pub ltc2320: ltc2320::Ltc2320,
@@ -21,9 +20,9 @@ pub struct DriverDevices {
     pub i2c_devices: I2cDevices,
 }
 
-#[derive(Clone, Copy, TryFromPrimitive, IntoEnumIterator, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(usize)]
-pub enum OutputChannelIdx {
-    Zero = 0,
-    One = 1,
+pub enum Channel {
+    HighPower,
+    LowNoise,
 }

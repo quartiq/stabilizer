@@ -8,16 +8,10 @@ use core::fmt::Debug;
 ///!
 ///! The relays are controlled via an I2C io-expander.
 use embedded_hal::blocking::i2c::{Write, WriteRead};
-use mcp23017::{Level, Pin, MCP23017};
+use mcp23017::Pin;
 
-use super::Channel;
+use super::OutputChannelIdx;
 use smlang::statemachine;
-
-#[derive(Debug, Copy, Clone)]
-pub enum RelayError {
-    /// Indicates that the I2C expander IC is in use
-    Mcp23008InUse,
-}
 
 // Driver low power output relays pins
 #[allow(non_camel_case_types, clippy::upper_case_acronyms, dead_code)]
@@ -61,18 +55,20 @@ impl From<HpRelayPin> for Pin {
     }
 }
 
-pub struct Relay<'a, I2C: WriteRead + Write> {
-    mutex: &'a spin::Mutex<MCP23017<I2C>>,
-    ch: Channel,
+pub struct Relay<I2C: WriteRead + Write> {
+    mcp23017: mcp23017::MCP23017<I2C>,
 }
 
-impl<'a, I2C, E> Relay<'a, I2C>
+impl<I2C, E> Relay<I2C>
 where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     E: Debug,
 {
-    pub fn new(mutex: &'a spin::Mutex<MCP23017<I2C>>, ch: Channel) -> Self {
-        Relay { mutex, ch }
+    pub fn new(i2c: I2C) -> Self {
+        let mcp23017 =
+            mcp23017::MCP23017::new_default(i2c, mcp23017::Variant::MCP23008)
+                .unwrap();
+        Relay { mcp23017 }
     }
 }
 
@@ -90,25 +86,13 @@ pub mod sm {
     }
 }
 
-impl<'a, I2C, E> sm::StateMachineContext for Relay<'a, I2C>
+impl<I2C, E> sm::StateMachineContext for Relay<I2C>
 where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     E: Debug,
 {
     // K0 to upper
     fn enable(&mut self) -> () {
-        let mut mcp = self
-            .mutex
-            .try_lock()
-            .ok_or(RelayError::Mcp23008InUse)
-            .unwrap(); // panic here if in use
-        if self.ch == Channel::LowNoise {
-            mcp.write_pin(LnRelayPin::K1_EN.into(), Level::High)
-                .unwrap(); // dummy write for now
-        } else {
-            mcp.write_pin(HpRelayPin::K1_EN.into(), Level::High)
-                .unwrap(); // dummy write for now
-        }
         todo!()
     }
 
@@ -128,7 +112,7 @@ where
     }
 }
 
-impl<'a, I2C, E> sm::StateMachine<Relay<'a, I2C>>
+impl<I2C, E> sm::StateMachine<Relay<I2C>>
 where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     E: Debug,

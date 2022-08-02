@@ -24,7 +24,7 @@ use stabilizer::{
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
         design_parameters, driver,
-        driver::OutputChannelIdx,
+        driver::Channel,
         hal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
@@ -442,10 +442,10 @@ mod app {
         log::info!(
             "internal adc values: {:?}",
             c.shared.adc_internal.lock(|adc| [
-                adc.read_output_current(OutputChannelIdx::Zero),
-                adc.read_output_current(OutputChannelIdx::One),
-                adc.read_output_voltage(OutputChannelIdx::Zero),
-                adc.read_output_voltage(OutputChannelIdx::One),
+                adc.read_output_current(Channel::LowNoise),
+                adc.read_output_current(Channel::HighPower),
+                adc.read_output_voltage(Channel::LowNoise),
+                adc.read_output_voltage(Channel::HighPower),
             ])
         );
         log::info!(

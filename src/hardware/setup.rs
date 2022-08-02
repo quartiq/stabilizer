@@ -1013,13 +1013,23 @@ pub fn setup(
         let i2c_manager =
             shared_bus_rtic::new!(i2c1, hal::i2c::I2c<hal::stm32::I2C1>);
 
-        let i2c_devices = I2cDevices {
-            lm75: lm75::Lm75::new(
-                i2c_manager.acquire(),
-                lm75::Address::default(),
-            ),
+        let lm75 =
+            lm75::Lm75::new(i2c_manager.acquire(), lm75::Address::default());
 
-            relays: relay::Relay::new(i2c_manager.acquire()),
+        let mcp23008 = mcp23017::MCP23017::new_default(
+            i2c_manager.acquire(),
+            mcp23017::Variant::MCP23008,
+        )
+        .unwrap();
+
+        let mcp_mutex =
+            cortex_m::singleton!(: spin::Mutex<mcp23017::MCP23017<&shared_bus_rtic::CommonBus<stm32h7xx_hal::i2c::I2c<stm32h7xx_hal::stm32::I2C1>>>> 
+            = spin::Mutex::new(mcp23008)).unwrap();
+
+        let i2c_devices = I2cDevices {
+            lm75,
+            relay_ln: relay::Relay::new(mcp_mutex, driver::Channel::LowNoise),
+            relay_hp: relay::Relay::new(mcp_mutex, driver::Channel::HighPower),
         };
 
         Mezzanine::Driver(DriverDevices {
