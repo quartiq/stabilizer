@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import logging
 import struct
+import socket
 from collections import namedtuple
 from dataclasses import dataclass
 
@@ -20,6 +21,18 @@ Trace = namedtuple("Trace", "values scale label")
 def wrap(wide):
     """Wrap to 32 bit integer"""
     return wide & 0xffffffff
+
+
+def get_local_ip(remote):
+    """Get the local IP of a connection to the to a remote host.
+    Returns a list of four octets."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect((remote, 1883))
+        address = sock.getsockname()[0]
+    finally:
+        sock.close()
+    return list(map(int, address.split(".")))
 
 
 class AdcDac:
