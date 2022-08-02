@@ -82,6 +82,14 @@ class StabilizerStream(asyncio.DatagramProtocol):
         loop = asyncio.get_running_loop()
         transport, protocol = await loop.create_datagram_endpoint(
             lambda: cls(maxsize), local_addr=local_addr)
+        # Increase the OS UDP receive buffer size to 4 MiB so that latency
+        # spikes don't impact much. Achieving 4 MiB may require increasing
+        # the max allowed buffer size, e.g. via
+        # `sudo sysctl net.core.rmem_max=26214400` but nowadays the default
+        # max appears to be ~ 50 MiB already.
+        sock = transport.get_extra_info("socket")
+        if sock is not None:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 << 20)
         return transport, protocol
 
     def __init__(self, maxsize):
