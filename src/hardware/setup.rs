@@ -13,7 +13,7 @@ use stm32h7xx_hal::{
 
 use smoltcp_nal::smoltcp;
 
-use crate::hardware::driver::relays;
+use crate::hardware::driver::relay;
 
 use super::{
     adc, afe, dac, design_parameters, driver, eeprom,
@@ -1019,7 +1019,7 @@ pub fn setup(
                 lm75::Address::default(),
             ),
 
-            relays: relays::Relay::new(i2c_manager.acquire()),
+            relays: relay::Relay::new(i2c_manager.acquire()),
         };
 
         Mezzanine::Driver(DriverDevices {

@@ -2,7 +2,7 @@ use enum_iterator::IntoEnumIterator;
 use num_enum::TryFromPrimitive;
 pub mod adc_internal;
 pub mod ltc2320;
-pub mod relays;
+pub mod relay;
 use lm75;
 use stm32h7xx_hal as hal;
 
@@ -13,7 +13,7 @@ pub type I2C1 =
 // Devices on the Driver I2C bus. Used in conjunction with shared-bus-rtic to arbitrate bus.
 pub struct I2cDevices {
     pub lm75: lm75::Lm75<I2C1, lm75::ic::Lm75>,
-    pub relays: relays::Relay<I2C1>,
+    pub relays: relay::Relay<I2C1>,
 }
 pub struct DriverDevices {
     pub ltc2320: ltc2320::Ltc2320,
