@@ -14,7 +14,7 @@ use super::OutputChannelIdx;
 use smlang::statemachine;
 
 // Driver relays pins
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, clippy::upper_case_acronyms, dead_code)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum RelayPin {
     HP_K1_EN_N,
@@ -69,22 +69,38 @@ where
             state: RelayState::ShuntedGrounded,
         }
     }
-
-    // pub fn set_state(
-    //     state: RelayState,
-    //     channel: OutputChannelIdx,
-    // ) -> Result<(), E> {
-    // }
 }
 
 pub mod sm {
     use super::*;
     statemachine! {
         transitions: {
-            *ShuntedGrounded + Connect = ConnectedGrounded,
-            ConnectedGrounded + OpenK1 = Connected,
-            Connected + CloseK1 = ConnectedGrounded,
-            ConnectedGrounded + Shunt = ShuntedGrounded
+            *ShuntedGrounded + Connect / connect = ConnectedGrounded,
+            ConnectedGrounded + OpenK1 / open_k1 = Connected,
+            Connected + CloseK1 / close_k1 = ConnectedGrounded,
+            ConnectedGrounded + Shunt / shunt = ShuntedGrounded
         }
+    }
+}
+
+impl<I2C, E> sm::StateMachineContext for Relay<I2C>
+where
+    I2C: WriteRead<Error = E> + Write<Error = E>,
+    E: Debug,
+{
+    fn connect(&mut self) -> () {
+        todo!()
+    }
+
+    fn shunt(&mut self) -> () {
+        todo!()
+    }
+
+    fn open_k1(&mut self) -> () {
+        todo!()
+    }
+
+    fn close_k1(&mut self) -> () {
+        todo!()
     }
 }
