@@ -724,6 +724,7 @@ pub fn setup(
     fp_led_2.set_low();
     fp_led_3.set_low();
 
+    // Use default PLL2p clock input with 1/2 prescaler for 50 MHz ADC clock.
     let (adc1, adc2, adc3) = {
         let (mut adc1, mut adc2) = hal::adc::adc12(
             device.ADC1,
@@ -738,12 +739,19 @@ pub fn setup(
             ccdr.peripheral.ADC3,
             &ccdr.clocks,
         );
+        // Set ADC clock prescaler after adc init but before enable
+        device.ADC12_COMMON.ccr.modify(|_, w| w.presc().div2());
+        device.ADC3_COMMON.ccr.modify(|_, w| w.presc().div2());
+
         adc1.set_sample_time(hal::adc::AdcSampleTime::T_810);
         adc1.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+        adc1.calibrate(); // re-calibrate after clock has changed
         adc2.set_sample_time(hal::adc::AdcSampleTime::T_810);
         adc2.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+        adc2.calibrate();
         adc3.set_sample_time(hal::adc::AdcSampleTime::T_810);
         adc3.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+        adc3.calibrate();
 
         hal::adc::Temperature::new().enable(&adc3);
 
