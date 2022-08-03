@@ -19,7 +19,7 @@ pub enum RelayError {
     Mcp23008InUse,
 }
 
-// Driver low power output relays pins
+// Driver low noise output relays pins
 #[allow(non_camel_case_types, clippy::upper_case_acronyms, dead_code)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum LnRelayPin {
@@ -80,11 +80,11 @@ pub mod sm {
     use super::*;
     statemachine! {
         transitions: {
-            *Disabled + Enable / enable = EnableWaitK0,
-            EnableWaitK0 + RelayDone / enable_k1 = EnableWaitK1,
+            *Disabled + Enable / engage_k0 = EnableWaitK0,
+            EnableWaitK0 + RelayDone / engage_k1 = EnableWaitK1,
             EnableWaitK1 + RelayDone = Enabled,
-            Enabled + Disable / disable = DisableWaitK1,
-            DisableWaitK1 + RelayDone / disable_k0 = DisableWaitK0,
+            Enabled + Disable / disengage_k1 = DisableWaitK1,
+            DisableWaitK1 + RelayDone / disengage_k0 = DisableWaitK0,
             DisableWaitK0 + RelayDone = Disabled
         }
     }
@@ -96,7 +96,7 @@ where
     E: Debug,
 {
     // K0 to upper
-    fn enable(&mut self) -> () {
+    fn engage_k0(&mut self) -> () {
         let mut mcp = self
             .mutex
             .try_lock()
@@ -113,17 +113,17 @@ where
     }
 
     // K0 to lower
-    fn disable_k0(&mut self) -> () {
+    fn disengage_k0(&mut self) -> () {
         todo!()
     }
 
     // K1 to upper
-    fn enable_k1(&mut self) -> () {
+    fn engage_k1(&mut self) -> () {
         todo!()
     }
 
     // K1 to lower
-    fn disable(&mut self) -> () {
+    fn disengage_k1(&mut self) -> () {
         todo!()
     }
 }
