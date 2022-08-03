@@ -803,8 +803,7 @@ pub fn setup(
         log::info!("Found Pounder");
 
         let io_expander =
-            mcp23017::MCP23017::new_default(i2c1, mcp23017::Variant::MCP23017)
-                .unwrap();
+            mcp230xx::mcp23017::MCP23017::new_default(i2c1).unwrap();
 
         let spi = {
             let mosi = gpiod.pd7.into_alternate();
@@ -1016,15 +1015,16 @@ pub fn setup(
         let lm75 =
             lm75::Lm75::new(i2c_manager.acquire(), lm75::Address::default());
 
-        let mcp23008 = mcp23017::MCP23017::new_default(
-            i2c_manager.acquire(),
-            mcp23017::Variant::MCP23008,
-        )
-        .unwrap();
+        let mcp23008 =
+            mcp230xx::mcp23008::MCP23008::new_default(i2c_manager.acquire())
+                .unwrap();
 
         let mcp_mutex =
-            cortex_m::singleton!(: spin::Mutex<mcp23017::MCP23017<&shared_bus_rtic::CommonBus<stm32h7xx_hal::i2c::I2c<stm32h7xx_hal::stm32::I2C1>>>> 
-            = spin::Mutex::new(mcp23008)).unwrap();
+            cortex_m::singleton!(: spin::Mutex<mcp230xx::mcp23008::MCP23008<
+                &shared_bus_rtic::CommonBus<stm32h7xx_hal::i2c::I2c<
+                    stm32h7xx_hal::stm32::I2C1>>>>
+            = spin::Mutex::new(mcp23008))
+            .unwrap();
 
         let i2c_devices = I2cDevices {
             lm75,

@@ -450,7 +450,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
 
 [[package]]
-name = "mcp23017"
+name = "mcp230xx"
 version = "1.0.0"
 dependencies = [
  "bit_field",
@@ -953,7 +953,7 @@ dependencies = [
  "idsp",
  "lm75",
  "log",
- "mcp23017",
+ "mcp230xx",
  "miniconf",
  "minimq",
  "mono-clock",

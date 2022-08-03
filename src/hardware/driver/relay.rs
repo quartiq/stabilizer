@@ -8,7 +8,7 @@ use core::fmt::Debug;
 ///!
 ///! The relays are controlled via an I2C io-expander.
 use embedded_hal::blocking::i2c::{Write, WriteRead};
-use mcp23017::{Level, Pin, MCP23017};
+use mcp230xx::mcp23008::{Level, Pin, MCP23008};
 
 use super::Channel;
 use smlang::statemachine;
@@ -32,10 +32,10 @@ enum LnRelayPin {
 impl From<LnRelayPin> for Pin {
     fn from(pin: LnRelayPin) -> Self {
         match pin {
-            LnRelayPin::K1_EN_N => Self::A0,
-            LnRelayPin::K1_EN => Self::A1,
-            LnRelayPin::K0_D => Self::A2,
-            LnRelayPin::K0_CP => Self::A3,
+            LnRelayPin::K1_EN_N => Self::Gp0,
+            LnRelayPin::K1_EN => Self::Gp1,
+            LnRelayPin::K0_D => Self::Gp2,
+            LnRelayPin::K0_CP => Self::Gp3,
         }
     }
 }
@@ -53,16 +53,16 @@ enum HpRelayPin {
 impl From<HpRelayPin> for Pin {
     fn from(pin: HpRelayPin) -> Self {
         match pin {
-            HpRelayPin::K1_EN_N => Self::A4,
-            HpRelayPin::K1_EN => Self::A5,
-            HpRelayPin::K0_D => Self::A6,
-            HpRelayPin::K0_CP => Self::A7,
+            HpRelayPin::K1_EN_N => Self::Gp4,
+            HpRelayPin::K1_EN => Self::Gp5,
+            HpRelayPin::K0_D => Self::Gp6,
+            HpRelayPin::K0_CP => Self::Gp7,
         }
     }
 }
 
 pub struct Relay<'a, I2C: WriteRead + Write> {
-    mutex: &'a spin::Mutex<MCP23017<I2C>>,
+    mutex: &'a spin::Mutex<MCP23008<I2C>>,
     ch: Channel,
 }
 
@@ -71,7 +71,7 @@ where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     E: Debug,
 {
-    pub fn new(mutex: &'a spin::Mutex<MCP23017<I2C>>, ch: Channel) -> Self {
+    pub fn new(mutex: &'a spin::Mutex<MCP23008<I2C>>, ch: Channel) -> Self {
         Relay { mutex, ch }
     }
 }
