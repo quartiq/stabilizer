@@ -49,8 +49,8 @@ ad9959 = { path = "ad9959", version = "0.1.0" }
 miniconf = "0.5"
 smoltcp-nal = { version = "0.2", features = ["shared-stack"] }
 serde-json-core = "0.4"
-# mcp23017 = { git = "https://github.com/quartiq/mcp23017.git", branch = "refactor" }
-mcp230xx = { path = "../mcp230xx"}
+mcp230xx = { git = "https://github.com/quartiq/mcp230xx.git", branch = "nk/mpc23008-support" }
+# mcp230xx = { path = "../mcp230xx"}
 mutex-trait = "0.2"
 minimq = "0.5.3"
 fugit = "0.3"
