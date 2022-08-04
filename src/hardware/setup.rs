@@ -13,7 +13,7 @@ use stm32h7xx_hal::{
 
 use smoltcp_nal::smoltcp;
 
-use crate::hardware::driver::relay;
+use crate::hardware::driver::relay::SharedMcp;
 
 use super::{
     adc, afe, dac, design_parameters, driver, eeprom,
@@ -1015,21 +1015,19 @@ pub fn setup(
         let lm75 =
             lm75::Lm75::new(i2c_manager.acquire(), lm75::Address::default());
 
-        let mcp23008 =
+        let mcp =
             mcp230xx::mcp23008::MCP23008::new_default(i2c_manager.acquire())
                 .unwrap();
 
-        let mcp_mutex =
-            cortex_m::singleton!(: spin::Mutex<mcp230xx::mcp23008::MCP23008<
-                &shared_bus_rtic::CommonBus<stm32h7xx_hal::i2c::I2c<
-                    stm32h7xx_hal::stm32::I2C1>>>>
-            = spin::Mutex::new(mcp23008))
-            .unwrap();
+        let shared_mcp = cortex_m::singleton!(: SharedMcp<
+            &shared_bus_rtic::CommonBus<stm32h7xx_hal::i2c::I2c<
+                stm32h7xx_hal::stm32::I2C1>>>  = SharedMcp::new(mcp))
+        .unwrap();
 
         let i2c_devices = I2cDevices {
             lm75,
-            relay_ln: relay::Relay::new(mcp_mutex, driver::Channel::LowNoise),
-            relay_hp: relay::Relay::new(mcp_mutex, driver::Channel::HighPower),
+            relay_ln: shared_mcp.obtain_relay(driver::Channel::LowNoise),
+            relay_hp: shared_mcp.obtain_relay(driver::Channel::HighPower),
         };
 
         Mezzanine::Driver(DriverDevices {

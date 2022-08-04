@@ -7,6 +7,8 @@ use core::fmt::Debug;
 ///!    - one that connects the current source/sink to the output
 ///!
 ///! The relays are controlled via an I2C io-expander.
+/// hide mutex
+/// just pins as member variables for Relay
 use embedded_hal::blocking::i2c::{Write, WriteRead};
 use mcp230xx::mcp23008::{Level, Pin, MCP23008};
 
@@ -143,5 +145,42 @@ where
 
     pub fn handle_relay_done(&mut self) {
         self.process_event(sm::Events::RelayDone).unwrap();
+    }
+}
+
+/// A SharedMcp can provide ownership of one of two sets of relays on Driver.
+/// Each set consists of two relays that control the state of a Driver output channel.
+/// The relays are controlled by toggeling pins on an MCP23008 I2C IO expander on the Driver board.
+/// Both sets use the same MCP23008 chip, hence the SharedMcp.
+pub struct SharedMcp<I2C> {
+    mutex: spin::Mutex<MCP23008<I2C>>,
+}
+
+impl<I2C, E> SharedMcp<I2C>
+where
+    I2C: WriteRead<Error = E> + Write<Error = E>,
+{
+    /// Construct a new shared MCP23008.
+    ///
+    /// # Args
+    /// * `mcp` - The MCP23008 peripheral to share.
+    pub fn new(mcp: MCP23008<I2C>) -> Self {
+        Self {
+            mutex: spin::Mutex::new(mcp),
+        }
+    }
+
+    /// Allocate a set of relay pins on the MCP23008 and get the [Relay]
+    ///
+    /// # Args
+    /// * `ch` - The Driver channel the relay pins are used for.
+    ///
+    /// # Returns
+    /// An instantiated [Relay] whose ownership can be transferred to other drivers.
+    pub fn obtain_relay(&self, ch: Channel) -> Relay<'_, I2C> {
+        Relay {
+            mutex: &self.mutex,
+            ch,
+        }
     }
 }
