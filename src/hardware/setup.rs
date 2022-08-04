@@ -3,7 +3,7 @@
 ///! This file contains all of the hardware-specific configuration of Stabilizer.
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{ptr, slice};
-use driver::{DriverDevices, I2cDevices};
+use driver::DriverDevices;
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
@@ -13,6 +13,7 @@ use stm32h7xx_hal::{
 
 use smoltcp_nal::smoltcp;
 
+use crate::hardware::driver::relay::sm::StateMachine;
 use crate::hardware::driver::relay::SharedMcp;
 
 use super::{
@@ -1024,16 +1025,16 @@ pub fn setup(
                 stm32h7xx_hal::stm32::I2C1>>>  = SharedMcp::new(mcp))
         .unwrap();
 
-        let i2c_devices = I2cDevices {
-            lm75,
-            relay_ln: shared_mcp.obtain_relay(driver::Channel::LowNoise),
-            relay_hp: shared_mcp.obtain_relay(driver::Channel::HighPower),
-        };
-
         Mezzanine::Driver(DriverDevices {
+            lm75,
             ltc2320,
             adc_internal,
-            i2c_devices,
+            relay_sm_ln: StateMachine::new(
+                shared_mcp.obtain_relay(driver::Channel::LowNoise),
+            ),
+            relay_sm_hp: StateMachine::new(
+                shared_mcp.obtain_relay(driver::Channel::HighPower),
+            ),
         })
     } else {
         Mezzanine::None
