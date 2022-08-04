@@ -428,7 +428,7 @@ impl PounderDevices {
         level: mcp230xx::Level,
     ) -> Result<(), Error> {
         self.mcp23017
-            .set_output_latch(pin.into(), level)
+            .set_gpio(pin.into(), level)
             .map_err(|_| Error::I2c)?;
         Ok(())
     }
