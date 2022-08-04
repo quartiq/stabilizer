@@ -777,7 +777,7 @@ pub fn setup(
                 ccdr.peripheral.I2C1,
                 &ccdr.clocks,
             );
-            mcp23017::MCP23017::new_default(i2c1).unwrap()
+            mcp230xx::MCP230xx::new_default(i2c1).unwrap()
         };
 
         let spi = {
