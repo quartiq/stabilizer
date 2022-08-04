@@ -166,7 +166,6 @@ mod app {
         telemetry: TelemetryBuffer,
         signal_generator: [SignalGenerator; 2],
         adc_internal: driver::adc_internal::AdcInternal,
-        driver_i2c_devices: driver::I2cDevices,
         header_adc: driver::ltc2320::Ltc2320,
         header_adc_data: [u16; 8],
     }
@@ -232,7 +231,6 @@ mod app {
                 ),
             ],
             adc_internal: driver.adc_internal,
-            driver_i2c_devices: driver.i2c_devices,
             header_adc: driver.ltc2320,
             header_adc_data: [0u16; 8],
         };
@@ -422,7 +420,7 @@ mod app {
         c.shared.network.lock(|net| net.direct_stream(target));
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry, adc_internal, driver_i2c_devices])]
+    #[task(priority = 1, shared=[network, settings, telemetry, adc_internal])]
     fn telemetry(mut c: telemetry::Context) {
         let telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
@@ -447,12 +445,6 @@ mod app {
                 adc.read_output_voltage(Channel::LowNoise),
                 adc.read_output_voltage(Channel::HighPower),
             ])
-        );
-        log::info!(
-            "driver lm75: {:?}",
-            c.shared
-                .driver_i2c_devices
-                .lock(|i2c| i2c.lm75.read_temperature())
         );
     }
 
