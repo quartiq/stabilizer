@@ -1,5 +1,3 @@
-use core::fmt::Debug;
-
 ///! Driver relays driver
 ///!
 ///! There are 2 relays at the driver output:
@@ -9,6 +7,7 @@ use core::fmt::Debug;
 ///! The relays are controlled via an I2C io-expander.
 /// hide mutex
 /// just pins as member variables for Relay
+use core::fmt::Debug;
 use embedded_hal::blocking::i2c::{Write, WriteRead};
 use mcp230xx::mcp23008::{Level, Pin, MCP23008};
 
@@ -24,57 +23,67 @@ pub enum RelayError {
 // Driver low noise output relays pins
 #[allow(non_camel_case_types, clippy::upper_case_acronyms, dead_code)]
 #[derive(Debug, Copy, Clone, PartialEq)]
-enum LnRelayPin {
-    K1_EN_N,
-    K1_EN,
-    K0_D,
-    K0_CP,
+enum RelayPin {
+    LN_K1_EN_N,
+    LN_K1_EN,
+    LN_K0_D,
+    LN_K0_CP,
+    HP_K1_EN_N,
+    HP_K1_EN,
+    HP_K0_D,
+    HP_K0_CP,
 }
 
-impl From<LnRelayPin> for Pin {
-    fn from(pin: LnRelayPin) -> Self {
+impl From<RelayPin> for Pin {
+    fn from(pin: RelayPin) -> Self {
         match pin {
-            LnRelayPin::K1_EN_N => Self::Gp0,
-            LnRelayPin::K1_EN => Self::Gp1,
-            LnRelayPin::K0_D => Self::Gp2,
-            LnRelayPin::K0_CP => Self::Gp3,
-        }
-    }
-}
-
-// Driver high power output relays pins
-#[allow(non_camel_case_types, clippy::upper_case_acronyms, dead_code)]
-#[derive(Debug, Copy, Clone, PartialEq)]
-enum HpRelayPin {
-    K1_EN_N,
-    K1_EN,
-    K0_D,
-    K0_CP,
-}
-
-impl From<HpRelayPin> for Pin {
-    fn from(pin: HpRelayPin) -> Self {
-        match pin {
-            HpRelayPin::K1_EN_N => Self::Gp4,
-            HpRelayPin::K1_EN => Self::Gp5,
-            HpRelayPin::K0_D => Self::Gp6,
-            HpRelayPin::K0_CP => Self::Gp7,
+            RelayPin::LN_K1_EN_N => Self::Gp0,
+            RelayPin::LN_K1_EN => Self::Gp1,
+            RelayPin::LN_K0_D => Self::Gp2,
+            RelayPin::LN_K0_CP => Self::Gp3,
+            RelayPin::HP_K1_EN_N => Self::Gp4,
+            RelayPin::HP_K1_EN => Self::Gp5,
+            RelayPin::HP_K0_D => Self::Gp6,
+            RelayPin::HP_K0_CP => Self::Gp7,
         }
     }
 }
 
 pub struct Relay<'a, I2C: WriteRead + Write> {
     mutex: &'a spin::Mutex<MCP23008<I2C>>,
-    ch: Channel,
+    k1_en_n: RelayPin,
+    k1_en: RelayPin,
+    k1_d: RelayPin,
+    k1_cp: RelayPin,
 }
 
 impl<'a, I2C, E> Relay<'a, I2C>
 where
     I2C: WriteRead<Error = E> + Write<Error = E>,
-    E: Debug,
 {
     pub fn new(mutex: &'a spin::Mutex<MCP23008<I2C>>, ch: Channel) -> Self {
-        Relay { mutex, ch }
+        let (k1_en_n, k1_en, k1_d, k1_cp) = if ch == Channel::LowNoise {
+            (
+                RelayPin::LN_K1_EN_N,
+                RelayPin::LN_K1_EN,
+                RelayPin::LN_K0_D,
+                RelayPin::LN_K0_CP,
+            )
+        } else {
+            (
+                RelayPin::LN_K1_EN_N,
+                RelayPin::LN_K1_EN,
+                RelayPin::LN_K0_D,
+                RelayPin::LN_K0_CP,
+            )
+        };
+        Relay {
+            mutex,
+            k1_en_n,
+            k1_en,
+            k1_d,
+            k1_cp,
+        }
     }
 }
 
@@ -104,14 +113,7 @@ where
             .try_lock()
             .ok_or(RelayError::Mcp23008InUse)
             .unwrap(); // panic here if in use
-        if self.ch == Channel::LowNoise {
-            mcp.write_pin(LnRelayPin::K1_EN.into(), Level::High)
-                .unwrap(); // dummy write for now
-        } else {
-            mcp.write_pin(HpRelayPin::K1_EN.into(), Level::High)
-                .unwrap(); // dummy write for now
-        }
-        todo!()
+        mcp.write_pin(self.k1_en.into(), Level::High).unwrap();
     }
 
     // K0 to lower
@@ -178,9 +180,6 @@ where
     /// # Returns
     /// An instantiated [Relay] whose ownership can be transferred to other drivers.
     pub fn obtain_relay(&self, ch: Channel) -> Relay<'_, I2C> {
-        Relay {
-            mutex: &self.mutex,
-            ch,
-        }
+        Relay::new(&self.mutex, ch)
     }
 }
