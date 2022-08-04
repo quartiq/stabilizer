@@ -397,7 +397,7 @@ impl PounderDevices {
         {
             devices
                 .mcp23017
-                .set_output_latch(pin.into(), level)
+                .set_gpio(pin.into(), level)
                 .map_err(|_| Error::I2c)?;
             devices
                 .mcp23017
