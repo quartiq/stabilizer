@@ -1,3 +1,5 @@
+use self::attenuators::AttenuatorInterface;
+
 use super::hal;
 use crate::hardware::shared_adc::AdcChannel;
 use embedded_hal::blocking::spi::Transfer;
@@ -379,11 +381,11 @@ impl PounderDevices {
         // selected and enabled, attenuators out of reset. Note that testing indicates the
         // output state needs to be set first to properly update the output registers.
         for (pin, level) in [
-            (GpioPin::AttLe0, mcp230xx::Level::High),
-            (GpioPin::AttLe1, mcp230xx::Level::High),
-            (GpioPin::AttLe2, mcp230xx::Level::High),
-            (GpioPin::AttLe3, mcp230xx::Level::High),
-            (GpioPin::AttRstN, mcp230xx::Level::High),
+            (GpioPin::AttLe1, mcp230xx::Level::Low),
+            (GpioPin::AttLe2, mcp230xx::Level::Low),
+            (GpioPin::AttLe3, mcp230xx::Level::Low),
+            (GpioPin::AttLe0, mcp230xx::Level::Low),
+            (GpioPin::AttRstN, mcp230xx::Level::Low),
             (GpioPin::ExtClkSel, mcp230xx::Level::Low),
             (GpioPin::OscEnN, mcp230xx::Level::Low),
             (GpioPin::Led4Green, mcp230xx::Level::Low),
@@ -404,7 +406,7 @@ impl PounderDevices {
                 .set_direction(pin.into(), mcp230xx::Direction::Output)
                 .map_err(|_| Error::I2c)?;
         }
-
+        devices.reset_attenuators();
         Ok(devices)
     }
 
@@ -459,9 +461,9 @@ impl attenuators::AttenuatorInterface for PounderDevices {
     /// Args:
     /// * `channel` - The attenuator channel to latch.
     fn latch_attenuator(&mut self, channel: Channel) -> Result<(), Error> {
-        self.set_gpio_pin(channel.into(), mcp230xx::Level::Low)?;
         // Rising edge sensitive
-        self.set_gpio_pin(channel.into(), mcp230xx::Level::High)
+        self.set_gpio_pin(channel.into(), mcp230xx::Level::High)?;
+        self.set_gpio_pin(channel.into(), mcp230xx::Level::Low)
     }
 
     /// Read the raw attenuation codes stored in the attenuator shift registers.
