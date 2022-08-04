@@ -423,11 +423,12 @@ checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
 [[package]]
 name = "mcp230xx"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/mcp230xx.git?branch=refactor#7855784c642f9599e328809d3acd85731e52e1e9"
+source = "git+https://github.com/quartiq/mcp230xx.git?branch=refactor#71806afe39efd6a9be67defec3e79530d20b2e19"
 dependencies = [
  "bit_field",
  "embedded-hal",
  "num_enum",
+ "paste",
 ]
 
 [[package]]
