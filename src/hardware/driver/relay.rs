@@ -71,10 +71,10 @@ where
             )
         } else {
             (
-                RelayPin::LN_K1_EN_N,
-                RelayPin::LN_K1_EN,
-                RelayPin::LN_K0_D,
-                RelayPin::LN_K0_CP,
+                RelayPin::HP_K1_EN_N,
+                RelayPin::HP_K1_EN,
+                RelayPin::HP_K0_D,
+                RelayPin::HP_K0_CP,
             )
         };
         Relay {
