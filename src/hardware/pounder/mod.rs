@@ -432,8 +432,7 @@ impl PounderDevices {
     ) -> Result<(), Error> {
         self.mcp23017
             .set_gpio(pin.into(), level)
-            .map_err(|_| Error::I2c)?;
-        Ok(())
+            .map_err(|_| Error::I2c)
     }
 
     /// Select external reference clock input.
