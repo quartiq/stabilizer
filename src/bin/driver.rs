@@ -490,9 +490,8 @@ mod app {
     // Todo: figure out how to handle both channels in one function.
     #[task(priority = 1, shared=[driver_relay_state])]
     fn handle_relay(mut c: handle_relay::Context) {
-        let delay = (c.shared.driver_relay_state).lock(|state| {
-            state[0].handle_relay()
-        });
+        let delay =
+            (c.shared.driver_relay_state).lock(|state| state[0].handle_relay());
         if let Some(del) = delay {
             handle_relay::Monotonic::spawn_after(del.convert()).unwrap();
         }

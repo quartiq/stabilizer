@@ -172,16 +172,20 @@ where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     E: Debug,
 {
+    /// Start relay enabling sequence. Returns the relay delay we need to wait for.
     pub fn enable(&mut self) -> fugit::MillisDuration<u64> {
         self.process_event(sm::Events::Enable).unwrap();
         Relay::<'_, I2C>::K0_DELAY // engage K0 first
     }
 
+    /// Start relay disabling sequence. Returns the relay delay we need to wait for.
     pub fn disable(&mut self) -> fugit::MillisDuration<u64> {
         self.process_event(sm::Events::Disable).unwrap();
         Relay::<'_, I2C>::K1_DELAY // engage K1 first
     }
 
+    /// Handle a completed relay transition. Returns `Some(relay delay)` if we need to wait,
+    /// otherwise returns `None`.
     pub fn handle_relay(&mut self) -> Option<fugit::MillisDuration<u64>> {
         self.process_event(sm::Events::RelayDone).unwrap();
         match *self.state() {
