@@ -486,14 +486,16 @@ mod app {
         });
     }
 
-    // just handle LN state machine for now. Todo: figure out how to combine both.
+    // This only processes the Low noise channel relay now.
+    // Todo: figure out how to handle both channels in one function.
     #[task(priority = 1, shared=[driver_relay_state])]
-    fn handle_relay_done(mut c: handle_relay_done::Context) {
-        (c.shared.driver_relay_state).lock(|state| {
-            state[0]
-                .process_event(relay::sm::Events::RelayDone)
-                .unwrap();
+    fn handle_relay(mut c: handle_relay::Context) {
+        let delay = (c.shared.driver_relay_state).lock(|state| {
+            state[0].handle_relay()
         });
+        if let Some(del) = delay {
+            handle_relay::Monotonic::spawn_after(del.convert()).unwrap();
+        }
     }
 
     #[task(binds = ETH, priority = 1)]

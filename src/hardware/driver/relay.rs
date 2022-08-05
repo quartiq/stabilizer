@@ -53,10 +53,11 @@ impl From<RelayPin> for Pin {
 }
 
 // small helper to lock the mutex
+// maybe todo: Pass out an error if in use. Not sure how to get that out of the state machine though..
 fn get_mcp<I2C>(
     mutex: &'_ spin::Mutex<MCP23008<I2C>>,
 ) -> spin::MutexGuard<MCP23008<I2C>> {
-    mutex.try_lock().ok_or(RelayError::Mcp23008InUse).unwrap() // panic here if in use
+    mutex.try_lock().unwrap() // panic here if in use
 }
 
 pub struct Relay<'a, I2C: WriteRead + Write> {
@@ -72,6 +73,10 @@ impl<'a, I2C, E> Relay<'a, I2C>
 where
     I2C: WriteRead<Error = E> + Write<Error = E>,
 {
+    const K0_DELAY: fugit::MillisDuration<u64> =
+        fugit::MillisDurationU64::millis(10);
+    const K1_DELAY: fugit::MillisDuration<u64> =
+        fugit::MillisDurationU64::millis(10);
     pub fn new(
         mutex: &'a spin::Mutex<MCP23008<I2C>>,
         ccdr: &rcc::CoreClocks,
@@ -128,6 +133,7 @@ where
     // set K0 to upper position
     fn engage_k0(&mut self) {
         let mut mcp = get_mcp(self.mutex);
+        // set flipflop data pin
         mcp.write_pin(self.k0_d.into(), Level::High).unwrap();
         // set flipflop clock input low to prepare rising edge
         mcp.write_pin(self.k0_cp.into(), Level::Low).unwrap();
@@ -139,12 +145,9 @@ where
     // set K0 to lower position
     fn disengage_k0(&mut self) {
         let mut mcp = get_mcp(self.mutex);
-        // set flipflop data input low
         mcp.write_pin(self.k0_d.into(), Level::High).unwrap();
-        // set flipflop clock input low to prepare rising edge
         mcp.write_pin(self.k0_cp.into(), Level::Low).unwrap();
         self.delay.delay_us(100u32);
-        // set flipflop clock input high to generate rising edge
         mcp.write_pin(self.k0_cp.into(), Level::High).unwrap();
     }
 
@@ -159,7 +162,6 @@ where
     // set K1 to lower position
     fn engage_k1(&mut self) {
         let mut mcp = get_mcp(self.mutex);
-        // set en high and en _n low in order to engage K1
         mcp.write_pin(self.k1_en.into(), Level::High).unwrap();
         mcp.write_pin(self.k1_en_n.into(), Level::Low).unwrap();
     }
@@ -170,16 +172,23 @@ where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     E: Debug,
 {
-    pub fn enable(&mut self) {
+    pub fn enable(&mut self) -> fugit::MillisDuration<u64> {
         self.process_event(sm::Events::Enable).unwrap();
+        Relay::<'_, I2C>::K0_DELAY // engage K0 first
     }
 
-    pub fn disable(&mut self) {
+    pub fn disable(&mut self) -> fugit::MillisDuration<u64> {
         self.process_event(sm::Events::Disable).unwrap();
+        Relay::<'_, I2C>::K1_DELAY // engage K1 first
     }
 
-    pub fn handle_relay_done(&mut self) {
+    pub fn handle_relay(&mut self) -> Option<fugit::MillisDuration<u64>> {
         self.process_event(sm::Events::RelayDone).unwrap();
+        match *self.state() {
+            sm::States::EnableWaitK1 => Some(Relay::<'_, I2C>::K1_DELAY), // disengage K1 second
+            sm::States::DisableWaitK0 => Some(Relay::<'_, I2C>::K0_DELAY), // disengage K0 second
+            _ => None, // done, no delay needed
+        }
     }
 }
 
