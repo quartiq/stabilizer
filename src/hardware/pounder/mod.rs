@@ -307,7 +307,7 @@ impl ad9959::Interface for QspiInterface {
 
 /// A structure containing implementation for Pounder hardware.
 pub struct PounderDevices {
-    mcp23017: mcp230xx::MCP230xx<I2c1Proxy, mcp230xx::Mcp23017>,
+    mcp23017: mcp230xx::Mcp230xx<I2c1Proxy, mcp230xx::Mcp23017>,
     pub lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
     attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
     pwr0: AdcChannel<
@@ -345,7 +345,7 @@ impl PounderDevices {
     /// * `aux_adc1` - The ADC channel to measure the ADC1 auxiliary input.
     pub fn new(
         lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
-        mcp23017: mcp230xx::MCP230xx<I2c1Proxy, mcp230xx::Mcp23017>,
+        mcp23017: mcp230xx::Mcp230xx<I2c1Proxy, mcp230xx::Mcp23017>,
         attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
         pwr0: AdcChannel<
             'static,
