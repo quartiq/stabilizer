@@ -381,26 +381,26 @@ impl PounderDevices {
         // Configure power-on-default state for pounder. All LEDs are off, on-board oscillator
         // selected and enabled, attenuators out of reset. Note that testing indicates the
         // output state needs to be set first to properly update the output registers.
-        for (pin, level) in [
-            (GpioPin::AttLe1, mcp230xx::Level::Low),
-            (GpioPin::AttLe2, mcp230xx::Level::Low),
-            (GpioPin::AttLe3, mcp230xx::Level::Low),
-            (GpioPin::AttLe0, mcp230xx::Level::Low),
-            (GpioPin::AttRstN, mcp230xx::Level::Low),
-            (GpioPin::ExtClkSel, mcp230xx::Level::Low),
-            (GpioPin::OscEnN, mcp230xx::Level::Low),
-            (GpioPin::Led4Green, mcp230xx::Level::Low),
-            (GpioPin::Led5Red, mcp230xx::Level::Low),
-            (GpioPin::Led6Green, mcp230xx::Level::Low),
-            (GpioPin::Led7Red, mcp230xx::Level::Low),
-            (GpioPin::Led8Green, mcp230xx::Level::Low),
-            (GpioPin::Led9Red, mcp230xx::Level::Low),
+        for pin in [
+            GpioPin::AttLe1,
+            GpioPin::AttLe2,
+            GpioPin::AttLe3,
+            GpioPin::AttLe0,
+            GpioPin::AttRstN,
+            GpioPin::ExtClkSel,
+            GpioPin::OscEnN,
+            GpioPin::Led4Green,
+            GpioPin::Led5Red,
+            GpioPin::Led6Green,
+            GpioPin::Led7Red,
+            GpioPin::Led8Green,
+            GpioPin::Led9Red,
         ]
         .into_iter()
         {
             devices
                 .mcp23017
-                .set_gpio(pin.into(), level)
+                .set_gpio(pin.into(), mcp230xx::Level::Low)
                 .map_err(|_| Error::I2c)?;
             devices
                 .mcp23017
