@@ -30,7 +30,7 @@ pub enum GpioPin {
     ExtClkSel,
 }
 
-impl From<GpioPin> for mcp230xx::Mcp23017Pin {
+impl From<GpioPin> for mcp230xx::Mcp23017 {
     fn from(x: GpioPin) -> Self {
         match x {
             GpioPin::Led4Green => Self::A0,
