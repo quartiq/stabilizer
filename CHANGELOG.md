@@ -13,11 +13,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 * Temperature sensor measurement for Pounder and Stabilizer's CPU has been added [#575](https://github.com/quartiq/stabilizer/pull/575)
 
 ### Removed
+
 ### Changed
 
-* Minimum supported Rust version bumped to 1.59
+* Minimum supported Rust version bumped to 1.62
 
 ### Fixed
+
 * Fixed panics when using a batch size of 1 ([#540](https://github.com/quartiq/stabilizer/issues/540))
 
 ## [v0.6.0] - 2022-02-11
