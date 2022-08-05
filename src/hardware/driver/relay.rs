@@ -1,3 +1,4 @@
+use super::hal::rcc;
 ///! Driver relays driver
 ///!
 ///! There are 2 relays at the driver output:
@@ -8,7 +9,10 @@
 /// hide mutex
 /// just pins as member variables for Relay
 use core::fmt::Debug;
-use embedded_hal::blocking::i2c::{Write, WriteRead};
+use embedded_hal::blocking::{
+    delay::DelayUs,
+    i2c::{Write, WriteRead},
+};
 use mcp230xx::mcp23008::{Level, Pin, MCP23008};
 
 use super::Channel;
@@ -49,20 +53,33 @@ impl From<RelayPin> for Pin {
     }
 }
 
+// small helper to lock the mutex
+fn get_mcp<'a, I2C>(mutex: &'a spin::Mutex<MCP23008<I2C>>) -> spin::MutexGuard<MCP23008<I2C>> {
+    mutex
+        .try_lock()
+        .ok_or(RelayError::Mcp23008InUse)
+        .unwrap() // panic here if in use
+}
+
 pub struct Relay<'a, I2C: WriteRead + Write> {
     mutex: &'a spin::Mutex<MCP23008<I2C>>,
+    delay: asm_delay::AsmDelay,
     k1_en_n: RelayPin,
     k1_en: RelayPin,
-    k1_d: RelayPin,
-    k1_cp: RelayPin,
+    k0_d: RelayPin,
+    k0_cp: RelayPin,
 }
 
 impl<'a, I2C, E> Relay<'a, I2C>
 where
     I2C: WriteRead<Error = E> + Write<Error = E>,
 {
-    pub fn new(mutex: &'a spin::Mutex<MCP23008<I2C>>, ch: Channel) -> Self {
-        let (k1_en_n, k1_en, k1_d, k1_cp) = if ch == Channel::LowNoise {
+    pub fn new(
+        mutex: &'a spin::Mutex<MCP23008<I2C>>,
+        ccdr: &rcc::CoreClocks,
+        ch: Channel,
+    ) -> Self {
+        let (k1_en_n, k1_en, k0_d, k0_cp) = if ch == Channel::LowNoise {
             (
                 RelayPin::LN_K1_EN_N,
                 RelayPin::LN_K1_EN,
@@ -77,12 +94,16 @@ where
                 RelayPin::HP_K0_CP,
             )
         };
+        let delay = asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(
+            ccdr.c_ck().to_Hz(),
+        ));
         Relay {
             mutex,
+            delay,
             k1_en_n,
             k1_en,
-            k1_d,
-            k1_cp,
+            k0_d,
+            k0_cp,
         }
     }
 }
@@ -92,9 +113,9 @@ pub mod sm {
     statemachine! {
         transitions: {
             *Disabled + Enable / engage_k0 = EnableWaitK0,
-            EnableWaitK0 + RelayDone / engage_k1 = EnableWaitK1,
+            EnableWaitK0 + RelayDone / disengage_k1 = EnableWaitK1,
             EnableWaitK1 + RelayDone = Enabled,
-            Enabled + Disable / disengage_k1 = DisableWaitK1,
+            Enabled + Disable / engage_k1 = DisableWaitK1,
             DisableWaitK1 + RelayDone / disengage_k0 = DisableWaitK0,
             DisableWaitK0 + RelayDone = Disabled
         }
@@ -106,30 +127,45 @@ where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     E: Debug,
 {
-    // K0 to upper
-    fn engage_k0(&mut self) -> () {
-        let mut mcp = self
-            .mutex
-            .try_lock()
-            .ok_or(RelayError::Mcp23008InUse)
-            .unwrap(); // panic here if in use
+    // K0 to upper position
+    fn engage_k0(&mut self) {
+        let mut mcp = get_mcp(self.mutex);
+        mcp.write_pin(self.k0_d.into(), Level::High).unwrap();
+        // set flipflop clock input low to prepare rising edge
+        mcp.write_pin(self.k0_cp.into(), Level::Low).unwrap();
+        self.delay.delay_us(100u32);
+        // set flipflop clock input high to generate rising edge
+        mcp.write_pin(self.k0_cp.into(), Level::High).unwrap();
+    }
+
+    // K0 to lower position
+    fn disengage_k0(&mut self) {
+        let mut mcp = get_mcp(self.mutex);
+        // set flipflop data input low
+        mcp.write_pin(self.k0_d.into(), Level::High).unwrap();
+        // set flipflop clock input low to prepare rising edge
+        mcp.write_pin(self.k0_cp.into(), Level::Low).unwrap();
+        self.delay.delay_us(100u32);
+        // set flipflop clock input high to generate rising edge
+        mcp.write_pin(self.k0_cp.into(), Level::High).unwrap();
+    }
+
+    // K1 to upper position
+    fn disengage_k1(&mut self) {
+        let mut mcp = get_mcp(self.mutex);
+        // set en high and en _n low in order to engage K1
+        mcp.write_pin(self.k1_en.into(), Level::Low).unwrap();
+        mcp.write_pin(self.k1_en_n.into(), Level::High).unwrap();
+    }
+
+    // K1 to upper position
+    fn engage_k1(&mut self) {
+        let mut mcp = get_mcp(self.mutex);
+        // set en high and en _n low in order to engage K1
         mcp.write_pin(self.k1_en.into(), Level::High).unwrap();
+        mcp.write_pin(self.k1_en_n.into(), Level::Low).unwrap();
     }
 
-    // K0 to lower
-    fn disengage_k0(&mut self) -> () {
-        todo!()
-    }
-
-    // K1 to upper
-    fn engage_k1(&mut self) -> () {
-        todo!()
-    }
-
-    // K1 to lower
-    fn disengage_k1(&mut self) -> () {
-        todo!()
-    }
 }
 
 impl<'a, I2C, E> sm::StateMachine<Relay<'a, I2C>>
@@ -179,7 +215,11 @@ where
     ///
     /// # Returns
     /// An instantiated [Relay] whose ownership can be transferred to other drivers.
-    pub fn obtain_relay(&self, ch: Channel) -> Relay<'_, I2C> {
-        Relay::new(&self.mutex, ch)
+    pub fn obtain_relay(
+        &self,
+        ccdr: &rcc::CoreClocks,
+        ch: Channel,
+    ) -> Relay<'_, I2C> {
+        Relay::new(&self.mutex, ccdr, ch)
     }
 }

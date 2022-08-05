@@ -1030,10 +1030,10 @@ pub fn setup(
             ltc2320,
             adc_internal,
             relay_sm_ln: StateMachine::new(
-                shared_mcp.obtain_relay(driver::Channel::LowNoise),
+                shared_mcp.obtain_relay(&ccdr.clocks, driver::Channel::LowNoise),
             ),
             relay_sm_hp: StateMachine::new(
-                shared_mcp.obtain_relay(driver::Channel::HighPower),
+                shared_mcp.obtain_relay(&ccdr.clocks, driver::Channel::HighPower),
             ),
         })
     } else {
