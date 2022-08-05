@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 
 * Optional specification of a static IP address ([#509](https://github.com/quartiq/stabilizer/pull/509))
+* Temperature sensor measurement for Pounder and Stabilizer's CPU has been added [#575](https://github.com/quartiq/stabilizer/pull/575)
 
 ### Removed
 ### Changed

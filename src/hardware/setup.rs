@@ -13,10 +13,10 @@ use stm32h7xx_hal::{
 use smoltcp_nal::smoltcp;
 
 use super::{
-    adc, afe, dac, design_parameters, eeprom, input_stamper::InputStamper,
-    pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
-    DigitalInput0, DigitalInput1, EthernetPhy, NetworkStack, SystemTimer,
-    Systick, AFE0, AFE1,
+    adc, afe, cpu_temp_sensor::CpuTempSensor, dac, design_parameters, eeprom,
+    input_stamper::InputStamper, pounder, pounder::dds_output::DdsOutput,
+    shared_adc::SharedAdc, timers, DigitalInput0, DigitalInput1, EthernetPhy,
+    NetworkStack, SystemTimer, Systick, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -102,6 +102,7 @@ pub struct NetworkDevices {
 /// The available hardware interfaces on Stabilizer.
 pub struct StabilizerDevices {
     pub systick: Systick,
+    pub temperature_sensor: CpuTempSensor,
     pub afes: (AFE0, AFE1),
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
     pub dacs: (dac::Dac0Output, dac::Dac1Output),
@@ -723,6 +724,7 @@ pub fn setup(
     fp_led_2.set_low();
     fp_led_3.set_low();
 
+    // Use default PLL2p clock input with 1/2 prescaler for 50 MHz ADC clock.
     let (adc1, adc2, adc3) = {
         let (mut adc1, mut adc2) = hal::adc::adc12(
             device.ADC1,
@@ -737,12 +739,19 @@ pub fn setup(
             ccdr.peripheral.ADC3,
             &ccdr.clocks,
         );
+        // Set ADC clock prescaler after adc init but before enable
+        device.ADC12_COMMON.ccr.modify(|_, w| w.presc().div2());
+        device.ADC3_COMMON.ccr.modify(|_, w| w.presc().div2());
+
         adc1.set_sample_time(hal::adc::AdcSampleTime::T_810);
         adc1.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+        adc1.calibrate(); // re-calibrate after clock has changed
         adc2.set_sample_time(hal::adc::AdcSampleTime::T_810);
         adc2.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+        adc2.calibrate();
         adc3.set_sample_time(hal::adc::AdcSampleTime::T_810);
         adc3.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+        adc3.calibrate();
 
         hal::adc::Temperature::new().enable(&adc3);
 
@@ -768,7 +777,7 @@ pub fn setup(
     let pounder = if pounder_pgood.is_high() {
         log::info!("Found Pounder");
 
-        let io_expander = {
+        let i2c1 = {
             let sda = gpiob.pb7.into_alternate().set_open_drain();
             let scl = gpiob.pb8.into_alternate().set_open_drain();
             let i2c1 = device.I2C1.i2c(
@@ -777,8 +786,15 @@ pub fn setup(
                 ccdr.peripheral.I2C1,
                 &ccdr.clocks,
             );
-            mcp230xx::MCP230xx::new_default(i2c1).unwrap()
+
+            shared_bus::new_atomic_check!(hal::i2c::I2c<hal::stm32::I2C1> = i2c1).unwrap()
         };
+
+        let io_expander =
+            mcp230xx::MCP230xx::new_default(i2c1.acquire_i2c()).unwrap();
+
+        let temp_sensor =
+            lm75::Lm75::new(i2c1.acquire_i2c(), lm75::Address::default());
 
         let spi = {
             let mosi = gpiod.pd7.into_alternate();
@@ -807,6 +823,7 @@ pub fn setup(
         let aux_adc1 = adc3.create_channel(gpiof.pf4.into_analog());
 
         let pounder_devices = pounder::PounderDevices::new(
+            temp_sensor,
             io_expander,
             spi,
             pwr0,
@@ -961,6 +978,9 @@ pub fn setup(
         afes,
         adcs,
         dacs,
+        temperature_sensor: CpuTempSensor::new(
+            adc3.create_channel(hal::adc::Temperature::new()),
+        ),
         timestamper: input_stamper,
         net: network_devices,
         adc_dac_timer: sampling_timer,

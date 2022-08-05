@@ -194,6 +194,7 @@ mod app {
         dacs: (Dac0Output, Dac1Output),
         iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
         generator: FrameGenerator,
+        cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
     }
 
     #[init]
@@ -252,6 +253,7 @@ mod app {
             dacs: stabilizer.dacs,
             iir_state: [[[0.; 5]; IIR_CASCADE_LENGTH]; 2],
             generator,
+            cpu_temp_sensor: stabilizer.temperature_sensor,
         };
 
         // Enable ADC/DAC events
@@ -427,7 +429,7 @@ mod app {
         c.shared.network.lock(|net| net.direct_stream(target));
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry])]
+    #[task(priority = 1, shared=[network, settings, telemetry], local=[cpu_temp_sensor])]
     fn telemetry(mut c: telemetry::Context) {
         let telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
@@ -438,8 +440,11 @@ mod app {
             .lock(|settings| (settings.afe, settings.telemetry_period));
 
         c.shared.network.lock(|net| {
-            net.telemetry
-                .publish(&telemetry.finalize(gains[0], gains[1]))
+            net.telemetry.publish(&telemetry.finalize(
+                gains[0],
+                gains[1],
+                c.local.cpu_temp_sensor.get_temperature().unwrap(),
+            ))
         });
 
         // Schedule the telemetry task in the future.
