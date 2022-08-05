@@ -6,8 +6,7 @@ use super::hal::rcc;
 ///!    - one that connects the current source/sink to the output
 ///!
 ///! The relays are controlled via an I2C io-expander.
-/// hide mutex
-/// just pins as member variables for Relay
+/// Todo: document relay toggeling
 use core::fmt::Debug;
 use embedded_hal::blocking::{
     delay::DelayUs,
@@ -54,11 +53,10 @@ impl From<RelayPin> for Pin {
 }
 
 // small helper to lock the mutex
-fn get_mcp<'a, I2C>(mutex: &'a spin::Mutex<MCP23008<I2C>>) -> spin::MutexGuard<MCP23008<I2C>> {
-    mutex
-        .try_lock()
-        .ok_or(RelayError::Mcp23008InUse)
-        .unwrap() // panic here if in use
+fn get_mcp<I2C>(
+    mutex: &'_ spin::Mutex<MCP23008<I2C>>,
+) -> spin::MutexGuard<MCP23008<I2C>> {
+    mutex.try_lock().ok_or(RelayError::Mcp23008InUse).unwrap() // panic here if in use
 }
 
 pub struct Relay<'a, I2C: WriteRead + Write> {
@@ -127,7 +125,7 @@ where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     E: Debug,
 {
-    // K0 to upper position
+    // set K0 to upper position
     fn engage_k0(&mut self) {
         let mut mcp = get_mcp(self.mutex);
         mcp.write_pin(self.k0_d.into(), Level::High).unwrap();
@@ -138,7 +136,7 @@ where
         mcp.write_pin(self.k0_cp.into(), Level::High).unwrap();
     }
 
-    // K0 to lower position
+    // set K0 to lower position
     fn disengage_k0(&mut self) {
         let mut mcp = get_mcp(self.mutex);
         // set flipflop data input low
@@ -150,7 +148,7 @@ where
         mcp.write_pin(self.k0_cp.into(), Level::High).unwrap();
     }
 
-    // K1 to upper position
+    // set K1 to upper position
     fn disengage_k1(&mut self) {
         let mut mcp = get_mcp(self.mutex);
         // set en high and en _n low in order to engage K1
@@ -158,14 +156,13 @@ where
         mcp.write_pin(self.k1_en_n.into(), Level::High).unwrap();
     }
 
-    // K1 to upper position
+    // set K1 to lower position
     fn engage_k1(&mut self) {
         let mut mcp = get_mcp(self.mutex);
         // set en high and en _n low in order to engage K1
         mcp.write_pin(self.k1_en.into(), Level::High).unwrap();
         mcp.write_pin(self.k1_en_n.into(), Level::Low).unwrap();
     }
-
 }
 
 impl<'a, I2C, E> sm::StateMachine<Relay<'a, I2C>>

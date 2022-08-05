@@ -24,7 +24,10 @@ use stabilizer::{
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
         design_parameters, driver,
-        driver::Channel,
+        driver::{
+            relay::{self, sm::StateMachine},
+            Channel, I2C1,
+        },
         hal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
@@ -168,6 +171,11 @@ mod app {
         adc_internal: driver::adc_internal::AdcInternal,
         header_adc: driver::ltc2320::Ltc2320,
         header_adc_data: [u16; 8],
+        // driver_relay_state might eventually live inside driver_output_state but then the
+        // relay_delay function would have to lock the whole output state..
+        driver_relay_state: [StateMachine<relay::Relay<'static, I2C1>>; 2],
+        // driver_dac: [Dac; 2]
+        // driver_output_state: [Output State Macheine; 2]
     }
 
     #[local]
@@ -233,6 +241,7 @@ mod app {
             adc_internal: driver.adc_internal,
             header_adc: driver.ltc2320,
             header_adc_data: [0u16; 8],
+            driver_relay_state: driver.relay_sm, // this will live inside driver_output_state eventually
         };
 
         let mut local = Local {
@@ -474,6 +483,16 @@ mod app {
     fn header_adc_transfer_done(c: header_adc_transfer_done::Context) {
         (c.shared.header_adc, c.shared.header_adc_data).lock(|ltc, data| {
             ltc.handle_transfer_done(data);
+        });
+    }
+
+    // just handle LN state machine for now. Todo: figure out how to combine both.
+    #[task(priority = 1, shared=[driver_relay_state])]
+    fn handle_relay_done(mut c: handle_relay_done::Context) {
+        (c.shared.driver_relay_state).lock(|state| {
+            state[0]
+                .process_event(relay::sm::Events::RelayDone)
+                .unwrap();
         });
     }
 

@@ -3,7 +3,10 @@
 ///! This file contains all of the hardware-specific configuration of Stabilizer.
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{ptr, slice};
-use driver::DriverDevices;
+use driver::{
+    relay::{sm::StateMachine, SharedMcp},
+    DriverDevices,
+};
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
@@ -12,9 +15,6 @@ use stm32h7xx_hal::{
 };
 
 use smoltcp_nal::smoltcp;
-
-use crate::hardware::driver::relay::sm::StateMachine;
-use crate::hardware::driver::relay::SharedMcp;
 
 use super::{
     adc, afe, dac, design_parameters, driver, eeprom,
@@ -1025,16 +1025,22 @@ pub fn setup(
                 stm32h7xx_hal::stm32::I2C1>>>  = SharedMcp::new(mcp))
         .unwrap();
 
+        let relay_sm = [
+            StateMachine::new(
+                shared_mcp
+                    .obtain_relay(&ccdr.clocks, driver::Channel::LowNoise),
+            ),
+            StateMachine::new(
+                shared_mcp
+                    .obtain_relay(&ccdr.clocks, driver::Channel::HighPower),
+            ),
+        ];
+
         Mezzanine::Driver(DriverDevices {
             lm75,
             ltc2320,
             adc_internal,
-            relay_sm_ln: StateMachine::new(
-                shared_mcp.obtain_relay(&ccdr.clocks, driver::Channel::LowNoise),
-            ),
-            relay_sm_hp: StateMachine::new(
-                shared_mcp.obtain_relay(&ccdr.clocks, driver::Channel::HighPower),
-            ),
+            relay_sm,
         })
     } else {
         Mezzanine::None
