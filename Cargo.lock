@@ -857,16 +857,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "shared-bus-rtic"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb1899470d03c5728db375f63be8f2bbfb93d8c35ec932061f3b593434c2273b"
-dependencies = [
- "embedded-hal",
- "nb 1.0.0",
-]
-
-[[package]]
 name = "smlang"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -969,7 +959,6 @@ dependencies = [
  "serde",
  "serde-json-core",
  "shared-bus",
- "shared-bus-rtic",
  "smlang 0.5.1",
  "smoltcp-nal",
  "spin",

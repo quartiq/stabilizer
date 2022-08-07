@@ -58,7 +58,6 @@ rtt-logger = "0.2"
 systick-monotonic = "1.0"
 mono-clock = "0.1"
 enum-iterator = "0.7.0"
-shared-bus-rtic = "0.2"
 lm75 = "0.2"
 spin = { version = "0.9", default-features = false, features = ["spin_mutex"]}
 smlang = "0.5.1"

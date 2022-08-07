@@ -7,10 +7,6 @@ use stm32h7xx_hal as hal;
 
 use self::relay::sm::StateMachine;
 
-// Convenience type definition for the I2C bus on Driver.
-pub type I2C1 =
-    &'static shared_bus_rtic::CommonBus<hal::i2c::I2c<hal::stm32::I2C1>>;
-
 /// Devices on Driver + Driver headerboard
 pub struct DriverDevices {
     pub ltc2320: ltc2320::Ltc2320,
