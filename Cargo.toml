@@ -14,7 +14,8 @@ repository = "https://github.com/quartiq/stabilizer"
 readme = "README.md"
 documentation = "https://docs.rs/stabilizer/"
 edition = "2021"
-rust-version = "1.59"
+# keep MSRV in sync in ci.yaml, bors.toml, Cargo.toml, and setup.md
+rust-version = "1.62"
 exclude = [
 	".gitignore",
 	"doc/",
@@ -49,7 +50,7 @@ ad9959 = { path = "ad9959", version = "0.1.0" }
 miniconf = "0.5"
 smoltcp-nal = { version = "0.2", features = ["shared-stack"] }
 serde-json-core = "0.4"
-mcp23017 = "1.0"
+mcp230xx = "0.1"
 mutex-trait = "0.2"
 minimq = "0.5.3"
 fugit = "0.3"
@@ -58,6 +59,8 @@ systick-monotonic = "1.0"
 mono-clock = "0.1"
 enum-iterator = "0.7.0"
 spin = { version = "0.9", default-features = false, features = ["spin_mutex"]}
+shared-bus = "0.2"
+lm75 = "0.2"
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "ethernet", "xspi"]

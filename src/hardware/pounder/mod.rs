@@ -1,7 +1,8 @@
+use self::attenuators::AttenuatorInterface;
+
 use super::hal;
-use crate::hardware::shared_adc::AdcChannel;
+use crate::hardware::{shared_adc::AdcChannel, I2c1Proxy};
 use embedded_hal::blocking::spi::Transfer;
-use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Serialize};
 
 pub mod attenuators;
@@ -12,22 +13,41 @@ pub mod rf_power;
 #[cfg(not(feature = "pounder_v1_0"))]
 pub mod timestamp;
 
-#[derive(Debug, Copy, Clone, TryFromPrimitive)]
-#[repr(u8)]
+#[derive(Debug, Copy, Clone)]
 pub enum GpioPin {
-    Led4Green = 0,
-    Led5Red = 1,
-    Led6Green = 2,
-    Led7Red = 3,
-    Led8Green = 4,
-    Led9Red = 5,
-    AttLe0 = 8,
-    AttLe1 = 8 + 1,
-    AttLe2 = 8 + 2,
-    AttLe3 = 8 + 3,
-    AttRstN = 8 + 5,
-    OscEnN = 8 + 6,
-    ExtClkSel = 8 + 7,
+    Led4Green,
+    Led5Red,
+    Led6Green,
+    Led7Red,
+    Led8Green,
+    Led9Red,
+    AttLe0,
+    AttLe1,
+    AttLe2,
+    AttLe3,
+    AttRstN,
+    OscEnN,
+    ExtClkSel,
+}
+
+impl From<GpioPin> for mcp230xx::Mcp23017 {
+    fn from(x: GpioPin) -> Self {
+        match x {
+            GpioPin::Led4Green => Self::A0,
+            GpioPin::Led5Red => Self::A1,
+            GpioPin::Led6Green => Self::A2,
+            GpioPin::Led7Red => Self::A3,
+            GpioPin::Led8Green => Self::A4,
+            GpioPin::Led9Red => Self::A5,
+            GpioPin::AttLe0 => Self::B0,
+            GpioPin::AttLe1 => Self::B1,
+            GpioPin::AttLe2 => Self::B2,
+            GpioPin::AttLe3 => Self::B3,
+            GpioPin::AttRstN => Self::B5,
+            GpioPin::OscEnN => Self::B6,
+            GpioPin::ExtClkSel => Self::B7,
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -57,6 +77,17 @@ pub enum Channel {
     Out0 = 1,
     In1 = 2,
     Out1 = 3,
+}
+
+impl From<Channel> for GpioPin {
+    fn from(x: Channel) -> Self {
+        match x {
+            Channel::In0 => GpioPin::AttLe0,
+            Channel::Out0 => GpioPin::AttLe1,
+            Channel::In1 => GpioPin::AttLe2,
+            Channel::Out1 => GpioPin::AttLe3,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Copy, Clone, Debug)]
@@ -276,7 +307,8 @@ impl ad9959::Interface for QspiInterface {
 
 /// A structure containing implementation for Pounder hardware.
 pub struct PounderDevices {
-    mcp23017: mcp23017::MCP23017<hal::i2c::I2c<hal::stm32::I2C1>>,
+    mcp23017: mcp230xx::Mcp230xx<I2c1Proxy, mcp230xx::Mcp23017>,
+    pub lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
     attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
     pwr0: AdcChannel<
         'static,
@@ -304,13 +336,16 @@ impl PounderDevices {
     /// Construct and initialize pounder-specific hardware.
     ///
     /// Args:
+    /// * `lm75` - The temperature sensor on Pounder.
+    /// * `mcp23017` - The GPIO expander on Pounder.
     /// * `attenuator_spi` - A SPI interface to control digital attenuators.
     /// * `pwr0` - The ADC channel to measure the IN0 input power.
     /// * `pwr1` - The ADC channel to measure the IN1 input power.
     /// * `aux_adc0` - The ADC channel to measure the ADC0 auxiliary input.
     /// * `aux_adc1` - The ADC channel to measure the ADC1 auxiliary input.
     pub fn new(
-        mcp23017: mcp23017::MCP23017<hal::i2c::I2c<hal::stm32::I2C1>>,
+        lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
+        mcp23017: mcp230xx::Mcp230xx<I2c1Proxy, mcp230xx::Mcp23017>,
         attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
         pwr0: AdcChannel<
             'static,
@@ -334,6 +369,7 @@ impl PounderDevices {
         >,
     ) -> Result<Self, Error> {
         let mut devices = Self {
+            lm75,
             mcp23017,
             attenuator_spi,
             pwr0,
@@ -345,27 +381,41 @@ impl PounderDevices {
         // Configure power-on-default state for pounder. All LEDs are off, on-board oscillator
         // selected and enabled, attenuators out of reset. Note that testing indicates the
         // output state needs to be set first to properly update the output registers.
-        devices
-            .mcp23017
-            .all_pin_mode(mcp23017::PinMode::OUTPUT)
-            .map_err(|_| Error::I2c)?;
-        devices
-            .mcp23017
-            .write_gpio(mcp23017::Port::GPIOA, 0x00)
-            .map_err(|_| Error::I2c)?;
-        devices
-            .mcp23017
-            .write_gpio(mcp23017::Port::GPIOB, 0x2F)
-            .map_err(|_| Error::I2c)?;
-
+        for pin in [
+            GpioPin::AttLe1,
+            GpioPin::AttLe2,
+            GpioPin::AttLe3,
+            GpioPin::AttLe0,
+            GpioPin::AttRstN,
+            GpioPin::ExtClkSel,
+            GpioPin::OscEnN,
+            GpioPin::Led4Green,
+            GpioPin::Led5Red,
+            GpioPin::Led6Green,
+            GpioPin::Led7Red,
+            GpioPin::Led8Green,
+            GpioPin::Led9Red,
+        ]
+        .into_iter()
+        {
+            devices
+                .mcp23017
+                .set_gpio(pin.into(), mcp230xx::Level::Low)
+                .map_err(|_| Error::I2c)?;
+            devices
+                .mcp23017
+                .set_direction(pin.into(), mcp230xx::Direction::Output)
+                .map_err(|_| Error::I2c)?;
+        }
+        devices.reset_attenuators().unwrap();
         Ok(devices)
     }
 
     /// Sample one of the two auxiliary ADC channels associated with the respective RF input channel.
     pub fn sample_aux_adc(&mut self, channel: Channel) -> Result<f32, Error> {
         let adc_scale = match channel {
-            Channel::In0 => self.aux_adc0.read().unwrap(),
-            Channel::In1 => self.aux_adc1.read().unwrap(),
+            Channel::In0 => self.aux_adc0.read_normalized().unwrap(),
+            Channel::In1 => self.aux_adc1.read_normalized().unwrap(),
             _ => return Err(Error::InvalidChannel),
         };
 
@@ -378,19 +428,23 @@ impl PounderDevices {
     pub fn set_gpio_pin(
         &mut self,
         pin: GpioPin,
-        state: bool,
+        level: mcp230xx::Level,
     ) -> Result<(), Error> {
         self.mcp23017
-            .digital_write(pin as _, state)
-            .map_err(|_| Error::I2c)?;
-        Ok(())
+            .set_gpio(pin.into(), level)
+            .map_err(|_| Error::I2c)
     }
 
     /// Select external reference clock input.
     pub fn set_ext_clk(&mut self, enabled: bool) -> Result<(), Error> {
+        let level = if enabled {
+            mcp230xx::Level::High
+        } else {
+            mcp230xx::Level::Low
+        };
         // Active low
-        self.set_gpio_pin(GpioPin::OscEnN, enabled)?;
-        self.set_gpio_pin(GpioPin::ExtClkSel, enabled)
+        self.set_gpio_pin(GpioPin::OscEnN, level)?;
+        self.set_gpio_pin(GpioPin::ExtClkSel, level)
     }
 }
 
@@ -398,8 +452,8 @@ impl attenuators::AttenuatorInterface for PounderDevices {
     /// Reset all of the attenuators to a power-on default state.
     fn reset_attenuators(&mut self) -> Result<(), Error> {
         // Active low
-        self.set_gpio_pin(GpioPin::AttRstN, false)?;
-        self.set_gpio_pin(GpioPin::AttRstN, true)
+        self.set_gpio_pin(GpioPin::AttRstN, mcp230xx::Level::Low)?;
+        self.set_gpio_pin(GpioPin::AttRstN, mcp230xx::Level::High)
     }
 
     /// Latch a configuration into a digital attenuator.
@@ -407,11 +461,9 @@ impl attenuators::AttenuatorInterface for PounderDevices {
     /// Args:
     /// * `channel` - The attenuator channel to latch.
     fn latch_attenuator(&mut self, channel: Channel) -> Result<(), Error> {
-        let pin =
-            GpioPin::try_from(GpioPin::AttLe0 as u8 + channel as u8).unwrap();
-        // Active low
-        self.set_gpio_pin(pin, false)?;
-        self.set_gpio_pin(pin, true)
+        // Rising edge sensitive
+        self.set_gpio_pin(channel.into(), mcp230xx::Level::High)?;
+        self.set_gpio_pin(channel.into(), mcp230xx::Level::Low)
     }
 
     /// Read the raw attenuation codes stored in the attenuator shift registers.
@@ -441,8 +493,8 @@ impl rf_power::PowerMeasurementInterface for PounderDevices {
     /// The sampled voltage of the specified channel.
     fn sample_converter(&mut self, channel: Channel) -> Result<f32, Error> {
         let adc_scale = match channel {
-            Channel::In0 => self.pwr0.read().unwrap(),
-            Channel::In1 => self.pwr1.read().unwrap(),
+            Channel::In0 => self.pwr0.read_normalized().unwrap(),
+            Channel::In1 => self.pwr1.read_normalized().unwrap(),
             _ => return Err(Error::InvalidChannel),
         };
 
