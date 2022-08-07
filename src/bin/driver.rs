@@ -31,8 +31,8 @@ use stabilizer::{
         hal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
-        DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
-        MONOTONIC_FREQUENCY,
+        DigitalInput0, DigitalInput1, I2c1Proxy, SystemTimer, Systick, AFE0,
+        AFE1, MONOTONIC_FREQUENCY,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -157,8 +157,6 @@ impl Default for Settings {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
-    use stabilizer::hardware::I2c1Proxy;
-
     use super::*;
 
     #[monotonic(binds = SysTick, default = true, priority = 2)]
@@ -244,7 +242,7 @@ mod app {
             adc_internal: driver.adc_internal,
             header_adc: driver.ltc2320,
             header_adc_data: [0u16; 8],
-            driver_relay_state: driver.relay_sm, // this will live inside driver_output_state eventually
+            driver_relay_state: driver.relay_sm, // this might live inside driver_output_state eventually
         };
 
         let mut local = Local {
@@ -493,7 +491,7 @@ mod app {
         });
     }
 
-    // Task to schedule for waiting the relay transition times.
+    // Task for waiting the relay transition times.
     #[task(priority = 1, shared=[driver_relay_state])]
     fn handle_relay(mut c: handle_relay::Context, channel: driver::Channel) {
         let delay = (c.shared.driver_relay_state)
