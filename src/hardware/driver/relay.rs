@@ -4,9 +4,8 @@
 ///!    - one that shorts the output to ground
 ///!    - one that connects the current source/sink to the output
 ///!
-///! The relays are controlled via an I2C io-expander.
+///! The relays are controlled via an MCP23008 I2C io expander.
 use super::hal::rcc;
-/// Todo: document relay toggeling
 use core::fmt::Debug;
 use embedded_hal::blocking::{
     delay::DelayUs,
@@ -17,13 +16,7 @@ use mcp230xx::{Level, Mcp23008, Mcp230xx};
 use super::Channel;
 use smlang::statemachine;
 
-#[derive(Debug, Copy, Clone)]
-pub enum RelayError {
-    /// Indicates that the I2C expander IC is in use
-    Mcp23008InUse,
-}
-
-// Driver low noise output relays pins
+// Driver output relays pins.
 #[allow(non_camel_case_types)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum RelayPin {
@@ -60,6 +53,16 @@ fn get_mcp<I2C>(
     mutex.try_lock().unwrap() // panic here if in use
 }
 
+/// Driver output [Relay] type that controlls the set of two relays that is present on both of
+/// the driver output channels.
+/// [Relay] contains a mutex of a shared MCP23008, an I2C io expander chip with 8 GPIOs.
+/// 4 of those GPIOs are used to controll one set of relays (aka one [Relay]):
+///     - `k1_en_n` and `k1_en` differentially control the state of K1
+///     - `k0_d` is that data input of a flipflop which controls the state of K0
+///     - `k0_cp` is the clock input if the flipflop. Note that there is additional circuitry
+///        which ensures this clock input cannot be driven if K1 is not in the correct state.
+///        See Driver schematic for details.
+/// A `delay` is used to generate a rising edge for the flipflip with enaugh timing margins.
 pub struct Relay<'a, I2C: WriteRead + Write> {
     mutex: &'a spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
     delay: asm_delay::AsmDelay,
@@ -77,12 +80,19 @@ where
         fugit::MillisDurationU64::millis(10);
     const K1_DELAY: fugit::MillisDuration<u64> =
         fugit::MillisDurationU64::millis(10);
+
+    /// Construct a new [Relay].
+    ///
+    /// # Args
+    /// * `mutex`   - mutex of a shared MCP23008
+    /// * `ccdr`    - core clocks to construct a `delay`
+    /// * `channel` - Driver channel to construct the [Relay] for
     pub fn new(
         mutex: &'a spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
         ccdr: &rcc::CoreClocks,
-        ch: Channel,
+        channel: Channel,
     ) -> Self {
-        let (k1_en_n, k1_en, k0_d, k0_cp) = if ch == Channel::LowNoise {
+        let (k1_en_n, k1_en, k0_d, k0_cp) = if channel == Channel::LowNoise {
             (
                 RelayPin::LN_K1_EN_N,
                 RelayPin::LN_K1_EN,
@@ -178,7 +188,6 @@ where
         Relay::<'_, I2C>::K0_DELAY // engage K0 first
     }
 
-    /// Start relay disabling sequence. Returns the relay delay we need to wait for.
     pub fn disable(&mut self) -> fugit::MillisDuration<u64> {
         self.process_event(sm::Events::Disable).unwrap();
         Relay::<'_, I2C>::K1_DELAY // engage K1 first
@@ -218,10 +227,11 @@ where
         }
     }
 
-    /// Allocate a set of relay pins on the MCP23008 and get the [Relay]
+    /// Allocate a set of relay pins on the MCP23008 and get the corresponding [Relay]
     ///
     /// # Args
-    /// * `ch` - The Driver channel the relay pins are used for.
+    /// * `ccdr`    - core clocks to construct a `delay` for flipflop control
+    /// * `ch`      - The Driver channel the relay pins are used for.
     ///
     /// # Returns
     /// An instantiated [Relay] whose ownership can be transferred to other drivers.
