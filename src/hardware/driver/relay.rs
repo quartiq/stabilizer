@@ -24,7 +24,7 @@ pub enum RelayError {
 }
 
 // Driver low noise output relays pins
-#[allow(non_camel_case_types, clippy::upper_case_acronyms, dead_code)]
+#[allow(non_camel_case_types)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum RelayPin {
     LN_K1_EN_N,
