@@ -12,8 +12,9 @@ pub struct DriverDevices {
     pub ltc2320: ltc2320::Ltc2320,
     pub adc_internal: adc_internal::AdcInternal,
     pub lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
-    pub relay_sm: [StateMachine<relay::Relay<'static, I2c1Proxy>>; 2], // dac
-                                                                       // output_state
+    pub relay_sm: [StateMachine<relay::Relay<'static, I2c1Proxy>>; 2],
+    // dac
+    // output_state
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

@@ -493,14 +493,14 @@ mod app {
         });
     }
 
-    // This only processes the Low noise channel relay now.
-    // Todo: figure out how to handle both channels in one function.
+    // Task to schedule for waiting the relay transition times.
     #[task(priority = 1, shared=[driver_relay_state])]
-    fn handle_relay(mut c: handle_relay::Context) {
-        let delay =
-            (c.shared.driver_relay_state).lock(|state| state[0].handle_relay());
+    fn handle_relay(mut c: handle_relay::Context, channel: driver::Channel) {
+        let delay = (c.shared.driver_relay_state)
+            .lock(|state| state[channel as usize].handle_relay());
         if let Some(del) = delay {
-            handle_relay::Monotonic::spawn_after(del.convert()).unwrap();
+            handle_relay::Monotonic::spawn_after(del.convert(), channel)
+                .unwrap();
         }
     }
 
