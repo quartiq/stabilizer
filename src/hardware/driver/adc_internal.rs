@@ -54,8 +54,12 @@ impl AdcInternal {
 
     pub fn read_output_voltage(&mut self, ch: Channel) -> f32 {
         let ratio: f32 = match ch {
-            Channel::LowNoise => self.output_voltage.0.read_normalized().unwrap(),
-            Channel::HighPower => self.output_voltage.1.read_normalized().unwrap(),
+            Channel::LowNoise => {
+                self.output_voltage.0.read_normalized().unwrap()
+            }
+            Channel::HighPower => {
+                self.output_voltage.1.read_normalized().unwrap()
+            }
         };
         const SCALE: f32 = V_REF; // Differential voltage sense gain      ToDo
         const OFFSET: f32 = 0.0; // Differential voltage sense offset       ToDo
@@ -64,8 +68,12 @@ impl AdcInternal {
 
     pub fn read_output_current(&mut self, ch: Channel) -> f32 {
         let ratio: f32 = match ch {
-            Channel::LowNoise => self.output_current.0.read_normalized().unwrap(),
-            Channel::HighPower => self.output_current.1.read_normalized().unwrap(),
+            Channel::LowNoise => {
+                self.output_current.0.read_normalized().unwrap()
+            }
+            Channel::HighPower => {
+                self.output_current.1.read_normalized().unwrap()
+            }
         };
         const SCALE: f32 = V_REF / R_SENSE; // Current sense scale       ToDo
         const OFFSET: f32 = 0.0; // Current sense offset         ToDo

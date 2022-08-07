@@ -27,7 +27,7 @@ pub type AFE0 = afe::ProgrammableGainAmplifier<
 >;
 
 // Type alias for the analog front-end (AFE) for ADC1.
-pub type AFE1 = afe::ProgrammableGainAmplifier< 
+pub type AFE1 = afe::ProgrammableGainAmplifier<
     hal::gpio::gpiod::PD14<hal::gpio::Output<hal::gpio::PushPull>>,
     hal::gpio::gpiod::PD15<hal::gpio::Output<hal::gpio::PushPull>>,
 >;
