@@ -4,6 +4,8 @@
 ///!    - one that shorts the output to ground
 ///!    - one that connects the current source/sink to the output
 ///!
+///! See [Relay] documentation for details about relay control.
+///!
 ///! The relays are controlled via an MCP23008 I2C io expander.
 use super::hal::rcc;
 use core::fmt::Debug;
@@ -61,7 +63,7 @@ fn get_mcp<I2C>(
 ///     - `k0_d` is that data input of a flipflop which controls the state of K0
 ///     - `k0_cp` is the clock input if the flipflop. Note that there is additional circuitry
 ///        which ensures this clock input cannot be driven if K1 is not in the correct state.
-///        See Driver schematic for details.
+///        See Driver schematic for exact details.
 /// A `delay` is used to generate a rising edge for the flipflip with enaugh timing margins.
 pub struct Relay<'a, I2C: WriteRead + Write> {
     mutex: &'a spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
