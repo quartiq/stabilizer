@@ -7,6 +7,8 @@ use driver::{
     relay::{sm::StateMachine, SharedMcp},
     DriverDevices,
 };
+use hal::i2c::I2c;
+use shared_bus::{AtomicCheckMutex, I2cProxy};
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
@@ -17,10 +19,11 @@ use stm32h7xx_hal::{
 use smoltcp_nal::smoltcp;
 
 use super::{
-    adc, afe, dac, design_parameters, driver, eeprom,
-    input_stamper::InputStamper, pounder, pounder::dds_output::DdsOutput,
-    shared_adc::SharedAdc, timers, DigitalInput0, DigitalInput1, EthernetPhy,
-    Mezzanine, NetworkStack, SystemTimer, Systick, AFE0, AFE1,
+    adc, afe, cpu_temp_sensor::CpuTempSensor, dac, design_parameters, driver,
+    eeprom, input_stamper::InputStamper, pounder,
+    pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
+    DigitalInput0, DigitalInput1, EthernetPhy, Mezzanine, NetworkStack,
+    SystemTimer, Systick, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -106,6 +109,7 @@ pub struct NetworkDevices {
 /// The available hardware interfaces on Stabilizer.
 pub struct StabilizerDevices {
     pub systick: Systick,
+    pub temperature_sensor: CpuTempSensor,
     pub afes: (AFE0, AFE1),
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
     pub dacs: (dac::Dac0Output, dac::Dac1Output),
@@ -750,6 +754,10 @@ pub fn setup(
     );
     log::info!("Driver EUI48: {:?}", driver_mac_addr);
 
+    let i2c1 =
+        shared_bus::new_atomic_check!(hal::i2c::I2c<hal::stm32::I2C1> = i2c1)
+            .unwrap();
+
     // Use default PLL2p clock input with 1/2 prescaler for 50 MHz ADC clock.
     let (adc1, adc2, adc3) = {
         let (mut adc1, mut adc2) = hal::adc::adc12(
@@ -804,7 +812,10 @@ pub fn setup(
         log::info!("Found Pounder");
 
         let io_expander =
-            mcp230xx::mcp23017::MCP23017::new_default(i2c1).unwrap();
+            mcp230xx::Mcp230xx::new_default(i2c1.acquire_i2c()).unwrap();
+
+        let temp_sensor =
+            lm75::Lm75::new(i2c1.acquire_i2c(), lm75::Address::default());
 
         let spi = {
             let mosi = gpiod.pd7.into_alternate();
@@ -833,6 +844,7 @@ pub fn setup(
         let aux_adc1 = adc3.create_channel(gpiof.pf4.into_analog());
 
         let pounder_devices = pounder::PounderDevices::new(
+            temp_sensor,
             io_expander,
             spi,
             pwr0,
@@ -1010,19 +1022,14 @@ pub fn setup(
             output_current,
         );
 
-        let i2c_manager =
-            shared_bus_rtic::new!(i2c1, hal::i2c::I2c<hal::stm32::I2C1>);
-
         let lm75 =
-            lm75::Lm75::new(i2c_manager.acquire(), lm75::Address::default());
+            lm75::Lm75::new(i2c1.acquire_i2c(), lm75::Address::default());
 
-        let mcp =
-            mcp230xx::mcp23008::MCP23008::new_default(i2c_manager.acquire())
-                .unwrap();
+        let mcp = mcp230xx::Mcp230xx::new_default(i2c1.acquire_i2c()).unwrap();
 
         let shared_mcp = cortex_m::singleton!(: SharedMcp<
-            &shared_bus_rtic::CommonBus<stm32h7xx_hal::i2c::I2c<
-                stm32h7xx_hal::stm32::I2C1>>>  = SharedMcp::new(mcp))
+            I2cProxy<'_, AtomicCheckMutex<I2c<stm32h7xx_hal::stm32::I2C1>>>>  
+                = SharedMcp::new(mcp))
         .unwrap();
 
         let relay_sm = [
@@ -1051,6 +1058,9 @@ pub fn setup(
         afes,
         adcs,
         dacs,
+        temperature_sensor: CpuTempSensor::new(
+            adc3.create_channel(hal::adc::Temperature::new()),
+        ),
         timestamper: input_stamper,
         net: network_devices,
         adc_dac_timer: sampling_timer,

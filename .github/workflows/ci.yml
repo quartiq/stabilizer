@@ -52,8 +52,8 @@ jobs:
     continue-on-error: ${{ matrix.toolchain == 'nightly' }}
     strategy:
       matrix:
-        # keep MSRV in sync in ci.yaml, bors.toml, and setup.md
-        toolchain: [stable, '1.59.0']
+        # keep MSRV in sync in ci.yaml, bors.toml, Cargo.toml, and setup.md
+        toolchain: [stable, '1.62.0']
         features: ['']
         include:
           - toolchain: beta

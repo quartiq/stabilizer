@@ -1,6 +1,7 @@
 pub mod adc_internal;
 pub mod ltc2320;
 pub mod relay;
+use super::I2c1Proxy;
 use lm75;
 use stm32h7xx_hal as hal;
 
@@ -14,8 +15,8 @@ pub type I2C1 =
 pub struct DriverDevices {
     pub ltc2320: ltc2320::Ltc2320,
     pub adc_internal: adc_internal::AdcInternal,
-    pub lm75: lm75::Lm75<I2C1, lm75::ic::Lm75>,
-    pub relay_sm: [StateMachine<relay::Relay<'static, I2C1>>; 2], // dac
+    pub lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
+    pub relay_sm: [StateMachine<relay::Relay<'static, I2c1Proxy>>; 2], // dac
                                                                   // output_state
 }
 

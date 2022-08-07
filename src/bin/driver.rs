@@ -26,7 +26,7 @@ use stabilizer::{
         design_parameters, driver,
         driver::{
             relay::{self, sm::StateMachine},
-            Channel, I2C1,
+            Channel,
         },
         hal,
         signal_generator::{self, SignalGenerator},
@@ -157,6 +157,8 @@ impl Default for Settings {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
+    use stabilizer::hardware::I2c1Proxy;
+
     use super::*;
 
     #[monotonic(binds = SysTick, default = true, priority = 2)]
@@ -173,7 +175,7 @@ mod app {
         header_adc_data: [u16; 8],
         // driver_relay_state might eventually live inside driver_output_state but then the
         // relay_delay function would have to lock the whole output state..
-        driver_relay_state: [StateMachine<relay::Relay<'static, I2C1>>; 2],
+        driver_relay_state: [StateMachine<relay::Relay<'static, I2c1Proxy>>; 2],
         // driver_dac: [Dac; 2]
         // driver_output_state: [Output State Macheine; 2]
     }
@@ -187,6 +189,7 @@ mod app {
         dacs: (Dac0Output, Dac1Output),
         iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
         generator: FrameGenerator,
+        cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
         header_adc_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
     }
 
@@ -252,6 +255,7 @@ mod app {
             dacs: stabilizer.dacs,
             iir_state: [[[0.; 5]; IIR_CASCADE_LENGTH]; 2],
             generator,
+            cpu_temp_sensor: stabilizer.temperature_sensor,
             header_adc_conversion_scheduled: stabilizer.systick.now(),
         };
 
@@ -429,7 +433,7 @@ mod app {
         c.shared.network.lock(|net| net.direct_stream(target));
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry, adc_internal])]
+    #[task(priority = 1, shared=[network, settings, telemetry, adc_internal], local=[cpu_temp_sensor])]
     fn telemetry(mut c: telemetry::Context) {
         let telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
@@ -440,8 +444,11 @@ mod app {
             .lock(|settings| (settings.afe, settings.telemetry_period));
 
         c.shared.network.lock(|net| {
-            net.telemetry
-                .publish(&telemetry.finalize(gains[0], gains[1]))
+            net.telemetry.publish(&telemetry.finalize(
+                gains[0],
+                gains[1],
+                c.local.cpu_temp_sensor.get_temperature().unwrap(),
+            ))
         });
         // Schedule the telemetry task in the future.
         telemetry::Monotonic::spawn_after((telemetry_period as u64).secs())

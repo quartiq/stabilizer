@@ -4,6 +4,7 @@ pub use stm32h7xx_hal as hal;
 
 pub mod adc;
 pub mod afe;
+pub mod cpu_temp_sensor;
 pub mod dac;
 pub mod design_parameters;
 pub mod driver;
@@ -26,7 +27,7 @@ pub type AFE0 = afe::ProgrammableGainAmplifier<
 >;
 
 // Type alias for the analog front-end (AFE) for ADC1.
-pub type AFE1 = afe::ProgrammableGainAmplifier<
+pub type AFE1 = afe::ProgrammableGainAmplifier< 
     hal::gpio::gpiod::PD14<hal::gpio::Output<hal::gpio::PushPull>>,
     hal::gpio::gpiod::PD15<hal::gpio::Output<hal::gpio::PushPull>>,
 >;
@@ -85,6 +86,9 @@ impl Mezzanine {
         }
     }
 }
+pub type I2c1 = hal::i2c::I2c<hal::stm32::I2C1>;
+pub type I2c1Proxy =
+    shared_bus::I2cProxy<'static, shared_bus::AtomicCheckMutex<I2c1>>;
 
 #[inline(never)]
 #[panic_handler]
