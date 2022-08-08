@@ -84,7 +84,7 @@ def main():
 
     async def test():
         """ The actual testing being completed. """
-        tele = await TelemetryReader.create(args.prefix, args.broker)
+        tele = await Telemetry.create(args.prefix, args.broker)
 
         interface = await Miniconf.create(args.prefix, args.broker)
 
