@@ -9,9 +9,9 @@ import asyncio
 import json
 import sys
 
-from gmqtt import Client as MqttClient
 from miniconf import Miniconf
-import stabilizer
+from stabilizer import voltage_to_machine_units
+from stabilizer.telemetry import Telemetry
 
 # The minimum allowable loopback voltage error (difference between output set point and input
 # measured value).
@@ -84,7 +84,7 @@ def main():
 
     async def test():
         """ The actual testing being completed. """
-        tele = await stabilizer.TelemetryReader.create(args.prefix, args.broker)
+        tele = await TelemetryReader.create(args.prefix, args.broker)
 
         interface = await Miniconf.create(args.prefix, args.broker)
 
