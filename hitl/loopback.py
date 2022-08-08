@@ -102,8 +102,6 @@ def main():
         # Test with 0V output
         await test_loopback(interface, tele.queue, 0.0)
 
-        tele.cancel()
-
     sys.exit(asyncio.run(test()))
 
 
