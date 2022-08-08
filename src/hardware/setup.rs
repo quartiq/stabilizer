@@ -791,7 +791,7 @@ pub fn setup(
         };
 
         let io_expander =
-            mcp23017::MCP23017::default(i2c1.acquire_i2c()).unwrap();
+            mcp230xx::Mcp230xx::new_default(i2c1.acquire_i2c()).unwrap();
 
         let temp_sensor =
             lm75::Lm75::new(i2c1.acquire_i2c(), lm75::Address::default());
