@@ -447,8 +447,9 @@ impl attenuators::AttenuatorInterface for PounderDevices {
     /// * `channel` - The attenuator channel to latch.
     fn latch_attenuator(&mut self, channel: Channel) -> Result<(), Error> {
         // Rising edge sensitive
-        self.set_gpio_pin(channel.into(), mcp230xx::Level::High)?;
-        self.set_gpio_pin(channel.into(), mcp230xx::Level::Low)
+        // Be robust against initial state: drive low, then high (contrary to the datasheet figure).
+        self.set_gpio_pin(channel.into(), mcp230xx::Level::Low)?;
+        self.set_gpio_pin(channel.into(), mcp230xx::Level::High)
     }
 
     /// Read the raw attenuation codes stored in the attenuator shift registers.
