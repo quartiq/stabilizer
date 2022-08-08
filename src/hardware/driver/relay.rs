@@ -77,6 +77,7 @@ pub struct Relay<'a, I2C: WriteRead + Write> {
 impl<'a, I2C, E> Relay<'a, I2C>
 where
     I2C: WriteRead<Error = E> + Write<Error = E>,
+    E: Debug,
 {
     const K0_DELAY: fugit::MillisDuration<u64> =
         fugit::MillisDurationU64::millis(10);
@@ -109,6 +110,13 @@ where
                 RelayPin::HP_K0_CP,
             )
         };
+        let mut mcp = get_mcp(mutex);
+        // set GPIOs to default position
+        mcp.set_gpio(k1_en.into(), Level::Low).unwrap();
+        mcp.set_gpio(k1_en_n.into(), Level::High).unwrap();
+        mcp.set_gpio(k0_d.into(), Level::Low).unwrap();
+        mcp.set_gpio(k0_cp.into(), Level::Low).unwrap();
+
         let delay = asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(
             ccdr.c_ck().to_Hz(),
         ));
@@ -142,7 +150,7 @@ where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     E: Debug,
 {
-    // set K0 to upper position
+    // set K0 to upper position (note that "upper" and "lower" refer to the schematic)
     fn engage_k0(&mut self) {
         let mut mcp = get_mcp(self.mutex);
         // set flipflop data pin
@@ -218,6 +226,7 @@ pub struct SharedMcp<I2C1> {
 impl<I2C, E> SharedMcp<I2C>
 where
     I2C: WriteRead<Error = E> + Write<Error = E>,
+    E: Debug,
 {
     /// Construct a new shared MCP23008.
     ///
