@@ -26,7 +26,7 @@ def static_iir_output(output_voltage):
     Returns
         The IIR configuration to send over Miniconf.
     """
-    machine_units = stabilizer.voltage_to_machine_units(output_voltage)
+    machine_units = voltage_to_machine_units(output_voltage)
     return {
         'y_min': machine_units,
         'y_max': machine_units,
