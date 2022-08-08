@@ -3,25 +3,12 @@
 
 import asyncio
 import logging
-import socket
 import argparse
 
 from miniconf import Miniconf
-from stabilizer.stream import measure, StabilizerStream
+from stabilizer.stream import measure, StabilizerStream, get_local_ip
 
 logger = logging.getLogger(__name__)
-
-
-def _get_ip(remote):
-    """Get the local IP of a connection to the to a remote host."""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        sock.connect((remote, 1883))
-        address = sock.getsockname()[0]
-    finally:
-        sock.close()
-
-    return list(map(int, address.split(".")))
 
 
 async def _main():
@@ -43,7 +30,7 @@ async def _main():
     logging.basicConfig(level=logging.INFO)
 
     conf = await Miniconf.create(args.prefix, args.broker)
-    local_ip = _get_ip(args.broker)
+    local_ip = get_local_ip(args.broker)
 
     logger.info("Starting stream")
     await conf.command(
