@@ -173,7 +173,7 @@ mod app {
         header_adc_data: [u16; 8],
         // driver_relay_state might eventually live inside driver_output_state but then the
         // relay_delay function would have to lock the whole output state..
-        driver_relay_state: [StateMachine<relay::Relay<'static, I2c1Proxy>>; 2],
+        driver_relay_state: [StateMachine<relay::Relay<I2c1Proxy>>; 2],
         // driver_dac: [Dac; 2]
         // driver_output_state: [Output State Macheine; 2]
     }

@@ -61,15 +61,15 @@ fn get_mcp<I2C>(
 ///        which ensures this clock input cannot be driven if K1 is not in the correct state.
 ///        See Driver schematic for exact details.
 /// A `delay` is used to generate a rising edge for the flipflip with enaugh timing margins.
-pub struct Relay<'a, I2C: WriteRead + Write> {
-    mutex: &'a spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
+pub struct Relay< I2C: WriteRead + Write + 'static> {
+    gpio: &'static spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
     k1_en_n: RelayPin,
     k1_en: RelayPin,
     k0_d: RelayPin,
     k0_cp: RelayPin,
 }
 
-impl<'a, I2C, E> Relay<'a, I2C>
+impl< I2C, E> Relay< I2C>
 where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     E: Debug,
@@ -82,11 +82,11 @@ where
     /// Construct a new [Relay].
     ///
     /// # Args
-    /// * `mutex`   - mutex of a shared MCP23008
+    /// * `gpio`   - mutex of a shared MCP23008
     /// * `ccdr`    - core clocks to construct a `delay`
     /// * `channel` - Driver channel to construct the [Relay] for
     pub fn new(
-        mutex: &'a spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
+        gpio: &'static spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
         channel: Channel,
     ) -> Self {
         let (k1_en_n, k1_en, k0_d, k0_cp) = if channel == Channel::LowNoise {
@@ -104,7 +104,7 @@ where
                 RelayPin::HP_K0_CP,
             )
         };
-        let mut mcp = get_mcp(mutex);
+        let mut mcp = get_mcp(gpio);
         // set GPIOs to default position
         mcp.set_gpio(k1_en.into(), Level::Low).unwrap();
         mcp.set_gpio(k1_en_n.into(), Level::High).unwrap();
@@ -112,7 +112,7 @@ where
         mcp.set_gpio(k0_cp.into(), Level::Low).unwrap();
 
         Relay {
-            mutex,
+            gpio,
             k1_en_n,
             k1_en,
             k0_d,
@@ -135,14 +135,14 @@ pub mod sm {
     }
 }
 
-impl<'a, I2C, E> sm::StateMachineContext for Relay<'a, I2C>
+impl< I2C, E> sm::StateMachineContext for Relay< I2C>
 where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     E: Debug,
 {
     // set K0 to upper position (note that "upper" and "lower" refer to the schematic)
     fn engage_k0(&mut self) {
-        let mut mcp = get_mcp(self.mutex);
+        let mut mcp = self.gpio.try_lock().unwrap();
         // set flipflop data pin
         mcp.set_gpio(self.k0_d.into(), Level::High).unwrap();
         // set flipflop clock input low to prepare rising edge
@@ -153,7 +153,7 @@ where
 
     // set K0 to lower position
     fn disengage_k0(&mut self) {
-        let mut mcp = get_mcp(self.mutex);
+        let mut mcp = self.gpio.try_lock().unwrap();
         mcp.set_gpio(self.k0_d.into(), Level::High).unwrap();
         mcp.set_gpio(self.k0_cp.into(), Level::Low).unwrap();
         mcp.set_gpio(self.k0_cp.into(), Level::High).unwrap();
@@ -161,7 +161,7 @@ where
 
     // set K1 to upper position
     fn disengage_k1(&mut self) {
-        let mut mcp = get_mcp(self.mutex);
+        let mut mcp = self.gpio.try_lock().unwrap();
         // set en high and en _n low in order to engage K1
         mcp.set_gpio(self.k1_en.into(), Level::Low).unwrap();
         mcp.set_gpio(self.k1_en_n.into(), Level::High).unwrap();
@@ -169,13 +169,13 @@ where
 
     // set K1 to lower position
     fn engage_k1(&mut self) {
-        let mut mcp = get_mcp(self.mutex);
+        let mut mcp = self.gpio.try_lock().unwrap();
         mcp.set_gpio(self.k1_en.into(), Level::High).unwrap();
         mcp.set_gpio(self.k1_en_n.into(), Level::Low).unwrap();
     }
 }
 
-impl<'a, I2C, E> sm::StateMachine<Relay<'a, I2C>>
+impl< I2C, E> sm::StateMachine<Relay< I2C>>
 where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     E: Debug,
@@ -183,12 +183,12 @@ where
     /// Start relay enabling sequence. Returns the relay delay we need to wait for.
     pub fn enable(&mut self) -> fugit::MillisDuration<u64> {
         self.process_event(sm::Events::Enable).unwrap();
-        Relay::<'_, I2C>::K0_DELAY // engage K0 first
+        Relay::<I2C>::K0_DELAY // engage K0 first
     }
 
     pub fn disable(&mut self) -> fugit::MillisDuration<u64> {
         self.process_event(sm::Events::Disable).unwrap();
-        Relay::<'_, I2C>::K1_DELAY // engage K1 first
+        Relay::<I2C>::K1_DELAY // engage K1 first
     }
 
     /// Handle a completed relay transition. Returns `Some(relay delay)` if we need to wait,
@@ -196,8 +196,8 @@ where
     pub fn handle_relay(&mut self) -> Option<fugit::MillisDuration<u64>> {
         self.process_event(sm::Events::RelayDone).unwrap();
         match *self.state() {
-            sm::States::EnableWaitK1 => Some(Relay::<'_, I2C>::K1_DELAY), // disengage K1 second
-            sm::States::DisableWaitK0 => Some(Relay::<'_, I2C>::K0_DELAY), // disengage K0 second
+            sm::States::EnableWaitK1 => Some(Relay::<I2C>::K1_DELAY), // disengage K1 second
+            sm::States::DisableWaitK0 => Some(Relay::<I2C>::K0_DELAY), // disengage K0 second
             _ => None, // done, no delay needed
         }
     }
@@ -234,7 +234,7 @@ where
     ///
     /// # Returns
     /// An instantiated [Relay] whose ownership can be transferred to other drivers.
-    pub fn obtain_relay(&self, ch: Channel) -> Relay<'_, I2C> {
+    pub fn obtain_relay(&'static self, ch: Channel) -> Relay<I2C> {
         Relay::new(&self.mutex, ch)
     }
 }
