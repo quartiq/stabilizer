@@ -223,7 +223,7 @@ mod app {
 
         let driver = mezzanine.get_driver();
 
-        let mut shared = Shared {
+        let shared = Shared {
             network,
             settings,
             telemetry: TelemetryBuffer::default(),
