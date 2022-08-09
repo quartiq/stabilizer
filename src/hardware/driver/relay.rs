@@ -52,7 +52,6 @@ impl From<RelayPin> for Mcp23008 {
 ///     - `k0_cp` is the clock input if the flipflop. Note that there is additional circuitry
 ///        which ensures this clock input cannot be driven if K1 is not in the correct state.
 ///        See Driver schematic for exact details.
-/// A `delay` is used to generate a rising edge for the flipflip with enaugh timing margins.
 pub struct Relay<I2C: WriteRead + Write + 'static> {
     gpio: &'static spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
     k1_en_n: RelayPin,
