@@ -271,8 +271,8 @@ mod app {
         start::spawn_after(100.millis()).unwrap();
 
         // mock LN output enable
-        let del = shared.driver_relay_state[0].enable().unwrap();
-        handle_relay::spawn_after(del.convert(), Channel::LowNoise).unwrap();
+        // let del = shared.driver_relay_state[0].enable().unwrap();
+        // handle_relay::spawn_after(del.convert(), Channel::LowNoise).unwrap();
 
         (shared, local, init::Monotonics(stabilizer.systick))
     }

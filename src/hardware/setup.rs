@@ -742,7 +742,7 @@ pub fn setup(
         )
     };
     let mut buffer = [0u8; 6];
-    let _driver_found = i2c1
+    let driver_found = i2c1
         .write_read(eeprom::I2C_ADDR, &[eeprom::MAC_POINTER], &mut buffer)
         .is_ok();
     log::info!("Driver EUI48: {:?}", buffer);
@@ -984,7 +984,8 @@ pub fn setup(
             timestamper: pounder_stamper,
         })
     // If Driver detected
-    } else if true {
+    // Always act is if driver was there for development.
+    } else if driver_found | true {
         log::info!("driver init");
         let ltc2320_pins = driver::ltc2320::Ltc2320Pins {
             qspi: (
@@ -1021,6 +1022,7 @@ pub fn setup(
         let mcp = mcp230xx::Mcp230xx::new_default(i2c1.acquire_i2c()).unwrap();
 
         // Use a mutex to share the MCP23008 preipheral for both channel relay state machines.
+        // There is no protection against allocating the same realy twice.
         let mcp_mutex = cortex_m::singleton!(: spin::Mutex<
             mcp230xx::Mcp230xx<I2cProxy<'_, AtomicCheckMutex<I2c<
                 stm32h7xx_hal::stm32::I2C1>>>, mcp230xx::Mcp23008>>
@@ -1028,10 +1030,7 @@ pub fn setup(
         .unwrap();
 
         let relay_sm = [
-            StateMachine::new(Relay::new(
-                mcp_mutex,
-                driver::Channel::HighPower,
-            )),
+            StateMachine::new(Relay::new(mcp_mutex, driver::Channel::LowNoise)),
             StateMachine::new(Relay::new(
                 mcp_mutex,
                 driver::Channel::HighPower,
