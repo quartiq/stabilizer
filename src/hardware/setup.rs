@@ -13,10 +13,11 @@ use stm32h7xx_hal::{
 use smoltcp_nal::smoltcp;
 
 use super::{
-    adc, afe, cpu_temp_sensor::CpuTempSensor, dac, design_parameters, eeprom,
-    input_stamper::InputStamper, pounder, pounder::dds_output::DdsOutput,
-    shared_adc::SharedAdc, timers, DigitalInput0, DigitalInput1, EthernetPhy,
-    NetworkStack, SystemTimer, Systick, AFE0, AFE1,
+    adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
+    eeprom, input_stamper::InputStamper, pounder,
+    pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
+    DigitalInput0, DigitalInput1, EthernetPhy, NetworkStack, SystemTimer,
+    Systick, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -275,9 +276,7 @@ pub fn setup(
     // After ITCM loading.
     core.SCB.enable_icache();
 
-    let mut delay = asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(
-        ccdr.clocks.c_ck().to_Hz(),
-    ));
+    let mut delay = delay::AsmDelay::new(ccdr.clocks.c_ck().to_Hz());
 
     let gpioa = device.GPIOA.split(ccdr.peripheral.GPIOA);
     let gpiob = device.GPIOB.split(ccdr.peripheral.GPIOB);

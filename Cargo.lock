@@ -43,17 +43,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "asm-delay"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9a69a963b70ddacfcd382524f72a4576f359af9334b3bf48a79566590bb8bfa"
-dependencies = [
- "bitrate",
- "cortex-m 0.7.5",
- "embedded-hal",
-]
-
-[[package]]
 name = "atomic-polyfill"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -100,12 +89,6 @@ name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
-
-[[package]]
-name = "bitrate"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c147d86912d04bef727828fda769a76ca81629a46d8ba311a8d58a26aa91473d"
 
 [[package]]
 name = "bytemuck"
@@ -915,7 +898,6 @@ name = "stabilizer"
 version = "0.7.0"
 dependencies = [
  "ad9959",
- "asm-delay",
  "cortex-m 0.7.5",
  "cortex-m-rt",
  "cortex-m-rtic",
