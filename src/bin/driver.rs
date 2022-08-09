@@ -223,7 +223,7 @@ mod app {
 
         let driver = mezzanine.get_driver();
 
-        let shared = Shared {
+        let mut shared = Shared {
             network,
             settings,
             telemetry: TelemetryBuffer::default(),
@@ -269,6 +269,10 @@ mod app {
         ethernet_link::spawn().unwrap();
         header_adc_start_conversion::spawn().unwrap();
         start::spawn_after(100.millis()).unwrap();
+
+        // mock LN output enable
+        let del = shared.driver_relay_state[0].enable();
+        handle_relay::spawn_after(del.convert(), Channel::LowNoise).unwrap();
 
         (shared, local, init::Monotonics(stabilizer.systick))
     }

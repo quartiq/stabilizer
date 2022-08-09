@@ -587,12 +587,10 @@ pub fn setup(
         )
     };
 
-    let mac_addr = smoltcp::wire::EthernetAddress(
-        eeprom::read_eui48(
-            &mut eeprom_i2c,
-            &mut delay,
-        )
-    );
+    let mac_addr = smoltcp::wire::EthernetAddress(eeprom::read_eui48(
+        &mut eeprom_i2c,
+        &mut delay,
+    ));
     log::info!("EUI48: {}", mac_addr);
 
     let network_devices = {
@@ -752,7 +750,6 @@ pub fn setup(
     let driver_mac_addr =
         i2c1.write_read(EEPROM_I2C_ADDR, &[EEPROM_MAC_POINTER], &mut buffer);
     log::info!("Driver EUI48: {:?}", driver_mac_addr);
-
 
     let i2c1 =
         shared_bus::new_atomic_check!(hal::i2c::I2c<hal::stm32::I2C1> = i2c1)
@@ -1028,7 +1025,7 @@ pub fn setup(
         let mcp = mcp230xx::Mcp230xx::new_default(i2c1.acquire_i2c()).unwrap();
 
         let shared_mcp = cortex_m::singleton!(: SharedMcp<
-            I2cProxy<'_, AtomicCheckMutex<I2c<stm32h7xx_hal::stm32::I2C1>>>>  
+            I2cProxy<'_, AtomicCheckMutex<I2c<stm32h7xx_hal::stm32::I2C1>>>>
                 = SharedMcp::new(mcp))
         .unwrap();
 
