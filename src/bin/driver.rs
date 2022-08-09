@@ -24,12 +24,15 @@ use stabilizer::{
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
         design_parameters, driver,
-        driver::OutputChannelIdx,
+        driver::{
+            relay::{self, sm::StateMachine},
+            Channel,
+        },
         hal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
-        DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
-        MONOTONIC_FREQUENCY,
+        DigitalInput0, DigitalInput1, I2c1Proxy, SystemTimer, Systick, AFE0,
+        AFE1, MONOTONIC_FREQUENCY,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -168,6 +171,11 @@ mod app {
         adc_internal: driver::adc_internal::AdcInternal,
         header_adc: driver::ltc2320::Ltc2320,
         header_adc_data: [u16; 8],
+        // driver_relay_state might eventually live inside driver_output_state but then the
+        // relay_delay function would have to lock the whole output state..
+        driver_relay_state: [StateMachine<relay::Relay<I2c1Proxy>>; 2],
+        // driver_dac: [Dac; 2]
+        // driver_output_state: [Output State Macheine; 2]
     }
 
     #[local]
@@ -234,6 +242,7 @@ mod app {
             adc_internal: driver.adc_internal,
             header_adc: driver.ltc2320,
             header_adc_data: [0u16; 8],
+            driver_relay_state: driver.relay_sm, // this might live inside driver_output_state eventually
         };
 
         let mut local = Local {
@@ -260,6 +269,10 @@ mod app {
         ethernet_link::spawn().unwrap();
         header_adc_start_conversion::spawn().unwrap();
         start::spawn_after(100.millis()).unwrap();
+
+        // mock LN output enable
+        // let del = shared.driver_relay_state[0].enable().unwrap();
+        // handle_relay::spawn_after(del.convert(), Channel::LowNoise).unwrap();
 
         (shared, local, init::Monotonics(stabilizer.systick))
     }
@@ -445,10 +458,10 @@ mod app {
         log::info!(
             "internal adc values: {:?}",
             c.shared.adc_internal.lock(|adc| [
-                adc.read_output_current(OutputChannelIdx::Zero),
-                adc.read_output_current(OutputChannelIdx::One),
-                adc.read_output_voltage(OutputChannelIdx::Zero),
-                adc.read_output_voltage(OutputChannelIdx::One),
+                adc.read_output_current(Channel::LowNoise),
+                adc.read_output_current(Channel::HighPower),
+                adc.read_output_voltage(Channel::LowNoise),
+                adc.read_output_voltage(Channel::HighPower),
             ])
         );
     }
@@ -480,6 +493,17 @@ mod app {
         (c.shared.header_adc, c.shared.header_adc_data).lock(|ltc, data| {
             ltc.handle_transfer_done(data);
         });
+    }
+
+    // Task for waiting the relay transition times.
+    #[task(priority = 1, shared=[driver_relay_state])]
+    fn handle_relay(mut c: handle_relay::Context, channel: driver::Channel) {
+        let delay = (c.shared.driver_relay_state)
+            .lock(|state| state[channel as usize].handle_relay());
+        if let Some(del) = delay {
+            handle_relay::Monotonic::spawn_after(del.convert(), channel)
+                .unwrap();
+        }
     }
 
     #[task(binds = ETH, priority = 1)]

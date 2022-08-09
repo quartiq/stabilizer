@@ -12,10 +12,10 @@ const V_REF: f32 = 2.048; // ADC reference voltage
 const R_SENSE: f32 = 0.1; // Driver output current sense resistor (Will maybe be something else on HW)
 
 pub enum DriverAdcChannel {
-    OutputVoltage(OutputChannelIdx),
-    OutputCurrent(OutputChannelIdx),
+    OutputVoltage(Channel),
+    OutputCurrent(Channel),
 }
-use super::OutputChannelIdx;
+use super::Channel;
 
 pub struct AdcInternal {
     output_voltage: (
@@ -52,12 +52,12 @@ impl AdcInternal {
         }
     }
 
-    pub fn read_output_voltage(&mut self, ch: OutputChannelIdx) -> f32 {
+    pub fn read_output_voltage(&mut self, ch: Channel) -> f32 {
         let ratio: f32 = match ch {
-            OutputChannelIdx::Zero => {
+            Channel::LowNoise => {
                 self.output_voltage.0.read_normalized().unwrap()
             }
-            OutputChannelIdx::One => {
+            Channel::HighPower => {
                 self.output_voltage.1.read_normalized().unwrap()
             }
         };
@@ -66,12 +66,12 @@ impl AdcInternal {
         (ratio + OFFSET) * SCALE
     }
 
-    pub fn read_output_current(&mut self, ch: OutputChannelIdx) -> f32 {
+    pub fn read_output_current(&mut self, ch: Channel) -> f32 {
         let ratio: f32 = match ch {
-            OutputChannelIdx::Zero => {
+            Channel::LowNoise => {
                 self.output_current.0.read_normalized().unwrap()
             }
-            OutputChannelIdx::One => {
+            Channel::HighPower => {
                 self.output_current.1.read_normalized().unwrap()
             }
         };

@@ -3,7 +3,9 @@
 ///! This file contains all of the hardware-specific configuration of Stabilizer.
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{ptr, slice};
-use driver::DriverDevices;
+use driver::{relay::sm::StateMachine, relay::Relay, DriverDevices};
+use hal::i2c::I2c;
+use shared_bus::{AtomicCheckMutex, I2cProxy};
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
@@ -726,6 +728,29 @@ pub fn setup(
     fp_led_2.set_low();
     fp_led_3.set_low();
 
+    let mut i2c1 = {
+        let mut sda = gpiob.pb7.into_alternate().set_open_drain();
+        let mut scl = gpiob.pb8.into_alternate().set_open_drain();
+        // enable internal pullups since none are present on Stabilizer without a Mezzanine
+        sda = sda.internal_pull_up(true);
+        scl = scl.internal_pull_up(true);
+        device.I2C1.i2c(
+            (scl, sda),
+            100.kHz(),
+            ccdr.peripheral.I2C1,
+            &ccdr.clocks,
+        )
+    };
+    let mut buffer = [0u8; 6];
+    let driver_found = i2c1
+        .write_read(eeprom::I2C_ADDR, &[eeprom::MAC_POINTER], &mut buffer)
+        .is_ok();
+    log::info!("Driver EUI48: {:?}", buffer);
+
+    let i2c1 =
+        shared_bus::new_atomic_check!(hal::i2c::I2c<hal::stm32::I2C1> = i2c1)
+            .unwrap();
+
     // Use default PLL2p clock input with 1/2 prescaler for 50 MHz ADC clock.
     let (adc1, adc2, adc3) = {
         let (mut adc1, mut adc2) = hal::adc::adc12(
@@ -778,19 +803,6 @@ pub fn setup(
     delay.delay_ms(2u8);
     let mezzanine = if pounder_pgood.is_high() {
         log::info!("Found Pounder");
-
-        let i2c1 = {
-            let sda = gpiob.pb7.into_alternate().set_open_drain();
-            let scl = gpiob.pb8.into_alternate().set_open_drain();
-            let i2c1 = device.I2C1.i2c(
-                (scl, sda),
-                400.kHz(),
-                ccdr.peripheral.I2C1,
-                &ccdr.clocks,
-            );
-
-            shared_bus::new_atomic_check!(hal::i2c::I2c<hal::stm32::I2C1> = i2c1).unwrap()
-        };
 
         let io_expander =
             mcp230xx::Mcp230xx::new_default(i2c1.acquire_i2c()).unwrap();
@@ -972,7 +984,8 @@ pub fn setup(
             timestamper: pounder_stamper,
         })
     // If Driver detected
-    } else if true {
+    // Always act is if driver was there for development.
+    } else if driver_found | true {
         log::info!("driver init");
         let ltc2320_pins = driver::ltc2320::Ltc2320Pins {
             qspi: (
@@ -1002,9 +1015,33 @@ pub fn setup(
             output_voltage,
             output_current,
         );
+
+        let lm75 =
+            lm75::Lm75::new(i2c1.acquire_i2c(), lm75::Address::default());
+
+        let mcp = mcp230xx::Mcp230xx::new_default(i2c1.acquire_i2c()).unwrap();
+
+        // Use a mutex to share the MCP23008 preipheral for both channel relay state machines.
+        // There is no protection against allocating the same realy twice.
+        let mcp_mutex = cortex_m::singleton!(: spin::Mutex<
+            mcp230xx::Mcp230xx<I2cProxy<'_, AtomicCheckMutex<I2c<
+                stm32h7xx_hal::stm32::I2C1>>>, mcp230xx::Mcp23008>>
+        = spin::Mutex::new(mcp))
+        .unwrap();
+
+        let relay_sm = [
+            StateMachine::new(Relay::new(mcp_mutex, driver::Channel::LowNoise)),
+            StateMachine::new(Relay::new(
+                mcp_mutex,
+                driver::Channel::HighPower,
+            )),
+        ];
+
         Mezzanine::Driver(DriverDevices {
+            lm75,
             ltc2320,
             adc_internal,
+            relay_sm,
         })
     } else {
         Mezzanine::None
