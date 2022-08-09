@@ -103,7 +103,9 @@ where
         mcp.set_gpio(k1_en.into(), Level::Low).unwrap();
         mcp.set_gpio(k1_en_n.into(), Level::High).unwrap();
         mcp.set_gpio(k0_d.into(), Level::Low).unwrap();
+        // toggle flipflop once to set a known output
         mcp.set_gpio(k0_cp.into(), Level::Low).unwrap();
+        mcp.set_gpio(k0_cp.into(), Level::High).unwrap();
 
         Relay {
             gpio,
