@@ -1,19 +1,8 @@
 use embedded_hal::blocking::{delay::DelayMs, i2c::WriteRead};
 
-// The EEPROM is a variant without address bits, so the 3 LSB of this word are "dont-cares".
-const I2C_ADDR: u8 = 0x50;
+use super::{EEPROM_I2C_ADDR, EEPROM_MAC_POINTER};
 
-// The MAC address is stored in the last 6 bytes of the 256 byte address space.
-const MAC_POINTER: u8 = 0xFA;
-
-#[derive(Copy, Clone, Debug)]
-pub struct EuiReadError;
-
-pub fn read_eui48<T>(
-    i2c: &mut T,
-    delay: &mut impl DelayMs<u8>,
-    trys: u8,
-) -> Result<[u8; 6], EuiReadError>
+pub fn read_eui48<T>(i2c: &mut T, delay: &mut impl DelayMs<u8>) -> [u8; 6]
 where
     T: WriteRead,
 {
@@ -24,15 +13,15 @@ where
     // accomodate this, we repeat the I2C read for a set number of attempts with a fixed delay
     // between them. Then, we wait for the bus to stabilize by waiting until the MAC address
     // read-out is identical for two consecutive reads.
-    for _ in 0..trys {
+    for _ in 0..40 {
         let mut buffer = [0u8; 6];
         if i2c
-            .write_read(I2C_ADDR, &[MAC_POINTER], &mut buffer)
+            .write_read(EEPROM_I2C_ADDR, &[EEPROM_MAC_POINTER], &mut buffer)
             .is_ok()
         {
             if let Some(old_read) = previous_read {
                 if old_read == buffer {
-                    return Ok(buffer);
+                    return buffer;
                 }
             }
 
@@ -41,8 +30,9 @@ where
             // Remove any pending previous read if we failed the last attempt.
             previous_read.take();
         }
+
         delay.delay_ms(100);
     }
 
-    Err(EuiReadError)
+    panic!("Failed to read MAC address");
 }

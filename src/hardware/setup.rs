@@ -18,6 +18,8 @@ use stm32h7xx_hal::{
 
 use smoltcp_nal::smoltcp;
 
+use crate::hardware::{EEPROM_I2C_ADDR, EEPROM_MAC_POINTER};
+
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, design_parameters, driver,
     eeprom, input_stamper::InputStamper, pounder,
@@ -589,9 +591,7 @@ pub fn setup(
         eeprom::read_eui48(
             &mut eeprom_i2c,
             &mut delay,
-            40, // Try a maximum of 40 times to account for turn-on transients.
         )
-        .unwrap(),
     );
     log::info!("EUI48: {}", mac_addr);
 
@@ -748,11 +748,11 @@ pub fn setup(
             &ccdr.clocks,
         )
     };
-
-    let driver_mac_addr = eeprom::read_eui48(
-        &mut i2c1, &mut delay, 5, // try a few times
-    );
+    let mut buffer = [0u8; 6];
+    let driver_mac_addr =
+        i2c1.write_read(EEPROM_I2C_ADDR, &[EEPROM_MAC_POINTER], &mut buffer);
     log::info!("Driver EUI48: {:?}", driver_mac_addr);
+
 
     let i2c1 =
         shared_bus::new_atomic_check!(hal::i2c::I2c<hal::stm32::I2C1> = i2c1)
