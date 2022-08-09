@@ -7,12 +7,8 @@
 ///! See [Relay] documentation for details about relay control.
 ///!
 ///! The relays are controlled via an MCP23008 I2C io expander.
-use super::hal::rcc;
 use core::fmt::Debug;
-use embedded_hal::blocking::{
-    delay::DelayUs,
-    i2c::{Write, WriteRead},
-};
+use embedded_hal::blocking::i2c::{Write, WriteRead};
 use mcp230xx::{Level, Mcp23008, Mcp230xx};
 
 use super::Channel;
@@ -67,7 +63,6 @@ fn get_mcp<I2C>(
 /// A `delay` is used to generate a rising edge for the flipflip with enaugh timing margins.
 pub struct Relay<'a, I2C: WriteRead + Write> {
     mutex: &'a spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
-    delay: asm_delay::AsmDelay,
     k1_en_n: RelayPin,
     k1_en: RelayPin,
     k0_d: RelayPin,
@@ -92,7 +87,6 @@ where
     /// * `channel` - Driver channel to construct the [Relay] for
     pub fn new(
         mutex: &'a spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
-        ccdr: &rcc::CoreClocks,
         channel: Channel,
     ) -> Self {
         let (k1_en_n, k1_en, k0_d, k0_cp) = if channel == Channel::LowNoise {
@@ -117,12 +111,8 @@ where
         mcp.set_gpio(k0_d.into(), Level::Low).unwrap();
         mcp.set_gpio(k0_cp.into(), Level::Low).unwrap();
 
-        let delay = asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(
-            ccdr.c_ck().to_Hz(),
-        ));
         Relay {
             mutex,
-            delay,
             k1_en_n,
             k1_en,
             k0_d,
@@ -157,7 +147,6 @@ where
         mcp.set_gpio(self.k0_d.into(), Level::High).unwrap();
         // set flipflop clock input low to prepare rising edge
         mcp.set_gpio(self.k0_cp.into(), Level::Low).unwrap();
-        self.delay.delay_us(100u32);
         // set flipflop clock input high to generate rising edge
         mcp.set_gpio(self.k0_cp.into(), Level::High).unwrap();
     }
@@ -167,7 +156,6 @@ where
         let mut mcp = get_mcp(self.mutex);
         mcp.set_gpio(self.k0_d.into(), Level::High).unwrap();
         mcp.set_gpio(self.k0_cp.into(), Level::Low).unwrap();
-        self.delay.delay_us(100u32);
         mcp.set_gpio(self.k0_cp.into(), Level::High).unwrap();
     }
 
@@ -246,11 +234,7 @@ where
     ///
     /// # Returns
     /// An instantiated [Relay] whose ownership can be transferred to other drivers.
-    pub fn obtain_relay(
-        &self,
-        ccdr: &rcc::CoreClocks,
-        ch: Channel,
-    ) -> Relay<'_, I2C> {
-        Relay::new(&self.mutex, ccdr, ch)
+    pub fn obtain_relay(&self, ch: Channel) -> Relay<'_, I2C> {
+        Relay::new(&self.mutex, ch)
     }
 }

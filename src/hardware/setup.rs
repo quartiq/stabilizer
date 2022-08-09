@@ -1034,12 +1034,10 @@ pub fn setup(
 
         let relay_sm = [
             StateMachine::new(
-                shared_mcp
-                    .obtain_relay(&ccdr.clocks, driver::Channel::LowNoise),
+                shared_mcp.obtain_relay(driver::Channel::LowNoise),
             ),
             StateMachine::new(
-                shared_mcp
-                    .obtain_relay(&ccdr.clocks, driver::Channel::HighPower),
+                shared_mcp.obtain_relay(driver::Channel::HighPower),
             ),
         ];
 
