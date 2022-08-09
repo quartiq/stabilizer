@@ -90,12 +90,6 @@ pub type I2c1 = hal::i2c::I2c<hal::stm32::I2C1>;
 pub type I2c1Proxy =
     shared_bus::I2cProxy<'static, shared_bus::AtomicCheckMutex<I2c1>>;
 
-// The EEPROM is a variant without address bits, so the 3 LSB of this word are "dont-cares".
-pub const EEPROM_I2C_ADDR: u8 = 0x50;
-
-// The MAC address is stored in the last 6 bytes of the 256 byte address space.
-pub const EEPROM_MAC_POINTER: u8 = 0xFA;
-
 #[inline(never)]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {

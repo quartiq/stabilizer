@@ -119,6 +119,10 @@ pub mod sm {
     use super::*;
     statemachine! {
         transitions: {
+            // The Driver headboard circuit ensures that the hardware is in the Disabled state after startup.
+            // Driver features a hardware over-temperature protection that will force K1 to
+            // ground the output. If this happens the state machine is out of sync with the hardware.
+            // This should be handled at a different point by monitoring the TEMP pin.
             *Disabled + Enable / engage_k0 = EnableWaitK0,
             EnableWaitK0 + RelayDone / disengage_k1 = EnableWaitK1,
             EnableWaitK1 + RelayDone = Enabled,
@@ -196,41 +200,5 @@ where
             sm::States::DisableWaitK0 => Some(Relay::<I2C>::K0_DELAY), // disengage K0 second
             _ => None, // done, no delay needed
         }
-    }
-}
-
-/// A SharedMcp can provide ownership of one of two sets of relays on Driver.
-/// Each set consists of two relays that control the state of a Driver output channel.
-/// The relays are controlled by toggeling pins on an MCP23008 I2C IO expander on the Driver board.
-/// Both sets use the same MCP23008 chip, hence the SharedMcp.
-pub struct SharedMcp<I2C1> {
-    mutex: spin::Mutex<Mcp230xx<I2C1, Mcp23008>>,
-}
-
-impl<I2C, E> SharedMcp<I2C>
-where
-    I2C: WriteRead<Error = E> + Write<Error = E>,
-    E: Debug,
-{
-    /// Construct a new shared MCP23008.
-    ///
-    /// # Args
-    /// * `mcp` - The MCP23008 peripheral to share.
-    pub fn new(mcp: Mcp230xx<I2C, Mcp23008>) -> Self {
-        Self {
-            mutex: spin::Mutex::new(mcp),
-        }
-    }
-
-    /// Allocate a set of relay pins on the MCP23008 and get the corresponding [Relay]
-    ///
-    /// # Args
-    /// * `ccdr`    - core clocks to construct a `delay` for flipflop control
-    /// * `ch`      - The Driver channel the relay pins are used for.
-    ///
-    /// # Returns
-    /// An instantiated [Relay] whose ownership can be transferred to other drivers.
-    pub fn obtain_relay(&'static self, ch: Channel) -> Relay<I2C> {
-        Relay::new(&self.mutex, ch)
     }
 }

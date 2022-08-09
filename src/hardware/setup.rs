@@ -3,10 +3,7 @@
 ///! This file contains all of the hardware-specific configuration of Stabilizer.
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{ptr, slice};
-use driver::{
-    relay::{sm::StateMachine, SharedMcp},
-    DriverDevices,
-};
+use driver::{relay::sm::StateMachine, relay::Relay, DriverDevices};
 use hal::i2c::I2c;
 use shared_bus::{AtomicCheckMutex, I2cProxy};
 use stm32h7xx_hal::{
@@ -17,8 +14,6 @@ use stm32h7xx_hal::{
 };
 
 use smoltcp_nal::smoltcp;
-
-use crate::hardware::{EEPROM_I2C_ADDR, EEPROM_MAC_POINTER};
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, design_parameters, driver,
@@ -747,9 +742,9 @@ pub fn setup(
         )
     };
     let mut buffer = [0u8; 6];
-    let driver_mac_addr =
-        i2c1.write_read(EEPROM_I2C_ADDR, &[EEPROM_MAC_POINTER], &mut buffer);
-    log::info!("Driver EUI48: {:?}", driver_mac_addr);
+    let _driver_mac_addr =
+        i2c1.write_read(eeprom::I2C_ADDR, &[eeprom::MAC_POINTER], &mut buffer);
+    log::info!("Driver EUI48: {:?}", buffer);
 
     let i2c1 =
         shared_bus::new_atomic_check!(hal::i2c::I2c<hal::stm32::I2C1> = i2c1)
@@ -1024,18 +1019,22 @@ pub fn setup(
 
         let mcp = mcp230xx::Mcp230xx::new_default(i2c1.acquire_i2c()).unwrap();
 
-        let shared_mcp = cortex_m::singleton!(: SharedMcp<
-            I2cProxy<'_, AtomicCheckMutex<I2c<stm32h7xx_hal::stm32::I2C1>>>>
-                = SharedMcp::new(mcp))
+        // Use a mutex to share the MCP23008 preipheral for both channel relay state machines.
+        let mcp_mutex = cortex_m::singleton!(: spin::Mutex<
+            mcp230xx::Mcp230xx<I2cProxy<'_, AtomicCheckMutex<I2c<
+                stm32h7xx_hal::stm32::I2C1>>>, mcp230xx::Mcp23008>>
+        = spin::Mutex::new(mcp))
         .unwrap();
 
         let relay_sm = [
-            StateMachine::new(
-                shared_mcp.obtain_relay(driver::Channel::LowNoise),
-            ),
-            StateMachine::new(
-                shared_mcp.obtain_relay(driver::Channel::HighPower),
-            ),
+            StateMachine::new(Relay::new(
+                mcp_mutex,
+                driver::Channel::HighPower,
+            )),
+            StateMachine::new(Relay::new(
+                mcp_mutex,
+                driver::Channel::HighPower,
+            )),
         ];
 
         Mezzanine::Driver(DriverDevices {
