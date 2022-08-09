@@ -43,14 +43,6 @@ impl From<RelayPin> for Mcp23008 {
     }
 }
 
-// small helper to lock the mutex
-// maybe todo: Pass out an error if in use. Not sure how to get that out of the state machine though..
-fn get_mcp<I2C>(
-    mutex: &'_ spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
-) -> spin::MutexGuard<Mcp230xx<I2C, Mcp23008>> {
-    mutex.try_lock().unwrap() // panic here if in use
-}
-
 /// Driver output [Relay] type that controlls the set of two relays that is present on both of
 /// the driver output channels.
 /// [Relay] contains a mutex of a shared MCP23008, an I2C io expander chip with 8 GPIOs.
@@ -106,7 +98,7 @@ where
                 RelayPin::HP_K0_CP,
             )
         };
-        let mut mcp = get_mcp(gpio);
+        let mut mcp = gpio.try_lock().unwrap();
         // set GPIOs to default position
         mcp.set_gpio(k1_en.into(), Level::Low).unwrap();
         mcp.set_gpio(k1_en_n.into(), Level::High).unwrap();
@@ -132,7 +124,9 @@ pub mod sm {
             EnableWaitK1 + RelayDone = Enabled,
             Enabled + Disable / engage_k1 = DisableWaitK1,
             DisableWaitK1 + RelayDone / disengage_k0 = DisableWaitK0,
-            DisableWaitK0 + RelayDone = Disabled
+            DisableWaitK0 + RelayDone = Disabled,
+            Disabled + Disable = Disabled,
+            Enabled + Enable = Enabled
         }
     }
 }
@@ -183,14 +177,14 @@ where
     E: Debug,
 {
     /// Start relay enabling sequence. Returns the relay delay we need to wait for.
-    pub fn enable(&mut self) -> fugit::MillisDuration<u64> {
-        self.process_event(sm::Events::Enable).unwrap();
-        Relay::<I2C>::K0_DELAY // engage K0 first
+    pub fn enable(&mut self) -> Result<fugit::MillisDuration<u64>, sm::Error> {
+        self.process_event(sm::Events::Enable)?;
+        Ok(Relay::<I2C>::K0_DELAY) // engage K0 first
     }
 
-    pub fn disable(&mut self) -> fugit::MillisDuration<u64> {
-        self.process_event(sm::Events::Disable).unwrap();
-        Relay::<I2C>::K1_DELAY // engage K1 first
+    pub fn disable(&mut self) -> Result<fugit::MillisDuration<u64>, sm::Error> {
+        self.process_event(sm::Events::Disable)?;
+        Ok(Relay::<I2C>::K1_DELAY) // engage K1 first
     }
 
     /// Handle a completed relay transition. Returns `Some(relay delay)` if we need to wait,
