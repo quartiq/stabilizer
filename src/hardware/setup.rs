@@ -742,7 +742,9 @@ pub fn setup(
         )
     };
     let mut buffer = [0u8; 6];
-    let _driver_found = i2c1.write_read(eeprom::I2C_ADDR, &[eeprom::MAC_POINTER], &mut buffer).is_ok();
+    let _driver_found = i2c1
+        .write_read(eeprom::I2C_ADDR, &[eeprom::MAC_POINTER], &mut buffer)
+        .is_ok();
     log::info!("Driver EUI48: {:?}", buffer);
 
     let i2c1 =
