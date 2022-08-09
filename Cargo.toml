@@ -47,7 +47,7 @@ asm-delay = "0.9.0"
 num_enum = { version = "0.5.7", default-features = false }
 paste = "1"
 idsp = "0.8"
-ad9959 = { path = "ad9959", version = "0.1.0" }
+ad9959 = { path = "ad9959", version = "0.2.0" }
 miniconf = "0.5"
 smoltcp-nal = { version = "0.2", features = ["shared-stack"] }
 serde-json-core = "0.4"
