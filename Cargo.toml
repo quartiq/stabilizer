@@ -1,12 +1,13 @@
 [package]
 name = "stabilizer"
-version = "0.6.0"
+# Keep versions in Cargo.toml and py/setup.py synchronized.
+version = "0.7.0"
 resolver = "2"
 authors = [
 	"Robert Jördens <rj@quartiq.de>",
 	"Ryan Summers <ryan.summers@vertigo-designs.com>",
 ]
-description = "Firmware for the Sinara Stabilizer board (stm32h743, eth, poe, 2 adc, 2 dac)"
+description = "Firmware for the Sinara Stabilizer board (STM32H743, Ethernet, PoE, 2 ADCs, 2 DACs)"
 categories = ["embedded", "no-std", "hardware-support", "science"]
 license = "MIT OR Apache-2.0"
 keywords = ["ethernet", "stm32h7", "adc", "dac", "physics"]
@@ -23,7 +24,7 @@ exclude = [
 ]
 
 [badges]
-maintenance = { status = "experimental" }
+maintenance = { status = "actively-developed" }
 
 [package.metadata.docs.rs]
 features = []
@@ -45,7 +46,7 @@ nb = "1.0.0"
 num_enum = { version = "0.5.7", default-features = false }
 paste = "1"
 idsp = "0.8"
-ad9959 = { path = "ad9959", version = "0.1.0" }
+ad9959 = { path = "ad9959", version = "0.2.0" }
 miniconf = "0.5"
 smoltcp-nal = { version = "0.2", features = ["shared-stack"] }
 serde-json-core = "0.4"

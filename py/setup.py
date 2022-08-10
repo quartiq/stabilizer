@@ -2,7 +2,8 @@ from setuptools import setup, find_packages
 
 setup(name="stabilizer",
       packages=find_packages(),
-      version="0.1",
+      # Keep versions in Cargo.toml and py/setup.py synchronized.
+      version="0.7.0",
       description="Stabilizer Utilities",
       author="QUARTIQ GmbH",
       license="MIT",

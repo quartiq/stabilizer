@@ -9,19 +9,33 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
-* Optional specification of a static IP address ([#509](https://github.com/quartiq/stabilizer/pull/509))
-* Temperature sensor measurement for Pounder and Stabilizer's CPU has been added [#575](https://github.com/quartiq/stabilizer/pull/575)
-
 ### Removed
 
 ### Changed
 
+### Fixed
+
+## [v0.7.0] - 2022-08-10
+
+### Added
+
+* Optional specification of a static IP address ([#509](https://github.com/quartiq/stabilizer/pull/509))
+* Temperature sensor measurement for Pounder and Stabilizer's CPU has been added [#575](https://github.com/quartiq/stabilizer/pull/575)
+* External clock support for Pounder
+* Auxiliary ADC support for Pounder
+
+### Removed
+
 * Minimum supported Rust version bumped to 1.62
+* The `pounder_v1_1` feature has been replaced by the `pounder_v1_0` feature with inverse meaning.
+* The `Telemetry` python client has been integrated into the `stabilizer` Python library
 
 ### Fixed
 
 * Fixed panics when using a batch size of 1 ([#540](https://github.com/quartiq/stabilizer/issues/540))
 * Fixed an issue where startup delays were 1/4 of what they should be ([#524](https://github.com/quartiq/stabilizer/issues/524))
+* Fixed Pounder GPIO extender issues by rewriting the `mcp280xx` crate
+* Fixed improper calculation of the signal generator phase increment ([#543](https://github.com/quartiq/stabilizer/pull/543))
 
 ## [v0.6.0] - 2022-02-11
 
@@ -129,7 +143,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 * First bits of code published
 
-[Unreleased]: https://github.com/quartiq/stabilizer/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/quartiq/stabilizer/compare/v0.7.0...HEAD
+[v0.7.0]: https://github.com/quartiq/stabilizer/compare/v0.6.0...v0.7.0
 [v0.6.0]: https://github.com/quartiq/stabilizer/compare/v0.5.0...v0.6.0
 [v0.5.0]: https://github.com/quartiq/stabilizer/compare/v0.4.1...v0.5.0
 [v0.4.1]: https://github.com/quartiq/stabilizer/compare/v0.4.0...v0.4.1
