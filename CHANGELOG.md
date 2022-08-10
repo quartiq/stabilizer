@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 * Fixed panics when using a batch size of 1 ([#540](https://github.com/quartiq/stabilizer/issues/540))
 * Fixed an issue where startup delays were 1/4 of what they should be ([#524](https://github.com/quartiq/stabilizer/issues/524))
 * Fixed Pounder GPIO extender issues by rewriting the `mcp280xx` crate
+* Fixed improper calculation of the signal generator phase increment ([#543](https://github.com/quartiq/stabilizer/pull/543))
 
 ## [v0.6.0] - 2022-02-11
 
