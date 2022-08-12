@@ -16,7 +16,8 @@ pub struct ThermostatClient {
     interlock_topic: String<128>, // The prefix of Thermostat and the interlock topic
 }
 
-impl ThermostatClient {
+impl ThermostatClient
+{
     /// Construct a new Thermostat client.
     ///
     /// # Args
@@ -64,12 +65,8 @@ impl ThermostatClient {
         // log::info!("polling interlock");
         self.mqtt
             .poll(|_, topic, _, _| {
-                log::info!("polling closure");
-                let string: String<64> =
-                    String::from(self.interlock_topic.as_str());
-                match topic {
-                    string => log::info!("interlock!"),
-                    _ => log::info!("somethign else"),
+                if topic == self.interlock_topic.as_str() {
+                    log::info!("topic: {:?}", topic);
                 }
             })
             .unwrap_or_default();
