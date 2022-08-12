@@ -122,7 +122,7 @@ where
         let thermostat = ThermostatClient::new(
             stack_manager.acquire_stack(),
             clock,
-            &get_client_id(app, "tlm", mac),
+            &get_client_id(app, "therm", mac),
             &thermostat_prefix,
             broker,
             1000.millis(),

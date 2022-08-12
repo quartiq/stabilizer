@@ -9,7 +9,7 @@ use crate::hardware::SystemTimer;
 use heapless::String;
 use minimq::embedded_nal::IpAddr;
 
-pub struct InterlockError;
+pub struct MqttDisconnectedError;
 
 pub struct ThermostatClient {
     mqtt: minimq::Minimq<NetworkReference, SystemTimer, 512, 1>,
@@ -22,7 +22,7 @@ impl ThermostatClient {
     /// # Args
     /// * `stack` - A reference to the (shared) underlying network stack.
     /// * `clock` - A `SystemTimer` implementing `Clock`.
-    /// * `client_id` - The MQTT client ID of the Thermostat client.
+    /// * `client_id` - The MQTT client ID of the mqtt client.
     /// * `prefix` - Thermostat MQTT prefix
     /// * `broker` - The IP address of the MQTT broker to use.
     ///
@@ -48,19 +48,31 @@ impl ThermostatClient {
         }
     }
 
-    // pub fn handle_interlock() -> Result<(), InterlockError> {}
+    pub fn arm_interlock(&mut self) -> Result<(), MqttDisconnectedError> {
+        if !self.mqtt.client.is_connected() {
+            Err(MqttDisconnectedError)
+        } else {
+            self.mqtt
+                .client
+                .subscribe(&self.interlock_topic, &[])
+                .unwrap();
+            Ok(())
+        }
+    }
 
     pub fn update(&mut self) {
+        // log::info!("polling interlock");
         self.mqtt
             .poll(|_, topic, _, _| {
-                let str: String<64> =
+                log::info!("polling closure");
+                let string: String<64> =
                     String::from(self.interlock_topic.as_str());
                 match topic {
-                    str => log::info!("interlock!"),
+                    string => log::info!("interlock!"),
                     _ => log::info!("somethign else"),
                 }
             })
-            .unwrap();
+            .unwrap_or_default();
     }
 
     // pub fn publish_setpoint()

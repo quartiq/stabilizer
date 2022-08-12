@@ -450,7 +450,8 @@ mod app {
                 gains[0],
                 gains[1],
                 c.local.cpu_temp_sensor.get_temperature().unwrap(),
-            ))
+            ));
+            net.thermostat.arm_interlock().unwrap_or_default();
         });
         // Schedule the telemetry task in the future.
         telemetry::Monotonic::spawn_after((telemetry_period as u64).secs())
