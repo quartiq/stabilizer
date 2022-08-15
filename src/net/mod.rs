@@ -47,6 +47,10 @@ pub enum NetworkState {
     Updated,
     NoChange,
 }
+
+#[derive(Copy, Clone, Debug)]
+pub struct InterlockRenewed;
+
 /// A structure of Stabilizer's default network users.
 pub struct NetworkUsers<S: Default + Miniconf + Clone, T: Serialize> {
     pub miniconf: miniconf::MqttClient<S, NetworkReference, SystemTimer, 512>,
@@ -113,11 +117,7 @@ where
             data_stream::setup_streaming(stack_manager.acquire_stack());
 
         let mut thermostat_prefix: String<128> = String::new();
-        write!(
-            &mut thermostat_prefix,
-            "dt/sinara/thermostat-eem/+"
-        )
-        .unwrap();
+        write!(&mut thermostat_prefix, "dt/sinara/thermostat-eem/+").unwrap();
 
         let thermostat = ThermostatClient::new(
             stack_manager.acquire_stack(),
@@ -165,8 +165,9 @@ where
     /// Update and process all of the network users state.
     ///
     /// # Returns
-    /// An indication if any of the network users indicated a state change.
-    pub fn update(&mut self) -> NetworkState {
+    /// An indication if any of the network users indicated a state change as well as
+    /// an Option if the interlock has been renewed.
+    pub fn update(&mut self) -> (NetworkState, Option<InterlockRenewed>) {
         // Update the MQTT clients.
         self.telemetry.update();
 
@@ -183,9 +184,23 @@ where
 
         self.thermostat.update();
 
-        match self.miniconf.update() {
-            Ok(true) => NetworkState::SettingsChanged,
-            _ => poll_result,
+        let mut interlock_renewed = false;
+        let miniconf_result =
+            match self.miniconf.handled_update(|path, old, new| {
+                // Hardcoded interlock settings path. Instatiate in your miniconf settings
+                // to enable interlock functionality.
+                interlock_renewed = path == "interlock";
+                *old = new.clone();
+                Result::<(), &'static str>::Ok(())
+            }) {
+                Ok(true) => NetworkState::SettingsChanged,
+                _ => poll_result,
+            };
+
+        if interlock_renewed {
+            (miniconf_result, Some(InterlockRenewed))
+        } else {
+            (miniconf_result, None)
         }
     }
 }

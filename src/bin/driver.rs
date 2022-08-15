@@ -58,6 +58,12 @@ const SAMPLE_PERIOD: f32 =
     SAMPLE_TICKS as f32 * hardware::design_parameters::TIMER_PERIOD;
 
 #[derive(Clone, Copy, Debug, Miniconf)]
+pub struct InterlockSettings {
+    enabled: bool,
+    timeout: u64, // milliseconds
+}
+
+#[derive(Clone, Copy, Debug, Miniconf)]
 pub struct Settings {
     /// Configure the Analog Front End (AFE) gain.
     ///
@@ -128,6 +134,12 @@ pub struct Settings {
     /// # Value
     /// See [signal_generator::BasicConfig#miniconf]
     signal_generator: [signal_generator::BasicConfig; 2],
+
+    /// Interlock todo
+    interlock: u8,
+
+    /// Interlock settings todo
+    interlock_settings: InterlockSettings,
 }
 
 impl Default for Settings {
@@ -151,12 +163,21 @@ impl Default for Settings {
             signal_generator: [signal_generator::BasicConfig::default(); 2],
 
             stream_target: StreamTarget::default(),
+
+            interlock: 0,
+
+            interlock_settings: InterlockSettings {
+                enabled: false,
+                timeout: 1000,
+            },
         }
     }
 }
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
+    use stabilizer::net::InterlockRenewed;
+
     use super::*;
 
     #[monotonic(binds = SysTick, default = true, priority = 2)]
@@ -394,16 +415,43 @@ mod app {
         );
     }
 
-    #[idle(shared=[network])]
+    #[idle(shared=[network, settings])]
     fn idle(mut c: idle::Context) -> ! {
+        let mut interlock_handle =
+            trip_interlock::spawn_after(60.secs()).unwrap();
         loop {
-            match c.shared.network.lock(|net| net.update()) {
+            let (network_state, interlock_renewed) =
+                c.shared.network.lock(|net| net.update());
+            match network_state {
                 NetworkState::SettingsChanged => {
                     settings_update::spawn().unwrap()
                 }
                 NetworkState::Updated => {}
                 NetworkState::NoChange => cortex_m::asm::wfi(),
             }
+            let interlock_settings = c
+                .shared
+                .settings
+                .lock(|settings| settings.interlock_settings);
+
+            interlock_handle =
+                match (interlock_settings.enabled, interlock_renewed) {
+                    (_, Some(InterlockRenewed)) => {
+                        log::info!(
+                            "interlock_renewed: {:?}",
+                            interlock_renewed
+                        );
+                        interlock_handle
+                            .reschedule_after(
+                                interlock_settings.timeout.millis(),
+                            )
+                            .unwrap()
+                    }
+                    (false, _) => interlock_handle
+                        .reschedule_after(interlock_settings.timeout.millis())
+                        .unwrap(),
+                    _ => interlock_handle,
+                }
         }
     }
 
@@ -505,6 +553,12 @@ mod app {
             handle_relay::Monotonic::spawn_after(del.convert(), channel)
                 .unwrap();
         }
+    }
+
+    // Task for waiting the relay transition times.
+    #[task(priority = 1, shared=[driver_relay_state])]
+    fn trip_interlock(_: trip_interlock::Context) {
+        panic!("Interlock tripped")
     }
 
     #[task(binds = ETH, priority = 1)]
