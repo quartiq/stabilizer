@@ -12,7 +12,6 @@ pub use serde;
 pub mod data_stream;
 pub mod network_processor;
 pub mod telemetry;
-pub mod thermostat;
 
 use crate::hardware::{EthernetPhy, NetworkManager, NetworkStack, SystemTimer};
 use data_stream::{DataStream, FrameGenerator};
