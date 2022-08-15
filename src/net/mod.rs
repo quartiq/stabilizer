@@ -1,4 +1,3 @@
-use fugit::ExtU32;
 ///! Stabilizer network management module
 ///!
 ///! # Design
@@ -26,8 +25,6 @@ use heapless::String;
 use miniconf::Miniconf;
 use serde::Serialize;
 use smoltcp_nal::embedded_nal::SocketAddr;
-
-use self::thermostat::ThermostatClient;
 
 pub type NetworkReference =
     smoltcp_nal::shared::NetworkStackProxy<'static, NetworkStack>;
@@ -58,7 +55,6 @@ pub struct NetworkUsers<S: Default + Miniconf + Clone, T: Serialize> {
     stream: DataStream,
     generator: Option<FrameGenerator>,
     pub telemetry: TelemetryClient<T>,
-    pub thermostat: ThermostatClient,
 }
 
 impl<S, T> NetworkUsers<S, T>
@@ -119,22 +115,12 @@ where
         let mut thermostat_prefix: String<128> = String::new();
         write!(&mut thermostat_prefix, "dt/sinara/thermostat-eem/+").unwrap();
 
-        let thermostat = ThermostatClient::new(
-            stack_manager.acquire_stack(),
-            clock,
-            &get_client_id(app, "therm", mac),
-            &thermostat_prefix,
-            broker,
-            1000.millis(),
-        );
-
         NetworkUsers {
             miniconf: settings,
             processor,
             telemetry,
             stream,
             generator: Some(generator),
-            thermostat,
         }
     }
 
@@ -181,8 +167,6 @@ where
             UpdateState::NoChange => NetworkState::NoChange,
             UpdateState::Updated => NetworkState::Updated,
         };
-
-        self.thermostat.update();
 
         let mut interlock_renewed = false;
         let miniconf_result =
