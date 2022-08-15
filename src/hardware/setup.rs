@@ -723,7 +723,8 @@ pub fn setup(
     fp_led_2.set_low();
     fp_led_3.set_low();
 
-    // Use default PLL2p clock input with 1/2 prescaler for 50 MHz ADC clock.
+    // Use default PLL2p clock input with 1/2 prescaler for a 25 MHz ADC kernel clock.
+    // Note that there is an additional, fixed 1/2 prescaler in the clock path.
     let (adc1, adc2, adc3) = {
         let (mut adc1, mut adc2) = hal::adc::adc12(
             device.ADC1,
