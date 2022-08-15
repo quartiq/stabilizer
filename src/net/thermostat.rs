@@ -62,10 +62,10 @@ impl ThermostatClient
     }
 
     pub fn update(&mut self) {
-        // log::info!("polling interlock");
+        // log::info!("interlock topic: {:?}", self.interlock_topic);
         self.mqtt
             .poll(|_, topic, _, _| {
-                if topic == self.interlock_topic.as_str() {
+                if topic == "dt/sinara/thermostat-eem/80-1f-12-63-84-1b/interlock" {
                     log::info!("topic: {:?}", topic);
                 }
             })

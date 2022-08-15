@@ -115,7 +115,7 @@ where
         let mut thermostat_prefix: String<128> = String::new();
         write!(
             &mut thermostat_prefix,
-            "dt/sinara/thermostat-eem/80-1f-12-63-84-1b"
+            "dt/sinara/thermostat-eem/+"
         )
         .unwrap();
 
