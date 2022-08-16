@@ -43,9 +43,6 @@ pub enum NetworkState {
     NoChange,
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct InterlockRenewed;
-
 /// A structure of Stabilizer's default network users.
 pub struct NetworkUsers<S: Default + Miniconf + Clone, T: Serialize> {
     pub miniconf: miniconf::MqttClient<S, NetworkReference, SystemTimer, 512>,
