@@ -181,7 +181,8 @@ macro_rules! timer_channels {
                 impl UpdateEvent {
                     /// Create a new update event
                     ///
-                    /// Note(unsafe): This is only safe to call once.
+                    /// # Safety
+                    /// This is only safe to call once.
                     #[allow(dead_code)]
                     pub unsafe fn new() -> Self {
                         Self {}

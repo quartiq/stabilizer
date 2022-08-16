@@ -16,8 +16,8 @@ use stm32h7xx_hal::{
 use smoltcp_nal::smoltcp;
 
 use super::{
-    adc, afe, cpu_temp_sensor::CpuTempSensor, dac, design_parameters, driver,
-    eeprom, input_stamper::InputStamper, pounder,
+    adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
+    driver, eeprom, input_stamper::InputStamper, pounder,
     pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
     DigitalInput0, DigitalInput1, EthernetPhy, Mezzanine, NetworkStack,
     SystemTimer, Systick, AFE0, AFE1,
@@ -279,9 +279,7 @@ pub fn setup(
     // After ITCM loading.
     core.SCB.enable_icache();
 
-    let mut delay = asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(
-        ccdr.clocks.c_ck().to_Hz(),
-    ));
+    let mut delay = delay::AsmDelay::new(ccdr.clocks.c_ck().to_Hz());
 
     let gpioa = device.GPIOA.split(ccdr.peripheral.GPIOA);
     let gpiob = device.GPIOB.split(ccdr.peripheral.GPIOB);
@@ -751,7 +749,8 @@ pub fn setup(
         shared_bus::new_atomic_check!(hal::i2c::I2c<hal::stm32::I2C1> = i2c1)
             .unwrap();
 
-    // Use default PLL2p clock input with 1/2 prescaler for 50 MHz ADC clock.
+    // Use default PLL2p clock input with 1/2 prescaler for a 25 MHz ADC kernel clock.
+    // Note that there is an additional, fixed 1/2 prescaler in the clock path.
     let (adc1, adc2, adc3) = {
         let (mut adc1, mut adc2) = hal::adc::adc12(
             device.ADC1,

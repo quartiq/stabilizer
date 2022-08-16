@@ -6,6 +6,7 @@ pub mod adc;
 pub mod afe;
 pub mod cpu_temp_sensor;
 pub mod dac;
+pub mod delay;
 pub mod design_parameters;
 pub mod driver;
 pub mod input_stamper;

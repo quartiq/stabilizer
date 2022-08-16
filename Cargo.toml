@@ -1,12 +1,13 @@
 [package]
 name = "stabilizer"
-version = "0.6.0"
+# Keep versions in Cargo.toml and py/setup.py synchronized.
+version = "0.7.0"
 resolver = "2"
 authors = [
 	"Robert Jördens <rj@quartiq.de>",
 	"Ryan Summers <ryan.summers@vertigo-designs.com>",
 ]
-description = "Firmware for the Sinara Stabilizer board (stm32h743, eth, poe, 2 adc, 2 dac)"
+description = "Firmware for the Sinara Stabilizer board (STM32H743, Ethernet, PoE, 2 ADCs, 2 DACs)"
 categories = ["embedded", "no-std", "hardware-support", "science"]
 license = "MIT OR Apache-2.0"
 keywords = ["ethernet", "stm32h7", "adc", "dac", "physics"]
@@ -23,7 +24,7 @@ exclude = [
 ]
 
 [badges]
-maintenance = { status = "experimental" }
+maintenance = { status = "actively-developed" }
 
 [package.metadata.docs.rs]
 features = []
@@ -33,20 +34,19 @@ default-target = "thumbv7em-none-eabihf"
 members = ["ad9959"]
 
 [dependencies]
-cortex-m = { version = "0.7.5", features = ["inline-asm"] }
+cortex-m = { version = "0.7.6", features = ["inline-asm"] }
 cortex-m-rt = { version = "0.7", features = ["device"] }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
 rtt-target = { version = "0.3", features = ["cortex-m"] }
 serde = { version = "1.0", features = ["derive"], default-features = false }
-heapless = { version = "0.7.14", features = ["serde"] }
+heapless = { version = "0.7.16", features = ["serde"] }
 cortex-m-rtic = "1.0"
 embedded-hal = "0.2.7"
 nb = "1.0.0"
-asm-delay = "0.9.0"
 num_enum = { version = "0.5.7", default-features = false }
 paste = "1"
 idsp = "0.8"
-ad9959 = { path = "ad9959", version = "0.1.0" }
+ad9959 = { path = "ad9959", version = "0.2.0" }
 miniconf = "0.5"
 smoltcp-nal = { version = "0.2", features = ["shared-stack"] }
 serde-json-core = "0.4"
@@ -57,11 +57,11 @@ fugit = "0.3"
 rtt-logger = "0.2"
 systick-monotonic = "1.0"
 mono-clock = "0.1"
-enum-iterator = "0.7.0"
 spin = { version = "0.9", default-features = false, features = ["spin_mutex"]}
 shared-bus = "0.2"
 lm75 = "0.2"
 smlang = "0.5.1"
+enum-iterator = "1.1.3"
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "ethernet", "xspi"]
