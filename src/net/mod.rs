@@ -37,9 +37,8 @@ pub enum UpdateState {
     Updated,
 }
 
-#[derive(Copy, Clone, PartialEq)]
 pub enum NetworkState {
-    SettingsChanged,
+    SettingsChanged(String<64>),
     Updated,
     NoChange,
 }
@@ -111,9 +110,6 @@ where
         let (generator, stream) =
             data_stream::setup_streaming(stack_manager.acquire_stack());
 
-        let mut thermostat_prefix: String<128> = String::new();
-        write!(&mut thermostat_prefix, "dt/sinara/thermostat-eem/+").unwrap();
-
         NetworkUsers {
             miniconf: settings,
             processor,
@@ -150,9 +146,9 @@ where
     /// Update and process all of the network users state.
     ///
     /// # Returns
-    /// An indication if any of the network users indicated a state change as well as
-    /// an Option if the interlock has been renewed.
-    pub fn update(&mut self) -> (NetworkState, Option<InterlockRenewed>) {
+    /// An indication if any of the network users indicated a state change.
+    /// The SettingsChanged option contains the path of the settings that changed.
+    pub fn update(&mut self) -> NetworkState {
         // Update the MQTT clients.
         self.telemetry.update();
 
@@ -167,23 +163,14 @@ where
             UpdateState::Updated => NetworkState::Updated,
         };
 
-        let mut interlock_renewed = false;
-        let miniconf_result =
-            match self.miniconf.handled_update(|path, old, new| {
-                // Hardcoded interlock settings path. Instatiate in your miniconf settings
-                // to enable interlock functionality.
-                interlock_renewed = path == "interlock";
-                *old = new.clone();
-                Result::<(), &'static str>::Ok(())
-            }) {
-                Ok(true) => NetworkState::SettingsChanged,
-                _ => poll_result,
-            };
-
-        if interlock_renewed {
-            (miniconf_result, Some(InterlockRenewed))
-        } else {
-            (miniconf_result, None)
+        let mut settings_path = String::new();
+        match self.miniconf.handled_update(|path, old, new| {
+            settings_path.push_str(path).unwrap();
+            *old = new.clone();
+            Result::<(), &'static str>::Ok(())
+        }) {
+            Ok(true) => NetworkState::SettingsChanged(settings_path),
+            _ => poll_result,
         }
     }
 }

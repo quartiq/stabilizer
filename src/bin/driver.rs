@@ -13,6 +13,7 @@ use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
 
 use fugit::{ExtU64, TimerInstantU64};
+use heapless::String;
 use mutex_trait::prelude::*;
 
 use idsp::iir;
@@ -59,7 +60,7 @@ const SAMPLE_PERIOD: f32 =
 
 #[derive(Clone, Copy, Debug, Miniconf)]
 pub struct InterlockSettings {
-    enabled: bool,
+    armed: bool,
     timeout: u64, // milliseconds
 }
 
@@ -167,7 +168,7 @@ impl Default for Settings {
             interlock: 0,
 
             interlock_settings: InterlockSettings {
-                enabled: false,
+                armed: false,
                 timeout: 1000,
             },
         }
@@ -176,8 +177,6 @@ impl Default for Settings {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
-    use stabilizer::net::InterlockRenewed;
-
     use super::*;
 
     #[monotonic(binds = SysTick, default = true, priority = 2)]
@@ -285,7 +284,7 @@ mod app {
         local.dacs.1.start();
 
         // Spawn a settings update for default settings.
-        settings_update::spawn().unwrap();
+        settings_update::spawn(String::from("")).unwrap();
         telemetry::spawn().unwrap();
         ethernet_link::spawn().unwrap();
         header_adc_start_conversion::spawn().unwrap();
@@ -417,46 +416,23 @@ mod app {
 
     #[idle(shared=[network, settings])]
     fn idle(mut c: idle::Context) -> ! {
-        let mut interlock_handle =
-            trip_interlock::spawn_after(60.secs()).unwrap();
         loop {
-            let (network_state, interlock_renewed) =
-                c.shared.network.lock(|net| net.update());
-            match network_state {
-                NetworkState::SettingsChanged => {
-                    settings_update::spawn().unwrap()
+            match c.shared.network.lock(|net| net.update()) {
+                NetworkState::SettingsChanged(path) => {
+                    settings_update::spawn(path).unwrap()
                 }
                 NetworkState::Updated => {}
                 NetworkState::NoChange => cortex_m::asm::wfi(),
             }
-            let interlock_settings = c
-                .shared
-                .settings
-                .lock(|settings| settings.interlock_settings);
-
-            interlock_handle =
-                match (interlock_settings.enabled, interlock_renewed) {
-                    (_, Some(InterlockRenewed)) => {
-                        log::info!(
-                            "interlock_renewed: {:?}",
-                            interlock_renewed
-                        );
-                        interlock_handle
-                            .reschedule_after(
-                                interlock_settings.timeout.millis(),
-                            )
-                            .unwrap()
-                    }
-                    (false, _) => interlock_handle
-                        .reschedule_after(interlock_settings.timeout.millis())
-                        .unwrap(),
-                    _ => interlock_handle,
-                }
         }
     }
 
     #[task(priority = 1, local=[afes], shared=[network, settings, signal_generator])]
-    fn settings_update(mut c: settings_update::Context) {
+    fn settings_update(mut c: settings_update::Context, path: String<64>) {
+        // check for interlock path here
+        if path.as_str() == "interlock" {
+            log::info!("interlock renewed");
+        }
         let settings = c.shared.network.lock(|net| *net.miniconf.settings());
         c.shared.settings.lock(|current| *current = settings);
 
@@ -555,9 +531,9 @@ mod app {
     }
 
     // Task for waiting the relay transition times.
-    #[task(priority = 1, shared=[driver_relay_state])]
+    #[task(priority = 1)]
     fn trip_interlock(_: trip_interlock::Context) {
-        panic!("Interlock tripped")
+        log::info!("interlock tripped");
     }
 
     #[task(binds = ETH, priority = 1)]
