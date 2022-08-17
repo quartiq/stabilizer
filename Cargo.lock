@@ -92,9 +92,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bytemuck"
-version = "1.12.0"
+version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44f8cb64b4147a528e1e9e77583739e683541973295b35f3bd7e78d42c5971fd"
+checksum = "2f5715e491b5a1598fc2bef5a606847b5dc1d48ea625bd3c02c00de8285591da"
 
 [[package]]
 name = "byteorder"
@@ -366,9 +366,9 @@ dependencies = [
 
 [[package]]
 name = "idsp"
-version = "0.8.5"
+version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4001d58f9e006f4318eac10d73dc12f3a31b15fd328b469c22346c4bf69a6c7"
+checksum = "8a978f7c533b86cabab1a431b8abedfd667a62f4fed91f5a42bb950128ff8b77"
 dependencies = [
  "miniconf",
  "num-complex 0.4.2",
