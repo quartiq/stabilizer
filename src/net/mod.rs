@@ -49,7 +49,7 @@ pub struct NetworkUsers<S: Default + Miniconf + Clone, T: Serialize> {
     pub processor: NetworkProcessor,
     stream: DataStream,
     generator: Option<FrameGenerator>,
-    pub telemetry: TelemetryClient<T>,
+    pub telemetry: Option<TelemetryClient<T>>,
 }
 
 impl<S, T> NetworkUsers<S, T>
@@ -110,7 +110,7 @@ where
         NetworkUsers {
             miniconf: settings,
             processor,
-            telemetry,
+            telemetry: Some(telemetry),
             stream,
             generator: Some(generator),
         }
@@ -147,7 +147,9 @@ where
     /// The SettingsChanged option contains the path of the settings that changed.
     pub fn update(&mut self) -> NetworkState {
         // Update the MQTT clients.
-        self.telemetry.update();
+        if let Some(telemetry) = &mut self.telemetry {
+            telemetry.update();
+        }
 
         // Update the data stream.
         if self.generator.is_none() {
