@@ -10,6 +10,10 @@ from scipy import signal
 import stabilizer
 from stabilizer.iir_coefficients import get_filters
 
+# disable warnings about short variable names and similar code
+#pylint: disable=invalid-name, duplicate-code
+
+
 
 def _main():
     parser = argparse.ArgumentParser(
