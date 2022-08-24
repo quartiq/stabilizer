@@ -30,9 +30,9 @@ def _main():
 
     filters = get_filters()
 
-    for (filter_name, filt) in filters.items():
-        subparser = subparsers.add_parser(filter_name, help=filt.help)
-        for arg in filt.arguments:
+    for name, filter in get_filters().items():
+        subparser = subparsers.add_parser(name, help=filter.help)
+        for arg in filter.arguments:
             subparser.add_argument(*arg.positionals, **arg.keywords)
 
     args = parser.parse_args()
@@ -48,16 +48,15 @@ def _main():
     if forward_gain == 0 and args.x_offset != 0:
         print("Filter has no DC gain but x_offset is non-zero")
 
-    f = np.logspace(-7, np.log10(0.5 / args.sample_period),
-                    1024, endpoint=False)
+    f = np.logspace(-8.5, 0, 1024, endpoint=False)*(.5/args.sample_period)
     f, h = signal.freqz(
         coefficients[:3],
-        [1] + [-c for c in coefficients[3:]],
+        np.r_[1, [-c for c in coefficients[3:]]],
         worN=f,
         fs=1 / args.sample_period,
     )
-    _fig, ax = plt.subplots()
-    ax.plot(f, 20 * np.log10(abs(h)))
+    _, ax = plt.subplots()
+    ax.plot(f, 20 * np.log10(np.absolute(h)))
     ax.set_xscale("log")
     ax.grid()
     ax.set_xlabel("Frequency (Hz)")
