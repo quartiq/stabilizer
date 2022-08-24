@@ -149,6 +149,14 @@ impl<T: Serialize> TelemetryClient<T> {
             .ok();
     }
 
+    pub fn topic(&self, topic: &str) -> String<128> {
+        let mut custom_topic = self.telemetry_topic.clone();
+        // pop "telemetry"
+        custom_topic.truncate(self.telemetry_topic.len() - 9);
+        custom_topic.push_str(topic).unwrap();
+        custom_topic
+    }
+
     /// Update the telemetry client
     ///
     /// # Note
