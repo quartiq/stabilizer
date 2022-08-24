@@ -7,8 +7,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
 
-from iir_coefficients import get_filters
 import stabilizer
+from stabilizer.iir_coefficients import get_filters
 
 
 def _main():
@@ -57,7 +57,6 @@ def _main():
         fs=1 / args.sample_period,
     )
     _fig, ax = plt.subplots()
-    ax.margins(0, 0.1)
     ax.plot(f, 20 * np.log10(abs(h)))
     ax.set_xscale("log")
     ax.grid()

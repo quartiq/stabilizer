@@ -9,6 +9,8 @@ setup(name="stabilizer",
       license="MIT",
       install_requires=[
             "numpy",
+            "scipy",
+            "matplotlib",
             "gmqtt",
             "miniconf-mqtt@git+https://github.com/quartiq/miniconf@develop#subdirectory=py/miniconf-mqtt"
       ])
