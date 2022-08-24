@@ -2,10 +2,10 @@
 """
 Small tool to show the frequency response of biquad IIR filters.
 """
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
-import argparse
 
 from iir_coefficients import get_filters
 import stabilizer
@@ -48,14 +48,15 @@ def _main():
     if forward_gain == 0 and args.x_offset != 0:
         print("Filter has no DC gain but x_offset is non-zero")
 
-    f = np.logspace(-7, np.log10(0.5 / args.sample_period), 1024, endpoint=False)
+    f = np.logspace(-7, np.log10(0.5 / args.sample_period),
+                    1024, endpoint=False)
     f, h = signal.freqz(
         coefficients[:3],
         [1] + [-c for c in coefficients[3:]],
         worN=f,
         fs=1 / args.sample_period,
     )
-    fig, ax = plt.subplots()
+    _fig, ax = plt.subplots()
     ax.margins(0, 0.1)
     ax.plot(f, 20 * np.log10(abs(h)))
     ax.set_xscale("log")
