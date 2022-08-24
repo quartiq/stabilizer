@@ -11,7 +11,7 @@ import stabilizer
 from stabilizer.iir_coefficients import get_filters
 
 # disable warnings about short variable names and similar code
-#pylint: disable=invalid-name, duplicate-code
+#pylint: disable=invalid-name, duplicate-code, redefined-builtin
 
 
 
