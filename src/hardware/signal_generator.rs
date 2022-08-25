@@ -7,6 +7,7 @@ pub enum Signal {
     Cosine,
     Square,
     Triangle,
+    Noise,
 }
 
 /// Basic configuration for a generated signal.
@@ -146,6 +147,7 @@ impl Default for Config {
 pub struct SignalGenerator {
     phase_accumulator: i32,
     config: Config,
+    noise_state: i32, // state of the xorshift rng
 }
 
 impl SignalGenerator {
@@ -160,6 +162,7 @@ impl SignalGenerator {
         Self {
             config,
             phase_accumulator: 0,
+            noise_state: 1,
         }
     }
 
@@ -171,6 +174,13 @@ impl SignalGenerator {
     /// Clear the phase accumulator.
     pub fn clear_phase_accumulator(&mut self) {
         self.phase_accumulator = 0;
+    }
+
+    fn xorshift(&mut self) -> i32 {
+        self.noise_state ^= self.noise_state << 13;
+        self.noise_state ^= self.noise_state >> 17;
+        self.noise_state ^= self.noise_state << 5;
+        self.noise_state
     }
 }
 
@@ -197,6 +207,7 @@ impl core::iter::Iterator for SignalGenerator {
                 }
             }
             Signal::Triangle => i16::MIN as i32 + (phase >> 15).abs(),
+            Signal::Noise => self.xorshift()>>16, // doesn't matter if we shift in zeros
         };
 
         // Calculate the final output result as an i16.
