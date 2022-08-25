@@ -7,7 +7,7 @@ pub enum Signal {
     Cosine,
     Square,
     Triangle,
-    Noise,
+    WhiteNoise,
 }
 
 /// Basic configuration for a generated signal.
@@ -207,7 +207,7 @@ impl core::iter::Iterator for SignalGenerator {
                 }
             }
             Signal::Triangle => i16::MIN as i32 + (phase >> 15).abs(),
-            Signal::Noise => self.xorshift()>>16, // doesn't matter if we shift in zeros
+            Signal::WhiteNoise => self.xorshift()>>16, // doesn't matter if we shift in zeros
         };
 
         // Calculate the final output result as an i16.
