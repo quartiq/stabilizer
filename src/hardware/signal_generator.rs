@@ -164,7 +164,7 @@ impl SignalGenerator {
         Self {
             config,
             phase_accumulator: 0,
-            rng: XorShiftRng::from_seed([1; 16]), // initialize with arbitrary vector
+            rng: XorShiftRng::from_seed([0; 16]), // zeros will initialize with XorShiftRng internal seed
         }
     }
 
