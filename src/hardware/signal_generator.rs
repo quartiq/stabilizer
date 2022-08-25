@@ -176,6 +176,7 @@ impl SignalGenerator {
         self.phase_accumulator = 0;
     }
 
+    // Generate a new random number using xorshift.
     fn xorshift(&mut self) -> i32 {
         self.noise_state ^= self.noise_state << 13;
         self.noise_state ^= self.noise_state >> 17;
@@ -207,7 +208,7 @@ impl core::iter::Iterator for SignalGenerator {
                 }
             }
             Signal::Triangle => i16::MIN as i32 + (phase >> 15).abs(),
-            Signal::WhiteNoise => self.xorshift()>>16, // doesn't matter if we shift in zeros
+            Signal::WhiteNoise => self.xorshift() >> 16, // doesn't matter if we shift in zeros since signa bit is random
         };
 
         // Calculate the final output result as an i16.
