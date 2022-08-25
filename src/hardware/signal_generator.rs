@@ -165,7 +165,7 @@ impl SignalGenerator {
             config,
             phase_accumulator: 0,
             rng: XorShiftRng::from_seed([
-                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
             ]), // initialize with arbitrary vector
         }
     }
