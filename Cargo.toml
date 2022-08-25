@@ -61,6 +61,8 @@ spin = { version = "0.9", default-features = false, features = ["spin_mutex"]}
 shared-bus = "0.2"
 lm75 = "0.2"
 enum-iterator = "1.1.3"
+rand_xorshift = "0.3.0"
+rand_core = "0.6.3"
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "ethernet", "xspi"]

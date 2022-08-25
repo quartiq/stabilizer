@@ -1,4 +1,6 @@
 use miniconf::Miniconf;
+use rand_core::{RngCore, SeedableRng};
+use rand_xorshift::XorShiftRng;
 use serde::{Deserialize, Serialize};
 
 /// Types of signals that can be generated.
@@ -143,11 +145,11 @@ impl Default for Config {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct SignalGenerator {
     phase_accumulator: i32,
     config: Config,
-    noise_state: i32, // state of the xorshift rng
+    rng: XorShiftRng,
 }
 
 impl SignalGenerator {
@@ -162,7 +164,9 @@ impl SignalGenerator {
         Self {
             config,
             phase_accumulator: 0,
-            noise_state: 1,
+            rng: XorShiftRng::from_seed([
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+            ]), // initialize with arbitrary vector
         }
     }
 
@@ -174,14 +178,6 @@ impl SignalGenerator {
     /// Clear the phase accumulator.
     pub fn clear_phase_accumulator(&mut self) {
         self.phase_accumulator = 0;
-    }
-
-    // Generate a new random number using xorshift.
-    fn xorshift(&mut self) -> i32 {
-        self.noise_state ^= self.noise_state << 13;
-        self.noise_state ^= self.noise_state >> 17;
-        self.noise_state ^= self.noise_state << 5;
-        self.noise_state
     }
 }
 
@@ -208,7 +204,7 @@ impl core::iter::Iterator for SignalGenerator {
                 }
             }
             Signal::Triangle => i16::MIN as i32 + (phase >> 15).abs(),
-            Signal::WhiteNoise => self.xorshift() >> 16,
+            Signal::WhiteNoise => self.rng.next_u32() as i32 >> 16,
         };
 
         // Calculate the final output result as an i16.
