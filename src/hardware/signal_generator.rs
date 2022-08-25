@@ -208,7 +208,7 @@ impl core::iter::Iterator for SignalGenerator {
                 }
             }
             Signal::Triangle => i16::MIN as i32 + (phase >> 15).abs(),
-            Signal::WhiteNoise => self.xorshift() >> 16, // doesn't matter if we shift in zeros since signa bit is random
+            Signal::WhiteNoise => self.xorshift() >> 16,
         };
 
         // Calculate the final output result as an i16.
