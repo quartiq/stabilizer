@@ -26,6 +26,7 @@ use stabilizer::{
         dac::{Dac0Output, Dac1Output, DacCode},
         design_parameters, driver,
         driver::{
+            interlock,
             relay::{self, sm::StateMachine},
             Channel,
         },
@@ -57,27 +58,6 @@ const SAMPLE_TICKS_LOG2: u8 = 7;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 const SAMPLE_PERIOD: f32 =
     SAMPLE_TICKS as f32 * hardware::design_parameters::TIMER_PERIOD;
-
-#[derive(Clone, Copy, Debug, Miniconf)]
-pub struct InterlockSettings {
-    /// Arm or disarm the interlock.
-    ///
-    /// # Path
-    /// `armed`
-    ///
-    /// # Value
-    /// "true" or "false"
-    armed: bool,
-
-    /// Interlock timeout in milliseconds.
-    ///
-    /// # Path
-    /// `timeout`
-    ///
-    /// # Value
-    /// "true" or "false"
-    timeout: u64,
-}
 
 #[derive(Clone, Copy, Debug, Miniconf)]
 pub struct Settings {
@@ -151,18 +131,14 @@ pub struct Settings {
     /// See [signal_generator::BasicConfig#miniconf]
     signal_generator: [signal_generator::BasicConfig; 2],
 
-    /// Interlock topic. Publishing "1" onto this topic renews the interlock timeout.
-    /// Publishing a "0" trips the interlock.
+    /// Interlock settings.
     ///
     /// # Path
     /// `interlock`
     ///
     /// # Value
-    /// "1" or "0"
-    interlock: u8,
-
-    /// Interlock settings.
-    interlock_settings: InterlockSettings,
+    /// [interlock::Interlock]
+    interlock: interlock::Interlock,
 }
 
 impl Default for Settings {
@@ -187,12 +163,7 @@ impl Default for Settings {
 
             stream_target: StreamTarget::default(),
 
-            interlock: 0,
-
-            interlock_settings: InterlockSettings {
-                armed: false,
-                timeout: 1000,
-            },
+            interlock: interlock::Interlock::default(),
         }
     }
 }
@@ -453,49 +424,83 @@ mod app {
 
     #[task(priority = 1, local=[afes, interlock_handle], shared=[network, settings, signal_generator])]
     fn settings_update(mut c: settings_update::Context, path: String<64>) {
-        let settings = c.shared.network.lock(|net| *net.miniconf.settings());
+        let new_settings =
+            c.shared.network.lock(|net| *net.miniconf.settings());
+        let old_settings = c.shared.settings.lock(|current| *current);
 
-        if path.as_str() == "interlock" {
-            *c.local.interlock_handle = match (
-                c.local.interlock_handle.take(),
-                settings.interlock_settings.armed,
-            ) {
-                // interlock got armed, first schedule
-                (None, true) => {
-                    log::info!("interlock armed");
-                    Some(
-                        trip_interlock::spawn_after(
-                            settings.interlock_settings.timeout.millis(),
-                        )
-                        .unwrap(),
-                    )
+        if let Some(handle) = interlock::handle(
+            path,
+            c.local.interlock_handle.is_some(),
+            new_settings.interlock,
+            old_settings.interlock,
+        ) {
+            *c.local.interlock_handle = match handle {
+                interlock::Handle::Spawn(millis) => {
+                    Some(trip_interlock::spawn_after(millis).unwrap())
                 }
-                // interlock renewal, push out
-                (Some(handle), true) => Some(
-                    handle
-                        .reschedule_after(
-                            settings.interlock_settings.timeout.millis(),
-                        )
-                        .unwrap(),
-                ),
-                // interlock got disarmed, cancel
-                (Some(handle), false) => {
-                    log::info!("interlock disarmed");
-                    handle.cancel().unwrap();
+                interlock::Handle::Reschedule(millis) => c
+                    .local
+                    .interlock_handle
+                    .take()
+                    .unwrap()
+                    .reschedule_after(millis)
+                    .ok(), // return `None` if rescheduled too late aka interlock already tripped
+                interlock::Handle::Cancel => {
+                    let _ = c.local.interlock_handle.take().unwrap().cancel(); // ignore error if cancelled too late
                     None
                 }
-                // interlock not in use
-                (None, false) => None,
+                interlock::Handle::Idle => None,
             };
-
-            log::info!("interlock renewed");
-        } else {
-            c.shared.settings.lock(|current| *current = settings);
-            c.local.afes.0.set_gain(settings.afe[0]);
-            c.local.afes.1.set_gain(settings.afe[1]);
+            log::info!("interlock updated");
+        }
+        // let path = path.as_str();
+        // if path == "interlock"
+        //     || path == "interlock_settings/armed"
+        //     || path == "interlock_settings/clear"
+        // {
+        //     *c.local.interlock_handle = match (
+        //         c.local.interlock_handle.take(),
+        //         new_settings.interlock_settings.armed,
+        //         new_settings.interlock,
+        //     ) {
+        //         // interlock got armed, first schedule
+        //         (None, true, _) => {
+        //             log::info!("interlock armed");
+        //             Some(
+        //                 trip_interlock::spawn_after(
+        //                     new_settings.interlock_settings.timeout.millis(),
+        //                 )
+        //                 .unwrap(),
+        //             )
+        //         }
+        //         // interlock renewal, push out
+        //         (Some(handle), true, true) => handle
+        //             .reschedule_after(
+        //                 new_settings.interlock_settings.timeout.millis(),
+        //             )
+        //             .ok(), // return `None` if rescheduled too late aka interlock already tripped
+        //         // interlock got disarmed, cancel
+        //         (Some(handle), false, _) => {
+        //             log::info!("interlock disarmed");
+        //             let _ = handle.cancel(); // ignore error if cancelled too late
+        //             None
+        //         }
+        //         // interlock not in use
+        //         (None, false, _) => None,
+        //         // `false` published onto interlock, trip immediately
+        //         (Some(handle), true, false) => {
+        //             let _ = handle.cancel(); // ignore error if cancelled too late
+        //             trip_interlock::spawn().unwrap();
+        //             None
+        //         }
+        //     };
+        else {
+            c.local.afes.0.set_gain(new_settings.afe[0]);
+            c.local.afes.1.set_gain(new_settings.afe[1]);
 
             // Update the signal generators
-            for (i, &config) in settings.signal_generator.iter().enumerate() {
+            for (i, &config) in new_settings.signal_generator.iter().enumerate()
+            {
                 match config.try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                 {
                     Ok(config) => {
@@ -511,9 +516,10 @@ mod app {
                 }
             }
 
-            let target = settings.stream_target.into();
+            let target = new_settings.stream_target.into();
             c.shared.network.lock(|net| net.direct_stream(target));
         }
+        c.shared.settings.lock(|current| *current = new_settings);
     }
 
     #[task(priority = 1, shared=[network, settings, telemetry, adc_internal], local=[cpu_temp_sensor])]

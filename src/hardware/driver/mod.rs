@@ -3,6 +3,7 @@ pub mod ltc2320;
 pub mod relay;
 use super::I2c1Proxy;
 use lm75;
+pub mod interlock;
 
 use self::relay::sm::StateMachine;
 
