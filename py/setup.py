@@ -7,6 +7,7 @@ setup(name="stabilizer",
       description="Stabilizer Utilities",
       author="QUARTIQ GmbH",
       license="MIT",
+      python_requires=">=3.8",
       install_requires=[
             "numpy",
             "scipy",
