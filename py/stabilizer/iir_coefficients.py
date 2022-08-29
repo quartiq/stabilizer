@@ -12,7 +12,7 @@ import asyncio
 import collections
 import logging
 
-from math import pi
+from math import pi, inf
 
 import miniconf
 
@@ -112,14 +112,22 @@ def get_filters():
                       arguments=[
                           add_argument("--Kii", default=0, type=float,
                                        help="Double Integrator (I^2) gain"),
+                          add_argument("--Kii_limit", default=inf, type=float,
+                                       help="Integral gain limit"),
                           add_argument("--Ki", default=0, type=float,
                                        help="Integrator (I) gain"),
+                          add_argument("--Ki_limit", default=inf, type=float,
+                                       help="Integral gain limit"),
                           add_argument("--Kp", default=0, type=float,
                                        help="Proportional (P) gain"),
                           add_argument("--Kd", default=0, type=float,
                                        help="Derivative (D) gain"),
+                          add_argument("--Kd_limit", default=inf, type=float,
+                                       help="Derivative gain limit"),
                           add_argument("--Kdd", default=0, type=float,
                                        help="Double Derivative (D^2) gain"),
+                          add_argument("--Kdd_limit", default=inf, type=float,
+                                       help="Derivative gain limit"),
                       ],
                       coefficients=pid_coefficients),
     }
@@ -179,12 +187,13 @@ def pid_coefficients(args):
 
     # Determine filter order
     if args.Kii != 0:
-        assert (args.Kdd, args.Kd) == (0, 0), \
-                "IIR filters I^2 and D or D^2 gain are unsupported"
+        assert (args.Kdd, args.Kd, args.Kdd_limit, args.Kd_limit) == \
+        (0, 0, float('inf'), float('inf')), \
+            "IIR filters I^2 and D or D^2 gain/limit are unsupported"
         order = 2
     elif args.Ki != 0:
-        assert args.Kdd == 0, \
-                "IIR filters with I and D^2 gain are unsupported"
+        assert (args.Kdd, args.Kdd_limit) == (0, float('inf')), \
+            "IIR filters with I and D^2 gain/limit are unsupported"
         order = 1
     else:
         order = 0
@@ -196,12 +205,16 @@ def pid_coefficients(args):
     ]
 
     gains = [args.Kii, args.Ki, args.Kp, args.Kd, args.Kdd]
+    limits = [args.Kii/args.Kii_limit, args.Ki/args.Ki_limit,
+              1, args.Kd/args.Kd_limit, args.Kdd/args.Kdd_limit]
     w = 2*pi*args.sample_period
     b = [sum(gains[2 - order + i] * w**(order - i) * kernels[i][j]
              for i in range(3)) for j in range(3)]
 
-    # Normalization is redundant because a0 is 1 in all cases.
-    a = kernels[order]
+    a = [sum(limits[2 - order + i] * w**(order - i) * kernels[i][j]
+             for i in range(3)) for j in range(3)]
+    b = [i/a[0] for i in b]
+    a = [i/a[0] for i in a]
     assert a[0] == 1
     return b + [-ai for ai in a[1:]]
 
