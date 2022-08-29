@@ -60,8 +60,23 @@ const SAMPLE_PERIOD: f32 =
 
 #[derive(Clone, Copy, Debug, Miniconf)]
 pub struct InterlockSettings {
+    /// Arm or disarm the interlock.
+    ///
+    /// # Path
+    /// `armed`
+    ///
+    /// # Value
+    /// "true" or "false"
     armed: bool,
-    timeout: u64, // milliseconds
+
+    /// Interlock timeout in milliseconds.
+    ///
+    /// # Path
+    /// `timeout`
+    ///
+    /// # Value
+    /// "true" or "false"
+    timeout: u64,
 }
 
 #[derive(Clone, Copy, Debug, Miniconf)]
@@ -136,10 +151,17 @@ pub struct Settings {
     /// See [signal_generator::BasicConfig#miniconf]
     signal_generator: [signal_generator::BasicConfig; 2],
 
-    /// Interlock todo
+    /// Interlock topic. Publishing "1" onto this topic renews the interlock timeout.
+    /// Publishing a "0" trips the interlock.
+    ///
+    /// # Path
+    /// `interlock`
+    ///
+    /// # Value
+    /// "1" or "0"
     interlock: u8,
 
-    /// Interlock settings todo
+    /// Interlock settings.
     interlock_settings: InterlockSettings,
 }
 
@@ -209,6 +231,7 @@ mod app {
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
         header_adc_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
+        interlock_handle: Option<trip_interlock::SpawnHandle>,
     }
 
     #[init]
@@ -275,6 +298,7 @@ mod app {
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
             header_adc_conversion_scheduled: stabilizer.systick.now(),
+            interlock_handle: None,
         };
 
         // Enable ADC/DAC events
@@ -427,36 +451,69 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, signal_generator])]
+    #[task(priority = 1, local=[afes, interlock_handle], shared=[network, settings, signal_generator])]
     fn settings_update(mut c: settings_update::Context, path: String<64>) {
-        // check for interlock path here
-        if path.as_str() == "interlock" {
-            log::info!("interlock renewed");
-        }
         let settings = c.shared.network.lock(|net| *net.miniconf.settings());
-        c.shared.settings.lock(|current| *current = settings);
 
-        c.local.afes.0.set_gain(settings.afe[0]);
-        c.local.afes.1.set_gain(settings.afe[1]);
-
-        // Update the signal generators
-        for (i, &config) in settings.signal_generator.iter().enumerate() {
-            match config.try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE) {
-                Ok(config) => {
-                    c.shared
-                        .signal_generator
-                        .lock(|generator| generator[i].update_waveform(config));
+        if path.as_str() == "interlock" {
+            *c.local.interlock_handle = match (
+                c.local.interlock_handle.take(),
+                settings.interlock_settings.armed,
+            ) {
+                // interlock got armed, first schedule
+                (None, true) => {
+                    log::info!("interlock armed");
+                    Some(
+                        trip_interlock::spawn_after(
+                            settings.interlock_settings.timeout.millis(),
+                        )
+                        .unwrap(),
+                    )
                 }
-                Err(err) => log::error!(
-                    "Failed to update signal generation on DAC{}: {:?}",
-                    i,
-                    err
+                // interlock renewal, push out
+                (Some(handle), true) => Some(
+                    handle
+                        .reschedule_after(
+                            settings.interlock_settings.timeout.millis(),
+                        )
+                        .unwrap(),
                 ),
-            }
-        }
+                // interlock got disarmed, cancel
+                (Some(handle), false) => {
+                    log::info!("interlock disarmed");
+                    handle.cancel().unwrap();
+                    None
+                }
+                // interlock not in use
+                (None, false) => None,
+            };
 
-        let target = settings.stream_target.into();
-        c.shared.network.lock(|net| net.direct_stream(target));
+            log::info!("interlock renewed");
+        } else {
+            c.shared.settings.lock(|current| *current = settings);
+            c.local.afes.0.set_gain(settings.afe[0]);
+            c.local.afes.1.set_gain(settings.afe[1]);
+
+            // Update the signal generators
+            for (i, &config) in settings.signal_generator.iter().enumerate() {
+                match config.try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
+                {
+                    Ok(config) => {
+                        c.shared.signal_generator.lock(|generator| {
+                            generator[i].update_waveform(config)
+                        });
+                    }
+                    Err(err) => log::error!(
+                        "Failed to update signal generation on DAC{}: {:?}",
+                        i,
+                        err
+                    ),
+                }
+            }
+
+            let target = settings.stream_target.into();
+            c.shared.network.lock(|net| net.direct_stream(target));
+        }
     }
 
     #[task(priority = 1, shared=[network, settings, telemetry, adc_internal], local=[cpu_temp_sensor])]
@@ -530,10 +587,9 @@ mod app {
         }
     }
 
-    // Task for waiting the relay transition times.
     #[task(priority = 1)]
     fn trip_interlock(_: trip_interlock::Context) {
-        log::info!("interlock tripped");
+        log::error!("interlock tripped");
     }
 
     #[task(binds = ETH, priority = 1)]
