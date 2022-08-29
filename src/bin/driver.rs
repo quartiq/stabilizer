@@ -451,50 +451,7 @@ mod app {
                 }
                 interlock::Handle::Idle => None,
             };
-            log::info!("interlock updated");
-        }
-        // let path = path.as_str();
-        // if path == "interlock"
-        //     || path == "interlock_settings/armed"
-        //     || path == "interlock_settings/clear"
-        // {
-        //     *c.local.interlock_handle = match (
-        //         c.local.interlock_handle.take(),
-        //         new_settings.interlock_settings.armed,
-        //         new_settings.interlock,
-        //     ) {
-        //         // interlock got armed, first schedule
-        //         (None, true, _) => {
-        //             log::info!("interlock armed");
-        //             Some(
-        //                 trip_interlock::spawn_after(
-        //                     new_settings.interlock_settings.timeout.millis(),
-        //                 )
-        //                 .unwrap(),
-        //             )
-        //         }
-        //         // interlock renewal, push out
-        //         (Some(handle), true, true) => handle
-        //             .reschedule_after(
-        //                 new_settings.interlock_settings.timeout.millis(),
-        //             )
-        //             .ok(), // return `None` if rescheduled too late aka interlock already tripped
-        //         // interlock got disarmed, cancel
-        //         (Some(handle), false, _) => {
-        //             log::info!("interlock disarmed");
-        //             let _ = handle.cancel(); // ignore error if cancelled too late
-        //             None
-        //         }
-        //         // interlock not in use
-        //         (None, false, _) => None,
-        //         // `false` published onto interlock, trip immediately
-        //         (Some(handle), true, false) => {
-        //             let _ = handle.cancel(); // ignore error if cancelled too late
-        //             trip_interlock::spawn().unwrap();
-        //             None
-        //         }
-        //     };
-        else {
+        } else {
             c.local.afes.0.set_gain(new_settings.afe[0]);
             c.local.afes.1.set_gain(new_settings.afe[1]);
 

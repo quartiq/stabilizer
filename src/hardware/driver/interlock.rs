@@ -74,39 +74,20 @@ pub fn handle(
         || path == "interlock/clear"
     {
         let cleared = (old.clear == false) && (new.clear == true);
-        log::info!("old.clear: {:?}", old.clear);
-        log::info!("new.clear: {:?}", new.clear);
-        log::info!(
-            "{:?},{:?},{:?},{:?}",
-            handle_is_some,
-            new.armed,
-            cleared,
-            new.interlock
-        );
         return match (handle_is_some, new.armed, cleared, new.interlock) {
             // Interlock is armed and got cleared, first schedule.
             // Also overwrites used handle after a tripping event.
-            (_, true, true, _) => {
-                log::info!("interlock armed");
-                Some(Handle::Spawn(new.timeout.millis()))
-            }
+            (_, true, true, _) => Some(Handle::Spawn(new.timeout.millis())),
             // interlock renewal, push out
             (true, true, _, true) => {
-                log::info!("interlock renewed");
                 Some(Handle::Reschedule(new.timeout.millis()))
             }
             // interlock got disarmed, cancel
-            (true, false, _, _) => {
-                log::info!("interlock disarmed");
-                Some(Handle::Cancel)
-            }
+            (true, false, _, _) => Some(Handle::Cancel),
             // `false` published onto interlock, trip immediately
-            (true, true, _, false) => {
-                log::info!("interlock forced");
-                Some(Handle::Reschedule(0.millis()))
-            }
+            (true, true, _, false) => Some(Handle::Reschedule(0.millis())),
             // interlock not in use / in all other cases
-            _ => None,
+            _ => Some(Handle::Idle),
         };
     } else {
         None
