@@ -6,3 +6,4 @@ To install this module locally (in editable mode):
 ```
 python -m pip install -e .
 ```
+Note that this package requires python 3.8+.
