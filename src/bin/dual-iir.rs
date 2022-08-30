@@ -47,8 +47,7 @@ use stabilizer::{
         pounder::{
             attenuators::AttenuatorInterface, dds_output::DdsOutput,
             rf_power::PowerMeasurementInterface, Ad9959PdhSettings,
-            Channel as PounderChannel, PDHLockGeneratorConfig,
-            PounderDevices,
+            Channel as PounderChannel, PDHLockGeneratorConfig, PounderDevices,
         },
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
