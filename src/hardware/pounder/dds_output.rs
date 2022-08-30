@@ -157,6 +157,16 @@ impl<'a> ProfileBuilder<'a> {
         self
     }
 
+    #[inline]
+    pub fn update_system_clock(
+        &mut self,
+        reference_clock_frequency: f32,
+        multiplier: u8,
+    ) -> Result<f32, ad9959::Error> {
+        self.serializer
+            .update_system_clock(reference_clock_frequency, multiplier)
+    }
+
     /// Write the profile to the DDS asynchronously.
     #[allow(dead_code)]
     #[inline]

@@ -566,6 +566,44 @@ impl ProfileSerializer {
         }
     }
 
+    /// Update the system clock configuration.
+    ///
+    /// # Args
+    /// * `channels` - A set of channels to apply the configuration to.
+    /// * `ftw` - If provided, indicates a frequency tuning word for the channels.
+    /// * `pow` - If provided, indicates a phase offset word for the channels.
+    /// * `acr` - If provided, indicates the amplitude control register for the channels. The ACR
+    ///   should be stored in the 3 LSB of the word. Note that if amplitude scaling is to be used,
+    ///   the "Amplitude multiplier enable" bit must be set.
+    #[inline]
+    pub fn update_system_clock(
+        &mut self,
+        reference_clock_frequency: f32,
+        multiplier: u8,
+    ) -> Result<f32, Error> {
+        if multiplier != 1 && !(4..=20).contains(&multiplier) {
+            return Err(Error::Bounds);
+        }
+
+        let frequency = multiplier as f32 * reference_clock_frequency as f32;
+        if frequency > 500_000_000.0f32 {
+            return Err(Error::Frequency);
+        }
+
+        // The enabled channel will be updated after clock reconfig
+        let mut fr1: [u8; 3] = [0, 0, 0];
+
+        // All FR1 fields are kept untouched except VCO & PLL divider
+        // These 2 fields will be modified anyway
+        fr1[0].set_bits(2..=6, multiplier);
+
+        let vco_range = frequency > 255e6;
+        fr1[0].set_bit(7, vco_range);
+
+        self.add_write(Register::FR1, &fr1);
+        Ok(frequency)
+    }
+
     /// Add a register write to the serialization data.
     fn add_write(&mut self, register: Register, value: &[u8]) {
         let data = &mut self.data[self.index..];
