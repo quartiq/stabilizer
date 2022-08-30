@@ -148,7 +148,19 @@ where
     pub fn update(&mut self) -> NetworkState {
         // Update the MQTT clients.
         self.telemetry.update();
+        self.update_no_telemetry()
+    }
 
+    /// Update and process all of the network users state, except telemetry.
+    ///
+    /// # Note
+    /// Application code must ensure that the telemetry's MQTT client is polled
+    /// regularly (see [TelemetryClient::update]).
+    ///
+    /// # Returns
+    /// An indication if any of the network users indicated a state change.
+    /// The SettingsChanged option contains the path of the settings that changed.
+    pub fn update_no_telemetry(&mut self) -> NetworkState {
         // Update the data stream.
         if self.generator.is_none() {
             self.stream.process();
