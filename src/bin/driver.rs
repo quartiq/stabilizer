@@ -409,7 +409,7 @@ mod app {
         );
     }
 
-    #[idle(shared=[network, settings])]
+    #[idle(shared=[network])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
             match c.shared.network.lock(|net| net.update()) {
@@ -494,7 +494,7 @@ mod app {
                 gains[0],
                 gains[1],
                 c.local.cpu_temp_sensor.get_temperature().unwrap(),
-            ));
+            ))
         });
         // Schedule the telemetry task in the future.
         telemetry::Monotonic::spawn_after((telemetry_period as u64).secs())
