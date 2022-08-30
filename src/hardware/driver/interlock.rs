@@ -74,8 +74,8 @@ pub fn handle(
         || path == "interlock/armed"
         || path == "interlock/clear"
     {
-        let cleared = (old.clear == false) && (new.clear == true);
-        return match (handle_is_some, new.armed, cleared, new.interlock) {
+        let cleared = !old.clear && new.clear;
+        match (handle_is_some, new.armed, cleared, new.interlock) {
             // Interlock is armed and got cleared, first schedule.
             // Also overwrites used handle after a tripping event.
             (_, true, true, true) => Some(Handle::Spawn(new.timeout.millis())),
@@ -89,7 +89,7 @@ pub fn handle(
             (true, true, _, false) => Some(Handle::Reschedule(0.millis())),
             // interlock not in use / in all other cases
             _ => Some(Handle::Idle),
-        };
+        }
     } else {
         None
     }
