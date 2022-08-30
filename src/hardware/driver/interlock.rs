@@ -50,7 +50,7 @@ impl Default for Interlock {
     fn default() -> Self {
         Self {
             interlock: false,
-            armed: false,
+            armed: true,
             clear: false,
             timeout: 1000,
         }
