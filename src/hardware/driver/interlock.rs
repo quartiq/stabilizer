@@ -78,7 +78,7 @@ pub fn handle(
         return match (handle_is_some, new.armed, cleared, new.interlock) {
             // Interlock is armed and got cleared, first schedule.
             // Also overwrites used handle after a tripping event.
-            (_, true, true, _) => Some(Handle::Spawn(new.timeout.millis())),
+            (_, true, true, true) => Some(Handle::Spawn(new.timeout.millis())),
             // interlock renewal, push out
             (true, true, _, true) => {
                 Some(Handle::Reschedule(new.timeout.millis()))
