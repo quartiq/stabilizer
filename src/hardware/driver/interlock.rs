@@ -1,6 +1,7 @@
-///! Driver Interlock functionality
+///! Driver interlock functionality
 ///!
-///! Todo docstring
+///! Driver features an interlock to ensure safe co-operation with other devices.
+///! The interlock is implemented via MQTT. See [Interlock] for details about the MQTT interface.
 use fugit::ExtU64;
 use heapless::String;
 use miniconf::Miniconf;
