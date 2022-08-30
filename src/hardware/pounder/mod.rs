@@ -4,6 +4,7 @@ use super::hal;
 use crate::hardware::{shared_adc::AdcChannel, I2c1Proxy};
 use embedded_hal::blocking::spi::Transfer;
 use enum_iterator::Sequence;
+use miniconf::{Miniconf, MiniconfAtomic};
 use serde::{Deserialize, Serialize};
 
 pub mod attenuators;
@@ -91,38 +92,129 @@ impl From<Channel> for GpioPin {
     }
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
-pub struct DdsChannelState {
-    pub phase_offset: f32,
-    pub frequency: f32,
-    pub amplitude: f32,
-    pub enabled: bool,
-}
-
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
-pub struct ChannelState {
-    pub parameters: DdsChannelState,
-    pub attenuation: f32,
-}
-
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
-pub struct InputChannelState {
-    pub attenuation: f32,
-    pub power: f32,
-    pub mixer: DdsChannelState,
-}
-
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
-pub struct OutputChannelState {
-    pub attenuation: f32,
-    pub channel: DdsChannelState,
-}
-
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, MiniconfAtomic)]
 pub struct DdsClockConfig {
     pub multiplier: u8,
     pub reference_clock: f32,
     pub external_clock: bool,
+}
+
+impl Default for DdsClockConfig {
+    fn default() -> Self {
+        Self {
+            multiplier: super::design_parameters::DDS_MULTIPLIER,
+            reference_clock: super::design_parameters::DDS_REF_CLK.to_Hz()
+                as f32,
+            external_clock: false,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, Miniconf)]
+pub struct PDHLockGeneratorConfig {
+    pub clock_config: DdsClockConfig,
+    pub ch: [PDHChannel; 2],
+}
+
+impl Default for PDHLockGeneratorConfig {
+    fn default() -> Self {
+        Self {
+            clock_config: DdsClockConfig::default(),
+            ch: [PDHChannel::default(); 2],
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, Miniconf)]
+pub struct PDHChannel {
+    pub osc_frequency: f32,
+    pub out_phase: f32,
+    pub in_phase_offset: f32,
+    pub amplitude: f32,
+    pub in_attenuation: f32,
+    pub out_attenuation: f32,
+    pub enabled: bool,
+}
+
+impl Default for PDHChannel {
+    fn default() -> Self {
+        Self {
+            osc_frequency: 10.0e6,
+            out_phase: 0.0,
+            in_phase_offset: 0.0,
+            amplitude: 0.0,
+            in_attenuation: 31.5,
+            out_attenuation: 31.5,
+            enabled: false,
+        }
+    }
+}
+
+pub struct Ad9959PdhSettings {
+    pub in_channel_dds: Ad9959DdsSettings,
+    pub out_channel_dds: Ad9959DdsSettings,
+}
+
+pub struct Ad9959DdsSettings {
+    pub ftw: u32,
+    pub pow: u16,
+    pub acr: u32,
+}
+
+impl PDHChannel {
+    pub fn try_into_dds_config_mu(
+        self,
+        system_frequency: f32,
+    ) -> Result<Ad9959PdhSettings, Error> {
+        let ftw = Self::frequency_to_ftw(self.osc_frequency, system_frequency)?;
+        Ok(Ad9959PdhSettings {
+            in_channel_dds: Ad9959DdsSettings {
+                ftw,
+                pow: Self::phase_to_pow(self.out_phase + self.in_phase_offset)?,
+                acr: if self.enabled {
+                    Self::amplitude_to_acr(1.0)?
+                } else {
+                    Self::amplitude_to_acr(0.0)?
+                },
+            },
+            out_channel_dds: Ad9959DdsSettings {
+                ftw,
+                pow: Self::phase_to_pow(self.out_phase)?,
+                acr: Self::amplitude_to_acr(self.amplitude)?,
+            },
+        })
+    }
+
+    fn frequency_to_ftw(
+        dds_frequency: f32,
+        system_frequency: f32,
+    ) -> Result<u32, Error> {
+        if dds_frequency < 0.0 || dds_frequency > system_frequency {
+            return Err(Error::Bounds);
+        }
+        // The function for channel frequency is `f_out = FTW * f_s / 2^32`, where FTW is the
+        // frequency tuning word and f_s is the system clock rate.
+        Ok(((dds_frequency as f32 / system_frequency)
+            * 1u64.wrapping_shl(32) as f32) as u32)
+    }
+
+    fn phase_to_pow(phase_turns: f32) -> Result<u16, Error> {
+        Ok((phase_turns * (1 << 14) as f32) as u16 & 0x3FFFu16)
+    }
+
+    fn amplitude_to_acr(amplitude: f32) -> Result<u32, Error> {
+        if !(0.0..=1.0).contains(&amplitude) {
+            return Err(Error::Bounds);
+        }
+
+        if amplitude == 1.0 {
+            return Ok(0x13FF);
+        }
+
+        let amplitude_control: u16 = (amplitude * (1 << 10) as f32) as u16;
+
+        Ok(((amplitude_control & 0x3FF) | (1 << 12)) as u32)
+    }
 }
 
 impl From<Channel> for ad9959::Channel {
