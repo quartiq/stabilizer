@@ -58,6 +58,12 @@ pub struct Telemetry {
 
     /// The CPU temperature in degrees Celsius.
     pub cpu_temp: f32,
+
+    /// The pounder temperature
+    pub pounder_temp: Option<f32>,
+
+    /// The detected RF power into PDH input channels
+    pub pdh_input_powers: Option<[f32; 2]>,
 }
 
 impl Default for TelemetryBuffer {
@@ -80,12 +86,21 @@ impl TelemetryBuffer {
     ///
     /// # Returns
     /// The finalized telemetry structure that can be serialized and reported.
-    pub fn finalize(self, afe0: Gain, afe1: Gain, cpu_temp: f32) -> Telemetry {
+    pub fn finalize(
+        self,
+        afe0: Gain,
+        afe1: Gain,
+        cpu_temp: f32,
+        pounder_temp: Option<f32>,
+        pdh_input_powers: Option<[f32; 2]>,
+    ) -> Telemetry {
         let in0_volts = Into::<f32>::into(self.adcs[0]) / afe0.as_multiplier();
         let in1_volts = Into::<f32>::into(self.adcs[1]) / afe1.as_multiplier();
 
         Telemetry {
             cpu_temp,
+            pounder_temp,
+            pdh_input_powers,
             adcs: [in0_volts, in1_volts],
             dacs: [self.dacs[0].into(), self.dacs[1].into()],
             digital_inputs: self.digital_inputs,

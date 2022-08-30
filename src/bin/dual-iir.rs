@@ -543,7 +543,7 @@ mod app {
         c.shared.network.lock(|net| net.direct_stream(target));
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry], local=[cpu_temp_sensor])]
+    #[task(priority = 1, shared=[network, settings, telemetry, pounder_devices], local=[cpu_temp_sensor])]
     fn telemetry(mut c: telemetry::Context) {
         let telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
@@ -553,11 +553,30 @@ mod app {
             .settings
             .lock(|settings| (settings.afe, settings.telemetry_period));
 
+        let (pounder_temp, input_powers) =
+            c.shared.pounder_devices.lock(|pounder_dev| {
+                if let Some(dev) = pounder_dev {
+                    let input_powers = [
+                        dev.measure_power(PounderChannel::In0).unwrap(),
+                        dev.measure_power(PounderChannel::In1).unwrap(),
+                    ];
+
+                    (
+                        Some(dev.lm75.read_temperature().unwrap()),
+                        Some(input_powers),
+                    )
+                } else {
+                    (None, None)
+                }
+            });
+
         c.shared.network.lock(|net| {
             net.telemetry.publish(&telemetry.finalize(
                 gains[0],
                 gains[1],
                 c.local.cpu_temp_sensor.get_temperature().unwrap(),
+                pounder_temp,
+                input_powers,
             ))
         });
 
