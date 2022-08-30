@@ -9,9 +9,9 @@ import asyncio
 import json
 import sys
 
-from gmqtt import Client as MqttClient
 from miniconf import Miniconf
-import stabilizer
+from stabilizer import voltage_to_machine_units
+from stabilizer.telemetry import Telemetry
 
 # The minimum allowable loopback voltage error (difference between output set point and input
 # measured value).
@@ -26,40 +26,13 @@ def static_iir_output(output_voltage):
     Returns
         The IIR configuration to send over Miniconf.
     """
-    machine_units = stabilizer.voltage_to_machine_units(output_voltage)
+    machine_units = voltage_to_machine_units(output_voltage)
     return {
         'y_min': machine_units,
         'y_max': machine_units,
         'y_offset': 0,
         'ba': [1, 0, 0, 0, 0],
     }
-
-
-class TelemetryReader:
-    """ Helper utility to read Stabilizer telemetry. """
-
-    @classmethod
-    async def create(cls, prefix, broker, queue):
-        """Create a connection to the broker and an MQTT device using it."""
-        client = MqttClient(client_id='')
-        await client.connect(broker)
-        return cls(client, prefix, queue)
-
-
-    def __init__(self, client, prefix, queue):
-        """ Constructor. """
-        self.client = client
-        self._telemetry = []
-        self.client.on_message = self.handle_telemetry
-        self._telemetry_topic = f'{prefix}/telemetry'
-        self.client.subscribe(self._telemetry_topic)
-        self.queue = queue
-
-
-    def handle_telemetry(self, _client, topic, payload, _qos, _properties):
-        """ Handle incoming telemetry messages over MQTT. """
-        assert topic == self._telemetry_topic
-        self.queue.put_nowait(json.loads(payload))
 
 
 async def test_loopback(miniconf, telemetry_queue, set_point, gain=1, channel=0):
@@ -109,21 +82,10 @@ def main():
 
     args = parser.parse_args()
 
-    telemetry_queue = asyncio.LifoQueue()
-
-    async def telemetry():
-        await TelemetryReader.create(args.prefix, args.broker, telemetry_queue)
-        try:
-            while True:
-                await asyncio.sleep(1)
-        except asyncio.CancelledError:
-            pass
-
-
-    telemetry_task = asyncio.Task(telemetry())
-
     async def test():
         """ The actual testing being completed. """
+        tele = await Telemetry.create(args.prefix, args.broker)
+
         interface = await Miniconf.create(args.prefix, args.broker)
 
         # Disable IIR holds and configure the telemetry rate.
@@ -132,18 +94,15 @@ def main():
         await interface.command('telemetry_period', 1, retain=False)
 
         # Test loopback with a static 1V output of the DACs.
-        await test_loopback(interface, telemetry_queue, 1.0)
+        await test_loopback(interface, tele.queue, 1.0)
 
         # Repeat test with AFE = 2x
-        await test_loopback(interface, telemetry_queue, 1.0, gain=2)
+        await test_loopback(interface, tele.queue, 1.0, gain=2)
 
         # Test with 0V output
-        await test_loopback(interface, telemetry_queue, 0.0)
+        await test_loopback(interface, tele.queue, 0.0)
 
-        telemetry_task.cancel()
-
-    loop = asyncio.get_event_loop()
-    sys.exit(loop.run_until_complete(test()))
+    sys.exit(asyncio.run(test()))
 
 
 if __name__ == '__main__':

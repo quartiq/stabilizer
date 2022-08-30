@@ -16,10 +16,11 @@ use stm32h7xx_hal::{
 use smoltcp_nal::smoltcp;
 
 use super::{
-    adc, afe, cpu_temp_sensor::CpuTempSensor, dac, design_parameters, driver,
-    eeprom, input_stamper::InputStamper, pounder,
+    adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
+    driver, eeprom, input_stamper::InputStamper, pounder,
     pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
-    DigitalInput0, DigitalInput1, EthernetPhy, Mezzanine, NetworkStack,
+    DigitalInput0, DigitalInput1, EemDigitalInput0, EemDigitalInput1,
+    EemDigitalOutput0, EemDigitalOutput1, EthernetPhy, Mezzanine, NetworkStack,
     SystemTimer, Systick, AFE0, AFE1,
 };
 
@@ -103,6 +104,14 @@ pub struct NetworkDevices {
     pub mac_address: smoltcp::wire::EthernetAddress,
 }
 
+/// The GPIO pins available on the EEM connector, if Pounder is not present.
+pub struct EemGpioDevices {
+    pub lvds4: EemDigitalInput0,
+    pub lvds5: EemDigitalInput1,
+    pub lvds6: EemDigitalOutput0,
+    pub lvds7: EemDigitalOutput1,
+}
+
 /// The available hardware interfaces on Stabilizer.
 pub struct StabilizerDevices {
     pub systick: Systick,
@@ -115,6 +124,7 @@ pub struct StabilizerDevices {
     pub timestamp_timer: timers::TimestampTimer,
     pub net: NetworkDevices,
     pub digital_inputs: (DigitalInput0, DigitalInput1),
+    pub eem_gpio: EemGpioDevices,
 }
 
 /// The available Pounder-specific hardware interfaces.
@@ -279,9 +289,7 @@ pub fn setup(
     // After ITCM loading.
     core.SCB.enable_icache();
 
-    let mut delay = asm_delay::AsmDelay::new(asm_delay::bitrate::Hertz(
-        ccdr.clocks.c_ck().to_Hz(),
-    ));
+    let mut delay = delay::AsmDelay::new(ccdr.clocks.c_ck().to_Hz());
 
     let gpioa = device.GPIOA.split(ccdr.peripheral.GPIOA);
     let gpiob = device.GPIOB.split(ccdr.peripheral.GPIOB);
@@ -751,7 +759,8 @@ pub fn setup(
         shared_bus::new_atomic_check!(hal::i2c::I2c<hal::stm32::I2C1> = i2c1)
             .unwrap();
 
-    // Use default PLL2p clock input with 1/2 prescaler for 50 MHz ADC clock.
+    // Use default PLL2p clock input with 1/2 prescaler for a 25 MHz ADC kernel clock.
+    // Note that there is an additional, fixed 1/2 prescaler in the clock path.
     let (adc1, adc2, adc3) = {
         let (mut adc1, mut adc2) = hal::adc::adc12(
             device.ADC1,
@@ -1047,6 +1056,13 @@ pub fn setup(
         Mezzanine::None
     };
 
+    let eem_gpio = EemGpioDevices {
+        lvds4: gpiod.pd1.into_floating_input(),
+        lvds5: gpiod.pd2.into_floating_input(),
+        lvds6: gpiod.pd3.into_push_pull_output(),
+        lvds7: gpiod.pd4.into_push_pull_output(),
+    };
+
     let stabilizer = StabilizerDevices {
         systick,
         afes,
@@ -1060,6 +1076,7 @@ pub fn setup(
         adc_dac_timer: sampling_timer,
         timestamp_timer,
         digital_inputs,
+        eem_gpio,
     };
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());

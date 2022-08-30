@@ -1,4 +1,6 @@
 use miniconf::Miniconf;
+use rand_core::{RngCore, SeedableRng};
+use rand_xorshift::XorShiftRng;
 use serde::{Deserialize, Serialize};
 
 /// Types of signals that can be generated.
@@ -7,6 +9,7 @@ pub enum Signal {
     Cosine,
     Square,
     Triangle,
+    WhiteNoise,
 }
 
 /// Basic configuration for a generated signal.
@@ -142,10 +145,11 @@ impl Default for Config {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct SignalGenerator {
     phase_accumulator: i32,
     config: Config,
+    rng: XorShiftRng,
 }
 
 impl SignalGenerator {
@@ -160,6 +164,7 @@ impl SignalGenerator {
         Self {
             config,
             phase_accumulator: 0,
+            rng: XorShiftRng::from_seed([0; 16]), // zeros will initialize with XorShiftRng internal seed
         }
     }
 
@@ -197,6 +202,7 @@ impl core::iter::Iterator for SignalGenerator {
                 }
             }
             Signal::Triangle => i16::MIN as i32 + (phase >> 15).abs(),
+            Signal::WhiteNoise => self.rng.next_u32() as i32 >> 16,
         };
 
         // Calculate the final output result as an i16.
