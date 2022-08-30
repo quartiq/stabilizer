@@ -44,6 +44,12 @@ use stabilizer::{
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
         hal,
+        pounder::{
+            attenuators::AttenuatorInterface, dds_output::DdsOutput,
+            rf_power::PowerMeasurementInterface, Ad9959PdhSettings,
+            Channel as PounderChannel, PDHLockGeneratorConfig,
+            PounderDevices,
+        },
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
@@ -142,6 +148,15 @@ pub struct Settings {
     /// # Value
     /// See [signal_generator::BasicConfig#miniconf]
     signal_generator: [signal_generator::BasicConfig; 2],
+
+    /// Pounder output control
+    ///
+    /// # Path
+    /// `pdh`
+    ///
+    /// # Value
+    /// See [pounder::PDHLockGeneratorConfig#miniconf]
+    pdh: PDHLockGeneratorConfig,
 }
 
 impl Default for Settings {
@@ -165,6 +180,8 @@ impl Default for Settings {
             signal_generator: [signal_generator::BasicConfig::default(); 2],
 
             stream_target: StreamTarget::default(),
+
+            pdh: PDHLockGeneratorConfig::default(),
         }
     }
 }
@@ -183,6 +200,7 @@ mod app {
         settings: Settings,
         telemetry: TelemetryBuffer,
         signal_generator: [SignalGenerator; 2],
+        pounder_devices: Option<PounderDevices>,
     }
 
     #[local]
@@ -192,6 +210,7 @@ mod app {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
+        ddses: Option<DdsOutput>,
         iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
@@ -202,13 +221,19 @@ mod app {
         let clock = SystemTimer::new(|| monotonics::now().ticks() as u32);
 
         // Configure the microcontroller
-        let (stabilizer, _pounder) = hardware::setup::setup(
+        let (stabilizer, pounder) = hardware::setup::setup(
             c.core,
             c.device,
             clock,
             BATCH_SIZE,
             SAMPLE_TICKS,
         );
+
+        let (pounder_devices, dds_output) = if let Some(pounder_dev) = pounder {
+            (Some(pounder_dev.pounder), Some(pounder_dev.dds_output))
+        } else {
+            (None, None)
+        };
 
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
@@ -243,6 +268,7 @@ mod app {
                         .unwrap(),
                 ),
             ],
+            pounder_devices,
         };
 
         let mut local = Local {
@@ -251,6 +277,7 @@ mod app {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
+            ddses: dds_output,
             iir_state: [[[0.; 5]; IIR_CASCADE_LENGTH]; 2],
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
@@ -401,7 +428,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, signal_generator])]
+    #[task(priority = 1, local=[afes, ddses], shared=[network, settings, signal_generator, pounder_devices])]
     fn settings_update(mut c: settings_update::Context) {
         let settings = c.shared.network.lock(|net| *net.miniconf.settings());
         c.shared.settings.lock(|current| *current = settings);
@@ -424,6 +451,87 @@ mod app {
                 ),
             }
         }
+
+        // Update PDH channels on Pounder
+        c.shared.pounder_devices.lock(|dev| {
+            if let (Some(ddses), Some(devices)) = (c.local.ddses, dev) {
+                devices
+                    .set_ext_clk(settings.pdh.clock_config.external_clock)
+                    .unwrap();
+
+                let mut builder = ddses.builder();
+
+                let f_sys = builder
+                    .update_system_clock(
+                        settings.pdh.clock_config.reference_clock,
+                        settings.pdh.clock_config.multiplier,
+                    )
+                    .unwrap();
+
+                let Ad9959PdhSettings {
+                    in_channel_dds,
+                    out_channel_dds,
+                } = settings.pdh.ch[0].try_into_dds_config_mu(f_sys).unwrap();
+
+                builder.update_channels(
+                    ad9959::Channel::ZERO,
+                    Some(out_channel_dds.ftw),
+                    Some(out_channel_dds.pow),
+                    Some(out_channel_dds.acr),
+                );
+                builder.update_channels(
+                    ad9959::Channel::ONE,
+                    Some(in_channel_dds.ftw),
+                    Some(in_channel_dds.pow),
+                    Some(in_channel_dds.acr),
+                );
+
+                let Ad9959PdhSettings {
+                    in_channel_dds,
+                    out_channel_dds,
+                } = settings.pdh.ch[1].try_into_dds_config_mu(f_sys).unwrap();
+
+                builder.update_channels(
+                    ad9959::Channel::TWO,
+                    Some(out_channel_dds.ftw),
+                    Some(out_channel_dds.pow),
+                    Some(out_channel_dds.acr),
+                );
+                builder.update_channels(
+                    ad9959::Channel::THREE,
+                    Some(in_channel_dds.ftw),
+                    Some(in_channel_dds.pow),
+                    Some(in_channel_dds.acr),
+                );
+
+                builder.write();
+
+                devices
+                    .set_attenuation(
+                        PounderChannel::Out0,
+                        settings.pdh.ch[0].out_attenuation,
+                    )
+                    .unwrap();
+                devices
+                    .set_attenuation(
+                        PounderChannel::In0,
+                        settings.pdh.ch[0].in_attenuation,
+                    )
+                    .unwrap();
+                devices
+                    .set_attenuation(
+                        PounderChannel::Out1,
+                        settings.pdh.ch[1].out_attenuation,
+                    )
+                    .unwrap();
+                devices
+                    .set_attenuation(
+                        PounderChannel::In1,
+                        settings.pdh.ch[1].in_attenuation,
+                    )
+                    .unwrap();
+            }
+        });
 
         let target = settings.stream_target.into();
         c.shared.network.lock(|net| net.direct_stream(target));
