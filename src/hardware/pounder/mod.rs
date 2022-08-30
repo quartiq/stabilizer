@@ -129,10 +129,10 @@ impl From<Channel> for ad9959::Channel {
     /// Translate pounder channels to DDS output channels.
     fn from(other: Channel) -> Self {
         match other {
-            Channel::In0 => Self::TWO,
-            Channel::In1 => Self::FOUR,
-            Channel::Out0 => Self::ONE,
-            Channel::Out1 => Self::THREE,
+            Channel::In0 => Self::ONE,
+            Channel::Out0 => Self::ZERO,
+            Channel::In1 => Self::THREE,
+            Channel::Out1 => Self::TWO,
         }
     }
 }
