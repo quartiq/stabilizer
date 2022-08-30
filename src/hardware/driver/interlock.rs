@@ -3,7 +3,6 @@
 ///! Driver features an interlock to ensure safe co-operation with other devices.
 ///! The interlock is implemented via MQTT. See [Interlock] for details about the MQTT interface.
 use fugit::ExtU64;
-use heapless::String;
 use miniconf::Miniconf;
 
 #[derive(Clone, Copy, Debug, Miniconf)]
@@ -57,41 +56,32 @@ impl Default for Interlock {
     }
 }
 
-pub enum Handle {
+pub enum Action {
     Spawn(fugit::Duration<u64, 1, 10000_u32>),
     Reschedule(fugit::Duration<u64, 1, 10000_u32>),
     Cancel,
-    Idle,
+    None,
 }
 
-pub fn handle(
-    path: String<64>,
-    handle_is_some: bool,
-    new: Interlock,
-    old: Interlock,
-) -> Option<Handle> {
-    let path = path.as_str();
-    if path == "interlock/interlock"
-        || path == "interlock/armed"
-        || path == "interlock/clear"
-    {
+impl Interlock {
+    pub fn handle(
+        handle_is_some: bool,
+        new: Interlock,
+        old: Interlock,
+    ) -> Action {
         let cleared = !old.clear && new.clear;
         match (handle_is_some, new.armed, cleared, new.interlock) {
             // Interlock is armed and got cleared, first schedule.
             // Also overwrites used handle after a tripping event.
-            (_, true, true, true) => Some(Handle::Spawn(new.timeout.millis())),
+            (_, true, true, true) => Action::Spawn(new.timeout.millis()),
             // interlock renewal, push out
-            (true, true, _, true) => {
-                Some(Handle::Reschedule(new.timeout.millis()))
-            }
+            (true, true, _, true) => Action::Reschedule(new.timeout.millis()),
             // interlock got disarmed, cancel
-            (true, false, _, _) => Some(Handle::Cancel),
+            (true, false, _, _) => Action::Cancel,
             // `false` published onto interlock, trip immediately
-            (true, true, _, false) => Some(Handle::Reschedule(0.millis())),
+            (true, true, _, false) => Action::Reschedule(0.millis()),
             // interlock not in use / in all other cases
-            _ => Some(Handle::Idle),
+            _ => Action::None,
         }
-    } else {
-        None
     }
 }

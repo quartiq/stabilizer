@@ -279,7 +279,7 @@ mod app {
         local.dacs.1.start();
 
         // Spawn a settings update for default settings.
-        settings_update::spawn(String::from("")).unwrap();
+        settings_update::spawn(None).unwrap();
         telemetry::spawn().unwrap();
         ethernet_link::spawn().unwrap();
         header_adc_start_conversion::spawn().unwrap();
@@ -414,7 +414,7 @@ mod app {
         loop {
             match c.shared.network.lock(|net| net.update()) {
                 NetworkState::SettingsChanged(path) => {
-                    settings_update::spawn(path).unwrap()
+                    settings_update::spawn(Some(path)).unwrap()
                 }
                 NetworkState::Updated => {}
                 NetworkState::NoChange => cortex_m::asm::wfi(),
@@ -423,60 +423,79 @@ mod app {
     }
 
     #[task(priority = 1, local=[afes, interlock_handle], shared=[network, settings, signal_generator])]
-    fn settings_update(mut c: settings_update::Context, path: String<64>) {
+    fn settings_update(
+        mut c: settings_update::Context,
+        path: Option<String<64>>,
+    ) {
         let new_settings =
             c.shared.network.lock(|net| *net.miniconf.settings());
         let old_settings = c.shared.settings.lock(|current| *current);
 
-        if let Some(handle) = interlock::handle(
-            path,
-            c.local.interlock_handle.is_some(),
-            new_settings.interlock,
-            old_settings.interlock,
-        ) {
-            *c.local.interlock_handle = match handle {
-                interlock::Handle::Spawn(millis) => {
+        if path.map_or(false, |path| {
+            ["interlock/interlock", "interlock/armed", "interlock/clear"]
+                .contains(&path.as_str())
+        }) {
+            log::info!("interlock update");
+            *c.local.interlock_handle = match interlock::Interlock::handle(
+                c.local.interlock_handle.is_some(),
+                new_settings.interlock,
+                old_settings.interlock,
+            ) {
+                interlock::Action::Spawn(millis) => {
                     Some(trip_interlock::spawn_after(millis).unwrap())
                 }
-                interlock::Handle::Reschedule(millis) => c
-                    .local
-                    .interlock_handle
-                    .take()
-                    .unwrap()
-                    .reschedule_after(millis)
-                    .ok(), // return `None` if rescheduled too late aka interlock already tripped
-                interlock::Handle::Cancel => {
-                    let _ = c.local.interlock_handle.take().unwrap().cancel(); // ignore error if cancelled too late
+                interlock::Action::Reschedule(millis) => {
+                    let ok = c
+                        .local
+                        .interlock_handle
+                        .take()
+                        .unwrap()
+                        .reschedule_after(millis)
+                        .ok();
+                    if ok.is_none() {
+                        log::error!(
+                            "Cannot reschedule. Interlock already tripped!"
+                        )
+                    }
+                    ok
+                } // return `None` if rescheduled too late aka interlock already tripped
+                interlock::Action::Cancel => {
+                    if c.local
+                        .interlock_handle
+                        .take()
+                        .unwrap()
+                        .cancel()
+                        .is_err()
+                    {
+                        log::error!("Cannot cancel. Interlock already tripped!")
+                    }; // ignore error if cancelled too late
                     None
                 }
-                interlock::Handle::Idle => None,
+                interlock::Action::None => None,
             };
-        } else {
-            c.local.afes.0.set_gain(new_settings.afe[0]);
-            c.local.afes.1.set_gain(new_settings.afe[1]);
-
-            // Update the signal generators
-            for (i, &config) in new_settings.signal_generator.iter().enumerate()
-            {
-                match config.try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
-                {
-                    Ok(config) => {
-                        c.shared.signal_generator.lock(|generator| {
-                            generator[i].update_waveform(config)
-                        });
-                    }
-                    Err(err) => log::error!(
-                        "Failed to update signal generation on DAC{}: {:?}",
-                        i,
-                        err
-                    ),
-                }
-            }
-
-            let target = new_settings.stream_target.into();
-            c.shared.network.lock(|net| net.direct_stream(target));
         }
         c.shared.settings.lock(|current| *current = new_settings);
+        c.local.afes.0.set_gain(new_settings.afe[0]);
+        c.local.afes.1.set_gain(new_settings.afe[1]);
+
+        // Update the signal generators
+        for (i, &config) in new_settings.signal_generator.iter().enumerate() {
+            match config.try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE) {
+                Ok(config) => {
+                    c.shared
+                        .signal_generator
+                        .lock(|generator| generator[i].update_waveform(config));
+                }
+                Err(err) => log::error!(
+                    "Failed to update signal generation on DAC{}: {:?}",
+                    i,
+                    err
+                ),
+            }
+        }
+
+        let target = new_settings.stream_target.into();
+        c.shared.network.lock(|net| net.direct_stream(target));
     }
 
     #[task(priority = 1, shared=[network, settings, telemetry, adc_internal], local=[cpu_temp_sensor])]
