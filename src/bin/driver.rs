@@ -137,7 +137,7 @@ pub struct Settings {
     /// `interlock`
     ///
     /// # Value
-    /// [interlock::Interlock]
+    /// [Interlock]
     interlock: Interlock,
 }
 
