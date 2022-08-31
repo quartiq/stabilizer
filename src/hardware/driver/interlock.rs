@@ -54,31 +54,30 @@ pub enum Action {
 }
 
 impl Interlock {
-    pub fn action(
+    pub fn action(&self,
         path: Option<&str>,
         handle_is_some: bool,
-        new: &Self,
         old: &Self,
     ) -> Option<Action> {
         match path {
             Some("interlock") => {
-                if new.interlock && handle_is_some {
-                    Some(Action::Reschedule(new.timeout.millis()))
-                } else if !new.interlock && handle_is_some {
+                if self.interlock && handle_is_some {
+                    Some(Action::Reschedule(self.timeout.millis()))
+                } else if !self.interlock && handle_is_some {
                     Some(Action::Reschedule(0.millis()))
                 } else {
                     None
                 }
             }
             Some("armed") => {
-                if !new.armed && handle_is_some {
+                if !self.armed && handle_is_some {
                     Some(Action::Cancel)
                 } else if !old.armed
-                    && new.armed
+                    && self.armed
                     && !handle_is_some
-                    && new.interlock
+                    && self.interlock
                 {
-                    Some(Action::Spawn(new.timeout.millis()))
+                    Some(Action::Spawn(self.timeout.millis()))
                 } else {
                     None
                 }

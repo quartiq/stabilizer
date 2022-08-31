@@ -432,11 +432,10 @@ mod app {
         let old_settings = c.shared.settings.lock(|current| *current);
 
         c.shared.interlock_handle.lock(|handle| {
-            if let Some(action) = Interlock::action(
+            if let Some(action) = new_settings.interlock.action(
                 path.as_ref()
                     .map(|path| path.as_str().trim_start_matches("interlock/")),
                 handle.is_some(),
-                &new_settings.interlock,
                 &old_settings.interlock,
             ) {
                 *handle = match action {
