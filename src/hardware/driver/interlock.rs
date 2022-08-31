@@ -17,7 +17,8 @@ pub struct Interlock {
     /// "true" or "false"
     interlock: bool,
 
-    /// Set interlock to armed/disarmed.
+    /// Set interlock to armed/disarmed. If the interlock tripped, a false->true transition is
+    /// required to re-arm the interlock.
     ///
     /// # Path
     /// `armed`
@@ -25,15 +26,6 @@ pub struct Interlock {
     /// # Value
     /// "true" or "false"
     armed: bool,
-
-    /// A positive flank from "false" to "true" clears the interrupt.
-    ///
-    /// # Path
-    /// `armed`
-    ///
-    /// # Value
-    /// "true" or "false"
-    clear: bool,
 
     /// Interlock timeout in milliseconds.
     ///
@@ -49,8 +41,7 @@ impl Default for Interlock {
     fn default() -> Self {
         Self {
             interlock: false,
-            armed: true,
-            clear: false,
+            armed: false,
             timeout: 1000,
         }
     }
@@ -63,11 +54,11 @@ pub enum Action {
 }
 
 impl Interlock {
-    pub fn handle(
+    pub fn action(
         path: Option<&str>,
         handle_is_some: bool,
-        new: Interlock,
-        old: Interlock,
+        new: &Self,
+        old: &Self,
     ) -> Option<Action> {
         match path {
             Some("interlock") => {
@@ -82,16 +73,10 @@ impl Interlock {
             Some("armed") => {
                 if !new.armed && handle_is_some {
                     Some(Action::Cancel)
-                } else {
-                    None
-                }
-            }
-            Some("clear") => {
-                if !old.clear
-                    && new.clear
-                    && new.interlock
-                    && !handle_is_some
+                } else if !old.armed
                     && new.armed
+                    && !handle_is_some
+                    && new.interlock
                 {
                     Some(Action::Spawn(new.timeout.millis()))
                 } else {

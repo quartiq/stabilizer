@@ -26,7 +26,7 @@ use stabilizer::{
         dac::{Dac0Output, Dac1Output, DacCode},
         design_parameters, driver,
         driver::{
-            interlock,
+            interlock::{Action, Interlock},
             relay::{self, sm::StateMachine},
             Channel,
         },
@@ -138,7 +138,7 @@ pub struct Settings {
     ///
     /// # Value
     /// [interlock::Interlock]
-    interlock: interlock::Interlock,
+    interlock: Interlock,
 }
 
 impl Default for Settings {
@@ -163,7 +163,7 @@ impl Default for Settings {
 
             stream_target: StreamTarget::default(),
 
-            interlock: interlock::Interlock::default(),
+            interlock: Interlock::default(),
         }
     }
 }
@@ -432,19 +432,19 @@ mod app {
         let old_settings = c.shared.settings.lock(|current| *current);
 
         c.shared.interlock_handle.lock(|handle| {
-            if let Some(action) = interlock::Interlock::handle(
+            if let Some(action) = Interlock::action(
                 path.as_ref()
                     .map(|path| path.as_str().trim_start_matches("interlock/")),
                 handle.is_some(),
-                new_settings.interlock,
-                old_settings.interlock,
+                &new_settings.interlock,
+                &old_settings.interlock,
             ) {
                 *handle = match action {
-                    interlock::Action::Spawn(millis) => {
+                   Action::Spawn(millis) => {
                         log::info!("Interlock armed");
                         Some(trip_interlock::spawn_after(millis).unwrap())
                     }
-                    interlock::Action::Reschedule(millis) => {
+                   Action::Reschedule(millis) => {
                         handle
                             .take()
                             .unwrap()
@@ -455,7 +455,7 @@ mod app {
                             , e))
                         .ok()
                     } // return `None` if rescheduled too late aka interlock already tripped
-                    interlock::Action::Cancel => {
+                   Action::Cancel => {
                         let _ = handle.take().unwrap().cancel().map_err(|e|
                             log::error!(
                                 "Cannot cancel. Interlock already tripped! {:?}"
