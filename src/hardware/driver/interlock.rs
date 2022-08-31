@@ -54,7 +54,8 @@ pub enum Action {
 }
 
 impl Interlock {
-    pub fn action(&self,
+    pub fn action(
+        &self,
         path: Option<&str>,
         handle_is_some: bool,
         old: &Self,
