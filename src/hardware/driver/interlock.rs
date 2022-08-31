@@ -60,28 +60,45 @@ pub enum Action {
     Spawn(fugit::Duration<u64, 1, 10000_u32>),
     Reschedule(fugit::Duration<u64, 1, 10000_u32>),
     Cancel,
-    None,
 }
 
 impl Interlock {
     pub fn handle(
+        path: Option<&str>,
         handle_is_some: bool,
         new: Interlock,
         old: Interlock,
-    ) -> Action {
-        let cleared = !old.clear && new.clear;
-        match (handle_is_some, new.armed, cleared, new.interlock) {
-            // Interlock is armed and got cleared, first schedule.
-            // Also overwrites used handle after a tripping event.
-            (_, true, true, true) => Action::Spawn(new.timeout.millis()),
-            // interlock renewal, push out
-            (true, true, _, true) => Action::Reschedule(new.timeout.millis()),
-            // interlock got disarmed, cancel
-            (true, false, _, _) => Action::Cancel,
-            // `false` published onto interlock, trip immediately
-            (true, true, _, false) => Action::Reschedule(0.millis()),
-            // interlock not in use / in all other cases
-            _ => Action::None,
+    ) -> Option<Action> {
+        match path {
+            Some("interlock") => {
+                if new.interlock && handle_is_some {
+                    Some(Action::Reschedule(new.timeout.millis()))
+                } else if !new.interlock && handle_is_some {
+                    Some(Action::Reschedule(0.millis()))
+                } else {
+                    None
+                }
+            }
+            Some("armed") => {
+                if !new.armed && handle_is_some {
+                    Some(Action::Cancel)
+                } else {
+                    None
+                }
+            }
+            Some("clear") => {
+                if !old.clear
+                    && new.clear
+                    && new.interlock
+                    && !handle_is_some
+                    && new.armed
+                {
+                    Some(Action::Spawn(new.timeout.millis()))
+                } else {
+                    None
+                }
+            }
+            _ => None,
         }
     }
 }

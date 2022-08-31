@@ -189,6 +189,7 @@ mod app {
         driver_relay_state: [StateMachine<relay::Relay<I2c1Proxy>>; 2],
         // driver_dac: [Dac; 2]
         // driver_output_state: [Output State Macheine; 2]
+        interlock_handle: Option<trip_interlock::SpawnHandle>,
     }
 
     #[local]
@@ -202,7 +203,6 @@ mod app {
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
         header_adc_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
-        interlock_handle: Option<trip_interlock::SpawnHandle>,
     }
 
     #[init]
@@ -257,6 +257,7 @@ mod app {
             header_adc: driver.ltc2320,
             header_adc_data: [0u16; 8],
             driver_relay_state: driver.relay_sm, // this might live inside driver_output_state eventually
+            interlock_handle: None,
         };
 
         let mut local = Local {
@@ -269,7 +270,6 @@ mod app {
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
             header_adc_conversion_scheduled: stabilizer.systick.now(),
-            interlock_handle: None,
         };
 
         // Enable ADC/DAC events
@@ -422,7 +422,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes, interlock_handle], shared=[network, settings, signal_generator])]
+    #[task(priority = 1, local=[afes], shared=[network, settings, signal_generator, interlock_handle])]
     fn settings_update(
         mut c: settings_update::Context,
         path: Option<String<64>>,
@@ -431,49 +431,41 @@ mod app {
             c.shared.network.lock(|net| *net.miniconf.settings());
         let old_settings = c.shared.settings.lock(|current| *current);
 
-        if path.map_or(false, |path| {
-            ["interlock/interlock", "interlock/armed", "interlock/clear"]
-                .contains(&path.as_str())
-        }) {
-            log::info!("interlock update");
-            *c.local.interlock_handle = match interlock::Interlock::handle(
-                c.local.interlock_handle.is_some(),
+        c.shared.interlock_handle.lock(|handle| {
+            if let Some(action) = interlock::Interlock::handle(
+                path.as_ref()
+                    .map(|path| path.as_str().trim_start_matches("interlock/")),
+                handle.is_some(),
                 new_settings.interlock,
                 old_settings.interlock,
             ) {
-                interlock::Action::Spawn(millis) => {
-                    Some(trip_interlock::spawn_after(millis).unwrap())
-                }
-                interlock::Action::Reschedule(millis) => {
-                    let ok = c
-                        .local
-                        .interlock_handle
-                        .take()
-                        .unwrap()
-                        .reschedule_after(millis)
-                        .ok();
-                    if ok.is_none() {
-                        log::error!(
-                            "Cannot reschedule. Interlock already tripped!"
-                        )
+                *handle = match action {
+                    interlock::Action::Spawn(millis) => {
+                        log::info!("Interlock armed");
+                        Some(trip_interlock::spawn_after(millis).unwrap())
                     }
-                    ok
-                } // return `None` if rescheduled too late aka interlock already tripped
-                interlock::Action::Cancel => {
-                    if c.local
-                        .interlock_handle
-                        .take()
-                        .unwrap()
-                        .cancel()
-                        .is_err()
-                    {
-                        log::error!("Cannot cancel. Interlock already tripped!")
-                    }; // ignore error if cancelled too late
-                    None
-                }
-                interlock::Action::None => None,
-            };
-        }
+                    interlock::Action::Reschedule(millis) => {
+                        handle
+                            .take()
+                            .unwrap()
+                            .reschedule_after(millis)
+                        .map_err(|e|
+                            log::error!(
+                                "Cannot reschedule. Interlock already tripped! {:?}"
+                            , e))
+                        .ok()
+                    } // return `None` if rescheduled too late aka interlock already tripped
+                    interlock::Action::Cancel => {
+                        let _ = handle.take().unwrap().cancel().map_err(|e|
+                            log::error!(
+                                "Cannot cancel. Interlock already tripped! {:?}"
+                            , e));
+                        None
+                    } // ignore error if cancelled too late
+                };
+            }
+        });
+
         c.shared.settings.lock(|current| *current = new_settings);
         c.local.afes.0.set_gain(new_settings.afe[0]);
         c.local.afes.1.set_gain(new_settings.afe[1]);
@@ -569,8 +561,9 @@ mod app {
         }
     }
 
-    #[task(priority = 1)]
-    fn trip_interlock(_: trip_interlock::Context) {
+    #[task(priority = 1, shared=[interlock_handle])]
+    fn trip_interlock(mut c: trip_interlock::Context) {
+        c.shared.interlock_handle.lock(|handle| *handle = None);
         log::error!("interlock tripped");
     }
 
