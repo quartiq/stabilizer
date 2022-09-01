@@ -490,13 +490,16 @@ mod app {
                         .unwrap();
                 }
 
-                let f_sys = pdh_settings.clock_config.reference_clock
-                    * pdh_settings.clock_config.multiplier as f32;
+                let system_frequency =
+                    pdh_settings.clock_config.reference_clock
+                        * pdh_settings.clock_config.multiplier as f32;
 
                 let Ad9959PdhSettings {
                     in_channel_dds,
                     out_channel_dds,
-                } = pdh_settings.ch[0].try_into_dds_config_mu(f_sys).unwrap();
+                } = pdh_settings.ch[0]
+                    .try_into_dds_config_mu(system_frequency)
+                    .unwrap();
 
                 builder.update_channels(
                     ad9959::Channel::ZERO,
@@ -514,7 +517,9 @@ mod app {
                 let Ad9959PdhSettings {
                     in_channel_dds,
                     out_channel_dds,
-                } = pdh_settings.ch[1].try_into_dds_config_mu(f_sys).unwrap();
+                } = pdh_settings.ch[1]
+                    .try_into_dds_config_mu(system_frequency)
+                    .unwrap();
 
                 builder.update_channels(
                     ad9959::Channel::TWO,
