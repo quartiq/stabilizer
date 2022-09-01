@@ -602,7 +602,7 @@ impl ProfileSerializer {
         }
 
         // The enabled channel will be updated after clock reconfig
-        let mut fr1: [u8; 3] = [0, 0, 0];
+        let mut fr1 = [0u8; 3];
 
         // The ad9959 crate does not modify FR1[0:17]. These bits keep their default value.
         // These bits by default are 0.
