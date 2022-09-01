@@ -154,7 +154,7 @@ pub struct Settings {
     /// `pdh`
     ///
     /// # Value
-    /// See [pounder::PDHLockGeneratorConfig#miniconf]
+    /// See [PDHLockGeneratorConfig#miniconf]
     pdh: PDHLockGeneratorConfig,
 }
 
