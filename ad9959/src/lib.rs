@@ -601,8 +601,8 @@ impl ProfileSerializer {
         // The enabled channel will be updated after clock reconfig
         let mut fr1: [u8; 3] = [0, 0, 0];
 
-        // All FR1 fields are kept untouched except VCO & PLL divider
-        // These 2 fields will be modified anyway
+        // The ad9959 crate does not modify FR1[0:17]. These bits keep their default value.
+        // These bits by default are 0.
         fr1[0].set_bits(2..=6, multiplier);
 
         let vco_range = frequency > 255e6;
