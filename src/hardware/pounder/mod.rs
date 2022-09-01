@@ -92,7 +92,9 @@ impl From<Channel> for GpioPin {
     }
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, MiniconfAtomic)]
+#[derive(
+    Serialize, Deserialize, Copy, Clone, Debug, PartialEq, MiniconfAtomic,
+)]
 pub struct DdsClockConfig {
     pub multiplier: u8,
     pub reference_clock: f32,
