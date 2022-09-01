@@ -191,7 +191,7 @@ impl PDHChannel {
         dds_frequency: f32,
         system_frequency: f32,
     ) -> Result<u32, Error> {
-        if dds_frequency < 0.0 || dds_frequency > system_frequency {
+        if dds_frequency < 0.0 || dds_frequency > (system_frequency / 2.0) {
             return Err(Error::Bounds);
         }
         // The function for channel frequency is `f_out = FTW * f_s / 2^32`, where FTW is the
