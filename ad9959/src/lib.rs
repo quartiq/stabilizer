@@ -603,7 +603,8 @@ impl ProfileSerializer {
         // These bits by default are 0.
         fr1[0].set_bits(2..=6, multiplier);
 
-        let vco_range = frequency > 255e6;
+        // Frequencies within the VCO forbidden range (160e6, 255e6) are already rejected.
+        let vco_range = frequency > 200e6;
         fr1[0].set_bit(7, vco_range);
 
         self.add_write(Register::FR1, &fr1);
