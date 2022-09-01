@@ -201,7 +201,7 @@ impl PDHChannel {
     }
 
     fn phase_to_pow(phase_turns: f32) -> Result<u16, Error> {
-        Ok((phase_turns * (1 << 14) as f32) as u16 & 0x3FFFu16)
+        Ok((phase_turns * (1 << 14) as f32) as u16 & ((1 << 14) - 1))
     }
 
     fn amplitude_to_acr(amplitude: f32) -> Result<u32, Error> {
