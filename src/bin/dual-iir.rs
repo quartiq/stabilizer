@@ -47,7 +47,8 @@ use stabilizer::{
         pounder::{
             attenuators::AttenuatorInterface, dds_output::DdsOutput,
             rf_power::PowerMeasurementInterface, Ad9959PdhSettings,
-            Channel as PounderChannel, PDHLockGeneratorConfig, PounderDevices,
+            Channel as PounderChannel, DdsClockConfig, PDHLockGeneratorConfig,
+            PounderDevices,
         },
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
@@ -211,6 +212,7 @@ mod app {
         dacs: (Dac0Output, Dac1Output),
         ddses: Option<DdsOutput>,
         iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
+        dds_clock_state: Option<DdsClockConfig>,
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
     }
@@ -228,11 +230,16 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let (pounder_devices, dds_output) = if let Some(pounder_dev) = pounder {
-            (Some(pounder_dev.pounder), Some(pounder_dev.dds_output))
-        } else {
-            (None, None)
-        };
+        let (pounder_devices, dds_output, dds_clock_state) =
+            if let Some(pounder_dev) = pounder {
+                (
+                    Some(pounder_dev.pounder),
+                    Some(pounder_dev.dds_output),
+                    Some(DdsClockConfig::default()),
+                )
+            } else {
+                (None, None, None)
+            };
 
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
@@ -278,6 +285,7 @@ mod app {
             dacs: stabilizer.dacs,
             ddses: dds_output,
             iir_state: [[[0.; 5]; IIR_CASCADE_LENGTH]; 2],
+            dds_clock_state,
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
         };
@@ -427,7 +435,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes, ddses], shared=[network, settings, signal_generator, pounder_devices])]
+    #[task(priority = 1, local=[afes, ddses, dds_clock_state], shared=[network, settings, signal_generator, pounder_devices])]
     fn settings_update(mut c: settings_update::Context) {
         let settings = c.shared.network.lock(|net| *net.miniconf.settings());
         c.shared.settings.lock(|current| *current = settings);
@@ -453,19 +461,31 @@ mod app {
 
         // Update PDH channels on Pounder
         c.shared.pounder_devices.lock(|dev| {
-            if let (Some(ddses), Some(devices), Some(pdh_settings)) = (c.local.ddses, dev, settings.pdh) {
-                devices
-                    .set_ext_clk(pdh_settings.clock_config.external_clock)
-                    .unwrap();
-
+            if let (
+                Some(ddses),
+                Some(devices),
+                Some(pdh_settings),
+                Some(clocking),
+            ) = (c.local.ddses, dev, settings.pdh, c.local.dds_clock_state)
+            {
                 let mut builder = ddses.builder();
 
-                let f_sys = builder
-                    .update_system_clock(
-                        pdh_settings.clock_config.reference_clock,
-                        pdh_settings.clock_config.multiplier,
-                    )
-                    .unwrap();
+                if *clocking != pdh_settings.clock_config {
+                    *clocking = pdh_settings.clock_config;
+                    devices
+                        .set_ext_clk(pdh_settings.clock_config.external_clock)
+                        .unwrap();
+
+                    builder
+                        .update_system_clock(
+                            pdh_settings.clock_config.reference_clock,
+                            pdh_settings.clock_config.multiplier,
+                        )
+                        .unwrap();
+                }
+
+                let f_sys = pdh_settings.clock_config.reference_clock
+                    * pdh_settings.clock_config.multiplier as f32;
 
                 let Ad9959PdhSettings {
                     in_channel_dds,
