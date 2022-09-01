@@ -209,13 +209,20 @@ impl PDHChannel {
             return Err(Error::Bounds);
         }
 
-        if amplitude == 1.0 {
-            return Ok(0x13FF);
+        let amplitude_control: u16 = (amplitude * (1 << 10) as f32) as u16;
+        let mut acr = 0;
+
+        // Enable the amplitude multiplier for the channel if required. The amplitude control has
+        // full-scale at 0x3FF (amplitude of 1), so the multiplier should be disabled whenever
+        // full-scale is used.
+        if amplitude_control < (1 << 10) {
+            acr = amplitude_control & 0x3FF;
+
+            // Enable the amplitude multiplier
+            acr |= 1 << 12;
         }
 
-        let amplitude_control: u16 = (amplitude * (1 << 10) as f32) as u16;
-
-        Ok(((amplitude_control & 0x3FF) | (1 << 12)) as u32)
+        Ok(acr as u32)
     }
 }
 
