@@ -585,14 +585,17 @@ impl ProfileSerializer {
             return Err(Error::Bounds);
         }
 
-        if (multiplier != 1 && reference_clock_frequency < 10e6) || reference_clock_frequency < 1e6 {
+        if (multiplier != 1 && reference_clock_frequency < 10e6)
+            || reference_clock_frequency < 1e6
+        {
             return Err(Error::Frequency);
         }
 
         let frequency = multiplier as f32 * reference_clock_frequency as f32;
         if frequency > 500e6
             || (frequency > 160e6 && frequency < 255e6)
-            || frequency < 100e6 {
+            || frequency < 100e6
+        {
             return Err(Error::Frequency);
         }
 
