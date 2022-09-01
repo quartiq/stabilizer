@@ -38,6 +38,10 @@ pub struct TelemetryBuffer {
     pub dacs: [DacCode; 2],
     /// The latest digital input states during processing.
     pub digital_inputs: [bool; 2],
+    /// The latest CPU temperature.
+    pub cpu_temp: f32,
+    /// The latest measured status related to pounder. See [PounderTelemetry].
+    pub pounder: Option<PounderTelemetry>,
 }
 
 /// The telemetry structure is data that is ultimately reported as telemetry over MQTT.
@@ -59,11 +63,22 @@ pub struct Telemetry {
     /// The CPU temperature in degrees Celsius.
     pub cpu_temp: f32,
 
-    /// The pounder temperature
-    pub pounder_temp: Option<f32>,
+    /// Measurements related to Pounder
+    pub pounder: Option<PounderTelemetry>,
+}
 
-    /// The detected RF power into PDH input channels
-    pub pdh_input_powers: Option<[f32; 2]>,
+/// The structure that holds the telemetry related to Pounder.
+///
+/// # Note
+/// This structure should be generated on-demand by the buffer when required to minimize conversion
+/// overhead.
+#[derive(Copy, Clone, Serialize)]
+pub struct PounderTelemetry {
+    /// The Pounder temperature in degree Celsius
+    pub temperature: f32,
+
+    /// The detected RF power into IN channels
+    pub input_powers: [f32; 2],
 }
 
 impl Default for TelemetryBuffer {
@@ -72,6 +87,8 @@ impl Default for TelemetryBuffer {
             adcs: [AdcCode(0), AdcCode(0)],
             dacs: [DacCode(0), DacCode(0)],
             digital_inputs: [false, false],
+            cpu_temp: 0.0,
+            pounder: None,
         }
     }
 }
@@ -86,24 +103,16 @@ impl TelemetryBuffer {
     ///
     /// # Returns
     /// The finalized telemetry structure that can be serialized and reported.
-    pub fn finalize(
-        self,
-        afe0: Gain,
-        afe1: Gain,
-        cpu_temp: f32,
-        pounder_temp: Option<f32>,
-        pdh_input_powers: Option<[f32; 2]>,
-    ) -> Telemetry {
+    pub fn finalize(self, afe0: Gain, afe1: Gain) -> Telemetry {
         let in0_volts = Into::<f32>::into(self.adcs[0]) / afe0.as_multiplier();
         let in1_volts = Into::<f32>::into(self.adcs[1]) / afe1.as_multiplier();
 
         Telemetry {
-            cpu_temp,
-            pounder_temp,
-            pdh_input_powers,
             adcs: [in0_volts, in1_volts],
             dacs: [self.dacs[0].into(), self.dacs[1].into()],
             digital_inputs: self.digital_inputs,
+            cpu_temp: self.cpu_temp,
+            pounder: self.pounder,
         }
     }
 }

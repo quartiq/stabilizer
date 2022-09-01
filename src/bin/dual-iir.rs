@@ -57,7 +57,7 @@ use stabilizer::{
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Miniconf,
-        telemetry::{Telemetry, TelemetryBuffer},
+        telemetry::{PounderTelemetry, Telemetry, TelemetryBuffer},
         NetworkState, NetworkUsers,
     },
 };
@@ -569,7 +569,7 @@ mod app {
 
     #[task(priority = 1, shared=[network, settings, telemetry, pounder_devices], local=[cpu_temp_sensor])]
     fn telemetry(mut c: telemetry::Context) {
-        let telemetry: TelemetryBuffer =
+        let mut telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
 
         let (gains, telemetry_period) = c
@@ -577,31 +577,24 @@ mod app {
             .settings
             .lock(|settings| (settings.afe, settings.telemetry_period));
 
-        let (pounder_temp, input_powers) =
-            c.shared.pounder_devices.lock(|pounder_dev| {
-                if let Some(dev) = pounder_dev {
-                    let input_powers = [
+        telemetry.cpu_temp = c.local.cpu_temp_sensor.get_temperature().unwrap();
+        telemetry.pounder = c.shared.pounder_devices.lock(|pounder_dev| {
+            if let Some(dev) = pounder_dev {
+                Some(PounderTelemetry {
+                    temperature: dev.lm75.read_temperature().unwrap(),
+                    input_powers: [
                         dev.measure_power(PounderChannel::In0).unwrap(),
                         dev.measure_power(PounderChannel::In1).unwrap(),
-                    ];
-
-                    (
-                        Some(dev.lm75.read_temperature().unwrap()),
-                        Some(input_powers),
-                    )
-                } else {
-                    (None, None)
-                }
-            });
+                    ],
+                })
+            } else {
+                None
+            }
+        });
 
         c.shared.network.lock(|net| {
-            net.telemetry.publish(&telemetry.finalize(
-                gains[0],
-                gains[1],
-                c.local.cpu_temp_sensor.get_temperature().unwrap(),
-                pounder_temp,
-                input_powers,
-            ))
+            net.telemetry
+                .publish(&telemetry.finalize(gains[0], gains[1]))
         });
 
         // Schedule the telemetry task in the future.
