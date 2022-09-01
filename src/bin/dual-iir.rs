@@ -572,11 +572,6 @@ mod app {
         let mut telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
 
-        let (gains, telemetry_period) = c
-            .shared
-            .settings
-            .lock(|settings| (settings.afe, settings.telemetry_period));
-
         telemetry.cpu_temp = c.local.cpu_temp_sensor.get_temperature().unwrap();
         telemetry.pounder = c.shared.pounder_devices.lock(|pounder_dev| {
             if let Some(dev) = pounder_dev {
@@ -591,6 +586,11 @@ mod app {
                 None
             }
         });
+
+        let (gains, telemetry_period) = c
+            .shared
+            .settings
+            .lock(|settings| (settings.afe, settings.telemetry_period));
 
         c.shared.network.lock(|net| {
             net.telemetry
