@@ -158,7 +158,7 @@ pub struct Settings {
     ///
     /// # Value
     /// See [PDHLockGeneratorConfig#miniconf]
-    pdh: PDHLockGeneratorConfig,
+    pdh: Option<PDHLockGeneratorConfig>,
 }
 
 impl Default for Settings {
@@ -186,7 +186,7 @@ impl Default for Settings {
 
             stream_target: StreamTarget::default(),
 
-            pdh: PDHLockGeneratorConfig::default(),
+            pdh: Some(PDHLockGeneratorConfig::default()),
         }
     }
 }
@@ -459,24 +459,24 @@ mod app {
 
         // Update PDH channels on Pounder
         c.shared.pounder_devices.lock(|dev| {
-            if let (Some(ddses), Some(devices)) = (c.local.ddses, dev) {
+            if let (Some(ddses), Some(devices), Some(pdh_settings)) = (c.local.ddses, dev, settings.pdh) {
                 devices
-                    .set_ext_clk(settings.pdh.clock_config.external_clock)
+                    .set_ext_clk(pdh_settings.clock_config.external_clock)
                     .unwrap();
 
                 let mut builder = ddses.builder();
 
                 let f_sys = builder
                     .update_system_clock(
-                        settings.pdh.clock_config.reference_clock,
-                        settings.pdh.clock_config.multiplier,
+                        pdh_settings.clock_config.reference_clock,
+                        pdh_settings.clock_config.multiplier,
                     )
                     .unwrap();
 
                 let Ad9959PdhSettings {
                     in_channel_dds,
                     out_channel_dds,
-                } = settings.pdh.ch[0].try_into_dds_config_mu(f_sys).unwrap();
+                } = pdh_settings.ch[0].try_into_dds_config_mu(f_sys).unwrap();
 
                 builder.update_channels(
                     ad9959::Channel::ZERO,
@@ -494,7 +494,7 @@ mod app {
                 let Ad9959PdhSettings {
                     in_channel_dds,
                     out_channel_dds,
-                } = settings.pdh.ch[1].try_into_dds_config_mu(f_sys).unwrap();
+                } = pdh_settings.ch[1].try_into_dds_config_mu(f_sys).unwrap();
 
                 builder.update_channels(
                     ad9959::Channel::TWO,
@@ -514,25 +514,25 @@ mod app {
                 devices
                     .set_attenuation(
                         PounderChannel::Out0,
-                        settings.pdh.ch[0].out_attenuation,
+                        pdh_settings.ch[0].out_attenuation,
                     )
                     .unwrap();
                 devices
                     .set_attenuation(
                         PounderChannel::In0,
-                        settings.pdh.ch[0].in_attenuation,
+                        pdh_settings.ch[0].in_attenuation,
                     )
                     .unwrap();
                 devices
                     .set_attenuation(
                         PounderChannel::Out1,
-                        settings.pdh.ch[1].out_attenuation,
+                        pdh_settings.ch[1].out_attenuation,
                     )
                     .unwrap();
                 devices
                     .set_attenuation(
                         PounderChannel::In1,
-                        settings.pdh.ch[1].in_attenuation,
+                        pdh_settings.ch[1].in_attenuation,
                     )
                     .unwrap();
             }
