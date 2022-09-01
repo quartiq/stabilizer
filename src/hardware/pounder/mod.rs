@@ -196,8 +196,10 @@ impl PDHChannel {
         }
         // The function for channel frequency is `f_out = FTW * f_s / 2^32`, where FTW is the
         // frequency tuning word and f_s is the system clock rate.
-        Ok(((dds_frequency as f32 / system_frequency)
-            * 1u64.wrapping_shl(32) as f32) as u32)
+        Ok(
+            ((dds_frequency as f32 / system_frequency) * (1u64 << 32) as f32)
+                as u32,
+        )
     }
 
     fn phase_to_pow(phase_turns: f32) -> Result<u16, Error> {
