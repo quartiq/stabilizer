@@ -56,7 +56,7 @@ use log::warn;
 use stm32h7xx_hal as hal;
 
 use super::{hrtimer::HighResTimerE, QspiInterface};
-use ad9959::{Channel, Mode, ProfileSerializer};
+use ad9959::{Channel, DdsProfile, Mode, ProfileSerializer};
 
 /// The DDS profile update stream.
 pub struct DdsOutput {
@@ -157,14 +157,42 @@ impl<'a> ProfileBuilder<'a> {
         self
     }
 
+    /// Update a number of channels with fully defined profile settings.
+    ///
+    /// # Args
+    /// * `channels` - A set of channels to apply the configuration to.
+    /// * `profile` - The complete DDS profile, which defines the frequency tuning word,
+    ///   amplitude control register & the phase offset word of the channels.
+    ///   Note that the ACR should be stored in the 3 LSB of the word.
+    ///   If amplitude scaling is to be used, the "Amplitude multiplier enable" bit must be set.
+    #[inline]
+    pub fn update_channels_with_profile(
+        &mut self,
+        channels: Channel,
+        profile: DdsProfile,
+    ) -> &mut Self {
+        self.serializer
+            .update_channels_with_profile(channels, profile);
+        self
+    }
+
+    /// Update a number of channels with fully defined profile settings.
+    ///
+    /// # Args
+    /// * `channels` - A set of channels to apply the configuration to.
+    /// * `profile` - The complete DDS profile, which defines the frequency tuning word,
+    ///   amplitude control register & the phase offset word of the channels. Note that the ACR
+    ///   should be stored in the 3 LSB of the word. If amplitude scaling is to be used, the
+    ///   "Amplitude multiplier enable" bit must be set.
     #[inline]
     pub fn set_system_clock(
         &mut self,
         reference_clock_frequency: f32,
         multiplier: u8,
-    ) -> Result<f32, ad9959::Error> {
+    ) -> Result<&mut Self, ad9959::Error> {
         self.serializer
-            .update_system_clock(reference_clock_frequency, multiplier)
+            .update_system_clock(reference_clock_frequency, multiplier)?;
+        Ok(self)
     }
 
     /// Write the profile to the DDS asynchronously.

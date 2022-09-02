@@ -44,7 +44,7 @@ pub enum NetworkState {
 }
 
 /// A structure of Stabilizer's default network users.
-pub struct NetworkUsers<S: Default + Miniconf + Clone, T: Serialize> {
+pub struct NetworkUsers<S: Miniconf + Clone, T: Serialize> {
     pub miniconf: miniconf::MqttClient<S, NetworkReference, SystemTimer, 512>,
     pub processor: NetworkProcessor,
     stream: DataStream,
@@ -54,7 +54,7 @@ pub struct NetworkUsers<S: Default + Miniconf + Clone, T: Serialize> {
 
 impl<S, T> NetworkUsers<S, T>
 where
-    S: Default + Miniconf + Clone,
+    S: Miniconf + Clone,
     T: Serialize,
 {
     /// Construct Stabilizer's default network users.
@@ -66,6 +66,7 @@ where
     /// * `app` - The name of the application.
     /// * `mac` - The MAC address of the network.
     /// * `broker` - The IP address of the MQTT broker to use.
+    /// * `settings` - The initial settings value
     ///
     /// # Returns
     /// A new struct of network users.
@@ -76,6 +77,7 @@ where
         app: &str,
         mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
         broker: IpAddr,
+        settings: S,
     ) -> Self {
         let stack_manager =
             cortex_m::singleton!(: NetworkManager = NetworkManager::new(stack))
@@ -92,7 +94,7 @@ where
             &prefix,
             broker,
             clock,
-            S::default(),
+            settings,
         )
         .unwrap();
 
