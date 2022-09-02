@@ -158,7 +158,7 @@ impl<'a> ProfileBuilder<'a> {
     }
 
     #[inline]
-    pub fn update_system_clock(
+    pub fn set_system_clock(
         &mut self,
         reference_clock_frequency: f32,
         multiplier: u8,
