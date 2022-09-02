@@ -54,10 +54,9 @@ pub trait AttenuatorInterface {
     fn get_attenuation(&mut self, channel: Channel) -> Result<f32, Error> {
         let mut channels = [0_u8; 4];
 
-        // Reading the data always shifts data out of the staging registers, so we perform a
-        // duplicate write-back to ensure the staging register is always equal to the output
-        // register.
-        self.transfer_attenuators(&mut channels)?;
+        // Reading the data always shifts data out of the staging registers, so a duplicate
+        // write-back will be performed to ensure the staging register is always equal to the
+        // output register.
         self.transfer_attenuators(&mut channels)?;
 
         // The attenuation code is stored in the upper 6 bits of the register, where each LSB
@@ -67,6 +66,9 @@ pub trait AttenuatorInterface {
         // the shift occurs before the inversion, the upper 2 bits (which would then be don't
         // care) would contain erroneous data.
         let attenuation_code = (!channels[channel as usize]) >> 2;
+        
+        // The write-back transfer is performed. Staging register is now restored.
+        self.transfer_attenuators(&mut channels)?;
 
         // Convert the desired channel code into dB of attenuation.
         Ok(attenuation_code as f32 / 2.0)
