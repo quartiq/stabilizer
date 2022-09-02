@@ -720,7 +720,7 @@ pub struct DdsProfile {
 
 impl DdsProfile {
     /// Construct a new DDS profile
-    /// 
+    ///
     /// Args:
     /// * `frequency` - The desired output frequency in Hz.
     /// * `phase_turns` - The desired phase offset in turns.
