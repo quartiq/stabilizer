@@ -232,7 +232,7 @@ impl<I: Interface> Ad9959<I> {
         self.read(Register::FR1, &mut fr1)?;
         fr1[0].set_bits(2..=6, multiplier);
 
-        let vco_range = frequency > 255e6;
+        let vco_range = frequency > 200e6;
         fr1[0].set_bit(7, vco_range);
 
         self.write(Register::FR1, &fr1)?;
