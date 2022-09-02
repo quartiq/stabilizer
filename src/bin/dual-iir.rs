@@ -45,11 +45,11 @@ use stabilizer::{
         dac::{Dac0Output, Dac1Output, DacCode},
         hal,
         pounder::{
-            attenuators::AttenuatorInterface, dds_output::DdsOutput,
+            attenuators::AttenuatorInterface,
             rf_power::PowerMeasurementInterface, Ad9959PdhSettings,
             Channel as PounderChannel, DdsClockConfig, PDHLockGeneratorConfig,
-            PounderDevices,
         },
+        setup::PounderDevices as Pounder,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
@@ -200,7 +200,7 @@ mod app {
         settings: Settings,
         telemetry: TelemetryBuffer,
         signal_generator: [SignalGenerator; 2],
-        pounder_devices: Option<PounderDevices>,
+        pounder: Option<Pounder>,
     }
 
     #[local]
@@ -210,7 +210,6 @@ mod app {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        ddses: Option<DdsOutput>,
         iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
         dds_clock_state: Option<DdsClockConfig>,
         generator: FrameGenerator,
@@ -230,16 +229,11 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let (pounder_devices, dds_output, dds_clock_state) =
-            if let Some(pounder_dev) = pounder {
-                (
-                    Some(pounder_dev.pounder),
-                    Some(pounder_dev.dds_output),
-                    Some(DdsClockConfig::default()),
-                )
-            } else {
-                (None, None, None)
-            };
+        let dds_clock_state = if pounder.is_some() {
+            Some(DdsClockConfig::default())
+        } else {
+            None
+        };
 
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
@@ -274,7 +268,7 @@ mod app {
                         .unwrap(),
                 ),
             ],
-            pounder_devices,
+            pounder,
         };
 
         let mut local = Local {
@@ -283,7 +277,6 @@ mod app {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            ddses: dds_output,
             iir_state: [[[0.; 5]; IIR_CASCADE_LENGTH]; 2],
             dds_clock_state,
             generator,
@@ -435,7 +428,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes, ddses, dds_clock_state], shared=[network, settings, signal_generator, pounder_devices])]
+    #[task(priority = 1, local=[afes, dds_clock_state], shared=[network, settings, signal_generator, pounder])]
     fn settings_update(mut c: settings_update::Context) {
         let settings = c.shared.network.lock(|net| *net.miniconf.settings());
         c.shared.settings.lock(|current| *current = settings);
@@ -460,19 +453,22 @@ mod app {
         }
 
         // Update PDH channels on Pounder
-        c.shared.pounder_devices.lock(|dev| {
+        c.shared.pounder.lock(|pounder| {
             if let (
-                Some(ddses),
-                Some(devices),
+                Some(Pounder {
+                    pounder: pounder_devices,
+                    dds_output: ddses,
+                    ..
+                }),
                 Some(pdh_settings),
                 Some(clocking),
-            ) = (c.local.ddses, dev, settings.pdh, c.local.dds_clock_state)
+            ) = (pounder, settings.pdh, c.local.dds_clock_state)
             {
                 let mut builder = ddses.builder();
 
                 if *clocking != pdh_settings.clock_config {
                     *clocking = pdh_settings.clock_config;
-                    devices
+                    pounder_devices
                         .set_ext_clk(pdh_settings.clock_config.external_clock)
                         .unwrap();
 
@@ -530,25 +526,25 @@ mod app {
 
                 builder.write();
 
-                devices
+                pounder_devices
                     .set_attenuation(
                         PounderChannel::Out0,
                         pdh_settings.ch[0].out_attenuation,
                     )
                     .unwrap();
-                devices
+                pounder_devices
                     .set_attenuation(
                         PounderChannel::In0,
                         pdh_settings.ch[0].in_attenuation,
                     )
                     .unwrap();
-                devices
+                pounder_devices
                     .set_attenuation(
                         PounderChannel::Out1,
                         pdh_settings.ch[1].out_attenuation,
                     )
                     .unwrap();
-                devices
+                pounder_devices
                     .set_attenuation(
                         PounderChannel::In1,
                         pdh_settings.ch[1].in_attenuation,
@@ -561,19 +557,30 @@ mod app {
         c.shared.network.lock(|net| net.direct_stream(target));
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry, pounder_devices], local=[cpu_temp_sensor])]
+    #[task(priority = 1, shared=[network, settings, telemetry, pounder], local=[cpu_temp_sensor])]
     fn telemetry(mut c: telemetry::Context) {
         let mut telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
 
         telemetry.cpu_temp = c.local.cpu_temp_sensor.get_temperature().unwrap();
-        telemetry.pounder = c.shared.pounder_devices.lock(|pounder_dev| {
-            if let Some(dev) = pounder_dev {
+        telemetry.pounder = c.shared.pounder.lock(|pounder| {
+            if let Some(Pounder {
+                pounder: pounder_devices,
+                ..
+            }) = pounder
+            {
                 Some(PounderTelemetry {
-                    temperature: dev.lm75.read_temperature().unwrap(),
+                    temperature: pounder_devices
+                        .lm75
+                        .read_temperature()
+                        .unwrap(),
                     input_powers: [
-                        dev.measure_power(PounderChannel::In0).unwrap(),
-                        dev.measure_power(PounderChannel::In1).unwrap(),
+                        pounder_devices
+                            .measure_power(PounderChannel::In0)
+                            .unwrap(),
+                        pounder_devices
+                            .measure_power(PounderChannel::In1)
+                            .unwrap(),
                     ],
                 })
             } else {
