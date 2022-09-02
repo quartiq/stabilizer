@@ -226,7 +226,6 @@ mod app {
         network: NetworkUsers<Settings, Telemetry>,
         settings: Settings,
         telemetry: TelemetryBuffer,
-        pounder_devices: Option<PounderDevices>,
     }
 
     #[local]
@@ -238,6 +237,7 @@ mod app {
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         pll: RPLL,
+        pounder_devices: Option<PounderDevices>,
         lockin: Lockin<4>,
         signal_generator: signal_generator::SignalGenerator,
         generator: FrameGenerator,
@@ -278,7 +278,6 @@ mod app {
             network,
             telemetry: TelemetryBuffer::default(),
             settings: Settings::default(),
-            pounder_devices,
         };
 
         let signal_config = signal_generator::Config {
@@ -299,6 +298,7 @@ mod app {
             timestamper: stabilizer.timestamper,
 
             pll: RPLL::new(SAMPLE_TICKS_LOG2 + BATCH_SIZE_LOG2),
+            pounder_devices,
             lockin: Lockin::default(),
             signal_generator: signal_generator::SignalGenerator::new(
                 signal_config,
@@ -487,7 +487,7 @@ mod app {
         c.shared.network.lock(|net| net.direct_stream(target));
     }
 
-    #[task(priority = 1, local=[digital_inputs, cpu_temp_sensor], shared=[network, settings, telemetry, pounder_devices])]
+    #[task(priority = 1, local=[digital_inputs, cpu_temp_sensor, pounder_devices], shared=[network, settings, telemetry])]
     fn telemetry(mut c: telemetry::Context) {
         let mut telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
@@ -498,19 +498,17 @@ mod app {
         ];
 
         telemetry.cpu_temp = c.local.cpu_temp_sensor.get_temperature().unwrap();
-        telemetry.pounder = c.shared.pounder_devices.lock(|pounder_dev| {
-            if let Some(dev) = pounder_dev {
-                Some(PounderTelemetry {
-                    temperature: dev.lm75.read_temperature().unwrap(),
-                    input_powers: [
-                        dev.measure_power(PounderChannel::In0).unwrap(),
-                        dev.measure_power(PounderChannel::In1).unwrap(),
-                    ],
-                })
-            } else {
-                None
-            }
-        });
+        telemetry.pounder = if let Some(dev) = c.local.pounder_devices {
+            Some(PounderTelemetry {
+                temperature: dev.lm75.read_temperature().unwrap(),
+                input_powers: [
+                    dev.measure_power(PounderChannel::In0).unwrap(),
+                    dev.measure_power(PounderChannel::In1).unwrap(),
+                ],
+            })
+        } else {
+            None
+        };
 
         let (gains, telemetry_period) = c
             .shared
