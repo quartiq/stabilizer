@@ -473,7 +473,7 @@ mod app {
                         .unwrap();
 
                     builder
-                        .update_system_clock(
+                        .set_system_clock(
                             pdh_settings.clock_config.reference_clock,
                             pdh_settings.clock_config.multiplier,
                         )
