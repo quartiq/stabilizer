@@ -66,7 +66,7 @@ pub trait AttenuatorInterface {
         // the shift occurs before the inversion, the upper 2 bits (which would then be don't
         // care) would contain erroneous data.
         let attenuation_code = (!channels[channel as usize]) >> 2;
-        
+
         // The write-back transfer is performed. Staging register is now restored.
         self.transfer_attenuators(&mut channels)?;
 
