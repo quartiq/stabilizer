@@ -216,16 +216,9 @@ impl<I: Interface> Ad9959<I> {
         reference_clock_frequency: f32,
         multiplier: u8,
     ) -> Result<f32, Error> {
+        let frequency =
+            Self::validate_system_clock(reference_clock_frequency, multiplier)?;
         self.reference_clock_frequency = reference_clock_frequency;
-
-        if multiplier != 1 && !(4..=20).contains(&multiplier) {
-            return Err(Error::Bounds);
-        }
-
-        let frequency = multiplier as f32 * self.reference_clock_frequency;
-        if frequency > 500_000_000.0f32 {
-            return Err(Error::Frequency);
-        }
 
         // TODO: Update / disable any enabled channels?
         let mut fr1: [u8; 3] = [0, 0, 0];
@@ -363,9 +356,7 @@ impl<I: Interface> Ad9959<I> {
         channel: Channel,
         phase_turns: f32,
     ) -> Result<f32, Error> {
-        let phase_offset: u16 =
-            (phase_turns * (1 << 14) as f32) as u16 & 0x3FFFu16;
-
+        let phase_offset = Self::phase_to_pow(phase_turns)?;
         self.modify_channel(
             channel,
             Register::CPOW0,
@@ -404,27 +395,11 @@ impl<I: Interface> Ad9959<I> {
         channel: Channel,
         amplitude: f32,
     ) -> Result<f32, Error> {
-        if !(0.0..=1.0).contains(&amplitude) {
-            return Err(Error::Bounds);
-        }
-
-        let amplitude_control: u16 = (amplitude * (1 << 10) as f32) as u16;
-
-        let mut acr: [u8; 3] = [0; 3];
-
-        // Enable the amplitude multiplier for the channel if required. The amplitude control has
-        // full-scale at 0x3FF (amplitude of 1), so the multiplier should be disabled whenever
-        // full-scale is used.
-        if amplitude_control < (1 << 10) {
-            let masked_control = amplitude_control & 0x3FF;
-            acr[1] = masked_control.to_be_bytes()[0];
-            acr[2] = masked_control.to_be_bytes()[1];
-
-            // Enable the amplitude multiplier
-            acr[1].set_bit(4, true);
-        }
-
-        self.modify_channel(channel, Register::ACR, &acr)?;
+        let acr = Self::amplitude_to_acr(amplitude)?;
+        // Isolate the amplitude scaling factor from ACR
+        let amplitude_control = acr | ((1 << 10) - 1);
+        // ACR is a 24-bits register, the MSB of the calculated ACR must be discarded.
+        self.modify_channel(channel, Register::ACR, &acr.to_be_bytes()[1..])?;
 
         Ok(amplitude_control as f32 / (1 << 10) as f32)
     }
@@ -462,6 +437,7 @@ impl<I: Interface> Ad9959<I> {
         channel: Channel,
         frequency: f32,
     ) -> Result<f32, Error> {
+<<<<<<< HEAD
         if frequency < 0.0 || frequency > self.system_clock_frequency() {
             return Err(Error::Bounds);
         }
@@ -471,13 +447,17 @@ impl<I: Interface> Ad9959<I> {
         let tuning_word: u32 = ((frequency / self.system_clock_frequency())
             * 1u64.wrapping_shl(32) as f32)
             as u32;
+=======
+        let tuning_word =
+            Self::frequency_to_ftw(frequency, self.system_clock_frequency())?;
+>>>>>>> f9d87f3 (reuse ad9959 conversion & validation code)
 
         self.modify_channel(
             channel,
             Register::CFTW0,
             &tuning_word.to_be_bytes(),
         )?;
-        Ok((tuning_word as f32 / 1u64.wrapping_shl(32) as f32)
+        Ok((tuning_word as f32 / (1u64 << 32) as f32)
             * self.system_clock_frequency())
     }
 
@@ -508,6 +488,80 @@ impl<I: Interface> Ad9959<I> {
     /// (i, mode) where `i` is the interface to the DDS and `mode` is the frozen `Mode`.
     pub fn freeze(self) -> (I, Mode) {
         (self.interface, self.communication_mode)
+    }
+}
+
+impl<I> Ad9959<I> {
+    /// Validate the internal system clock configuration of the chip.
+    ///
+    /// Arguments:
+    /// * `reference_clock_frequency` - The reference clock frequency provided to the AD9959 core.
+    /// * `multiplier` - The frequency multiplier of the system clock. Must be 1 or 4-20.
+    ///
+    /// Returns:
+    /// The system clock frequency to be configured.
+    pub fn validate_system_clock(
+        reference_clock_frequency: f32,
+        multiplier: u8,
+    ) -> Result<f32, Error> {
+        if multiplier != 1 && !(4..=20).contains(&multiplier) {
+            return Err(Error::Bounds);
+        }
+
+        if (multiplier != 1 && reference_clock_frequency < 10e6)
+            || reference_clock_frequency < 1e6
+        {
+            return Err(Error::Frequency);
+        }
+
+        let frequency = multiplier as f32 * reference_clock_frequency as f32;
+        if frequency > 500e6
+            || (frequency > 160e6 && frequency < 255e6)
+            || frequency < 100e6
+        {
+            return Err(Error::Frequency);
+        }
+
+        Ok(frequency)
+    }
+
+    fn frequency_to_ftw(
+        dds_frequency: f32,
+        system_clock_frequency: f32,
+    ) -> Result<u32, Error> {
+        if dds_frequency < 0.0 || dds_frequency > (system_clock_frequency / 2.0)
+        {
+            return Err(Error::Bounds);
+        }
+        // The function for channel frequency is `f_out = FTW * f_s / 2^32`, where FTW is the
+        // frequency tuning word and f_s is the system clock rate.
+        Ok(((dds_frequency as f32 / system_clock_frequency)
+            * (1u64 << 32) as f32) as u32)
+    }
+
+    fn phase_to_pow(phase_turns: f32) -> Result<u16, Error> {
+        Ok((phase_turns * (1 << 14) as f32) as u16 & ((1 << 14) - 1))
+    }
+
+    fn amplitude_to_acr(amplitude: f32) -> Result<u32, Error> {
+        if !(0.0..=1.0).contains(&amplitude) {
+            return Err(Error::Bounds);
+        }
+
+        let amplitude_control: u16 = (amplitude * (1 << 10) as f32) as u16;
+        let mut acr = 0;
+
+        // Enable the amplitude multiplier for the channel if required. The amplitude control has
+        // full-scale at 0x3FF (amplitude of 1), so the multiplier should be disabled whenever
+        // full-scale is used.
+        if amplitude_control < (1 << 10) {
+            acr = amplitude_control & 0x3FF;
+
+            // Enable the amplitude multiplier
+            acr |= 1 << 12;
+        }
+
+        Ok(acr as u32)
     }
 }
 
@@ -577,23 +631,10 @@ impl ProfileSerializer {
         reference_clock_frequency: f32,
         multiplier: u8,
     ) -> Result<f32, Error> {
-        if multiplier != 1 && !(4..=20).contains(&multiplier) {
-            return Err(Error::Bounds);
-        }
-
-        if (multiplier != 1 && reference_clock_frequency < 10e6)
-            || reference_clock_frequency < 1e6
-        {
-            return Err(Error::Frequency);
-        }
-
-        let frequency = multiplier as f32 * reference_clock_frequency as f32;
-        if frequency > 500e6
-            || (frequency > 160e6 && frequency < 255e6)
-            || frequency < 100e6
-        {
-            return Err(Error::Frequency);
-        }
+        let frequency = Ad9959::<()>::validate_system_clock(
+            reference_clock_frequency,
+            multiplier,
+        )?;
 
         // The enabled channel will be updated after clock reconfig
         let mut fr1 = [0u8; 3];
