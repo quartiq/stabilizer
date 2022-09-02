@@ -620,6 +620,27 @@ impl ProfileSerializer {
         }
     }
 
+    /// Update a number of channels with fully defined profile settings.
+    ///
+    /// # Args
+    /// * `channels` - A set of channels to apply the configuration to.
+    /// * `profile` - The complete DDS profile, which defines the frequency tuning word,
+    ///   amplitude control register & the phase offset word of the channels. Note that the ACR
+    ///   should be stored in the 3 LSB of the word. If amplitude scaling is to be used, the
+    ///   "Amplitude multiplier enable" bit must be set.
+    #[inline]
+    pub fn update_channels_with_profile(
+        &mut self,
+        channels: Channel,
+        profile: DdsProfile,
+    ) {
+        let csr = [self.mode as u8 | channels.bits()];
+        self.add_write(Register::CSR, &csr);
+        self.add_write(Register::CFTW0, &profile.ftw.to_be_bytes());
+        self.add_write(Register::CPOW0, &profile.pow.to_be_bytes());
+        self.add_write(Register::ACR, &profile.acr.to_be_bytes()[1..]);
+    }
+
     /// Update the system clock configuration.
     ///
     /// # Args
@@ -687,5 +708,37 @@ impl ProfileSerializer {
     pub fn finalize(&mut self) -> &[u32] {
         self.pad();
         bytemuck::cast_slice(&self.data[..self.index])
+    }
+}
+
+/// Represents a fully defined DDS profile, with parameters expressed in machine units
+pub struct DdsProfile {
+    pub ftw: u32,
+    pub pow: u16,
+    pub acr: u32,
+}
+
+impl DdsProfile {
+    /// Construct a new DDS profile
+    /// 
+    /// Args:
+    /// * `frequency` - The desired output frequency in Hz.
+    /// * `phase_turns` - The desired phase offset in turns.
+    /// * `amplitude` - A normalized amplitude setting [0, 1].
+    /// * `system_clock_frequency` - The system clock frequency of Ad9959.
+    pub fn new(
+        frequency: f32,
+        phase_turns: f32,
+        amplitude: f32,
+        system_clock_frequency: f32,
+    ) -> Result<Self, Error> {
+        Ok(DdsProfile {
+            ftw: Ad9959::<()>::frequency_to_ftw(
+                frequency,
+                system_clock_frequency,
+            )?,
+            pow: Ad9959::<()>::phase_to_pow(phase_turns)?,
+            acr: Ad9959::<()>::amplitude_to_acr(amplitude)?,
+        })
     }
 }

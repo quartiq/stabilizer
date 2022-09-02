@@ -259,6 +259,7 @@ mod app {
             SAMPLE_TICKS,
         );
 
+        let settings = Settings::default();
         let pounder_devices = pounder.map(|pounder| pounder.pounder);
 
         let mut network = NetworkUsers::new(
@@ -271,6 +272,7 @@ mod app {
                 .unwrap_or("10.34.16.1")
                 .parse()
                 .unwrap(),
+            settings,
         );
 
         let generator = network
@@ -279,7 +281,7 @@ mod app {
         let shared = Shared {
             network,
             telemetry: TelemetryBuffer::default(),
-            settings: Settings::default(),
+            settings,
         };
 
         let signal_config = signal_generator::Config {
