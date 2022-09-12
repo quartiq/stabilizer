@@ -1020,7 +1020,7 @@ pub fn setup(
             adc1.create_channel(gpiof.pf12.into_analog()),
             adc3.create_channel(gpiof.pf4.into_analog()),
         );
-        let adc_internal = driver::adc_internal::AdcInternal::new(
+        let internal_adc = driver::internal_adc::InternalAdc::new(
             output_voltage,
             output_current,
         );
@@ -1049,7 +1049,7 @@ pub fn setup(
         Mezzanine::Driver(DriverDevices {
             lm75,
             ltc2320,
-            adc_internal,
+            internal_adc,
             relay_sm,
         })
     } else {

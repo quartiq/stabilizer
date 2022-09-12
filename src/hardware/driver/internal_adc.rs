@@ -17,7 +17,7 @@ pub enum DriverAdcChannel {
 }
 use super::Channel;
 
-pub struct AdcInternal {
+pub struct InternalAdc {
     output_voltage: (
         AdcChannel<'static, ADC1, PF11<Analog>>,
         AdcChannel<'static, ADC3, PF3<Analog>>,
@@ -28,7 +28,7 @@ pub struct AdcInternal {
     ),
 }
 
-impl AdcInternal {
+impl InternalAdc {
     pub fn new(
         output_voltage: (
             AdcChannel<'static, ADC1, PF11<Analog>>,
@@ -39,7 +39,7 @@ impl AdcInternal {
             AdcChannel<'static, ADC3, PF4<Analog>>,
         ),
     ) -> Self {
-        AdcInternal {
+        InternalAdc {
             output_voltage,
             output_current,
         }
