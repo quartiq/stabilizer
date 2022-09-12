@@ -181,12 +181,12 @@ mod app {
         settings: Settings,
         telemetry: TelemetryBuffer,
         signal_generator: [SignalGenerator; 2],
-        adc_internal: driver::adc_internal::AdcInternal,
+        internal_adc: driver::internal_adc::InternalAdc,
         header_adc: driver::ltc2320::Ltc2320,
         header_adc_data: [u16; 8],
-        // driver_relay_state might eventually live inside driver_output_state but then the
+        // relay_state might eventually live inside driver_output_state but then the
         // relay_delay function would have to lock the whole output state..
-        driver_relay_state: [StateMachine<relay::Relay<I2c1Proxy>>; 2],
+        relay_state: [StateMachine<relay::Relay<I2c1Proxy>>; 2],
         // driver_dac: [Dac; 2]
         // driver_output_state: [Output State Macheine; 2]
         interlock_handle: Option<trip_interlock::SpawnHandle>,
@@ -253,10 +253,10 @@ mod app {
                         .unwrap(),
                 ),
             ],
-            adc_internal: driver.adc_internal,
+            internal_adc: driver.internal_adc,
             header_adc: driver.ltc2320,
             header_adc_data: [0u16; 8],
-            driver_relay_state: driver.relay_sm, // this might live inside driver_output_state eventually
+            relay_state: driver.relay_sm, // this might live inside driver_output_state eventually
             interlock_handle: None,
         };
 
@@ -286,7 +286,7 @@ mod app {
         start::spawn_after(100.millis()).unwrap();
 
         // mock LN output enable
-        // let del = shared.driver_relay_state[0].enable().unwrap();
+        // let del = shared.relay_state[0].enable().unwrap();
         // handle_relay::spawn_after(del.convert(), Channel::LowNoise).unwrap();
 
         (shared, local, init::Monotonics(stabilizer.systick))
@@ -489,7 +489,7 @@ mod app {
         c.shared.network.lock(|net| net.direct_stream(target));
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry, adc_internal], local=[cpu_temp_sensor])]
+    #[task(priority = 1, shared=[network, settings, telemetry, internal_adc], local=[cpu_temp_sensor])]
     fn telemetry(mut c: telemetry::Context) {
         let telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
@@ -511,7 +511,7 @@ mod app {
             .unwrap();
         log::info!(
             "internal adc values: {:?}",
-            c.shared.adc_internal.lock(|adc| [
+            c.shared.internal_adc.lock(|adc| [
                 adc.read_output_current(Channel::LowNoise),
                 adc.read_output_current(Channel::HighPower),
                 adc.read_output_voltage(Channel::LowNoise),
@@ -550,9 +550,9 @@ mod app {
     }
 
     // Task for waiting the relay transition times.
-    #[task(priority = 1, shared=[driver_relay_state])]
+    #[task(priority = 1, shared=[relay_state])]
     fn handle_relay(mut c: handle_relay::Context, channel: driver::Channel) {
-        let delay = (c.shared.driver_relay_state)
+        let delay = (c.shared.relay_state)
             .lock(|state| state[channel as usize].handle_relay());
         if let Some(del) = delay {
             handle_relay::Monotonic::spawn_after(del.convert(), channel)
