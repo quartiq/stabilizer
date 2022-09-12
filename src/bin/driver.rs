@@ -560,6 +560,17 @@ mod app {
         }
     }
 
+    // Task for handling the output current ramp-up.
+    #[task(priority = 1, shared=[settings, output_state])]
+    fn handle_ramp(mut c: handle_ramp::Context, channel: driver::Channel) {
+        let delay = (c.shared.driver_relay_state)
+            .lock(|state| state[channel as usize].handle_relay());
+        if let Some(del) = delay {
+            handle_relay::Monotonic::spawn_after(del.convert(), channel)
+                .unwrap();
+        }
+    }
+
     #[task(priority = 1, shared=[interlock_handle])]
     fn trip_interlock(mut c: trip_interlock::Context) {
         c.shared.interlock_handle.lock(|handle| *handle = None);
