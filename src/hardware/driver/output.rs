@@ -1,6 +1,9 @@
+use crate::hardware::I2c1Proxy;
 ///! Driver output state handling.
 use idsp::iir;
 use smlang::statemachine;
+
+use super::relay;
 
 // use super::Channel;
 
@@ -12,7 +15,7 @@ impl Output {
     // 1 A/s current ramp-up
     const RAMP_STEP: f32 = 1e-3; // 1 mA current steps
     const RAMP_DELAY: fugit::MillisDuration<u64> =
-        fugit::MillisDurationU64::millis(1); // current steps every 1 ms 
+        fugit::MillisDurationU64::millis(1); // current steps every 1 ms
 
     pub fn new() -> Self {
         Output {
@@ -47,19 +50,45 @@ impl sm::StateMachineContext for Output {
     }
 }
 
+#[derive(Debug)]
+pub enum Error {
+    Output(sm::Error),
+    Relay(relay::sm::Error),
+}
+
+impl From<sm::Error> for Error {
+    fn from(err: sm::Error) -> Error {
+        Error::Output(err)
+    }
+}
+
+impl From<relay::sm::Error> for Error {
+    fn from(err: relay::sm::Error) -> Error {
+        Error::Relay(err)
+    }
+}
+
 impl sm::StateMachine<Output> {
-    pub fn enable(&mut self) -> Result<(), sm::Error> {
+    pub fn enable(
+        &mut self,
+        relay: &mut relay::sm::StateMachine<relay::Relay<I2c1Proxy>>,
+    ) -> Result<(), Error> {
+        relay.enable()?;
         self.process_event(sm::Events::Enable)?;
         Ok(())
     }
 
-    pub fn disable(&mut self) -> Result<(), sm::Error> {
+    pub fn disable(
+        &mut self,
+        relay: &mut relay::sm::StateMachine<relay::Relay<I2c1Proxy>>,
+    ) -> Result<(), Error> {
+        relay.disable()?;
         self.process_event(sm::Events::Disable)?;
         Ok(())
     }
 
     /// Handle realays done. Returns `ramp delay`.
-    pub fn relays_done(&mut self) -> fugit::MillisDuration<u64> {
+    pub fn relay_done(&mut self) -> fugit::MillisDuration<u64> {
         self.process_event(sm::Events::RelaysDone).unwrap();
         Output::RAMP_DELAY
     }
@@ -79,7 +108,7 @@ impl sm::StateMachine<Output> {
         }
     }
 
-    pub fn ramp_iir(&mut self) -> &iir::IIR<f32> {
+    pub fn iir(&mut self) -> &iir::IIR<f32> {
         &self.context().ramp_iir
     }
 }
