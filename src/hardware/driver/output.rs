@@ -40,10 +40,10 @@ pub mod sm {
 
 impl sm::StateMachineContext for Output {
     fn increment_current(&mut self) {
-        self.ramp_iir.y_offset = self.ramp_iir.y_offset + Output::RAMP_STEP;
+        self.ramp_iir.y_offset += Output::RAMP_STEP;
     }
 
-    fn reset_iir(&mut self) -> () {
+    fn reset_iir(&mut self) {
         self.ramp_iir.y_offset = 0.;
     }
 }

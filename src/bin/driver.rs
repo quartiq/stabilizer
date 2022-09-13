@@ -514,12 +514,10 @@ mod app {
                 .enumerate()
             {
                 if *new_output_enabled && !old_output_enabled {
-                    if let Some(delay) = output[i]
-                        .enable(&mut relay[i])
-                        .map_err(|e| {
+                    if let Ok(delay) =
+                        output[i].enable(&mut relay[i]).map_err(|e| {
                             log::error!("Cannot enable output {:?}! {:?}", i, e)
                         })
-                        .ok()
                     {
                         handle_relay::spawn_after(
                             delay.convert(),
@@ -529,16 +527,14 @@ mod app {
                     }
                 }
                 if !*new_output_enabled && old_output_enabled {
-                    if let Some(delay) = output[i]
-                        .disable(&mut relay[i])
-                        .map_err(|e| {
+                    if let Ok(delay) =
+                        output[i].disable(&mut relay[i]).map_err(|e| {
                             log::error!(
                                 "Cannot disable output {:?}! {:?}",
                                 i,
                                 e
                             )
                         })
-                        .ok()
                     {
                         handle_relay::spawn_after(
                             delay.convert(),
