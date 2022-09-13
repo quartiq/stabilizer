@@ -620,16 +620,14 @@ mod app {
             handle_relay::Monotonic::spawn_after(del.convert(), channel)
                 .unwrap();
         } else {
-            c.shared.output_state.lock(|output| {
-                if let Some(ramp_delay) = output[channel as usize].relay_done()
-                {
-                    handle_ramp::Monotonic::spawn_after(
-                        ramp_delay.convert(),
-                        channel,
-                    )
+            let ramp_delay = c
+                .shared
+                .output_state
+                .lock(|output| output[channel as usize].relay_done());
+            if let Some(del) = ramp_delay {
+                handle_ramp::Monotonic::spawn_after(del.convert(), channel)
                     .unwrap();
-                }
-            });
+            }
         }
     }
 

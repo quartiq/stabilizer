@@ -87,7 +87,7 @@ impl sm::StateMachine<Output> {
         relay.disable().map_err(|err| err.into())
     }
 
-    /// Handle realays done. Returns `ramp delay`.
+    /// Handle realays done. Returns `Some(ramp delay)` if output is enabling and `None` if it is disabling.
     pub fn relay_done(&mut self) -> Option<fugit::MillisDuration<u64>> {
         log::info!("relay_done");
         self.process_event(sm::Events::RelayDone).unwrap();
@@ -98,14 +98,13 @@ impl sm::StateMachine<Output> {
         }
     }
 
-    /// Handle current ramp step. Returns Some(`ramp delay`) unless the ramp is done.
+    /// Handle current ramp step. Returns `Some(ramp delay)` unless the ramp is done.
     /// In this case returns `None`.
     pub fn handle_ramp(
         &mut self,
         iir: iir::IIR<f32>,
     ) -> Option<fugit::MillisDuration<u64>> {
         log::info!("ramp y_offset: {:?}", self.context().ramp_iir.y_offset);
-        log::info!("iir y_offset: {:?}", iir.y_offset);
         if self.context().ramp_iir.y_offset >= iir.y_offset {
             self.process_event(sm::Events::CurrentFinal).unwrap();
             None
@@ -116,7 +115,6 @@ impl sm::StateMachine<Output> {
     }
 
     pub fn iir(&mut self) -> iir::IIR<f32> {
-        // log::info!("iir_fn_offset: {:?}", self.context().ramp_iir.y_offset);
         self.context().ramp_iir
     }
 
