@@ -145,34 +145,34 @@ where
     fn engage_k0(&mut self) {
         let mut mcp = self.gpio.try_lock().unwrap();
         // set flipflop data pin
-        mcp.set_gpio(self.k0_d.into(), Level::High).unwrap();
+        // mcp.set_gpio(self.k0_d.into(), Level::High).unwrap();
         // set flipflop clock input low to prepare rising edge
-        mcp.set_gpio(self.k0_cp.into(), Level::Low).unwrap();
+        // mcp.set_gpio(self.k0_cp.into(), Level::Low).unwrap();
         // set flipflop clock input high to generate rising edge
-        mcp.set_gpio(self.k0_cp.into(), Level::High).unwrap();
+        // mcp.set_gpio(self.k0_cp.into(), Level::High).unwrap();
     }
 
     // set K0 to lower position
     fn disengage_k0(&mut self) {
         let mut mcp = self.gpio.try_lock().unwrap();
-        mcp.set_gpio(self.k0_d.into(), Level::High).unwrap();
-        mcp.set_gpio(self.k0_cp.into(), Level::Low).unwrap();
-        mcp.set_gpio(self.k0_cp.into(), Level::High).unwrap();
+        // mcp.set_gpio(self.k0_d.into(), Level::High).unwrap();
+        // mcp.set_gpio(self.k0_cp.into(), Level::Low).unwrap();
+        // mcp.set_gpio(self.k0_cp.into(), Level::High).unwrap();
     }
 
     // set K1 to upper position
     fn disengage_k1(&mut self) {
         let mut mcp = self.gpio.try_lock().unwrap();
         // set en high and en _n low in order to engage K1
-        mcp.set_gpio(self.k1_en.into(), Level::Low).unwrap();
-        mcp.set_gpio(self.k1_en_n.into(), Level::High).unwrap();
+        // mcp.set_gpio(self.k1_en.into(), Level::Low).unwrap();
+        // mcp.set_gpio(self.k1_en_n.into(), Level::High).unwrap();
     }
 
     // set K1 to lower position
     fn engage_k1(&mut self) {
         let mut mcp = self.gpio.try_lock().unwrap();
-        mcp.set_gpio(self.k1_en.into(), Level::High).unwrap();
-        mcp.set_gpio(self.k1_en_n.into(), Level::Low).unwrap();
+        // mcp.set_gpio(self.k1_en.into(), Level::High).unwrap();
+        // mcp.set_gpio(self.k1_en_n.into(), Level::Low).unwrap();
     }
 }
 

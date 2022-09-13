@@ -50,7 +50,7 @@ const BATCH_SIZE: usize = 8;
 
 // The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^7 =
 // 128, there is 1.28uS per sample, corresponding to a sampling frequency of 781.25 KHz.
-const SAMPLE_TICKS_LOG2: u8 = 7;
+const SAMPLE_TICKS_LOG2: u8 = 10;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 const SAMPLE_PERIOD: f32 =
     SAMPLE_TICKS as f32 * hardware::design_parameters::TIMER_PERIOD;
@@ -134,6 +134,15 @@ pub struct Settings {
     /// # Value
     /// [Interlock]
     interlock: Interlock,
+
+    /// Output enabled. `True` to enable, `False` to disable.
+    ///
+    /// # Path
+    /// `output_enabled`
+    ///
+    /// # Value
+    /// [bool]
+    output_enabled: [bool; 2],
 }
 
 impl Default for Settings {
@@ -145,7 +154,7 @@ impl Default for Settings {
             // new output is computed as `y0 = a1*y1 + a2*y2 + b0*x0 + b1*x1 + b2*x2`.
             // The IIR coefficients can be mapped to other transfer function
             // representations, for example as described in https://arxiv.org/abs/1508.06319
-            iir_ch: [iir::IIR::new(1., -SCALE, SCALE); 2],
+            iir_ch: [iir::IIR::new(0., -SCALE, SCALE); 2],
             // Permit the DI1 digital input to suppress filter output updates.
             allow_hold: false,
             // Force suppress filter output updates.
@@ -158,6 +167,8 @@ impl Default for Settings {
             stream_target: StreamTarget::default(),
 
             interlock: Interlock::default(),
+
+            output_enabled: [false; 2],
         }
     }
 }
@@ -316,7 +327,7 @@ mod app {
             settings,
             telemetry,
             signal_generator,
-            output_state,
+            mut output_state,
         } = c.shared;
 
         let process::LocalResources {
@@ -327,8 +338,15 @@ mod app {
             generator,
         } = c.local;
 
-        (settings, telemetry, signal_generator, output_state).lock(
-            |settings, telemetry, signal_generator, output| {
+        let (ramp_iir, enabled) = output_state.lock(|output| {
+            (
+                [output[0].iir(), output[1].iir()],
+                [output[0].is_enabled(), output[1].is_enabled()],
+            )
+        });
+
+        (settings, telemetry, signal_generator).lock(
+            |settings, telemetry, signal_generator| {
                 let digital_inputs =
                     [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
                 telemetry.digital_inputs = digital_inputs;
@@ -350,12 +368,10 @@ mod app {
                             .zip(&mut signal_generator[channel])
                             .map(|((ai, di), signal)| {
                                 let x = f32::from(*ai as i16);
-                                let iir = if *output[channel].state()
-                                    == output::sm::States::Enabled
-                                {
+                                let iir = if enabled[channel] {
                                     settings.iir_ch[channel]
                                 } else {
-                                    *output[channel].iir()
+                                    ramp_iir[channel]
                                 };
                                 let y = iir.update(
                                     &mut iir_state[channel],
@@ -424,7 +440,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, signal_generator, interlock_handle])]
+    #[task(priority = 1, local=[afes], shared=[network, settings, signal_generator, interlock_handle, relay_state, output_state])]
     fn settings_update(
         mut c: settings_update::Context,
         path: Option<String<64>>,
@@ -489,6 +505,50 @@ mod app {
 
         let target = new_settings.stream_target.into();
         c.shared.network.lock(|net| net.direct_stream(target));
+
+        (c.shared.output_state, c.shared.relay_state).lock(|output, relay| {
+            for (i, (new_output_enabled, old_output_enabled)) in new_settings
+                .output_enabled
+                .iter()
+                .zip(old_settings.output_enabled)
+                .enumerate()
+            {
+                if *new_output_enabled && !old_output_enabled {
+                    if let Some(delay) = output[i]
+                        .enable(&mut relay[i])
+                        .map_err(|e| {
+                            log::error!("Cannot enable output {:?}! {:?}", i, e)
+                        })
+                        .ok()
+                    {
+                        handle_relay::spawn_after(
+                            delay.convert(),
+                            Channel::LowNoise,
+                        )
+                        .unwrap();
+                    }
+                }
+                if !*new_output_enabled && old_output_enabled {
+                    if let Some(delay) = output[i]
+                        .disable(&mut relay[i])
+                        .map_err(|e| {
+                            log::error!(
+                                "Cannot disable output {:?}! {:?}",
+                                i,
+                                e
+                            )
+                        })
+                        .ok()
+                    {
+                        handle_relay::spawn_after(
+                            delay.convert(),
+                            Channel::LowNoise,
+                        )
+                        .unwrap();
+                    }
+                }
+            }
+        });
     }
 
     #[task(priority = 1, shared=[network, settings, telemetry, internal_adc], local=[cpu_temp_sensor])]
@@ -561,26 +621,31 @@ mod app {
                 .unwrap();
         } else {
             c.shared.output_state.lock(|output| {
-                handle_ramp::Monotonic::spawn_after(
-                    output[channel as usize].relay_done().convert(),
-                    channel,
-                )
-                .unwrap()
+                if let Some(ramp_delay) = output[channel as usize].relay_done()
+                {
+                    handle_ramp::Monotonic::spawn_after(
+                        ramp_delay.convert(),
+                        channel,
+                    )
+                    .unwrap();
+                }
             });
         }
     }
 
     // Task for handling the output current ramp-up.
     #[task(priority = 1, shared=[settings, output_state])]
-    fn handle_ramp(c: handle_ramp::Context, channel: driver::Channel) {
-        let delay = (c.shared.output_state, c.shared.settings).lock(
-            |state, settings| {
-                state[channel as usize]
-                    .handle_ramp(settings.iir_ch[channel as usize])
-            },
-        );
+    fn handle_ramp(mut c: handle_ramp::Context, channel: driver::Channel) {
+        let iir = c
+            .shared
+            .settings
+            .lock(|settings| settings.iir_ch[channel as usize]);
+        let delay = c
+            .shared
+            .output_state
+            .lock(|state| state[channel as usize].handle_ramp(iir));
         if let Some(del) = delay {
-            handle_relay::Monotonic::spawn_after(del.convert(), channel)
+            handle_ramp::Monotonic::spawn_after(del.convert(), channel)
                 .unwrap();
         }
     }

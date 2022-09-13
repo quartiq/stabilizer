@@ -1,11 +1,9 @@
-use crate::hardware::I2c1Proxy;
 ///! Driver output state handling.
+use crate::hardware::I2c1Proxy;
 use idsp::iir;
 use smlang::statemachine;
 
 use super::relay;
-
-// use super::Channel;
 
 pub struct Output {
     ramp_iir: iir::IIR<f32>,
@@ -13,13 +11,13 @@ pub struct Output {
 
 impl Output {
     // 1 A/s current ramp-up
-    const RAMP_STEP: f32 = 1e-3; // 1 mA current steps
+    const RAMP_STEP: f32 = 1.0; // 1 mA current steps
     const RAMP_DELAY: fugit::MillisDuration<u64> =
-        fugit::MillisDurationU64::millis(1); // current steps every 1 ms
+        fugit::MillisDurationU64::millis(10); // current steps every 1 ms
 
     pub fn new() -> Self {
         Output {
-            ramp_iir: iir::IIR::new(0., 0., 0.1), // Todo: sensible defaults
+            ramp_iir: iir::IIR::new(0., -i16::MAX as _, i16::MAX as _), // Todo: sensible defaults for driver (this is for stabilizer now)
         }
     }
 }
@@ -28,12 +26,12 @@ pub mod sm {
     use super::*;
     statemachine! {
         transitions: {
-            *Disabled + Enable = EnableWaitRelays,
-            EnableWaitRelay + RelaysDone = RampCurrent,
+            *Disabled + Enable = EnableWaitRelay,
+            EnableWaitRelay + RelayDone = RampCurrent,
             RampCurrent + CurrentStep / increment_current = RampCurrent,
             RampCurrent + CurrentFinal = Enabled,
-            Enabled + Disable / reset_iir = DisableWaitRelays,
-            DisableWaitRelays + RelaysDone  = Disabled,
+            Enabled + Disable / reset_iir = DisableWaitRelay,
+            DisableWaitRelay + RelayDone  = Disabled,
             Disabled + Disable = Disabled,
             Enabled + Enable = Enabled
         }
@@ -69,28 +67,35 @@ impl From<relay::sm::Error> for Error {
 }
 
 impl sm::StateMachine<Output> {
+    /// Start enabling sequence. Returns `relay delay` or an error is a SM is in an illegal state.
     pub fn enable(
         &mut self,
         relay: &mut relay::sm::StateMachine<relay::Relay<I2c1Proxy>>,
-    ) -> Result<(), Error> {
-        relay.enable()?;
+    ) -> Result<fugit::MillisDuration<u64>, Error> {
+        log::info!("enable");
         self.process_event(sm::Events::Enable)?;
-        Ok(())
+        relay.enable().map_err(|err| err.into())
     }
 
+    /// Start disabling sequence. Returns `relay delay` or an error is a SM is in an illegal state.
     pub fn disable(
         &mut self,
         relay: &mut relay::sm::StateMachine<relay::Relay<I2c1Proxy>>,
-    ) -> Result<(), Error> {
-        relay.disable()?;
+    ) -> Result<fugit::MillisDuration<u64>, Error> {
+        log::info!("disable");
         self.process_event(sm::Events::Disable)?;
-        Ok(())
+        relay.disable().map_err(|err| err.into())
     }
 
     /// Handle realays done. Returns `ramp delay`.
-    pub fn relay_done(&mut self) -> fugit::MillisDuration<u64> {
-        self.process_event(sm::Events::RelaysDone).unwrap();
-        Output::RAMP_DELAY
+    pub fn relay_done(&mut self) -> Option<fugit::MillisDuration<u64>> {
+        log::info!("relay_done");
+        self.process_event(sm::Events::RelayDone).unwrap();
+        if *self.state() == sm::States::RampCurrent {
+            Some(Output::RAMP_DELAY)
+        } else {
+            None
+        }
     }
 
     /// Handle current ramp step. Returns Some(`ramp delay`) unless the ramp is done.
@@ -99,7 +104,9 @@ impl sm::StateMachine<Output> {
         &mut self,
         iir: iir::IIR<f32>,
     ) -> Option<fugit::MillisDuration<u64>> {
-        if iir.y_offset >= self.context().ramp_iir.y_offset {
+        log::info!("ramp y_offset: {:?}", self.context().ramp_iir.y_offset);
+        log::info!("iir y_offset: {:?}", iir.y_offset);
+        if self.context().ramp_iir.y_offset >= iir.y_offset {
             self.process_event(sm::Events::CurrentFinal).unwrap();
             None
         } else {
@@ -108,7 +115,12 @@ impl sm::StateMachine<Output> {
         }
     }
 
-    pub fn iir(&mut self) -> &iir::IIR<f32> {
-        &self.context().ramp_iir
+    pub fn iir(&mut self) -> iir::IIR<f32> {
+        // log::info!("iir_fn_offset: {:?}", self.context().ramp_iir.y_offset);
+        self.context().ramp_iir
+    }
+
+    pub fn is_enabled(&mut self) -> bool {
+        *self.state() == sm::States::Enabled
     }
 }
