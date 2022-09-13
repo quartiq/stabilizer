@@ -11,9 +11,9 @@ pub struct Output {
 
 impl Output {
     // 1 A/s current ramp-up
-    const RAMP_STEP: f32 = 1.0; // 1 mA current steps
+    const RAMP_STEP: f32 = 1.0; // will be 1 mA current steps
     const RAMP_DELAY: fugit::MillisDuration<u64> =
-        fugit::MillisDurationU64::millis(10); // current steps every 1 ms
+        fugit::MillisDurationU64::millis(10); // will be current steps every 1 ms
 
     pub fn new() -> Self {
         Output {
@@ -72,7 +72,6 @@ impl sm::StateMachine<Output> {
         &mut self,
         relay: &mut relay::sm::StateMachine<relay::Relay<I2c1Proxy>>,
     ) -> Result<fugit::MillisDuration<u64>, Error> {
-        log::info!("enable");
         self.process_event(sm::Events::Enable)?;
         relay.enable().map_err(|err| err.into())
     }
@@ -82,14 +81,12 @@ impl sm::StateMachine<Output> {
         &mut self,
         relay: &mut relay::sm::StateMachine<relay::Relay<I2c1Proxy>>,
     ) -> Result<fugit::MillisDuration<u64>, Error> {
-        log::info!("disable");
         self.process_event(sm::Events::Disable)?;
         relay.disable().map_err(|err| err.into())
     }
 
     /// Handle realays done. Returns `Some(ramp delay)` if output is enabling and `None` if it is disabling.
     pub fn relay_done(&mut self) -> Option<fugit::MillisDuration<u64>> {
-        log::info!("relay_done");
         self.process_event(sm::Events::RelayDone).unwrap();
         if *self.state() == sm::States::RampCurrent {
             Some(Output::RAMP_DELAY)
@@ -104,7 +101,6 @@ impl sm::StateMachine<Output> {
         &mut self,
         iir: iir::IIR<f32>,
     ) -> Option<fugit::MillisDuration<u64>> {
-        log::info!("ramp y_offset: {:?}", self.context().ramp_iir.y_offset);
         if self.context().ramp_iir.y_offset >= iir.y_offset {
             self.process_event(sm::Events::CurrentFinal).unwrap();
             None
