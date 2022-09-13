@@ -340,7 +340,7 @@ mod app {
 
         let (ramp_iir, enabled) = output_state.lock(|output| {
             (
-                [output[0].iir(), output[1].iir()],
+                [*output[0].iir(), *output[1].iir()],
                 [output[0].is_enabled(), output[1].is_enabled()],
             )
         });
@@ -507,13 +507,13 @@ mod app {
         c.shared.network.lock(|net| net.direct_stream(target));
 
         (c.shared.output_state, c.shared.relay_state).lock(|output, relay| {
-            for (i, (new_output_enabled, old_output_enabled)) in new_settings
+            for (i, (&new_output_enabled, old_output_enabled)) in new_settings
                 .output_enabled
                 .iter()
                 .zip(old_settings.output_enabled)
                 .enumerate()
             {
-                if *new_output_enabled && !old_output_enabled {
+                if new_output_enabled && !old_output_enabled {
                     if let Ok(delay) =
                         output[i].enable(&mut relay[i]).map_err(|e| {
                             log::error!("Cannot enable output {:?}! {:?}", i, e)
@@ -526,7 +526,7 @@ mod app {
                         .unwrap();
                     }
                 }
-                if !*new_output_enabled && old_output_enabled {
+                if !new_output_enabled && old_output_enabled {
                     if let Ok(delay) =
                         output[i].disable(&mut relay[i]).map_err(|e| {
                             log::error!(

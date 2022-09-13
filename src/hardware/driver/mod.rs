@@ -5,6 +5,7 @@ pub mod relay;
 use super::I2c1Proxy;
 use lm75;
 pub mod interlock;
+use num_enum::TryFromPrimitive;
 
 /// Devices on Driver + Driver headerboard
 pub struct DriverDevices {
@@ -16,23 +17,9 @@ pub struct DriverDevices {
     // dac
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, TryFromPrimitive)]
 #[repr(usize)]
 pub enum Channel {
     LowNoise = 0,
     HighPower = 1,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct ChannelIndexError;
-
-impl TryFrom<usize> for Channel {
-    type Error = ChannelIndexError;
-    fn try_from(ch: usize) -> Result<Self, ChannelIndexError> {
-        match ch {
-            0 => Ok(Channel::LowNoise),
-            1 => Ok(Channel::HighPower),
-            _ => Err(ChannelIndexError),
-        }
-    }
 }

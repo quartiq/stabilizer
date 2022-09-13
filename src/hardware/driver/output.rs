@@ -28,10 +28,13 @@ pub mod sm {
         transitions: {
             *Disabled + Enable = EnableWaitRelay,
             EnableWaitRelay + RelayDone = RampCurrent,
+            EnableWaitRelay + Enable = EnableWaitRelay,
+            RampCurrent + Enable = RampCurrent,
             RampCurrent + CurrentStep / increment_current = RampCurrent,
             RampCurrent + CurrentFinal = Enabled,
             Enabled + Disable / reset_iir = DisableWaitRelay,
             DisableWaitRelay + RelayDone  = Disabled,
+            DisableWaitRelay + Disable = DisableWaitRelay,
             Disabled + Disable = Disabled,
             Enabled + Enable = Enabled
         }
@@ -110,8 +113,8 @@ impl sm::StateMachine<Output> {
         }
     }
 
-    pub fn iir(&mut self) -> iir::IIR<f32> {
-        self.context().ramp_iir
+    pub fn iir(&mut self) -> &iir::IIR<f32> {
+        &self.context().ramp_iir
     }
 
     pub fn is_enabled(&mut self) -> bool {
