@@ -523,7 +523,7 @@ mod app {
                     {
                         handle_relay::spawn_after(
                             delay.convert(),
-                            Channel::LowNoise,
+                            i.try_into().unwrap(),
                         )
                         .unwrap();
                     }
@@ -542,7 +542,7 @@ mod app {
                     {
                         handle_relay::spawn_after(
                             delay.convert(),
-                            Channel::LowNoise,
+                            i.try_into().unwrap(),
                         )
                         .unwrap();
                     }

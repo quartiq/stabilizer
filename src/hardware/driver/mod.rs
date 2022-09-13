@@ -22,3 +22,17 @@ pub enum Channel {
     LowNoise = 0,
     HighPower = 1,
 }
+
+#[derive(Clone, Copy, Debug)]
+pub struct ChannelIndexError;
+
+impl TryFrom<usize> for Channel {
+    type Error = ChannelIndexError;
+    fn try_from(ch: usize) -> Result<Self, ChannelIndexError> {
+        match ch {
+            0 => Ok(Channel::LowNoise),
+            1 => Ok(Channel::HighPower),
+            _ => Err(ChannelIndexError),
+        }
+    }
+}
