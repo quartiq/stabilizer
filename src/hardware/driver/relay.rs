@@ -113,6 +113,7 @@ where
             k0_cp,
         }
     }
+
     // set K0 to upper position (note that "upper" and "lower" refer to the schematic)
     pub fn engage_k0(&mut self) {
         let mut mcp = self.gpio.try_lock().unwrap();
