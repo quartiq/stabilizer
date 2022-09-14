@@ -17,7 +17,7 @@ use smlang::statemachine;
 // Driver output relays pins.
 #[allow(non_camel_case_types)]
 #[derive(Debug, Copy, Clone, PartialEq)]
-enum RelayPin {
+pub enum RelayPin {
     LN_K1_EN_N,
     LN_K1_EN,
     LN_K0_D,
@@ -53,11 +53,11 @@ impl From<RelayPin> for Mcp23008 {
 ///        which ensures this clock input cannot be driven if K1 is not in the correct state.
 ///        See Driver schematic for exact details.
 pub struct Relay<I2C: WriteRead + Write + 'static> {
-    gpio: &'static spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
-    k1_en_n: RelayPin,
-    k1_en: RelayPin,
-    k0_d: RelayPin,
-    k0_cp: RelayPin,
+    pub gpio: &'static spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
+    pub k1_en_n: RelayPin,
+    pub k1_en: RelayPin,
+    pub k0_d: RelayPin,
+    pub k0_cp: RelayPin,
 }
 
 impl<I2C, E> Relay<I2C>
@@ -66,10 +66,10 @@ where
     E: Debug,
 {
     // RL2B Operating Time and Release Time
-    const K0_DELAY: fugit::MillisDuration<u64> =
+    pub const K0_DELAY: fugit::MillisDuration<u64> =
         fugit::MillisDurationU64::millis(30);
     // RL1B Operating Time and Release Time
-    const K1_DELAY: fugit::MillisDuration<u64> =
+    pub const K1_DELAY: fugit::MillisDuration<u64> =
         fugit::MillisDurationU64::millis(30);
 
     /// Construct a new [Relay].

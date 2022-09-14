@@ -1038,27 +1038,21 @@ pub fn setup(
         = spin::Mutex::new(mcp))
         .unwrap();
 
-        let relay_sm = [
-            relay::sm::StateMachine::new(relay::Relay::new(
+        let output_sm = [
+            output::sm::StateMachine::new(output::Output::new(
                 mcp_mutex,
                 driver::Channel::LowNoise,
             )),
-            relay::sm::StateMachine::new(relay::Relay::new(
+            output::sm::StateMachine::new(output::Output::new(
                 mcp_mutex,
                 driver::Channel::HighPower,
             )),
-        ];
-
-        let output_sm = [
-            output::sm::StateMachine::new(output::Output::new()),
-            output::sm::StateMachine::new(output::Output::new()),
         ];
 
         Mezzanine::Driver(DriverDevices {
             lm75,
             ltc2320,
             internal_adc,
-            relay_sm,
             output_sm,
         })
     } else {
