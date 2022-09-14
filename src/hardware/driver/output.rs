@@ -68,40 +68,24 @@ where
         self.iir.y_offset += Output::<I2C>::RAMP_STEP;
     }
 
-    // set K0 to upper position (note that "upper" and "lower" refer to the schematic)
     fn engage_k0(&mut self) {
-        let mut mcp = self.relay.gpio.try_lock().unwrap();
-        // set flipflop data pin
-        // mcp.set_gpio(self.relay.k0_d.into(), Level::High).unwrap();
-        // set flipflop clock input low to prepare rising edge
-        // mcp.set_gpio(self.relay.k0_cp.into(), Level::Low).unwrap();
-        // set flipflop clock input high to generate rising edge
-        // mcp.set_gpio(self.relay.k0_cp.into(), Level::High).unwrap();
+        self.relay.engage_k0()
     }
 
-    // set K0 to lower position
     fn disengage_k0_and_reset_iir(&mut self) {
         self.iir.y_offset = 0.;
-        let mut mcp = self.relay.gpio.try_lock().unwrap();
-        // mcp.set_gpio(self.relay.k0_d.into(), Level::High).unwrap();
-        // mcp.set_gpio(self.relay.k0_cp.into(), Level::Low).unwrap();
-        // mcp.set_gpio(self.relay.k0_cp.into(), Level::High).unwrap();
+        self.relay.disengage_k0()
     }
 
-    // set K1 to upper position
     fn disengage_k1(&mut self) {
-        let mut mcp = self.relay.gpio.try_lock().unwrap();
-        // set en high and en _n low in order to engage K1
-        // mcp.set_gpio(self.relay.k1_en.into(), Level::Low).unwrap();
-        // mcp.set_gpio(self.relay.k1_en_n.into(), Level::High)
-        // .unwrap();
+        self.relay.disengage_k1()
     }
 
     // set K1 to lower position and output current to zero
     fn engage_k1_and_hold_iir(&mut self) {
-        let mut mcp = self.relay.gpio.try_lock().unwrap();
-        // mcp.set_gpio(self.relay.k1_en.into(), Level::High).unwrap();
-        // mcp.set_gpio(self.relay.k1_en_n.into(), Level::Low).unwrap();
+        self.iir.y_offset = 0.;
+        self.iir.ba = [0., 0., 0., 1., 0.];
+        self.relay.engage_k1()
     }
 }
 
