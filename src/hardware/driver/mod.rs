@@ -2,6 +2,7 @@ pub mod internal_adc;
 pub mod ltc2320;
 pub mod output;
 pub mod relay;
+pub mod dac;
 use super::I2c1Proxy;
 use lm75;
 pub mod interlock;

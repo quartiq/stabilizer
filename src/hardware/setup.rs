@@ -3,7 +3,9 @@
 ///! This file contains all of the hardware-specific configuration of Stabilizer.
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{ptr, slice};
+use hal::device::SPI1;
 use hal::i2c::I2c;
+use hal::spi::Enabled;
 use shared_bus::{AtomicCheckMutex, I2cProxy};
 use stm32h7xx_hal::{
     self as hal,
@@ -1048,6 +1050,27 @@ pub fn setup(
                 driver::Channel::HighPower,
             )),
         ];
+
+        let dac_pins = {
+            gpioa.pa0.into_alternate(),
+        };
+
+        let config = hal::spi::Config::new(hal::spi::Mode {
+            polarity: hal::spi::Polarity::IdleHigh,
+            phase: hal::spi::Phase::CaptureOnSecondTransition,
+        });
+
+        let dac_spi = device.SPI1.spi(
+            (gpiog.pg11.into_alternate(), gpioa.pa6.into_alternate(), gpiod.pd7.into_alternate(), gpiog.pg10.into_alternate()),
+            config,
+            design_parameters::ADC_DAC_SCK_MAX.convert(),
+            ccdr.peripheral.SPI1,
+            &ccdr.clocks,
+        );
+
+        let dac_bus_manager = shared_bus::new_atomic_check!(hal::spi::Spi<SPI1, Enabled, u32> = dac_spi).unwrap();
+
+        let dac = driver::dac::Dac::new(dac_bus_manager.acquire_spi(), sync_n)
 
         Mezzanine::Driver(DriverDevices {
             lm75,
