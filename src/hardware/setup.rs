@@ -22,7 +22,7 @@ use super::{
     EemDigitalOutput0, EemDigitalOutput1, EthernetPhy, Mezzanine, NetworkStack,
     SystemTimer, Systick, AFE0, AFE1,
 };
-use driver::{output, relay, DriverDevices};
+use driver::{output, DriverDevices};
 
 const NUM_TCP_SOCKETS: usize = 4;
 const NUM_UDP_SOCKETS: usize = 1;

@@ -69,24 +69,24 @@ where
     }
 
     fn engage_k0(&mut self) {
-        // self.relay.engage_k0()
+        self.relay.engage_k0()
     }
 
     fn disengage_k0_and_reset_iir(&mut self) {
         self.iir.y_offset = 0.;
         self.iir.ba = [0., 0., 0., 0., 0.];
-        // self.relay.disengage_k0()
+        self.relay.disengage_k0()
     }
 
     fn disengage_k1(&mut self) {
-        // self.relay.disengage_k1()
+        self.relay.disengage_k1()
     }
 
     // set K1 to lower position and output current to zero
     fn engage_k1_and_hold_iir(&mut self) {
         self.iir.y_offset = 0.;
         self.iir.ba = [0., 0., 0., 1., 0.];
-        // self.relay.engage_k1()
+        self.relay.engage_k1()
     }
 }
 

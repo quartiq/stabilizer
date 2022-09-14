@@ -16,7 +16,7 @@ pub struct DriverDevices {
     // dac
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, TryFromPrimitive)]
 #[repr(usize)]
 pub enum Channel {
     LowNoise = 0,
