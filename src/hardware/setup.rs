@@ -3,7 +3,6 @@
 ///! This file contains all of the hardware-specific configuration of Stabilizer.
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{ptr, slice};
-use driver::{relay::sm::StateMachine, relay::Relay, DriverDevices};
 use hal::i2c::I2c;
 use shared_bus::{AtomicCheckMutex, I2cProxy};
 use stm32h7xx_hal::{
@@ -23,6 +22,7 @@ use super::{
     EemDigitalOutput0, EemDigitalOutput1, EthernetPhy, Mezzanine, NetworkStack,
     SystemTimer, Systick, AFE0, AFE1,
 };
+use driver::{output, DriverDevices};
 
 const NUM_TCP_SOCKETS: usize = 4;
 const NUM_UDP_SOCKETS: usize = 1;
@@ -1038,9 +1038,12 @@ pub fn setup(
         = spin::Mutex::new(mcp))
         .unwrap();
 
-        let relay_sm = [
-            StateMachine::new(Relay::new(mcp_mutex, driver::Channel::LowNoise)),
-            StateMachine::new(Relay::new(
+        let output_sm = [
+            output::sm::StateMachine::new(output::Output::new(
+                mcp_mutex,
+                driver::Channel::LowNoise,
+            )),
+            output::sm::StateMachine::new(output::Output::new(
                 mcp_mutex,
                 driver::Channel::HighPower,
             )),
@@ -1050,7 +1053,7 @@ pub fn setup(
             lm75,
             ltc2320,
             internal_adc,
-            relay_sm,
+            output_sm,
         })
     } else {
         Mezzanine::None

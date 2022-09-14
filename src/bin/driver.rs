@@ -27,8 +27,7 @@ use stabilizer::{
         design_parameters, driver,
         driver::{
             interlock::{Action, Interlock},
-            relay::{self, sm::StateMachine},
-            Channel,
+            output, Channel,
         },
         hal,
         signal_generator::{self, SignalGenerator},
@@ -45,9 +44,6 @@ use stabilizer::{
 };
 
 const SCALE: f32 = i16::MAX as _;
-
-// The number of cascaded IIR biquads per channel. Select 1 or 2!
-const IIR_CASCADE_LENGTH: usize = 1;
 
 // The number of samples in each batch process
 const BATCH_SIZE: usize = 8;
@@ -75,14 +71,13 @@ pub struct Settings {
     /// Configure the IIR filter parameters.
     ///
     /// # Path
-    /// `iir_ch/<n>/<m>`
+    /// `iir_ch/<n>
     ///
     /// * <n> specifies which channel to configure. <n> := [0, 1]
-    /// * <m> specifies which cascade to configure. <m> := [0, 1], depending on [IIR_CASCADE_LENGTH]
     ///
     /// # Value
     /// See [iir::IIR#miniconf]
-    iir_ch: [[iir::IIR<f32>; IIR_CASCADE_LENGTH]; 2],
+    iir_ch: [iir::IIR<f32>; 2],
 
     /// Specified true if DI1 should be used as a "hold" input.
     ///
@@ -139,6 +134,15 @@ pub struct Settings {
     /// # Value
     /// [Interlock]
     interlock: Interlock,
+
+    /// Output enabled. `True` to enable, `False` to disable.
+    ///
+    /// # Path
+    /// `output_enabled`
+    ///
+    /// # Value
+    /// [bool]
+    output_enabled: [bool; 2],
 }
 
 impl Default for Settings {
@@ -148,10 +152,9 @@ impl Default for Settings {
             afe: [Gain::G1, Gain::G1],
             // IIR filter tap gains are an array `[b0, b1, b2, a1, a2]` such that the
             // new output is computed as `y0 = a1*y1 + a2*y2 + b0*x0 + b1*x1 + b2*x2`.
-            // The array is `iir_state[channel-index][cascade-index][coeff-index]`.
             // The IIR coefficients can be mapped to other transfer function
             // representations, for example as described in https://arxiv.org/abs/1508.06319
-            iir_ch: [[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2],
+            iir_ch: [iir::IIR::new(0., -SCALE, SCALE); 2],
             // Permit the DI1 digital input to suppress filter output updates.
             allow_hold: false,
             // Force suppress filter output updates.
@@ -164,6 +167,8 @@ impl Default for Settings {
             stream_target: StreamTarget::default(),
 
             interlock: Interlock::default(),
+
+            output_enabled: [false; 2],
         }
     }
 }
@@ -184,11 +189,8 @@ mod app {
         internal_adc: driver::internal_adc::InternalAdc,
         header_adc: driver::ltc2320::Ltc2320,
         header_adc_data: [u16; 8],
-        // relay_state might eventually live inside driver_output_state but then the
-        // relay_delay function would have to lock the whole output state..
-        relay_state: [StateMachine<relay::Relay<I2c1Proxy>>; 2],
         // driver_dac: [Dac; 2]
-        // driver_output_state: [Output State Macheine; 2]
+        output_state: [output::sm::StateMachine<output::Output<I2c1Proxy>>; 2],
         interlock_handle: Option<trip_interlock::SpawnHandle>,
     }
 
@@ -199,7 +201,7 @@ mod app {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
+        iir_state: [iir::Vec5<f32>; 2],
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
         header_adc_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
@@ -256,7 +258,7 @@ mod app {
             internal_adc: driver.internal_adc,
             header_adc: driver.ltc2320,
             header_adc_data: [0u16; 8],
-            relay_state: driver.relay_sm, // this might live inside driver_output_state eventually
+            output_state: driver.output_sm,
             interlock_handle: None,
         };
 
@@ -266,7 +268,7 @@ mod app {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            iir_state: [[[0.; 5]; IIR_CASCADE_LENGTH]; 2],
+            iir_state: [[0.; 5]; 2],
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
             header_adc_conversion_scheduled: stabilizer.systick.now(),
@@ -314,13 +316,14 @@ mod app {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[settings, signal_generator, telemetry], priority=3)]
+    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[settings, signal_generator, telemetry, output_state], priority=3)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
             settings,
             telemetry,
             signal_generator,
+            output_state,
         } = c.shared;
 
         let process::LocalResources {
@@ -331,8 +334,8 @@ mod app {
             generator,
         } = c.local;
 
-        (settings, telemetry, signal_generator).lock(
-            |settings, telemetry, signal_generator| {
+        (settings, telemetry, signal_generator, output_state).lock(
+            |settings, telemetry, signal_generator, output| {
                 let digital_inputs =
                     [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
                 telemetry.digital_inputs = digital_inputs;
@@ -354,12 +357,16 @@ mod app {
                             .zip(&mut signal_generator[channel])
                             .map(|((ai, di), signal)| {
                                 let x = f32::from(*ai as i16);
-                                let y = settings.iir_ch[channel]
-                                    .iter()
-                                    .zip(iir_state[channel].iter_mut())
-                                    .fold(x, |yi, (ch, state)| {
-                                        ch.update(state, yi, hold)
-                                    });
+                                let iir = if output[channel].is_enabled() {
+                                    settings.iir_ch[channel]
+                                } else {
+                                    *output[channel].iir()
+                                };
+                                let y = iir.update(
+                                    &mut iir_state[channel],
+                                    x,
+                                    hold,
+                                );
 
                                 // Note(unsafe): The filter limits must ensure that the value is in range.
                                 // The truncation introduces 1/2 LSB distortion.
@@ -422,7 +429,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, signal_generator, interlock_handle])]
+    #[task(priority = 1, local=[afes], shared=[network, settings, signal_generator, interlock_handle, output_state])]
     fn settings_update(
         mut c: settings_update::Context,
         path: Option<String<64>>,
@@ -487,6 +494,33 @@ mod app {
 
         let target = new_settings.stream_target.into();
         c.shared.network.lock(|net| net.direct_stream(target));
+
+        c.shared.output_state.lock(|output| {
+            for (i, (&new_output_enabled, old_output_enabled)) in new_settings
+                .output_enabled
+                .iter()
+                .zip(old_settings.output_enabled)
+                .enumerate()
+            {
+                if new_output_enabled != old_output_enabled {
+                    if let Ok(Some(delay)) =
+                        output[i].set_enable(new_output_enabled).map_err(|e| {
+                            log::error!(
+                                "Cannot enable/disable output {:?}! {:?}",
+                                i,
+                                e
+                            )
+                        })
+                    {
+                        handle_output_tick::spawn_after(
+                            delay.convert(),
+                            i.try_into().unwrap(),
+                        )
+                        .unwrap();
+                    }
+                }
+            }
+        });
     }
 
     #[task(priority = 1, shared=[network, settings, telemetry, internal_adc], local=[cpu_temp_sensor])]
@@ -549,15 +583,25 @@ mod app {
         });
     }
 
-    // Task for waiting the relay transition times.
-    #[task(priority = 1, shared=[relay_state])]
-    fn handle_relay(mut c: handle_relay::Context, channel: driver::Channel) {
-        let delay = (c.shared.relay_state)
-            .lock(|state| state[channel as usize].handle_relay());
-        if let Some(del) = delay {
-            handle_relay::Monotonic::spawn_after(del.convert(), channel)
-                .unwrap();
-        }
+    // Task for handling the Powerup/-down sequence
+    #[task(priority = 1, capacity = 2, shared=[output_state, settings])]
+    fn handle_output_tick(
+        mut c: handle_output_tick::Context,
+        channel: driver::Channel,
+    ) {
+        let iir = c
+            .shared
+            .settings
+            .lock(|settings| settings.iir_ch[channel as usize]);
+        c.shared.output_state.lock(|state| {
+            state[channel as usize].handle_tick(&iir).map(|del| {
+                handle_output_tick::Monotonic::spawn_after(
+                    del.convert(),
+                    channel,
+                )
+                .unwrap()
+            })
+        });
     }
 
     #[task(priority = 1, shared=[interlock_handle])]
