@@ -584,7 +584,7 @@ mod app {
     }
 
     // Task for handling the Powerup/-down sequence
-    #[task(priority = 1, shared=[output_state, settings])]
+    #[task(priority = 1, capacity = 2, shared=[output_state, settings])]
     fn handle_output_event(
         mut c: handle_output_event::Context,
         channel: driver::Channel,
