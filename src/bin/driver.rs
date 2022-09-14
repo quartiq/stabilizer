@@ -512,7 +512,7 @@ mod app {
                             )
                         })
                     {
-                        handle_output_event::spawn_after(
+                        handle_output_tick::spawn_after(
                             delay.convert(),
                             i.try_into().unwrap(),
                         )
@@ -585,8 +585,8 @@ mod app {
 
     // Task for handling the Powerup/-down sequence
     #[task(priority = 1, capacity = 2, shared=[output_state, settings])]
-    fn handle_output_event(
-        mut c: handle_output_event::Context,
+    fn handle_output_tick(
+        mut c: handle_output_tick::Context,
         channel: driver::Channel,
     ) {
         let iir = c
@@ -594,15 +594,13 @@ mod app {
             .settings
             .lock(|settings| settings.iir_ch[channel as usize]);
         c.shared.output_state.lock(|state| {
-            state[channel as usize]
-                .handle_output_event(&iir)
-                .map(|del| {
-                    handle_output_event::Monotonic::spawn_after(
-                        del.convert(),
-                        channel,
-                    )
-                    .unwrap()
-                })
+            state[channel as usize].handle_tick(&iir).map(|del| {
+                handle_output_tick::Monotonic::spawn_after(
+                    del.convert(),
+                    channel,
+                )
+                .unwrap()
+            })
         });
     }
 

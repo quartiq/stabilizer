@@ -103,16 +103,6 @@ where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     E: Debug,
 {
-    fn delay(&self) -> Option<fugit::MillisDuration<u64>> {
-        match *self.state() {
-            sm::States::DisableWaitK0 => Some(Relay::<I2C>::K0_DELAY),
-            sm::States::DisableWaitK1 => Some(Relay::<I2C>::K1_DELAY),
-            sm::States::EnableWaitK0 => Some(Relay::<I2C>::K0_DELAY),
-            sm::States::EnableWaitK1 => Some(Relay::<I2C>::K1_DELAY),
-            sm::States::RampCurrent => Some(Output::<I2C>::RAMP_DELAY),
-            _ => None,
-        }
-    }
     /// Start enabling sequence. Returns `Some(relay delay)` or `None` if we started an Abort
     /// or an error if SM is in a state where we can't enable.
     pub fn set_enable(
@@ -131,7 +121,7 @@ where
     }
 
     /// Handle an event that happens during the enabling/disabling sequence.
-    pub fn handle_output_event(
+    pub fn handle_tick(
         &mut self,
         iir: &iir::IIR<f32>,
     ) -> Option<fugit::MillisDuration<u64>> {
@@ -153,7 +143,14 @@ where
             }
             _ => (),
         };
-        self.delay()
+        match *self.state() {
+            sm::States::DisableWaitK0 => Some(Relay::<I2C>::K0_DELAY),
+            sm::States::DisableWaitK1 => Some(Relay::<I2C>::K1_DELAY),
+            sm::States::EnableWaitK0 => Some(Relay::<I2C>::K0_DELAY),
+            sm::States::EnableWaitK1 => Some(Relay::<I2C>::K1_DELAY),
+            sm::States::RampCurrent => Some(Output::<I2C>::RAMP_DELAY),
+            _ => None,
+        }
     }
 
     pub fn iir(&mut self) -> &iir::IIR<f32> {
