@@ -100,27 +100,18 @@ where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     E: Debug,
 {
-    /// Start enabling sequence. Returns `Some(relay delay)` or None if we started an Abort
+    /// Start enabling sequence. Returns `Some(relay delay)` or `None` if we started an Abort
     /// or an error if SM is in a state where we can't enable.
-    pub fn enable(
+    pub fn set_enable(
         &mut self,
+        enable: bool,
     ) -> Result<Option<fugit::MillisDuration<u64>>, sm::Error> {
-        self.process_event(sm::Events::Enable)?;
-        if *self.state() != sm::States::Abort {
+        let event = match enable {
+            true => sm::Events::Enable,
+            false => sm::Events::Disable,
+        };
+        if *self.process_event(event)? != sm::States::Abort {
             Ok(Some(Relay::<I2C>::K0_DELAY)) // engage K0 first
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// Start disabling sequence. Returns `Some(relay delay)` or None if we started an Abort
-    /// or an error if SM is in a state where we can't disable.
-    pub fn disable(
-        &mut self,
-    ) -> Result<Option<fugit::MillisDuration<u64>>, sm::Error> {
-        self.process_event(sm::Events::Disable)?;
-        if *self.state() != sm::States::Abort {
-            Ok(Some(Relay::<I2C>::K1_DELAY)) // engage K1 first
         } else {
             Ok(None)
         }
@@ -129,7 +120,7 @@ where
     /// Handle an event that happens during the enabling/disabling sequence.
     pub fn handle_output_event(
         &mut self,
-        iir: iir::IIR<f32>,
+        iir: &iir::IIR<f32>,
     ) -> Option<fugit::MillisDuration<u64>> {
         match *self.state() {
             // engage K1 second

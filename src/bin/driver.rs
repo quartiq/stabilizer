@@ -502,21 +502,16 @@ mod app {
                 .zip(old_settings.output_enabled)
                 .enumerate()
             {
-                if new_output_enabled && !old_output_enabled {
-                    if let Ok(Some(delay)) = output[i].enable().map_err(|e| {
-                        log::error!("Cannot enable output {:?}! {:?}", i, e)
-                    }) {
-                        handle_output_event::spawn_after(
-                            delay.convert(),
-                            i.try_into().unwrap(),
-                        )
-                        .unwrap();
-                    }
-                }
-                if !new_output_enabled && old_output_enabled {
-                    if let Ok(Some(delay)) = output[i].disable().map_err(|e| {
-                        log::error!("Cannot disable output {:?}! {:?}", i, e)
-                    }) {
+                if new_output_enabled != old_output_enabled {
+                    if let Ok(Some(delay)) =
+                        output[i].set_enable(new_output_enabled).map_err(|e| {
+                            log::error!(
+                                "Cannot enable/disable output {:?}! {:?}",
+                                i,
+                                e
+                            )
+                        })
+                    {
                         handle_output_event::spawn_after(
                             delay.convert(),
                             i.try_into().unwrap(),
@@ -598,12 +593,17 @@ mod app {
             .shared
             .settings
             .lock(|settings| settings.iir_ch[channel as usize]);
-        let delay = (c.shared.output_state)
-            .lock(|state| state[channel as usize].handle_output_event(iir));
-        if let Some(del) = delay {
-            handle_output_event::Monotonic::spawn_after(del.convert(), channel)
-                .unwrap();
-        }
+        c.shared.output_state.lock(|state| {
+            state[channel as usize]
+                .handle_output_event(&iir)
+                .map(|del| {
+                    handle_output_event::Monotonic::spawn_after(
+                        del.convert(),
+                        channel,
+                    )
+                    .unwrap()
+                })
+        });
     }
 
     #[task(priority = 1, shared=[interlock_handle])]
