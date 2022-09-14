@@ -2,7 +2,7 @@
 use core::fmt::Debug;
 use embedded_hal::blocking::i2c::{Write, WriteRead};
 use idsp::iir;
-use mcp230xx::{Level, Mcp23008, Mcp230xx};
+use mcp230xx::{Mcp23008, Mcp230xx};
 use smlang::statemachine;
 
 use super::{relay::Relay, Channel};
