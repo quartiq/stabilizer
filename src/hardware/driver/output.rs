@@ -1,4 +1,7 @@
 ///! Driver output state handling.
+///!
+///! Driver has two independent output channels.
+///! Each channel can be in various states during operation, powerup and powerdown.
 use core::fmt::Debug;
 use embedded_hal::blocking::i2c::{Write, WriteRead};
 use idsp::iir;
@@ -7,6 +10,9 @@ use smlang::statemachine;
 
 use super::{relay::Relay, Channel};
 
+/// Driver [Output].
+/// An Output consits of the output [Relay]s and an IIR to implement a current ramp
+/// during an enabling sequence and a current hold during powerdown.
 pub struct Output<I2C: WriteRead + Write + 'static> {
     iir: iir::IIR<f32>,
     relay: Relay<I2C>,
@@ -82,7 +88,6 @@ where
         self.relay.disengage_k1()
     }
 
-    // set K1 to lower position and output current to zero
     fn engage_k1_and_hold_iir(&mut self) {
         self.iir.y_offset = 0.;
         self.iir.ba = [0., 0., 0., 1., 0.];
