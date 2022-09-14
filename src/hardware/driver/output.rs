@@ -38,26 +38,29 @@ where
         }
     }
 }
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub struct Delay(pub fugit::MillisDuration<u64>);
 
 pub mod sm {
     use super::*;
+
     statemachine! {
         transitions: {
             // Enable sequence
             *Disabled + Enable / engage_k0 = EnableWaitK0,
-            EnableWaitK0 + RelayDone / disengage_k1 = EnableWaitK1,
-            EnableWaitK1 + RelayDone = RampCurrent,
-            RampCurrent + CurrentStep / increment_current = RampCurrent,
-            RampCurrent + CurrentFinal = Enabled,
+            EnableWaitK0 + Tick / disengage_k1 = EnableWaitK1,
+            EnableWaitK1 + Tick / increment_current = RampCurrent,
+            RampCurrent + Tick / increment_current = RampCurrent,
+            RampCurrent + RampDone = Enabled,
 
             // Abort transitions
             EnableWaitK0 | EnableWaitK1 | RampCurrent + Disable = Abort,
-            Abort + RelayDone / engage_k1_and_hold_iir = DisableWaitK1,
+            Abort + Tick / engage_k1_and_hold_iir = DisableWaitK1,
 
             // Disable sequence
             Enabled + Disable / engage_k1_and_hold_iir = DisableWaitK1,
-            DisableWaitK1 + RelayDone / disengage_k0_and_reset_iir = DisableWaitK0,
-            DisableWaitK0 + RelayDone = Disabled,
+            DisableWaitK1 + Tick / disengage_k0_and_reset_iir = DisableWaitK0,
+            DisableWaitK0 + Tick = Disabled,
 
             Disabled + Disable = Disabled,
             Enabled + Enable = Enabled
@@ -75,23 +78,23 @@ where
     }
 
     fn engage_k0(&mut self) {
-        self.relay.engage_k0()
+        self.relay.engage_k0();
     }
 
     fn disengage_k0_and_reset_iir(&mut self) {
         self.iir.y_offset = 0.;
         self.iir.ba = [0., 0., 0., 0., 0.];
-        self.relay.disengage_k0()
+        self.relay.disengage_k0();
     }
 
     fn disengage_k1(&mut self) {
-        self.relay.disengage_k1()
+        self.relay.disengage_k1();
     }
 
     fn engage_k1_and_hold_iir(&mut self) {
         self.iir.y_offset = 0.;
         self.iir.ba = [0., 0., 0., 1., 0.];
-        self.relay.engage_k1()
+        self.relay.engage_k1();
     }
 }
 
@@ -100,6 +103,16 @@ where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     E: Debug,
 {
+    fn delay(&self) -> Option<fugit::MillisDuration<u64>> {
+        match *self.state() {
+            sm::States::DisableWaitK0 => Some(Relay::<I2C>::K0_DELAY),
+            sm::States::DisableWaitK1 => Some(Relay::<I2C>::K1_DELAY),
+            sm::States::EnableWaitK0 => Some(Relay::<I2C>::K0_DELAY),
+            sm::States::EnableWaitK1 => Some(Relay::<I2C>::K1_DELAY),
+            sm::States::RampCurrent => Some(Output::<I2C>::RAMP_DELAY),
+            _ => None,
+        }
+    }
     /// Start enabling sequence. Returns `Some(relay delay)` or `None` if we started an Abort
     /// or an error if SM is in a state where we can't enable.
     pub fn set_enable(
@@ -123,43 +136,24 @@ where
         iir: &iir::IIR<f32>,
     ) -> Option<fugit::MillisDuration<u64>> {
         match *self.state() {
-            // engage K1 second
-            sm::States::EnableWaitK0 => {
-                self.process_event(sm::Events::RelayDone).unwrap();
-                Some(Relay::<I2C>::K1_DELAY)
-            }
-            // disengage K0 second
-            sm::States::DisableWaitK1 => {
-                self.process_event(sm::Events::RelayDone).unwrap();
-                Some(Relay::<I2C>::K0_DELAY)
-            }
-            // start ramp
-            sm::States::EnableWaitK1 => {
-                self.process_event(sm::Events::RelayDone).unwrap();
-                Some(Output::<I2C>::RAMP_DELAY)
-            }
-            // powerdown finished, no need to wait
-            sm::States::DisableWaitK0 => {
-                self.process_event(sm::Events::RelayDone).unwrap();
-                None
+            sm::States::EnableWaitK0
+            | sm::States::DisableWaitK1
+            | sm::States::EnableWaitK1
+            | sm::States::DisableWaitK0
+            | sm::States::Abort => {
+                self.process_event(sm::Events::Tick).unwrap();
             }
             // handle the ramp
             sm::States::RampCurrent => {
                 if self.context().iir.y_offset >= iir.y_offset {
-                    self.process_event(sm::Events::CurrentFinal).unwrap();
-                    None
+                    self.process_event(sm::Events::RampDone).unwrap();
                 } else {
-                    self.process_event(sm::Events::CurrentStep).unwrap();
-                    Some(Output::<I2C>::RAMP_DELAY)
+                    self.process_event(sm::Events::Tick).unwrap();
                 }
             }
-            // first event after aborting => engage K1 to be safe in all cases
-            sm::States::Abort => {
-                self.process_event(sm::Events::RelayDone).unwrap();
-                Some(Output::<I2C>::RAMP_DELAY)
-            }
-            _ => None,
-        }
+            _ => (),
+        };
+        self.delay()
     }
 
     pub fn iir(&mut self) -> &iir::IIR<f32> {
