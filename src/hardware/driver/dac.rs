@@ -117,9 +117,9 @@ pub struct DacCode(u32);
 impl DacCode {
     // DAC constants
     const MAX_DAC_WORD: i32 = 1 << 20; // maximum DAC dataword (exclusive)
-    const VREF_DAC: f32 = 5.0; // Difference between
-    const R_OUT_LN: f32 = 100.0; // Low noise side output resistor
-    const R_OUT_HP: f32 = 40.0; // High power side output resistor
+    const VREF_DAC: f32 = 10.0; // Difference between positive and negaitiv reference pin
+    const R_OUT_LN: f32 = 40.0; // Low noise side output resistor
+    const R_OUT_HP: f32 = 0.68; // High power side output resistor
 }
 
 impl TryFrom<(f32, ChannelVariant)> for DacCode {
@@ -133,15 +133,18 @@ impl TryFrom<(f32, ChannelVariant)> for DacCode {
             ChannelVariant::HighPowerAnodeGrounded => (Self::R_OUT_HP, true),
             ChannelVariant::HighPowerCathodeGrounded => (Self::R_OUT_HP, false),
         };
-        let dac_code = (r_out
+        let mut dac_code = (r_out
             * current
             * (DacCode::MAX_DAC_WORD as f32 / DacCode::VREF_DAC))
             as i32;
+        log::info!("dac_code before: {:?}", dac_code);
+
         if is_inverted {
             // Convert to inverted dac output for anode grounded Driver channel variants.
-            // These variants need (VREF_DAC - V_CURR) to produce the current CURR. 
-            dac_code = !dac_code;
+            // These variants need (VREF_DAC - V_CURR) to produce the current CURR.
+            dac_code = DacCode::MAX_DAC_WORD - dac_code + 1;
         }
+        log::info!("dac_code after: {:?}", dac_code);
         if !(0..DacCode::MAX_DAC_WORD).contains(&dac_code) {
             return Err(Error::Bounds);
         };
@@ -183,9 +186,9 @@ where
 
     pub fn set(&mut self, current: f32) -> Result<(), Error> {
         let dac_code = DacCode::try_from((current, self.channel))?;
-        let mut bytes = (DAC_ADDR::DAC_DATA | (dac_code.0 << 4)).to_be_bytes();
+        let bytes = (DAC_ADDR::DAC_DATA | (dac_code.0 << 4)).to_be_bytes();
         self.sync_n.set_low();
-        self.spi.write(&mut bytes).unwrap();
+        self.spi.write(&bytes).unwrap();
         self.sync_n.set_high();
         Ok(())
     }

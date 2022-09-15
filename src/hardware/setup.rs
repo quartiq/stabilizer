@@ -1063,7 +1063,7 @@ pub fn setup(
                 gpiod.pd7.into_alternate(),
             ),
             config,
-            design_parameters::ADC_DAC_SCK_MAX.convert(),
+            1.MHz(), // ToDo find good clock rate and potentially debug 50 MHz FullDuplex error
             ccdr.peripheral.SPI1,
             &ccdr.clocks,
         );
@@ -1085,12 +1085,16 @@ pub fn setup(
 
         let mut curr = 0.0;
         loop {
-            let _ = dac[0].set(curr);
-            dac[1].set(curr).map_err(|_| {
-                log::info!("curr oflw: {:?}", curr);
+            let _ = dac[0].set(curr).map_err(|_| {
+                log::info!("curr0 oflw: {:?}", curr);
                 curr = 0.;
             });
-            curr += 0.01;
+            let _ = dac[1].set(curr).map_err(|_| {
+                log::info!("curr1 oflw: {:?}", curr);
+                curr = 0.;
+            });
+            curr += 0.001;
+            cortex_m::asm::delay(1000000);
         }
 
         Mezzanine::Driver(DriverDevices {
