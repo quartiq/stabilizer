@@ -1,21 +1,20 @@
-use core::fmt::Debug;
-
-use embedded_hal::blocking::spi::{Transfer, Write};
 ///! Driver DAC11001 driver
+use core::fmt::Debug;
+use embedded_hal::blocking::spi::{Transfer, Write};
 use stm32h7xx_hal::gpio;
 
 use super::ChannelVariant;
 
 // DAC11001 register addresses
 #[allow(unused, non_camel_case_types)]
-pub mod DAC_ADDR {
-    pub const NOP: u32 = 0x00 << 24;
-    pub const DAC_DATA: u32 = 0x01 << 24;
-    pub const CONFIG1: u32 = 0x02 << 24;
-    pub const DAC_CLEAR_DATA: u32 = 0x03 << 24;
-    pub const TRIGGER: u32 = 0x04 << 24;
-    pub const STATUS: u32 = 0x05 << 24;
-    pub const CONFIG2: u32 = 0x06 << 24;
+pub enum DAC_ADDR {
+    NOP = 0x00 << 24,
+    DAC_DATA = 0x01 << 24,
+    CONFIG1 = 0x02 << 24,
+    DAC_CLEAR_DATA = 0x03 << 24,
+    TRIGGER = 0x04 << 24,
+    STATUS = 0x05 << 24,
+    CONFIG2 = 0x06 << 24,
 }
 
 #[allow(non_snake_case)]
@@ -79,6 +78,13 @@ pub mod TRIGGER {
     }
     pub mod SCLR {
         pub const CLEAR: u32 = 1 << 5;
+    }
+}
+
+#[allow(non_snake_case)]
+pub mod STATUS {
+    pub mod ALM {
+        pub const RECALIBRATED: u32 = 1 << 12;
     }
 }
 
@@ -171,26 +177,61 @@ where
     SPI: Transfer<u8, Error = E> + Write<u8, Error = E>,
     E: Debug,
 {
+    /// Construct a new [Dac] in the following state:
+    /// - reset
+    /// - deglitch circuit is enabled by default (fast-settling off)
+    /// - asyncronous output update (when sync goes high) by default
+    /// - 0.5-MHz DAC update rate by default for enhanced THD performance
+    /// - temperature drift calibration performed
     pub fn new(
         spi: SPI,
         sync_n: gpio::ErasedPin<gpio::Output>,
         channel: ChannelVariant,
     ) -> Self {
-        Dac {
+        let mut dac = Dac {
             spi,
             sync_n,
             channel,
-        }
+        };
+
+        // reset DAC
+        dac.write(DAC_ADDR::TRIGGER as u32 | TRIGGER::SRST::RESET);
+        dac.calibrate();
+
+        dac
     }
 
-    // pub fn calibrate()
+    /// Perform temperature drift calibration (waits until calibration is done).
+    pub fn calibrate(&mut self) {
+        self.write(DAC_ADDR::CONFIG1 as u32 | CONFIG1::EN_TMP_CAL::ENABLED);
+        self.write(DAC_ADDR::TRIGGER as u32 | TRIGGER::RCLTMP::RECAL);
+        // continuously read recalibration done bit until it is set
+        while (self.read(DAC_ADDR::STATUS) & STATUS::ALM::RECALIBRATED) == 0 {}
+    }
 
+    /// Set the DAC to produce a voltage corresponding to `current`.
     pub fn set(&mut self, current: f32) -> Result<(), Error> {
         let dac_code = DacCode::try_from((current, self.channel))?;
-        let bytes = (DAC_ADDR::DAC_DATA | (dac_code.0 << 4)).to_be_bytes();
+        let word = DAC_ADDR::DAC_DATA as u32 | (dac_code.0 << 4);
+        self.write(word);
+        Ok(())
+    }
+
+    /// Write a 32 bit word to the DAC.
+    pub fn write(&mut self, word: u32) {
+        let bytes = word.to_be_bytes();
         self.sync_n.set_low();
         self.spi.write(&bytes).unwrap();
         self.sync_n.set_high();
-        Ok(())
+    }
+
+    /// Perform a read of a DAC register. First writes a word and then reads one.
+    pub fn read(&mut self, addr: DAC_ADDR) -> u32 {
+        let mut buf = [0u8; 8];
+        buf[0] = 1u8 << 7 | addr as u8;
+        self.sync_n.set_low();
+        self.spi.transfer(&mut buf).unwrap();
+        self.sync_n.set_high();
+        u64::from_be_bytes(buf) as u32 // just cut off the upper word where no data was received
     }
 }
