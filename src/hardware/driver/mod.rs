@@ -23,3 +23,12 @@ pub enum Channel {
     LowNoise = 0,
     HighPower = 1,
 }
+
+#[derive(Clone, Copy, Debug)]
+#[repr(usize)]
+pub enum ChannelVariant {
+    LowNoiseAnodeGrounded,
+    LowNoiseCathodeGrounded,
+    HighPowerAnodeGrounded,
+    HighPowerCathodeGrounded,
+}

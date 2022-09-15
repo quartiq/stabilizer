@@ -1070,10 +1070,28 @@ pub fn setup(
         let dac_bus_manager = shared_bus::BusManagerSimple::new(dac_spi);
         let dac0_cs = gpiog.pg10.into_push_pull_output().erase();
         let dac1_cs = gpioa.pa0.into_push_pull_output().erase();
-        let dac = [
-            driver::dac::Dac::new(dac_bus_manager.acquire_spi(), dac0_cs),
-            driver::dac::Dac::new(dac_bus_manager.acquire_spi(), dac1_cs),
+        let mut dac = [
+            driver::dac::Dac::new(
+                dac_bus_manager.acquire_spi(),
+                dac0_cs,
+                driver::ChannelVariant::LowNoiseAnodeGrounded,
+            ),
+            driver::dac::Dac::new(
+                dac_bus_manager.acquire_spi(),
+                dac1_cs,
+                driver::ChannelVariant::HighPowerAnodeGrounded,
+            ),
         ];
+
+        let mut curr = 0.0;
+        loop {
+            let _ = dac[0].set(curr);
+            dac[1].set(curr).map_err(|_| {
+                log::info!("curr oflw: {:?}", curr);
+                curr = 0.;
+            });
+            curr += 0.01;
+        }
 
         Mezzanine::Driver(DriverDevices {
             lm75,
