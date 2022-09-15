@@ -1051,26 +1051,29 @@ pub fn setup(
             )),
         ];
 
-        let dac_pins = {
-            gpioa.pa0.into_alternate(),
-        };
-
         let config = hal::spi::Config::new(hal::spi::Mode {
             polarity: hal::spi::Polarity::IdleHigh,
             phase: hal::spi::Phase::CaptureOnSecondTransition,
         });
 
         let dac_spi = device.SPI1.spi(
-            (gpiog.pg11.into_alternate(), gpioa.pa6.into_alternate(), gpiod.pd7.into_alternate(), gpiog.pg10.into_alternate()),
+            (
+                gpiog.pg11.into_alternate(),
+                gpioa.pa6.into_alternate(),
+                gpiod.pd7.into_alternate(),
+            ),
             config,
             design_parameters::ADC_DAC_SCK_MAX.convert(),
             ccdr.peripheral.SPI1,
             &ccdr.clocks,
         );
-
-        let dac_bus_manager = shared_bus::new_atomic_check!(hal::spi::Spi<SPI1, Enabled, u32> = dac_spi).unwrap();
-
-        let dac = driver::dac::Dac::new(dac_bus_manager.acquire_spi(), sync_n)
+        let dac_bus_manager = shared_bus::BusManagerSimple::new(dac_spi);
+        let dac0_cs = gpiog.pg10.into_push_pull_output().erase();
+        let dac1_cs = gpioa.pa0.into_push_pull_output().erase();
+        let dac = [
+            driver::dac::Dac::new(dac_bus_manager.acquire_spi(), dac0_cs),
+            driver::dac::Dac::new(dac_bus_manager.acquire_spi(), dac1_cs),
+        ];
 
         Mezzanine::Driver(DriverDevices {
             lm75,
