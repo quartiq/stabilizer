@@ -4,18 +4,18 @@ use embedded_hal::blocking::spi::{Transfer, Write};
 ///! Driver DAC11001 driver
 use stm32h7xx_hal::gpio;
 
-use super::{Channel, ChannelVariant};
+use super::ChannelVariant;
 
 // DAC11001 register addresses
 #[allow(unused, non_camel_case_types)]
 pub mod DAC_ADDR {
-    pub const NOP: u32 = 0x00 << 23;
-    pub const DAC_DATA: u32 = 0x01 << 23;
-    pub const CONFIG1: u32 = 0x02 << 23;
-    pub const DAC_CLEAR_DATA: u32 = 0x03 << 23;
-    pub const TRIGGER: u32 = 0x04 << 23;
-    pub const STATUS: u32 = 0x05 << 23;
-    pub const CONFIG2: u32 = 0x06 << 23;
+    pub const NOP: u32 = 0x00 << 24;
+    pub const DAC_DATA: u32 = 0x01 << 24;
+    pub const CONFIG1: u32 = 0x02 << 24;
+    pub const DAC_CLEAR_DATA: u32 = 0x03 << 24;
+    pub const TRIGGER: u32 = 0x04 << 24;
+    pub const STATUS: u32 = 0x05 << 24;
+    pub const CONFIG2: u32 = 0x06 << 24;
 }
 
 #[allow(non_snake_case)]
@@ -142,6 +142,7 @@ impl TryFrom<(f32, ChannelVariant)> for DacCode {
         if is_inverted {
             // Convert to inverted dac output for anode grounded Driver channel variants.
             // These variants need (VREF_DAC - V_CURR) to produce the current CURR.
+            // No bitinversion and masking so we can still detect bounds errors.
             dac_code = DacCode::MAX_DAC_WORD - dac_code + 1;
         }
         log::info!("dac_code after: {:?}", dac_code);

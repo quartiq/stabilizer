@@ -1067,10 +1067,16 @@ pub fn setup(
             ccdr.peripheral.SPI1,
             &ccdr.clocks,
         );
-        let dac_bus_manager = shared_bus::BusManagerSimple::new(dac_spi);
+        let dac_bus_manager = cortex_m::singleton!(
+            SPI1_MANAGER:
+                shared_bus::BusManager<
+                    shared_bus::NullMutex<hal::spi::Spi<SPI1, Enabled, u8>>,
+                > = shared_bus::BusManagerSimple::new(dac_spi)
+        )
+        .unwrap();
         let dac0_cs = gpiog.pg10.into_push_pull_output().erase();
         let dac1_cs = gpioa.pa0.into_push_pull_output().erase();
-        let mut dac = [
+        let dac = [
             driver::dac::Dac::new(
                 dac_bus_manager.acquire_spi(),
                 dac0_cs,
@@ -1079,29 +1085,16 @@ pub fn setup(
             driver::dac::Dac::new(
                 dac_bus_manager.acquire_spi(),
                 dac1_cs,
-                driver::ChannelVariant::HighPowerAnodeGrounded,
+                driver::ChannelVariant::HighPowerCathodeGrounded,
             ),
         ];
-
-        let mut curr = 0.0;
-        loop {
-            let _ = dac[0].set(curr).map_err(|_| {
-                log::info!("curr0 oflw: {:?}", curr);
-                curr = 0.;
-            });
-            let _ = dac[1].set(curr).map_err(|_| {
-                log::info!("curr1 oflw: {:?}", curr);
-                curr = 0.;
-            });
-            curr += 0.001;
-            cortex_m::asm::delay(1000000);
-        }
 
         Mezzanine::Driver(DriverDevices {
             lm75,
             ltc2320,
             internal_adc,
             output_sm,
+            dac,
         })
     } else {
         Mezzanine::None
