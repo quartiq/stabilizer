@@ -7,6 +7,7 @@ use hal::device::SPI1;
 use hal::i2c::I2c;
 use hal::spi::Enabled;
 use shared_bus::{AtomicCheckMutex, I2cProxy};
+use shared_bus_rtic::CommonBus;
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
@@ -1063,27 +1064,34 @@ pub fn setup(
                 gpiod.pd7.into_alternate(),
             ),
             config,
-            1.MHz(), // ToDo find good clock rate and potentially debug 50 MHz FullDuplex error
+            // ToDo find good clock rate and potentially debug the following observed errors:
+            // - A clock rate of 25 MHz (next possible step from 12.5 MHz) somehow seems to lead to
+            //   longer CPU-blocking SPI writes which in turn means the Stabilizer DAC panics (at 100 kHz process rate).
+            // - 50 MHz FullDuplex error
+            12500.kHz(),
             ccdr.peripheral.SPI1,
             &ccdr.clocks,
         );
-        let dac_bus_manager = cortex_m::singleton!(
-            SPI1_MANAGER:
-                shared_bus::BusManager<
-                    shared_bus::NullMutex<hal::spi::Spi<SPI1, Enabled, u8>>,
-                > = shared_bus::BusManagerSimple::new(dac_spi)
-        )
-        .unwrap();
+
+        let dac_bus_manager =
+            shared_bus_rtic::new!(dac_spi, hal::spi::Spi<SPI1,Enabled,u8>);
+        // let dac_bus_manager = cortex_m::singleton!(
+        //     SPI1_MANAGER:
+        //         shared_bus::BusManager<
+        //             shared_bus::NullMutex<hal::spi::Spi<SPI1, Enabled, u8>>,
+        //         > = shared_bus::BusManagerSimple::new(dac_spi)
+        // )
+        // .unwrap();
         let dac0_cs = gpiog.pg10.into_push_pull_output().erase();
         let dac1_cs = gpioa.pa0.into_push_pull_output().erase();
         let dac = [
             driver::dac::Dac::new(
-                dac_bus_manager.acquire_spi(),
+                dac_bus_manager.acquire(),
                 dac0_cs,
                 driver::ChannelVariant::LowNoiseAnodeGrounded,
             ),
             driver::dac::Dac::new(
-                dac_bus_manager.acquire_spi(),
+                dac_bus_manager.acquire(),
                 dac1_cs,
                 driver::ChannelVariant::HighPowerCathodeGrounded,
             ),

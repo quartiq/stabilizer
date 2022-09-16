@@ -143,7 +143,6 @@ impl TryFrom<(f32, ChannelVariant)> for DacCode {
             * current
             * (DacCode::MAX_DAC_WORD as f32 / DacCode::VREF_DAC))
             as i32;
-        log::info!("dac_code before: {:?}", dac_code);
 
         if is_inverted {
             // Convert to inverted dac output for anode grounded Driver channel variants.
@@ -151,7 +150,6 @@ impl TryFrom<(f32, ChannelVariant)> for DacCode {
             // No bitinversion and masking so we can still detect bounds errors.
             dac_code = DacCode::MAX_DAC_WORD - dac_code + 1;
         }
-        log::info!("dac_code after: {:?}", dac_code);
         if !(0..DacCode::MAX_DAC_WORD).contains(&dac_code) {
             return Err(Error::Bounds);
         };
@@ -221,7 +219,7 @@ where
         Ok(())
     }
 
-    /// Write a 24 bit [data] to the DAC at [addr].
+    /// Write 24 bit [data] to the DAC at [addr].
     pub fn write(&mut self, data: u32, addr: DAC_ADDR) {
         let bytes = (addr as u32 | (data & 0xffffff)).to_be_bytes();
         self.sync_n.set_low();

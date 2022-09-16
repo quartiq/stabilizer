@@ -9,10 +9,9 @@ pub mod interlock;
 use num_enum::TryFromPrimitive;
 use stm32h7xx_hal as hal;
 
-pub type Spi1 = hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>;
-pub type Spi1Proxy =
-    shared_bus::SpiProxy<'static, shared_bus::NullMutex<Spi1>>;
-
+pub type Spi1Proxy = &'static shared_bus_rtic::CommonBus<
+    hal::spi::Spi<stm32h7xx_hal::stm32::SPI1, stm32h7xx_hal::spi::Enabled>,
+>;
 /// Devices on Driver + Driver headerboard
 pub struct DriverDevices {
     pub ltc2320: ltc2320::Ltc2320,

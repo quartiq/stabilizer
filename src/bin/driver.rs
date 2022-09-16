@@ -46,11 +46,12 @@ use stabilizer::{
 const SCALE: f32 = i16::MAX as _;
 
 // The number of samples in each batch process
-const BATCH_SIZE: usize = 8;
+// DO NOT CHANGE FOR DRIVER
+const BATCH_SIZE: usize = 1;
 
-// The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^7 =
-// 128, there is 1.28uS per sample, corresponding to a sampling frequency of 781.25 KHz.
-const SAMPLE_TICKS_LOG2: u8 = 7;
+// The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^10 =
+// 1024, there are 10.24uS per sample, corresponding to a sampling frequency of 97.66 KHz.
+const SAMPLE_TICKS_LOG2: u8 = 10;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 const SAMPLE_PERIOD: f32 =
     SAMPLE_TICKS as f32 * hardware::design_parameters::TIMER_PERIOD;
@@ -205,6 +206,7 @@ mod app {
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
         header_adc_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
+        driver_dac: [driver::dac::Dac<driver::Spi1Proxy>; 2],
     }
 
     #[init]
@@ -272,6 +274,7 @@ mod app {
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
             header_adc_conversion_scheduled: stabilizer.systick.now(),
+            driver_dac: driver.dac,
         };
 
         // Enable ADC/DAC events
@@ -316,7 +319,7 @@ mod app {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[settings, signal_generator, telemetry, output_state], priority=3)]
+    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator, driver_dac], shared=[settings, signal_generator, telemetry, output_state], priority=3)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
@@ -332,6 +335,7 @@ mod app {
             dacs: (dac0, dac1),
             iir_state,
             generator,
+            driver_dac,
         } = c.local;
 
         (settings, telemetry, signal_generator, output_state).lock(
@@ -378,6 +382,8 @@ mod app {
                                 *di = DacCode::from(y).0;
                             })
                             .last();
+
+                        driver_dac[channel].set(0.1).unwrap();
                     }
 
                     // Stream the data.
