@@ -383,6 +383,8 @@ mod app {
                             })
                             .last();
 
+                        // I could put the driver dac writes into a lower prio rtic task so the blocking writes
+                        // can be interrupted by networking etc?
                         driver_dac[channel].set(0.1).unwrap();
                     }
 
