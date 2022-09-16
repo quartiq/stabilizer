@@ -179,10 +179,12 @@ where
 {
     /// Construct a new [Dac] in the following state:
     /// - reset
+    /// - 10 V plusminus 1.25 V refernece span configured
+    /// - temperature drift calibration performed
     /// - deglitch circuit is enabled by default (fast-settling off)
     /// - asyncronous output update (when sync goes high) by default
-    /// - 0.5-MHz DAC update rate by default for enhanced THD performance
-    /// - temperature drift calibration performed
+    /// - 0.5-MHz max DAC update rate by default for enhanced THD performance
+    /// - TNH masked for code jump > 2^14 (default)
     pub fn new(
         spi: SPI,
         sync_n: gpio::ErasedPin<gpio::Output>,
@@ -195,7 +197,10 @@ where
         };
 
         // reset DAC
-        dac.write(DAC_ADDR::TRIGGER as u32 | TRIGGER::SRST::RESET);
+        dac.write(TRIGGER::SRST::RESET, DAC_ADDR::TRIGGER);
+        // set to 10 V plusminus 1.25 V refernece span
+        dac.write(CONFIG1::VREFVAL::SPAN_10V_1_25V, DAC_ADDR::CONFIG1);
+        // perform calibration
         dac.calibrate();
 
         dac
@@ -203,8 +208,8 @@ where
 
     /// Perform temperature drift calibration (waits until calibration is done).
     pub fn calibrate(&mut self) {
-        self.write(DAC_ADDR::CONFIG1 as u32 | CONFIG1::EN_TMP_CAL::ENABLED);
-        self.write(DAC_ADDR::TRIGGER as u32 | TRIGGER::RCLTMP::RECAL);
+        self.write(CONFIG1::EN_TMP_CAL::ENABLED, DAC_ADDR::CONFIG1);
+        self.write(TRIGGER::RCLTMP::RECAL, DAC_ADDR::TRIGGER);
         // continuously read recalibration done bit until it is set
         while (self.read(DAC_ADDR::STATUS) & STATUS::ALM::RECALIBRATED) == 0 {}
     }
@@ -212,14 +217,13 @@ where
     /// Set the DAC to produce a voltage corresponding to `current`.
     pub fn set(&mut self, current: f32) -> Result<(), Error> {
         let dac_code = DacCode::try_from((current, self.channel))?;
-        let word = DAC_ADDR::DAC_DATA as u32 | (dac_code.0 << 4);
-        self.write(word);
+        self.write(dac_code.0 << 4, DAC_ADDR::DAC_DATA);
         Ok(())
     }
 
-    /// Write a 32 bit word to the DAC.
-    pub fn write(&mut self, word: u32) {
-        let bytes = word.to_be_bytes();
+    /// Write a 24 bit [data] to the DAC at [addr].
+    pub fn write(&mut self, data: u32, addr: DAC_ADDR) {
+        let bytes = (addr as u32 | (data & 0xffffff)).to_be_bytes();
         self.sync_n.set_low();
         self.spi.write(&bytes).unwrap();
         self.sync_n.set_high();
@@ -228,7 +232,7 @@ where
     /// Perform a read of a DAC register. First writes a word and then reads one.
     pub fn read(&mut self, addr: DAC_ADDR) -> u32 {
         let mut buf = [0u8; 8];
-        buf[0] = 1u8 << 7 | addr as u8;
+        buf[0] = 1u8 << 7 | (addr as u32 >> 24) as u8;
         self.sync_n.set_low();
         self.spi.transfer(&mut buf).unwrap();
         self.sync_n.set_high();
