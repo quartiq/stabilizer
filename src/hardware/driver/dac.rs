@@ -148,8 +148,9 @@ impl TryFrom<(f32, ChannelVariant)> for DacCode {
             // Convert to inverted dac output for anode grounded Driver channel variants.
             // These variants need (VREF_DAC - V_CURR) to produce the current CURR.
             // No bitinversion and masking so we can still detect bounds errors.
-            dac_code = DacCode::MAX_DAC_WORD - dac_code + 1;
+            dac_code = DacCode::MAX_DAC_WORD - dac_code - 1; // For now just subtract a bit to stay in bounds for 0 A
         }
+
         if !(0..DacCode::MAX_DAC_WORD).contains(&dac_code) {
             return Err(Error::Bounds);
         };

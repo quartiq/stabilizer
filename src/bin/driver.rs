@@ -331,7 +331,7 @@ mod app {
                             .iter()
                             .zip(dac_samples[channel].iter_mut())
                             .map(|(ai, di)| {
-                                let x = f32::from(*ai as i16);
+                                let x = f32::from(*ai); // get adc sample in volt
                                 let iir = if output[channel].is_enabled() {
                                     settings.iir_ch[channel]
                                 } else {
@@ -343,18 +343,14 @@ mod app {
                                     hold,
                                 );
 
-                                // Note(unsafe): The filter limits must ensure that the value is in range.
-                                // The truncation introduces 1/2 LSB distortion.
-                                let y: i16 = unsafe { y.to_int_unchecked() };
+                                // Convert to DAC code. Output 1V/1A Driver output current. Bounds must be ensured by filter limits!
+                                *di = DacCode::try_from(y).unwrap().0;
 
-                                // Convert to DAC code
-                                *di = DacCode::from(y).0;
+                                // I could put the driver dac writes into a lower prio rtic task so the blocking writes
+                                // can be interrupted by networking etc?
+                                driver_dac[channel].set(y).unwrap();
                             })
                             .last();
-
-                        // I could put the driver dac writes into a lower prio rtic task so the blocking writes
-                        // can be interrupted by networking etc?
-                        driver_dac[channel].set(0.1).unwrap();
                     }
 
                     // Stream the data.
