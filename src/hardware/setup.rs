@@ -1064,10 +1064,13 @@ pub fn setup(
                 gpiod.pd7.into_alternate(),
             ),
             config,
-            // ToDo find good clock rate and potentially debug the following observed errors:
+            // ToDo find good clock rate and further debug the following observed errors:
             // - A clock rate of 25 MHz (next possible step from 12.5 MHz) somehow seems to lead to
             //   longer CPU-blocking SPI writes which in turn means the Stabilizer DAC panics (at 100 kHz process rate).
-            // - 50 MHz FullDuplex error
+            // - I also see spurious SPI Overrun errors after ~30 seconds of program runtime at a rate or 25 MHz
+            //   with an effective DAC update rate of 97.6 kHz (triggered by the DSP process)
+            // - 50 MHz immediately leads to FullDuplex error
+            //   https://github.com/stm32-rs/stm32h7xx-hal/blob/778ecf7a14d713e4387dbd477a2455d2f71a3424/src/spi.rs#L101-L103
             12500.kHz(),
             ccdr.peripheral.SPI1,
             &ccdr.clocks,
@@ -1075,25 +1078,18 @@ pub fn setup(
 
         let dac_bus_manager =
             shared_bus_rtic::new!(dac_spi, hal::spi::Spi<SPI1,Enabled,u8>);
-        // let dac_bus_manager = cortex_m::singleton!(
-        //     SPI1_MANAGER:
-        //         shared_bus::BusManager<
-        //             shared_bus::NullMutex<hal::spi::Spi<SPI1, Enabled, u8>>,
-        //         > = shared_bus::BusManagerSimple::new(dac_spi)
-        // )
-        // .unwrap();
         let dac0_cs = gpiog.pg10.into_push_pull_output().erase();
         let dac1_cs = gpioa.pa0.into_push_pull_output().erase();
         let dac = [
             driver::dac::Dac::new(
                 dac_bus_manager.acquire(),
                 dac0_cs,
-                driver::ChannelVariant::LowNoiseAnodeGrounded,
+                driver::ChannelVariant::LowNoiseAnodeGrounded, // just any channel variant for now
             ),
             driver::dac::Dac::new(
                 dac_bus_manager.acquire(),
                 dac1_cs,
-                driver::ChannelVariant::HighPowerCathodeGrounded,
+                driver::ChannelVariant::HighPowerCathodeGrounded, // just any channel variant for now
             ),
         ];
 
