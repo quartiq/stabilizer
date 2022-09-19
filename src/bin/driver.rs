@@ -52,8 +52,6 @@ const BATCH_SIZE: usize = 1;
 // 1024, there are 10.24uS per sample, corresponding to a sampling frequency of 97.66 KHz.
 const SAMPLE_TICKS_LOG2: u8 = 10;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
-// const SAMPLE_PERIOD: f32 =
-//     SAMPLE_TICKS as f32 * hardware::design_parameters::TIMER_PERIOD;
 
 #[derive(Clone, Copy, Debug, Miniconf)]
 pub struct Settings {

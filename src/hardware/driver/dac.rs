@@ -197,7 +197,7 @@ where
 
         // reset DAC
         dac.write(TRIGGER::SRST::RESET, DAC_ADDR::TRIGGER);
-        // set to 10 V plusminus 1.25 V refernece span
+        // set to 10 V plusminus 1.25 V referenece span
         dac.write(CONFIG1::VREFVAL::SPAN_10V_1_25V, DAC_ADDR::CONFIG1);
         // perform calibration
         dac.calibrate();
@@ -210,7 +210,7 @@ where
         self.write(CONFIG1::EN_TMP_CAL::ENABLED, DAC_ADDR::CONFIG1);
         self.write(TRIGGER::RCLTMP::RECAL, DAC_ADDR::TRIGGER);
         // continuously read recalibration done bit until it is set
-        // while (self.read(DAC_ADDR::STATUS) & STATUS::ALM::RECALIBRATED) == 0 {}
+        while (self.read(DAC_ADDR::STATUS) & STATUS::ALM::RECALIBRATED) == 0 {}
     }
 
     /// Set the DAC to produce a voltage corresponding to `current`.

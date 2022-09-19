@@ -24,9 +24,9 @@ where
     E: Debug,
 {
     // 1 A/s current ramp-up
-    const RAMP_STEP: f32 = 1e-3; // will be 1 mA current steps
+    const RAMP_STEP: f32 = 1e-3;
     const RAMP_DELAY: fugit::MillisDuration<u64> =
-        fugit::MillisDurationU64::millis(10); // will be current steps every 1 ms
+        fugit::MillisDurationU64::millis(1);
 
     pub fn new(
         gpio: &'static spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
