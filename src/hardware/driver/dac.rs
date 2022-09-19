@@ -210,7 +210,7 @@ where
         self.write(CONFIG1::EN_TMP_CAL::ENABLED, DAC_ADDR::CONFIG1);
         self.write(TRIGGER::RCLTMP::RECAL, DAC_ADDR::TRIGGER);
         // continuously read recalibration done bit until it is set
-        while (self.read(DAC_ADDR::STATUS) & STATUS::ALM::RECALIBRATED) == 0 {}
+        // while (self.read(DAC_ADDR::STATUS) & STATUS::ALM::RECALIBRATED) == 0 {}
     }
 
     /// Set the DAC to produce a voltage corresponding to `current`.

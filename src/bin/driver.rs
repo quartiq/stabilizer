@@ -292,7 +292,7 @@ mod app {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator, driver_dac], shared=[settings, telemetry, output_state], priority=3)]
+    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[settings, telemetry, output_state], priority=4)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
@@ -307,7 +307,6 @@ mod app {
             dacs: (dac0, dac1),
             iir_state,
             generator,
-            driver_dac,
         } = c.local;
 
         (settings, telemetry, output_state).lock(
@@ -346,9 +345,11 @@ mod app {
                                 // Convert to DAC code. Output 1V/1A Driver output current. Bounds must be ensured by filter limits!
                                 *di = DacCode::try_from(y).unwrap().0;
 
-                                // I could put the driver dac writes into a lower prio rtic task so the blocking writes
-                                // can be interrupted by networking etc?
-                                driver_dac[channel].set(y).unwrap();
+                                write_dac_spi::spawn(
+                                    channel.try_into().unwrap(),
+                                    y,
+                                )
+                                .unwrap();
                             })
                             .last();
                     }
@@ -517,7 +518,7 @@ mod app {
         ethernet_link::Monotonic::spawn_after(1.secs()).unwrap();
     }
 
-    #[task(priority = 2, shared=[header_adc], local=[header_adc_conversion_scheduled])]
+    #[task(priority = 3, shared=[header_adc], local=[header_adc_conversion_scheduled])]
     fn header_adc_start_conversion(
         mut c: header_adc_start_conversion::Context,
     ) {
@@ -533,7 +534,7 @@ mod app {
         .unwrap();
     }
 
-    #[task(binds = QUADSPI, priority = 2, shared=[header_adc, header_adc_data])]
+    #[task(binds = QUADSPI, priority = 3, shared=[header_adc, header_adc_data])]
     fn header_adc_transfer_done(c: header_adc_transfer_done::Context) {
         (c.shared.header_adc, c.shared.header_adc_data).lock(|ltc, data| {
             ltc.handle_transfer_done(data);
@@ -541,7 +542,7 @@ mod app {
     }
 
     // Task for handling the Powerup/-down sequence
-    #[task(priority = 1, capacity = 2, shared=[output_state, settings])]
+    #[task(priority = 3, capacity = 2, shared=[output_state, settings])]
     fn handle_output_tick(
         mut c: handle_output_tick::Context,
         channel: driver::Channel,
@@ -561,6 +562,17 @@ mod app {
         });
     }
 
+    // Driver DAC SPI write task. This effectively makes the slow, blocking SPI writes non-blocking
+    // for higher priority tasks.
+    #[task(priority = 2, capacity = 2, local=[driver_dac])]
+    fn write_dac_spi(
+        c: write_dac_spi::Context,
+        channel: driver::Channel,
+        current: f32,
+    ) {
+        c.local.driver_dac[channel as usize].set(current).unwrap()
+    }
+
     #[task(priority = 1, shared=[interlock_handle])]
     fn trip_interlock(mut c: trip_interlock::Context) {
         c.shared.interlock_handle.lock(|handle| *handle = None);
@@ -572,22 +584,22 @@ mod app {
         unsafe { hal::ethernet::interrupt_handler() }
     }
 
-    #[task(binds = SPI2, priority = 4)]
+    #[task(binds = SPI2, priority = 5)]
     fn spi2(_: spi2::Context) {
         panic!("ADC0 SPI error");
     }
 
-    #[task(binds = SPI3, priority = 4)]
+    #[task(binds = SPI3, priority = 5)]
     fn spi3(_: spi3::Context) {
         panic!("ADC1 SPI error");
     }
 
-    #[task(binds = SPI4, priority = 4)]
+    #[task(binds = SPI4, priority = 5)]
     fn spi4(_: spi4::Context) {
         panic!("DAC0 SPI error");
     }
 
-    #[task(binds = SPI5, priority = 4)]
+    #[task(binds = SPI5, priority = 5)]
     fn spi5(_: spi5::Context) {
         panic!("DAC1 SPI error");
     }
