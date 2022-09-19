@@ -1065,10 +1065,10 @@ pub fn setup(
             ),
             config,
             // ToDo find good clock rate and further debug the following observed errors:
-            // - A clock rate of 25 MHz (next possible step from 12.5 MHz) somehow seems to lead to
-            //   longer CPU-blocking SPI writes which in turn means the Stabilizer DAC panics (at 100 kHz process rate).
-            // - I also see spurious SPI Overrun errors after ~30 seconds of program runtime at a rate or 25 MHz
-            //   with an effective DAC update rate of 97.6 kHz (triggered by the DSP process)
+            // - With blocking DAC writes, a clock rate of 25 MHz (next possible step from 12.5 MHz) somehow seems to lead to
+            //   longer CPU-blocking SPI writes which in turn means the Stabilizer DAC panics (at 97.6 kHz process rate).
+            // - With non-blocking DAC writes I also see spurious SPI Overrun errors after ~30 seconds of program runtime at
+            //   a rate or 25 MHz with an effective DAC update rate of 97.6 kHz (triggered by the DSP process)
             // - 50 MHz immediately leads to FullDuplex error
             //   https://github.com/stm32-rs/stm32h7xx-hal/blob/778ecf7a14d713e4387dbd477a2455d2f71a3424/src/spi.rs#L101-L103
             12500.kHz(),
