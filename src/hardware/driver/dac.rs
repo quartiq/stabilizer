@@ -127,26 +127,18 @@ impl TryFrom<(f32, ChannelVariant)> for DacCode {
     /// Convert an f32 representing a current int the corresponding DAC output code for the respective channel.
     fn try_from(current_channel: (f32, ChannelVariant)) -> Result<Self, Error> {
         let (current, channel) = current_channel;
-        if channel == ChannelVariant::HighPowerAnodeGrounded
-            || channel == ChannelVariant::LowNoiseAnodeGrounded
-        {
-            if current <= 0.0 {
-                return Err(Error::Bounds);
-            }
-        } else if current < 0.0 {
-            return Err(Error::Bounds);
+        let scale = channel.transimpedance()
+            * (DacCode::MAX_DAC_WORD as f32 / DacCode::VREF_DAC);
+        let mut code = (current * scale) as i32;
+        if scale < 0. {
+            // Flip the sign and overflow bits
+            code ^= !(DacCode::MAX_DAC_WORD - 1);
         }
-        let dac_code = (channel.transimpedance()
-            * current
-            * (DacCode::MAX_DAC_WORD as f32 / DacCode::VREF_DAC))
-            as i32;
-
-        if !(-DacCode::MAX_DAC_WORD..DacCode::MAX_DAC_WORD).contains(&dac_code)
-        {
-            return Err(Error::Bounds);
-        };
-
-        Ok(Self((dac_code & 0xfffff) as u32)) // translate to valid DAC code
+        if !(0..DacCode::MAX_DAC_WORD).contains(&code) {
+            Err(Error::Bounds)
+        } else {
+            Ok(Self((code & (DacCode::MAX_DAC_WORD - 1)) as u32))
+        }
     }
 }
 
