@@ -20,94 +20,89 @@ pub enum DAC_ADDR {
 #[allow(non_snake_case)]
 pub mod CONFIG1 {
     pub mod EN_TMP_CAL {
-        pub const DISABLED: u32 = 0 << 23;
-        pub const ENABLED: u32 = 1 << 23;
+        pub const DISABLED: u32 = 0b0 << 23;
+        pub const ENABLED: u32 = 0b1 << 23;
     }
     pub mod TNH_MASK {
-        pub const JUMP14: u32 = 00 << 18;
-        pub const JUMP15: u32 = 01 << 18;
-        pub const JUMP13: u32 = 10 << 18;
-        pub const JUMP12: u32 = 11 << 18;
+        pub const JUMP14: u32 = 0b00 << 18;
+        pub const JUMP15: u32 = 0b01 << 18;
+        pub const JUMP13: u32 = 0b10 << 18;
+        pub const JUMP12: u32 = 0b11 << 18;
     }
     pub mod LDACMODE {
-        pub const SYNC: u32 = 0 << 14;
-        pub const ASYNC: u32 = 1 << 14;
+        pub const SYNC: u32 = 0b0 << 14;
+        pub const ASYNC: u32 = 0b1 << 14;
     }
     pub mod FSDO {
-        pub const DISABLED: u32 = 0 << 13;
-        pub const ENABLED: u32 = 1 << 13;
+        pub const DISABLED: u32 = 0b0 << 13;
+        pub const ENABLED: u32 = 0b1 << 13;
     }
     pub mod ENALMP {
-        pub const DISABLED: u32 = 0 << 12;
-        pub const ENABLED: u32 = 1 << 12;
+        pub const DISABLED: u32 = 0b0 << 12;
+        pub const ENABLED: u32 = 0b1 << 12;
     }
     pub mod DSOO {
-        pub const DISABLED: u32 = 0 << 11;
-        pub const ENABLED: u32 = 1 << 11;
+        pub const DISABLED: u32 = 0b0 << 11;
+        pub const ENABLED: u32 = 0b1 << 11;
     }
     pub mod FSET {
-        pub const DISABLED: u32 = 0 << 10;
-        pub const ENABLED: u32 = 1 << 10;
+        pub const DISABLED: u32 = 0b0 << 10;
+        pub const ENABLED: u32 = 0b1 << 10;
     }
     pub mod VREFVAL {
-        pub const SPAN_5V_1_25V: u32 = 0010 << 6;
-        pub const SPAN_7_5V_1_25V: u32 = 0011 << 6;
-        pub const SPAN_10V_1_25V: u32 = 0100 << 6;
-        pub const SPAN_12_5V_1_25V: u32 = 0101 << 6;
-        pub const SPAN_15V_1_25V: u32 = 0110 << 6;
-        pub const SPAN_17_5V_1_25V: u32 = 0111 << 6;
-        pub const SPAN_20V_1_25V: u32 = 1000 << 6;
-        pub const SPAN_22_5V_1_25V: u32 = 1001 << 6;
-        pub const SPAN_25V_1_25V: u32 = 1010 << 6;
-        pub const SPAN_27_5V_1_25V: u32 = 1011 << 6;
-        pub const SPAN_30V_1_25V: u32 = 1100 << 6;
+        pub const SPAN_5V: u32 = 0b0010 << 6;
+        pub const SPAN_7_5V: u32 = 0b0011 << 6;
+        pub const SPAN_10V: u32 = 0b0100 << 6;
+        pub const SPAN_12_5V: u32 = 0b0101 << 6;
+        pub const SPAN_15V: u32 = 0b0110 << 6;
+        pub const SPAN_17_5V: u32 = 0b0111 << 6;
+        pub const SPAN_20V: u32 = 0b1000 << 6;
+        pub const SPAN_22_5V: u32 = 0b1001 << 6;
+        pub const SPAN_25V: u32 = 0b1010 << 6;
+        pub const SPAN_27_5V: u32 = 0b1011 << 6;
+        pub const SPAN_30V: u32 = 0b1100 << 6;
     }
     pub mod PDN {
-        pub const POWERUP: u32 = 0 << 4;
-        pub const POWERDOWN: u32 = 1 << 4;
+        pub const POWERUP: u32 = 0b0 << 4;
+        pub const POWERDOWN: u32 = 0b1 << 4;
     }
 }
 
 #[allow(non_snake_case)]
 pub mod TRIGGER {
     pub mod RCLTMP {
-        pub const RECAL: u32 = 1 << 8;
+        pub const RECAL: u32 = 0b1 << 8;
     }
     pub mod SRST {
-        pub const RESET: u32 = 1 << 6;
+        pub const RESET: u32 = 0b1 << 6;
     }
     pub mod SCLR {
-        pub const CLEAR: u32 = 1 << 5;
+        pub const CLEAR: u32 = 0b1 << 5;
     }
 }
 
 #[allow(non_snake_case)]
 pub mod STATUS {
     pub mod ALM {
-        pub const RECALIBRATED: u32 = 1 << 12;
+        pub const RECALIBRATED: u32 = 0b1 << 12;
     }
-}
-
-pub enum Polarity {
-    AnodeGrounded,
-    CathodeGrounded,
 }
 
 #[allow(non_snake_case)]
 pub mod CONFIG2 {
     pub mod DIS_TNH {
-        pub const DISABLED: u32 = 0 << 7;
-        pub const ENABLED: u32 = 1 << 7;
+        pub const DISABLED: u32 = 0b0 << 7;
+        pub const ENABLED: u32 = 0b1 << 7;
     }
     pub mod UP_RATE {
-        pub const UPDATE_RATE_1_MHZ_38_MHZ_SCLK: u32 = 000 << 4;
-        pub const UPDATE_RATE_0_9_MHZ_34_MHZ_SCLK: u32 = 001 << 4;
-        pub const UPDATE_RATE_0_8_MHZ_31_MHZ_SCLK: u32 = 010 << 4;
-        pub const UPDATE_RATE_1_2_MHZ_45_MHZ_SCLK: u32 = 011 << 4;
-        pub const UPDATE_RATE_0_5_MHZ_21_MHZ_SCLK: u32 = 100 << 4;
-        pub const UPDATE_RATE_0_45_MHZ_18_MHZ_SCLK: u32 = 101 << 4;
-        pub const UPDATE_RATE_0_4_MHZ_16_MHZ_SCLK: u32 = 110 << 4;
-        pub const UPDATE_RATE_0_6_MHZ_24_MHZ_SCLK: u32 = 111 << 4;
+        pub const UPDATE_RATE_1_MHZ_38_MHZ_SCLK: u32 = 0b000 << 4;
+        pub const UPDATE_RATE_0_9_MHZ_34_MHZ_SCLK: u32 = 0b001 << 4;
+        pub const UPDATE_RATE_0_8_MHZ_31_MHZ_SCLK: u32 = 0b010 << 4;
+        pub const UPDATE_RATE_1_2_MHZ_45_MHZ_SCLK: u32 = 0b011 << 4;
+        pub const UPDATE_RATE_0_5_MHZ_21_MHZ_SCLK: u32 = 0b100 << 4;
+        pub const UPDATE_RATE_0_45_MHZ_18_MHZ_SCLK: u32 = 0b101 << 4;
+        pub const UPDATE_RATE_0_4_MHZ_16_MHZ_SCLK: u32 = 0b110 << 4;
+        pub const UPDATE_RATE_0_6_MHZ_24_MHZ_SCLK: u32 = 0b111 << 4;
     }
 }
 
@@ -196,9 +191,9 @@ where
         };
 
         // reset DAC
-        dac.write(TRIGGER::SRST::RESET, DAC_ADDR::TRIGGER);
+        dac.write(DAC_ADDR::TRIGGER, TRIGGER::SRST::RESET);
         // set to 10 V plusminus 1.25 V referenece span
-        dac.write(CONFIG1::VREFVAL::SPAN_10V_1_25V, DAC_ADDR::CONFIG1);
+        dac.write(DAC_ADDR::CONFIG1, CONFIG1::VREFVAL::SPAN_10V);
         // perform calibration
         dac.calibrate();
 
@@ -207,8 +202,8 @@ where
 
     /// Perform temperature drift calibration (waits until calibration is done).
     pub fn calibrate(&mut self) {
-        self.write(CONFIG1::EN_TMP_CAL::ENABLED, DAC_ADDR::CONFIG1);
-        self.write(TRIGGER::RCLTMP::RECAL, DAC_ADDR::TRIGGER);
+        self.write(DAC_ADDR::CONFIG1, CONFIG1::EN_TMP_CAL::ENABLED);
+        self.write(DAC_ADDR::TRIGGER, TRIGGER::RCLTMP::RECAL);
         // continuously read recalibration done bit until it is set
         while (self.read(DAC_ADDR::STATUS) & STATUS::ALM::RECALIBRATED) == 0 {}
     }
@@ -216,12 +211,12 @@ where
     /// Set the DAC to produce a voltage corresponding to `current`.
     pub fn set(&mut self, current: f32) -> Result<(), Error> {
         let dac_code = DacCode::try_from((current, self.channel))?;
-        self.write(dac_code.0 << 4, DAC_ADDR::DAC_DATA);
+        self.write(DAC_ADDR::DAC_DATA, dac_code.0 << 4);
         Ok(())
     }
 
     /// Write 24 bit [data] to the DAC at [addr].
-    pub fn write(&mut self, data: u32, addr: DAC_ADDR) {
+    pub fn write(&mut self, addr: DAC_ADDR, data: u32) {
         let bytes = (addr as u32 | (data & 0xffffff)).to_be_bytes();
         self.sync_n.set_low();
         self.spi.write(&bytes).unwrap();

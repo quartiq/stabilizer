@@ -1053,7 +1053,7 @@ pub fn setup(
         ];
 
         let config = hal::spi::Config::new(hal::spi::Mode {
-            polarity: hal::spi::Polarity::IdleHigh,
+            polarity: hal::spi::Polarity::IdleLow,
             phase: hal::spi::Phase::CaptureOnSecondTransition,
         });
 
@@ -1078,8 +1078,10 @@ pub fn setup(
 
         let dac_bus_manager =
             shared_bus_rtic::new!(dac_spi, hal::spi::Spi<SPI1,Enabled,u8>);
-        let dac0_cs = gpiog.pg10.into_push_pull_output().erase();
-        let dac1_cs = gpioa.pa0.into_push_pull_output().erase();
+        let mut dac0_cs = gpiog.pg10.into_push_pull_output().erase();
+        dac0_cs.set_high();
+        let mut dac1_cs = gpioa.pa0.into_push_pull_output().erase();
+        dac1_cs.set_high();
         let dac = [
             driver::dac::Dac::new(
                 dac_bus_manager.acquire(),
