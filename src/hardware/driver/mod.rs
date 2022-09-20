@@ -12,6 +12,7 @@ use stm32h7xx_hal as hal;
 pub type Spi1Proxy = &'static shared_bus_rtic::CommonBus<
     hal::spi::Spi<stm32h7xx_hal::stm32::SPI1, stm32h7xx_hal::spi::Enabled>,
 >;
+
 /// Devices on Driver + Driver headerboard
 pub struct DriverDevices {
     pub ltc2320: ltc2320::Ltc2320,
@@ -28,11 +29,24 @@ pub enum Channel {
     HighPower = 1,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(usize)]
 pub enum ChannelVariant {
     LowNoiseAnodeGrounded,
     LowNoiseCathodeGrounded,
     HighPowerAnodeGrounded,
     HighPowerCathodeGrounded,
+}
+
+impl ChannelVariant {
+    const R_OUT_LN: f32 = 40.0; // Low noise side output resistor
+    const R_OUT_HP: f32 = 0.68; // High power side output resistor
+    fn transimpedance(&self) -> f32 {
+        match self {
+            ChannelVariant::LowNoiseAnodeGrounded => -Self::R_OUT_LN, // negated
+            ChannelVariant::LowNoiseCathodeGrounded => Self::R_OUT_LN,
+            ChannelVariant::HighPowerAnodeGrounded => -Self::R_OUT_HP, // negated
+            ChannelVariant::HighPowerCathodeGrounded => Self::R_OUT_HP,
+        }
+    }
 }

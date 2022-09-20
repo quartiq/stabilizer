@@ -120,8 +120,6 @@ impl DacCode {
     // DAC constants
     const MAX_DAC_WORD: i32 = 1 << 20; // maximum DAC dataword (exclusive)
     const VREF_DAC: f32 = 10.0; // Difference between positive and negaitiv reference pin
-    const R_OUT_LN: f32 = 40.0; // Low noise side output resistor
-    const R_OUT_HP: f32 = 0.68; // High power side output resistor
 }
 
 impl TryFrom<(f32, ChannelVariant)> for DacCode {
@@ -129,29 +127,26 @@ impl TryFrom<(f32, ChannelVariant)> for DacCode {
     /// Convert an f32 representing a current int the corresponding DAC output code for the respective channel.
     fn try_from(current_channel: (f32, ChannelVariant)) -> Result<Self, Error> {
         let (current, channel) = current_channel;
-        let (r_out, is_inverted) = match channel {
-            ChannelVariant::LowNoiseAnodeGrounded => (Self::R_OUT_LN, true),
-            ChannelVariant::LowNoiseCathodeGrounded => (Self::R_OUT_LN, false),
-            ChannelVariant::HighPowerAnodeGrounded => (Self::R_OUT_HP, true),
-            ChannelVariant::HighPowerCathodeGrounded => (Self::R_OUT_HP, false),
-        };
-        let mut dac_code = (r_out
+        if channel == ChannelVariant::HighPowerAnodeGrounded
+            || channel == ChannelVariant::LowNoiseAnodeGrounded
+        {
+            if current <= 0.0 {
+                return Err(Error::Bounds);
+            }
+        } else if current < 0.0 {
+            return Err(Error::Bounds);
+        }
+        let dac_code = (channel.transimpedance()
             * current
             * (DacCode::MAX_DAC_WORD as f32 / DacCode::VREF_DAC))
             as i32;
 
-        if is_inverted {
-            // Convert to inverted dac output for anode grounded Driver channel variants.
-            // These variants need (VREF_DAC - V_CURR) to produce the current CURR.
-            // No bitinversion and masking so we can still detect bounds errors.
-            dac_code = DacCode::MAX_DAC_WORD - dac_code - 1; // For now just subtract a bit to stay in bounds for 0 A
-        }
-
-        if !(0..DacCode::MAX_DAC_WORD).contains(&dac_code) {
+        if !(-DacCode::MAX_DAC_WORD..DacCode::MAX_DAC_WORD).contains(&dac_code)
+        {
             return Err(Error::Bounds);
         };
 
-        Ok(Self(dac_code as u32))
+        Ok(Self((dac_code & 0xfffff) as u32)) // translate to valid DAC code
     }
 }
 
@@ -209,12 +204,16 @@ where
         // continuously read recalibration done bit until it is set
         while (self.read(DAC_ADDR::STATUS, delay) & STATUS::ALM::RECALIBRATED)
             == 0
-        {}
+        {
+            delay.delay_us(1)
+        }
     }
 
     /// Set the DAC to produce a voltage corresponding to `current`.
     pub fn set(&mut self, current: f32) -> Result<(), Error> {
         let dac_code = DacCode::try_from((current, self.channel))?;
+        log::info!("current: {:?}", current);
+        log::info!("dac_code: {:?}", dac_code);
         self.write(DAC_ADDR::DAC_DATA, dac_code.0 << 4);
         Ok(())
     }

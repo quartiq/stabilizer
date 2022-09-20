@@ -1092,7 +1092,7 @@ pub fn setup(
             driver::dac::Dac::new(
                 dac_bus_manager.acquire(),
                 dac1_cs,
-                driver::ChannelVariant::HighPowerCathodeGrounded, // just any channel variant for now
+                driver::ChannelVariant::LowNoiseCathodeGrounded, // just any channel variant for now
                 &mut delay,
             ),
         ];
