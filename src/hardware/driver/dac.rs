@@ -118,7 +118,7 @@ pub enum Error {
 pub struct DacCode(u32);
 impl DacCode {
     // DAC constants
-    const MAX_DAC_WORD: i32 = 1 << 20; // maximum DAC dataword (exclusive)
+    const MAX_DAC_WORD: i32 = 1 << 24; // maximum DAC dataword plus 4 bits to avoid shift later (exclusive)
     const VREF_DAC: f32 = 10.0; // Difference between positive and negaitiv reference pin
 }
 
@@ -204,9 +204,7 @@ where
     /// Set the DAC to produce a voltage corresponding to `current`.
     pub fn set(&mut self, current: f32) -> Result<(), Error> {
         let dac_code = DacCode::try_from((current, self.channel))?;
-        log::info!("current: {:?}", current);
-        log::info!("dac_code: {:?}", dac_code);
-        self.write(DAC_ADDR::DAC_DATA, dac_code.0 << 4);
+        self.write(DAC_ADDR::DAC_DATA, dac_code.0);
         Ok(())
     }
 
