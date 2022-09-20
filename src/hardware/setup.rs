@@ -7,7 +7,6 @@ use hal::device::SPI1;
 use hal::i2c::I2c;
 use hal::spi::Enabled;
 use shared_bus::{AtomicCheckMutex, I2cProxy};
-use shared_bus_rtic::CommonBus;
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
@@ -1057,6 +1056,11 @@ pub fn setup(
             phase: hal::spi::Phase::CaptureOnSecondTransition,
         });
 
+        let mut dac0_cs = gpiog.pg10.into_push_pull_output().erase();
+        dac0_cs.set_high();
+        let mut dac1_cs = gpioa.pa0.into_push_pull_output().erase();
+        dac1_cs.set_high();
+
         let dac_spi = device.SPI1.spi(
             (
                 gpiog.pg11.into_alternate(),
@@ -1078,20 +1082,18 @@ pub fn setup(
 
         let dac_bus_manager =
             shared_bus_rtic::new!(dac_spi, hal::spi::Spi<SPI1,Enabled,u8>);
-        let mut dac0_cs = gpiog.pg10.into_push_pull_output().erase();
-        dac0_cs.set_high();
-        let mut dac1_cs = gpioa.pa0.into_push_pull_output().erase();
-        dac1_cs.set_high();
         let dac = [
             driver::dac::Dac::new(
                 dac_bus_manager.acquire(),
                 dac0_cs,
                 driver::ChannelVariant::LowNoiseAnodeGrounded, // just any channel variant for now
+                &mut delay,
             ),
             driver::dac::Dac::new(
                 dac_bus_manager.acquire(),
                 dac1_cs,
                 driver::ChannelVariant::HighPowerCathodeGrounded, // just any channel variant for now
+                &mut delay,
             ),
         ];
 

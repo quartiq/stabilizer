@@ -4,6 +4,7 @@ use embedded_hal::blocking::spi::{Transfer, Write};
 use stm32h7xx_hal::gpio;
 
 use super::ChannelVariant;
+use embedded_hal::blocking::delay::DelayUs;
 
 // DAC11001 register addresses
 #[allow(unused, non_camel_case_types)]
@@ -183,6 +184,7 @@ where
         spi: SPI,
         sync_n: gpio::ErasedPin<gpio::Output>,
         channel: ChannelVariant,
+        delay: &mut impl DelayUs<u8>,
     ) -> Self {
         let mut dac = Dac {
             spi,
@@ -195,17 +197,19 @@ where
         // set to 10 V plusminus 1.25 V referenece span
         dac.write(DAC_ADDR::CONFIG1, CONFIG1::VREFVAL::SPAN_10V);
         // perform calibration
-        dac.calibrate();
+        dac.calibrate(delay);
 
         dac
     }
 
     /// Perform temperature drift calibration (waits until calibration is done).
-    pub fn calibrate(&mut self) {
+    pub fn calibrate(&mut self, delay: &mut impl DelayUs<u8>) {
         self.write(DAC_ADDR::CONFIG1, CONFIG1::EN_TMP_CAL::ENABLED);
         self.write(DAC_ADDR::TRIGGER, TRIGGER::RCLTMP::RECAL);
         // continuously read recalibration done bit until it is set
-        while (self.read(DAC_ADDR::STATUS) & STATUS::ALM::RECALIBRATED) == 0 {}
+        while (self.read(DAC_ADDR::STATUS, delay) & STATUS::ALM::RECALIBRATED)
+            == 0
+        {}
     }
 
     /// Set the DAC to produce a voltage corresponding to `current`.
@@ -224,12 +228,19 @@ where
     }
 
     /// Perform a read of a DAC register. First writes a word and then reads one.
-    pub fn read(&mut self, addr: DAC_ADDR) -> u32 {
-        let mut buf = [0u8; 8];
-        buf[0] = 1u8 << 7 | (addr as u32 >> 24) as u8;
+    pub fn read(
+        &mut self,
+        addr: DAC_ADDR,
+        delay: &mut impl DelayUs<u8>,
+    ) -> u32 {
+        let mut bytes = (1u32 << 31 | addr as u32).to_be_bytes();
         self.sync_n.set_low();
-        self.spi.transfer(&mut buf).unwrap();
+        self.spi.write(&bytes).unwrap();
         self.sync_n.set_high();
-        u64::from_be_bytes(buf) as u32 // just cut off the upper word where no data was received
+        delay.delay_us(1); // has to be high for at least 100 ns
+        self.sync_n.set_low();
+        self.spi.transfer(&mut bytes).unwrap();
+        self.sync_n.set_high();
+        u32::from_be_bytes(bytes)
     }
 }
