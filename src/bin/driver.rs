@@ -323,34 +323,27 @@ mod app {
                     // Preserve instruction and data ordering w.r.t. DMA flag access.
                     fence(Ordering::SeqCst);
 
-                    for channel in 0..adc_samples.len() {
-                        adc_samples[channel]
-                            .iter()
-                            .zip(dac_samples[channel].iter_mut())
-                            .map(|(ai, di)| {
-                                let x = f32::from(*ai); // get adc sample in volt
-                                let iir = if output[channel].is_enabled() {
-                                    settings.iir_ch[channel]
-                                } else {
-                                    *output[channel].iir()
-                                };
-                                let y = iir.update(
-                                    &mut iir_state[channel],
-                                    x,
-                                    hold,
-                                );
+                    // Perform processing for  ADC channel 0 --> Driver channel 0 (LowNoise)
+                    adc_samples[0]
+                        .iter()
+                        .zip(dac_samples[0].iter_mut())
+                        .map(|(ai, di)| {
+                            let x = f32::from(*ai); // get adc sample in volt
+                            let iir = if output[0].is_enabled() {
+                                settings.iir_ch[0]
+                            } else {
+                                *output[0].iir()
+                            };
+                            let y = iir.update(&mut iir_state[0], x, hold);
 
-                                // Convert to DAC code. Output 1V/1A Driver output current. Bounds must be ensured by filter limits!
-                                *di = DacCode::try_from(y).unwrap().0;
+                            // Convert to DAC code. Output 1V/1A Driver output current. Bounds must be ensured by filter limits!
+                            *di = DacCode::try_from(y).unwrap().0;
 
-                                write_dac_spi::spawn(
-                                    channel.try_into().unwrap(),
-                                    y,
-                                )
+                            // Set Driver current.
+                            write_dac_spi::spawn(driver::Channel::LowNoise, y)
                                 .unwrap();
-                            })
-                            .last();
-                    }
+                        })
+                        .last();
 
                     // Stream the data.
                     const N: usize = BATCH_SIZE * core::mem::size_of::<i16>()
@@ -476,6 +469,13 @@ mod app {
                     }
                 }
             }
+            if output[driver::Channel::HighPower as usize].is_enabled() {
+                write_dac_spi::spawn(
+                    driver::Channel::HighPower,
+                    new_settings.iir_ch[1].y_offset,
+                )
+                .unwrap();
+            }
         });
     }
 
@@ -556,7 +556,14 @@ mod app {
                     channel,
                 )
                 .unwrap()
-            })
+            });
+            if channel == driver::Channel::HighPower {
+                write_dac_spi::spawn(
+                    channel,
+                    state[channel as usize].iir().y_offset,
+                )
+                .unwrap();
+            }
         });
     }
 
