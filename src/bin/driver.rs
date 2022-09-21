@@ -50,7 +50,7 @@ const BATCH_SIZE: usize = 1;
 
 // The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^10 =
 // 1024, there are 10.24uS per sample, corresponding to a sampling frequency of 97.66 KHz.
-const SAMPLE_TICKS_LOG2: u8 = 13;
+const SAMPLE_TICKS_LOG2: u8 = 10;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 
 #[derive(Clone, Copy, Debug, Miniconf)]
