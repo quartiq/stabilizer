@@ -30,7 +30,6 @@ use stabilizer::{
             output, Channel,
         },
         hal,
-        signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, I2c1Proxy, SystemTimer, Systick, AFE0,
         AFE1, MONOTONIC_FREQUENCY,
@@ -46,14 +45,13 @@ use stabilizer::{
 const SCALE: f32 = i16::MAX as _;
 
 // The number of samples in each batch process
-const BATCH_SIZE: usize = 8;
+// DO NOT CHANGE FOR DRIVER
+const BATCH_SIZE: usize = 1;
 
-// The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^7 =
-// 128, there is 1.28uS per sample, corresponding to a sampling frequency of 781.25 KHz.
-const SAMPLE_TICKS_LOG2: u8 = 7;
+// The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^10 =
+// 1024, there are 10.24uS per sample, corresponding to a sampling frequency of 97.66 KHz.
+const SAMPLE_TICKS_LOG2: u8 = 13;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
-const SAMPLE_PERIOD: f32 =
-    SAMPLE_TICKS as f32 * hardware::design_parameters::TIMER_PERIOD;
 
 #[derive(Clone, Copy, Debug, Miniconf)]
 pub struct Settings {
@@ -115,17 +113,6 @@ pub struct Settings {
     /// See [StreamTarget#miniconf]
     stream_target: StreamTarget,
 
-    /// Specifies the config for signal generators to add on to DAC0/DAC1 outputs.
-    ///
-    /// # Path
-    /// `signal_generator/<n>`
-    ///
-    /// * <n> specifies which channel to configure. <n> := [0, 1]
-    ///
-    /// # Value
-    /// See [signal_generator::BasicConfig#miniconf]
-    signal_generator: [signal_generator::BasicConfig; 2],
-
     /// Interlock settings.
     ///
     /// # Path
@@ -162,8 +149,6 @@ impl Default for Settings {
             // The default telemetry period in seconds.
             telemetry_period: 1,
 
-            signal_generator: [signal_generator::BasicConfig::default(); 2],
-
             stream_target: StreamTarget::default(),
 
             interlock: Interlock::default(),
@@ -185,7 +170,6 @@ mod app {
         network: NetworkUsers<Settings, Telemetry>,
         settings: Settings,
         telemetry: TelemetryBuffer,
-        signal_generator: [SignalGenerator; 2],
         internal_adc: driver::internal_adc::InternalAdc,
         header_adc: driver::ltc2320::Ltc2320,
         header_adc_data: [u16; 8],
@@ -205,6 +189,7 @@ mod app {
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
         header_adc_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
+        driver_dac: [driver::dac::Dac<driver::Spi1Proxy>; 2],
     }
 
     #[init]
@@ -243,18 +228,6 @@ mod app {
             network,
             settings,
             telemetry: TelemetryBuffer::default(),
-            signal_generator: [
-                SignalGenerator::new(
-                    settings.signal_generator[0]
-                        .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
-                        .unwrap(),
-                ),
-                SignalGenerator::new(
-                    settings.signal_generator[1]
-                        .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
-                        .unwrap(),
-                ),
-            ],
             internal_adc: driver.internal_adc,
             header_adc: driver.ltc2320,
             header_adc_data: [0u16; 8],
@@ -272,6 +245,7 @@ mod app {
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
             header_adc_conversion_scheduled: stabilizer.systick.now(),
+            driver_dac: driver.dac,
         };
 
         // Enable ADC/DAC events
@@ -316,13 +290,12 @@ mod app {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[settings, signal_generator, telemetry, output_state], priority=3)]
+    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[settings, telemetry, output_state], priority=4)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
             settings,
             telemetry,
-            signal_generator,
             output_state,
         } = c.shared;
 
@@ -334,8 +307,8 @@ mod app {
             generator,
         } = c.local;
 
-        (settings, telemetry, signal_generator, output_state).lock(
-            |settings, telemetry, signal_generator, output| {
+        (settings, telemetry, output_state).lock(
+            |settings, telemetry, output| {
                 let digital_inputs =
                     [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
                 telemetry.digital_inputs = digital_inputs;
@@ -354,9 +327,8 @@ mod app {
                         adc_samples[channel]
                             .iter()
                             .zip(dac_samples[channel].iter_mut())
-                            .zip(&mut signal_generator[channel])
-                            .map(|((ai, di), signal)| {
-                                let x = f32::from(*ai as i16);
+                            .map(|(ai, di)| {
+                                let x = f32::from(*ai); // get adc sample in volt
                                 let iir = if output[channel].is_enabled() {
                                     settings.iir_ch[channel]
                                 } else {
@@ -368,14 +340,14 @@ mod app {
                                     hold,
                                 );
 
-                                // Note(unsafe): The filter limits must ensure that the value is in range.
-                                // The truncation introduces 1/2 LSB distortion.
-                                let y: i16 = unsafe { y.to_int_unchecked() };
+                                // Convert to DAC code. Output 1V/1A Driver output current. Bounds must be ensured by filter limits!
+                                *di = DacCode::try_from(y).unwrap().0;
 
-                                let y = y.saturating_add(signal);
-
-                                // Convert to DAC code
-                                *di = DacCode::from(y).0;
+                                write_dac_spi::spawn(
+                                    channel.try_into().unwrap(),
+                                    y,
+                                )
+                                .unwrap();
                             })
                             .last();
                     }
@@ -429,7 +401,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, signal_generator, interlock_handle, output_state])]
+    #[task(priority = 1, local=[afes], shared=[network, settings, interlock_handle, output_state])]
     fn settings_update(
         mut c: settings_update::Context,
         path: Option<String<64>>,
@@ -475,22 +447,6 @@ mod app {
         c.shared.settings.lock(|current| *current = new_settings);
         c.local.afes.0.set_gain(new_settings.afe[0]);
         c.local.afes.1.set_gain(new_settings.afe[1]);
-
-        // Update the signal generators
-        for (i, &config) in new_settings.signal_generator.iter().enumerate() {
-            match config.try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE) {
-                Ok(config) => {
-                    c.shared
-                        .signal_generator
-                        .lock(|generator| generator[i].update_waveform(config));
-                }
-                Err(err) => log::error!(
-                    "Failed to update signal generation on DAC{}: {:?}",
-                    i,
-                    err
-                ),
-            }
-        }
 
         let target = new_settings.stream_target.into();
         c.shared.network.lock(|net| net.direct_stream(target));
@@ -560,7 +516,7 @@ mod app {
         ethernet_link::Monotonic::spawn_after(1.secs()).unwrap();
     }
 
-    #[task(priority = 2, shared=[header_adc], local=[header_adc_conversion_scheduled])]
+    #[task(priority = 3, shared=[header_adc], local=[header_adc_conversion_scheduled])]
     fn header_adc_start_conversion(
         mut c: header_adc_start_conversion::Context,
     ) {
@@ -576,7 +532,7 @@ mod app {
         .unwrap();
     }
 
-    #[task(binds = QUADSPI, priority = 2, shared=[header_adc, header_adc_data])]
+    #[task(binds = QUADSPI, priority = 3, shared=[header_adc, header_adc_data])]
     fn header_adc_transfer_done(c: header_adc_transfer_done::Context) {
         (c.shared.header_adc, c.shared.header_adc_data).lock(|ltc, data| {
             ltc.handle_transfer_done(data);
@@ -584,7 +540,7 @@ mod app {
     }
 
     // Task for handling the Powerup/-down sequence
-    #[task(priority = 1, capacity = 2, shared=[output_state, settings])]
+    #[task(priority = 3, capacity = 2, shared=[output_state, settings])]
     fn handle_output_tick(
         mut c: handle_output_tick::Context,
         channel: driver::Channel,
@@ -604,6 +560,17 @@ mod app {
         });
     }
 
+    // Driver DAC SPI write task. This effectively makes the slow, blocking SPI writes non-blocking
+    // for higher priority tasks.
+    #[task(priority = 2, capacity = 2, local=[driver_dac])]
+    fn write_dac_spi(
+        c: write_dac_spi::Context,
+        channel: driver::Channel,
+        current: f32,
+    ) {
+        c.local.driver_dac[channel as usize].set(current).unwrap()
+    }
+
     #[task(priority = 1, shared=[interlock_handle])]
     fn trip_interlock(mut c: trip_interlock::Context) {
         c.shared.interlock_handle.lock(|handle| *handle = None);
@@ -615,22 +582,22 @@ mod app {
         unsafe { hal::ethernet::interrupt_handler() }
     }
 
-    #[task(binds = SPI2, priority = 4)]
+    #[task(binds = SPI2, priority = 5)]
     fn spi2(_: spi2::Context) {
         panic!("ADC0 SPI error");
     }
 
-    #[task(binds = SPI3, priority = 4)]
+    #[task(binds = SPI3, priority = 5)]
     fn spi3(_: spi3::Context) {
         panic!("ADC1 SPI error");
     }
 
-    #[task(binds = SPI4, priority = 4)]
+    #[task(binds = SPI4, priority = 5)]
     fn spi4(_: spi4::Context) {
         panic!("DAC0 SPI error");
     }
 
-    #[task(binds = SPI5, priority = 4)]
+    #[task(binds = SPI5, priority = 5)]
     fn spi5(_: spi5::Context) {
         panic!("DAC1 SPI error");
     }

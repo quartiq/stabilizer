@@ -3,7 +3,9 @@
 ///! This file contains all of the hardware-specific configuration of Stabilizer.
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{ptr, slice};
+use hal::device::SPI1;
 use hal::i2c::I2c;
+use hal::spi::Enabled;
 use shared_bus::{AtomicCheckMutex, I2cProxy};
 use stm32h7xx_hal::{
     self as hal,
@@ -1049,11 +1051,58 @@ pub fn setup(
             )),
         ];
 
+        let config = hal::spi::Config::new(hal::spi::Mode {
+            polarity: hal::spi::Polarity::IdleLow,
+            phase: hal::spi::Phase::CaptureOnSecondTransition,
+        });
+
+        let mut dac0_cs = gpiog.pg10.into_push_pull_output().erase();
+        dac0_cs.set_high();
+        let mut dac1_cs = gpioa.pa0.into_push_pull_output().erase();
+        dac1_cs.set_high();
+
+        let dac_spi = device.SPI1.spi(
+            (
+                gpiog.pg11.into_alternate(),
+                gpioa.pa6.into_alternate(),
+                gpiod.pd7.into_alternate(),
+            ),
+            config,
+            // ToDo find good clock rate and further debug the following observed errors:
+            // - With blocking DAC writes, a clock rate of 25 MHz (next possible step from 12.5 MHz) somehow seems to lead to
+            //   longer CPU-blocking SPI writes which in turn means the Stabilizer DAC panics (at 97.6 kHz process rate).
+            // - With non-blocking DAC writes I also see spurious SPI Overrun errors after ~30 seconds of program runtime at
+            //   a rate or 25 MHz with an effective DAC update rate of 97.6 kHz (triggered by the DSP process)
+            // - 50 MHz immediately leads to FullDuplex error
+            //   https://github.com/stm32-rs/stm32h7xx-hal/blob/778ecf7a14d713e4387dbd477a2455d2f71a3424/src/spi.rs#L101-L103
+            12500.kHz(),
+            ccdr.peripheral.SPI1,
+            &ccdr.clocks,
+        );
+
+        let dac_bus_manager =
+            shared_bus_rtic::new!(dac_spi, hal::spi::Spi<SPI1,Enabled,u8>);
+        let dac = [
+            driver::dac::Dac::new(
+                dac_bus_manager.acquire(),
+                dac0_cs,
+                driver::ChannelVariant::LowNoiseSource,
+                &mut delay,
+            ),
+            driver::dac::Dac::new(
+                dac_bus_manager.acquire(),
+                dac1_cs,
+                driver::ChannelVariant::HighPowerSource,
+                &mut delay,
+            ),
+        ];
+
         Mezzanine::Driver(DriverDevices {
             lm75,
             ltc2320,
             internal_adc,
             output_sm,
+            dac,
         })
     } else {
         Mezzanine::None
