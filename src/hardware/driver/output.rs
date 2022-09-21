@@ -6,9 +6,113 @@ use core::fmt::Debug;
 use embedded_hal::blocking::i2c::{Write, WriteRead};
 use idsp::iir;
 use mcp230xx::{Mcp23008, Mcp230xx};
+use miniconf::Miniconf;
 use smlang::statemachine;
 
 use super::{relay::Relay, Channel};
+
+const LN_MAX_I_DEFAULT: f32 = 0.2; // default maximum current for the low noise channel in ampere
+
+#[derive(Clone, Copy, Debug, Miniconf, Default)]
+pub struct OutputSettings {
+    /// Low noise channel output settings
+    ///
+    /// # Path
+    /// `low_noise`
+    ///
+    /// # Value
+    /// See [LowNoiseSettings]
+    pub low_noise: LowNoiseSettings,
+
+    /// High power channel output settings
+    ///
+    /// # Path
+    /// `high_power`
+    ///
+    /// # Value
+    /// See [HighPowerSettings]
+    pub high_power: HighPowerSettings,
+}
+
+#[derive(Clone, Copy, Debug, Miniconf)]
+pub struct LowNoiseSettings {
+    /// Configure the IIR filter parameters. Only active once channel is enabled.
+    ///
+    /// # Path
+    /// `iir_ch`
+    ///
+    /// # Value
+    /// See [iir::IIR#miniconf]
+    pub iir: iir::IIR<f32>,
+
+    /// Specified true if DI1 should be used as a "hold" input.
+    ///
+    /// # Path
+    /// `allow_hold`
+    ///
+    /// # Value
+    /// "true" or "false"
+    pub allow_hold: bool,
+
+    /// Specified true if "hold" should be forced regardless of DI1 state and hold allowance.
+    ///
+    /// # Path
+    /// `force_hold`
+    ///
+    /// # Value
+    /// "true" or "false"
+    pub force_hold: bool,
+
+    /// Output enabled. `True` to enable, `False` to disable.
+    ///
+    /// # Path
+    /// `output_enabled`
+    ///
+    /// # Value
+    /// [bool]
+    pub output_enabled: bool,
+}
+
+impl Default for LowNoiseSettings {
+    fn default() -> Self {
+        Self {
+            iir: iir::IIR::new(0., 0.0, LN_MAX_I_DEFAULT),
+            allow_hold: false,
+            force_hold: false,
+            output_enabled: false,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Miniconf)]
+pub struct HighPowerSettings {
+    /// Configure the output current. Only active once channel is enabled.
+    ///
+    /// # Path
+    /// `current`
+    ///
+    /// # Value
+    /// Any positive value up to the maximum current for the high power channel.
+    pub current: f32,
+
+    /// Output enabled. `True` to enable, `False` to disable.
+    ///
+    /// # Path
+    /// `output_enabled`
+    ///
+    /// # Value
+    /// bool
+    pub output_enabled: bool,
+}
+
+impl Default for HighPowerSettings {
+    fn default() -> Self {
+        Self {
+            current: 0.0,
+            output_enabled: false,
+        }
+    }
+}
 
 /// Driver [Output].
 /// An Output consits of the output [Relay]s and an IIR to implement a current ramp
@@ -33,7 +137,7 @@ where
         channel: Channel,
     ) -> Self {
         Output {
-            iir: iir::IIR::new(0., -i16::MAX as _, i16::MAX as _), // Todo: sensible defaults for driver (this is for stabilizer now)
+            iir: iir::IIR::new(0., 0.0, f32::MAX),
             relay: Relay::new(gpio, channel),
         }
     }
@@ -123,7 +227,7 @@ where
     /// Handle an event that happens during the enabling/disabling sequence.
     pub fn handle_tick(
         &mut self,
-        iir: &iir::IIR<f32>,
+        target: &f32,
     ) -> Option<fugit::MillisDuration<u64>> {
         match *self.state() {
             sm::States::EnableWaitK0
@@ -135,7 +239,7 @@ where
             }
             // handle the ramp
             sm::States::RampCurrent => {
-                if self.context().iir.y_offset >= iir.y_offset {
+                if self.context().iir.y_offset >= *target {
                     self.process_event(sm::Events::RampDone).unwrap();
                 } else {
                     self.process_event(sm::Events::Tick).unwrap();
