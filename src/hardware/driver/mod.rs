@@ -32,10 +32,10 @@ pub enum Channel {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(usize)]
 pub enum ChannelVariant {
-    LowNoiseAnodeGrounded,
-    LowNoiseCathodeGrounded,
-    HighPowerAnodeGrounded,
-    HighPowerCathodeGrounded,
+    LowNoiseSink,
+    LowNoiseSource,
+    HighPowerSink,
+    HighPowerSource,
 }
 
 impl ChannelVariant {
@@ -43,10 +43,10 @@ impl ChannelVariant {
     const R_OUT_HP: f32 = 0.68; // High power side output resistor
     fn transimpedance(&self) -> f32 {
         match self {
-            ChannelVariant::LowNoiseAnodeGrounded => -Self::R_OUT_LN, // negated
-            ChannelVariant::LowNoiseCathodeGrounded => Self::R_OUT_LN,
-            ChannelVariant::HighPowerAnodeGrounded => -Self::R_OUT_HP, // negated
-            ChannelVariant::HighPowerCathodeGrounded => Self::R_OUT_HP,
+            ChannelVariant::LowNoiseSink => -Self::R_OUT_LN, // negated
+            ChannelVariant::LowNoiseSource => Self::R_OUT_LN,
+            ChannelVariant::HighPowerSink => -Self::R_OUT_HP, // negated
+            ChannelVariant::HighPowerSource => Self::R_OUT_HP,
         }
     }
 }
