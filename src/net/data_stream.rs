@@ -81,7 +81,7 @@ pub struct StreamTarget {
 
 /// Specifies the format of streamed data
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, PartialEq, IntoPrimitive)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive)]
 pub enum StreamFormat {
     /// Reserved, unused format specifier.
     Unknown = 0,

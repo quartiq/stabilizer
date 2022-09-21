@@ -34,7 +34,7 @@ pub trait Interface {
 
 /// Indicates various communication modes of the DDS. The value of this enumeration is equivalent to
 /// the configuration bits of the DDS CSR register.
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Mode {
     SingleBitTwoWire = 0b000,
