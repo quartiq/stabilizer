@@ -239,7 +239,9 @@ where
             }
             // handle the ramp
             sm::States::RampCurrent => {
-                if self.context().iir.y_offset >= *target {
+                if self.context().iir.y_offset
+                    >= (*target - Output::<I2C>::RAMP_STEP)
+                {
                     self.process_event(sm::Events::RampDone).unwrap();
                 } else {
                     self.process_event(sm::Events::Tick).unwrap();
