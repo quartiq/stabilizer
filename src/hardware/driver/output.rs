@@ -17,17 +17,11 @@ const LN_MAX_I_DEFAULT: f32 = 0.2; // default maximum current for the low noise 
 pub struct OutputSettings {
     /// Low noise channel output settings
     ///
-    /// # Path
-    /// `low_noise`
-    ///
     /// # Value
     /// See [LowNoiseSettings]
     pub low_noise: LowNoiseSettings,
 
     /// High power channel output settings
-    ///
-    /// # Path
-    /// `high_power`
     ///
     /// # Value
     /// See [HighPowerSettings]
@@ -38,17 +32,11 @@ pub struct OutputSettings {
 pub struct LowNoiseSettings {
     /// Configure the IIR filter parameters. Only active once channel is enabled.
     ///
-    /// # Path
-    /// `iir_ch`
-    ///
     /// # Value
     /// See [iir::IIR#miniconf]
     pub iir: iir::IIR<f32>,
 
     /// Specified true if DI1 should be used as a "hold" input.
-    ///
-    /// # Path
-    /// `allow_hold`
     ///
     /// # Value
     /// "true" or "false"
@@ -56,17 +44,11 @@ pub struct LowNoiseSettings {
 
     /// Specified true if "hold" should be forced regardless of DI1 state and hold allowance.
     ///
-    /// # Path
-    /// `force_hold`
-    ///
     /// # Value
     /// "true" or "false"
     pub force_hold: bool,
 
     /// Output enabled. `True` to enable, `False` to disable.
-    ///
-    /// # Path
-    /// `output_enabled`
     ///
     /// # Value
     /// [bool]
@@ -88,17 +70,11 @@ impl Default for LowNoiseSettings {
 pub struct HighPowerSettings {
     /// Configure the output current. Only active once channel is enabled.
     ///
-    /// # Path
-    /// `current`
-    ///
     /// # Value
     /// Any positive value up to the maximum current for the high power channel.
     pub current: f32,
 
     /// Output enabled. `True` to enable, `False` to disable.
-    ///
-    /// # Path
-    /// `output_enabled`
     ///
     /// # Value
     /// bool

@@ -263,35 +263,31 @@ mod app {
                         && settings.output.low_noise.allow_hold);
 
                 (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
-                    let adc_samples = [adc0, adc1];
-                    let dac_samples = [dac0, dac1];
-
                     // Preserve instruction and data ordering w.r.t. DMA flag access.
                     fence(Ordering::SeqCst);
 
                     // Perform processing for  ADC channel 0 --> Driver channel 0 (LowNoise)
-                    adc_samples[0]
-                        .iter()
-                        .zip(dac_samples[0].iter_mut())
-                        .map(|(ai, di)| {
-                            let x = f32::from(*ai); // get adc sample in volt
-                            let iir = if output[0].is_enabled() {
-                                settings.output.low_noise.iir
-                            } else {
-                                *output[0].iir()
-                            };
-                            let y = iir.update(&mut iir_state[0], x, hold);
+                    let x = f32::from(adc0[0]); // get adc sample in volt
+                    let iir = if output[driver::Channel::LowNoise as usize]
+                        .is_enabled()
+                    {
+                        settings.output.low_noise.iir
+                    } else {
+                        *output[driver::Channel::LowNoise as usize].iir()
+                    };
+                    let y = iir.update(&mut iir_state[0], x, hold);
 
-                            // Convert to DAC code. Output 1V/1A Driver output current. Bounds must be ensured by filter limits!
-                            *di = DacCode::try_from(y).unwrap().0;
+                    // Convert to DAC code. Output 1V/1A Driver output current. Bounds must be ensured by filter limits!
+                    dac0[0] = DacCode::try_from(y).unwrap().0;
 
-                            // Set Driver current.
-                            write_dac_spi::spawn(driver::Channel::LowNoise, y)
-                                .unwrap();
-                        })
-                        .last();
+                    // Set Driver current.
+                    write_dac_spi::spawn(driver::Channel::LowNoise, y).unwrap();
+
+                    // Driver TODO: Rework Telemetry and Streaming.
 
                     // Stream the data.
+                    let adc_samples = [adc0, adc1];
+                    let dac_samples = [dac0, dac1];
                     const N: usize = BATCH_SIZE * core::mem::size_of::<i16>()
                         / core::mem::size_of::<MaybeUninit<u8>>();
                     generator.add::<_, { N * 4 }>(|buf| {
