@@ -261,10 +261,6 @@ mod app {
         header_adc_start_conversion::spawn().unwrap();
         start::spawn_after(100.millis()).unwrap();
 
-        // mock LN output enable
-        // let del = shared.relay_state[0].enable().unwrap();
-        // handle_relay::spawn_after(del.convert(), Channel::LowNoise).unwrap();
-
         (shared, local, init::Monotonics(stabilizer.systick))
     }
 
@@ -439,7 +435,7 @@ mod app {
                                 "Cannot cancel. Interlock already tripped! {:?}"
                             , e));
                         None
-                    } // ignore error if cancelled too late
+                    } // Ignore error if cancelled too late. This is ok since we don't want to cancel if the interlock already tripped. 
                 };
             }
         });
