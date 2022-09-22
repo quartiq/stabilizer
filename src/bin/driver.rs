@@ -18,10 +18,11 @@ use mutex_trait::prelude::*;
 
 use idsp::iir;
 
+use serde::Serialize;
 use stabilizer::{
     hardware::{
         self,
-        adc::{Adc0Input, Adc1Input, AdcCode},
+        adc::{Adc0Input, Adc1Input},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
         design_parameters, driver,
@@ -37,7 +38,6 @@ use stabilizer::{
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Miniconf,
-        telemetry::{Telemetry, TelemetryBuffer},
         NetworkState, NetworkUsers,
     },
 };
@@ -119,6 +119,26 @@ impl Default for Settings {
     }
 }
 
+#[derive(Serialize, Copy, Clone, Default, Debug)]
+pub struct Monitor {
+    output_current: [f32; 2],
+    output_voltage: [f32; 2],
+    cpu_temp: f32,
+    overtemp: bool,
+}
+
+#[derive(Serialize, Copy, Clone, Default, Debug)]
+pub struct LowNoise {
+    input_voltage: f32,  // Stabilizer ADC0 feedback signal
+    output_current: f32, // Output current set by control loop
+}
+
+#[derive(Serialize, Copy, Clone, Default, Debug)]
+pub struct Telemetry {
+    monitor: Monitor,
+    low_noise: LowNoise,
+}
+
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
     use super::*;
@@ -130,7 +150,7 @@ mod app {
     struct Shared {
         network: NetworkUsers<Settings, Telemetry>,
         settings: Settings,
-        telemetry: TelemetryBuffer,
+        telemetry: Telemetry,
         internal_adc: driver::internal_adc::InternalAdc,
         header_adc: driver::ltc2320::Ltc2320,
         header_adc_data: [u16; 8],
@@ -188,7 +208,7 @@ mod app {
         let shared = Shared {
             network,
             settings,
-            telemetry: TelemetryBuffer::default(),
+            telemetry: Telemetry::default(),
             internal_adc: driver.internal_adc,
             header_adc: driver.ltc2320,
             header_adc_data: [0u16; 8],
@@ -256,7 +276,6 @@ mod app {
             |settings, telemetry, output| {
                 let digital_inputs =
                     [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
-                telemetry.digital_inputs = digital_inputs;
 
                 let hold = settings.output.low_noise.force_hold
                     || (digital_inputs[1]
@@ -306,15 +325,8 @@ mod app {
                         }
                     });
                     // Update telemetry measurements.
-                    telemetry.adcs = [
-                        AdcCode(adc_samples[0][0]),
-                        AdcCode(adc_samples[1][0]),
-                    ];
-
-                    telemetry.dacs = [
-                        DacCode(dac_samples[0][0]),
-                        DacCode(dac_samples[1][0]),
-                    ];
+                    telemetry.low_noise.input_voltage = x;
+                    telemetry.low_noise.output_current = y;
 
                     // Preserve instruction and data ordering w.r.t. DMA flag access.
                     fence(Ordering::SeqCst);
@@ -433,33 +445,37 @@ mod app {
 
     #[task(priority = 1, shared=[network, settings, telemetry, internal_adc], local=[cpu_temp_sensor])]
     fn telemetry(mut c: telemetry::Context) {
-        let telemetry: TelemetryBuffer =
+        let mut telemetry: Telemetry =
             c.shared.telemetry.lock(|telemetry| *telemetry);
 
-        let (gains, telemetry_period) = c
+        telemetry.monitor.cpu_temp =
+            c.local.cpu_temp_sensor.get_temperature().unwrap();
+        (
+            telemetry.monitor.output_current,
+            telemetry.monitor.output_voltage,
+        ) = c.shared.internal_adc.lock(|adc| {
+            (
+                [
+                    adc.read_output_current(Channel::LowNoise),
+                    adc.read_output_current(Channel::HighPower),
+                ],
+                [
+                    adc.read_output_voltage(Channel::LowNoise),
+                    adc.read_output_voltage(Channel::HighPower),
+                ],
+            )
+        });
+        let telemetry_period = c
             .shared
             .settings
-            .lock(|settings| (settings.afe, settings.telemetry_period));
+            .lock(|settings| (settings.telemetry_period));
 
-        c.shared.network.lock(|net| {
-            net.telemetry.publish(&telemetry.finalize(
-                gains[0],
-                gains[1],
-                c.local.cpu_temp_sensor.get_temperature().unwrap(),
-            ))
-        });
+        c.shared
+            .network
+            .lock(|net| net.telemetry.publish(&telemetry));
         // Schedule the telemetry task in the future.
         telemetry::Monotonic::spawn_after((telemetry_period as u64).secs())
             .unwrap();
-        log::info!(
-            "internal adc values: {:?}",
-            c.shared.internal_adc.lock(|adc| [
-                adc.read_output_current(Channel::LowNoise),
-                adc.read_output_current(Channel::HighPower),
-                adc.read_output_voltage(Channel::LowNoise),
-                adc.read_output_voltage(Channel::HighPower),
-            ])
-        );
     }
 
     #[task(priority = 1, shared=[network])]
