@@ -130,14 +130,15 @@ pub struct Monitor {
 
 #[derive(Serialize, Copy, Clone, Default, Debug)]
 pub struct LowNoise {
-    input_voltage: f32,  // Stabilizer ADC0 feedback signal
-    output_current: f32, // Output current set by control loop
+    feedback_voltage: f32, // Stabilizer ADC0 feedback signal
+    output_current: f32,   // Output current set by control loop
 }
 
 #[derive(Serialize, Copy, Clone, Default, Debug)]
 pub struct Telemetry {
     monitor: Monitor,
     low_noise: LowNoise,
+    // no high_power since it is fully defined by settings
 }
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
@@ -327,7 +328,7 @@ mod app {
                         }
                     });
                     // Update telemetry measurements.
-                    telemetry.low_noise.input_voltage = x;
+                    telemetry.low_noise.feedback_voltage = x;
                     telemetry.low_noise.output_current = y;
 
                     // Preserve instruction and data ordering w.r.t. DMA flag access.
