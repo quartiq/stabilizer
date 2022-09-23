@@ -452,21 +452,19 @@ mod app {
 
         telemetry.monitor.cpu_temp =
             c.local.cpu_temp_sensor.get_temperature().unwrap();
-        (
-            telemetry.monitor.current,
-            telemetry.monitor.voltage,
-        ) = c.shared.internal_adc.lock(|adc| {
-            (
-                [
-                    adc.read_output_current(Channel::LowNoise),
-                    adc.read_output_current(Channel::HighPower),
-                ],
-                [
-                    adc.read_output_voltage(Channel::LowNoise),
-                    adc.read_output_voltage(Channel::HighPower),
-                ],
-            )
-        });
+        (telemetry.monitor.current, telemetry.monitor.voltage) =
+            c.shared.internal_adc.lock(|adc| {
+                (
+                    [
+                        adc.read_output_current(Channel::LowNoise),
+                        adc.read_output_current(Channel::HighPower),
+                    ],
+                    [
+                        adc.read_output_voltage(Channel::LowNoise),
+                        adc.read_output_voltage(Channel::HighPower),
+                    ],
+                )
+            });
         let telemetry_period = c
             .shared
             .settings
