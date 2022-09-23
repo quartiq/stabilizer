@@ -266,8 +266,8 @@ mod app {
                     fence(Ordering::SeqCst);
 
                     // Perform processing for  ADC channel 0 --> Driver channel 0 (LowNoise)
-                    let x = f32::from(adc0[0])
-                        * settings.afe[driver::Channel::LowNoise as usize]
+                    let x = f32::from(AdcCode(adc0[0]))
+                        / settings.afe[driver::Channel::LowNoise as usize]
                             .as_multiplier(); // get adc sample in volt * AFE gain for equivalent input voltage
                     let iir = if output[driver::Channel::LowNoise as usize]
                         .is_enabled()
