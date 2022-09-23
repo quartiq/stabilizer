@@ -329,8 +329,8 @@ mod app {
                         }
                     });
                     // Update telemetry measurements.
-                    telemetry.low_noise.feedback_voltage = x;
-                    telemetry.low_noise.output_current = y;
+                    telemetry.low_noise.adc0 = x;
+                    telemetry.low_noise.current = y;
                     // Todo: The raw photodiode samples should be converted to eqivalent photocurrent(?)
                     // and incorporated into the signal processing.
                     telemetry.header_adc_data = *header_adc_data;
@@ -453,8 +453,8 @@ mod app {
         telemetry.monitor.cpu_temp =
             c.local.cpu_temp_sensor.get_temperature().unwrap();
         (
-            telemetry.monitor.output_current,
-            telemetry.monitor.output_voltage,
+            telemetry.monitor.current,
+            telemetry.monitor.voltage,
         ) = c.shared.internal_adc.lock(|adc| {
             (
                 [
