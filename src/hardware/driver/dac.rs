@@ -110,7 +110,7 @@ pub mod CONFIG2 {
 /// DAC value out of bounds error.
 #[derive(Debug)]
 pub enum Error {
-    Bounds,
+    Bounds(f32, i32),
 }
 
 /// A type representing a DAC sample.
@@ -124,7 +124,7 @@ impl DacCode {
 
 impl TryFrom<(f32, ChannelVariant)> for DacCode {
     type Error = Error;
-    /// Convert an f32 representing a current int the corresponding DAC output code for the respective channel.
+    /// Convert an f32 representing a current into the corresponding DAC output code for the respective channel.
     fn try_from(current_channel: (f32, ChannelVariant)) -> Result<Self, Error> {
         let (current, channel) = current_channel;
         let scale = channel.transimpedance()
@@ -135,7 +135,7 @@ impl TryFrom<(f32, ChannelVariant)> for DacCode {
             code ^= !(DacCode::MAX_DAC_WORD - 1);
         }
         if !(0..DacCode::MAX_DAC_WORD).contains(&code) {
-            Err(Error::Bounds)
+            Err(Error::Bounds(current, code))
         } else {
             Ok(Self((code & (DacCode::MAX_DAC_WORD - 1)) as u32))
         }

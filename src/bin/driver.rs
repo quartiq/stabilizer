@@ -42,8 +42,6 @@ use stabilizer::{
     },
 };
 
-const SCALE: f32 = i16::MAX as _;
-
 // The number of samples in each batch process
 // DO NOT CHANGE FOR DRIVER
 const BATCH_SIZE: usize = 1;
@@ -65,35 +63,6 @@ pub struct Settings {
     /// # Value
     /// Any of the variants of [Gain] enclosed in double quotes.
     afe: [Gain; 2],
-
-    /// Configure the IIR filter parameters.
-    ///
-    /// # Path
-    /// `iir_ch/<n>
-    ///
-    /// * <n> specifies which channel to configure. <n> := [0, 1]
-    ///
-    /// # Value
-    /// See [iir::IIR#miniconf]
-    iir_ch: [iir::IIR<f32>; 2],
-
-    /// Specified true if DI1 should be used as a "hold" input.
-    ///
-    /// # Path
-    /// `allow_hold`
-    ///
-    /// # Value
-    /// "true" or "false"
-    allow_hold: bool,
-
-    /// Specified true if "hold" should be forced regardless of DI1 state and hold allowance.
-    ///
-    /// # Path
-    /// `force_hold`
-    ///
-    /// # Value
-    /// "true" or "false"
-    force_hold: bool,
 
     /// Specifies the telemetry output period in seconds.
     ///
@@ -122,14 +91,17 @@ pub struct Settings {
     /// [Interlock]
     interlock: Interlock,
 
-    /// Output enabled. `True` to enable, `False` to disable.
-    ///
-    /// # Path
-    /// `output_enabled`
+    /// Low noise channel output settings
     ///
     /// # Value
-    /// [bool]
-    output_enabled: [bool; 2],
+    /// See [driver::output::LowNoiseSettings]
+    pub low_noise: driver::output::LowNoiseSettings,
+
+    /// High power channel output settings
+    ///
+    /// # Value
+    /// See [driver::output::HighPowerSettings]
+    pub high_power: driver::output::HighPowerSettings,
 }
 
 impl Default for Settings {
@@ -137,23 +109,12 @@ impl Default for Settings {
         Self {
             // Analog frontend programmable gain amplifier gains (G1, G2, G5, G10)
             afe: [Gain::G1, Gain::G1],
-            // IIR filter tap gains are an array `[b0, b1, b2, a1, a2]` such that the
-            // new output is computed as `y0 = a1*y1 + a2*y2 + b0*x0 + b1*x1 + b2*x2`.
-            // The IIR coefficients can be mapped to other transfer function
-            // representations, for example as described in https://arxiv.org/abs/1508.06319
-            iir_ch: [iir::IIR::new(0., -SCALE, SCALE); 2],
-            // Permit the DI1 digital input to suppress filter output updates.
-            allow_hold: false,
-            // Force suppress filter output updates.
-            force_hold: false,
             // The default telemetry period in seconds.
             telemetry_period: 1,
-
             stream_target: StreamTarget::default(),
-
             interlock: Interlock::default(),
-
-            output_enabled: [false; 2],
+            low_noise: driver::output::LowNoiseSettings::default(),
+            high_power: driver::output::HighPowerSettings::default(),
         }
     }
 }
@@ -272,20 +233,8 @@ mod app {
 
     /// Main DSP processing routine.
     ///
-    /// # Note
-    /// Processing time for the DSP application code is bounded by the following constraints:
-    ///
-    /// DSP application code starts after the ADC has generated a batch of samples and must be
-    /// completed by the time the next batch of ADC samples has been acquired (plus the FIFO buffer
-    /// time). If this constraint is not met, firmware will panic due to an ADC input overrun.
-    ///
-    /// The DSP application code must also fill out the next DAC output buffer in time such that the
-    /// DAC can switch to it when it has completed the current buffer. If this constraint is not met
-    /// it's possible that old DAC codes will be generated on the output and the output samples will
-    /// be delayed by 1 batch.
-    ///
-    /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
-    /// the same time bounds, meeting one also means the other is also met.
+    /// Performs an IIR processing step on a sample from Stabilizer ADC0 and generates a new output
+    /// sample for the Driver LowNoise channel. The output is also available at Stabilizer DAC0 at 1V/1A.
     #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[settings, telemetry, output_state], priority=4)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
@@ -309,46 +258,37 @@ mod app {
                     [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
                 telemetry.digital_inputs = digital_inputs;
 
-                let hold = settings.force_hold
-                    || (digital_inputs[1] && settings.allow_hold);
+                let hold = settings.low_noise.force_hold
+                    || (digital_inputs[1] && settings.low_noise.allow_hold);
 
                 (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
-                    let adc_samples = [adc0, adc1];
-                    let dac_samples = [dac0, dac1];
-
                     // Preserve instruction and data ordering w.r.t. DMA flag access.
                     fence(Ordering::SeqCst);
 
-                    for channel in 0..adc_samples.len() {
-                        adc_samples[channel]
-                            .iter()
-                            .zip(dac_samples[channel].iter_mut())
-                            .map(|(ai, di)| {
-                                let x = f32::from(*ai); // get adc sample in volt
-                                let iir = if output[channel].is_enabled() {
-                                    settings.iir_ch[channel]
-                                } else {
-                                    *output[channel].iir()
-                                };
-                                let y = iir.update(
-                                    &mut iir_state[channel],
-                                    x,
-                                    hold,
-                                );
+                    // Perform processing for  ADC channel 0 --> Driver channel 0 (LowNoise)
+                    let x = f32::from(AdcCode(adc0[0]))
+                        / settings.afe[driver::Channel::LowNoise as usize]
+                            .as_multiplier(); // get adc sample in volt * AFE gain for equivalent input voltage
+                    let iir = if output[driver::Channel::LowNoise as usize]
+                        .is_enabled()
+                    {
+                        settings.low_noise.iir
+                    } else {
+                        *output[driver::Channel::LowNoise as usize].iir()
+                    };
+                    let y = iir.update(&mut iir_state[0], x, hold);
 
-                                // Convert to DAC code. Output 1V/1A Driver output current. Bounds must be ensured by filter limits!
-                                *di = DacCode::try_from(y).unwrap().0;
+                    // Convert to DAC code. Output 1V/1A Driver output current. Bounds must be ensured by filter limits!
+                    dac0[0] = DacCode::try_from(y).unwrap().0;
 
-                                write_dac_spi::spawn(
-                                    channel.try_into().unwrap(),
-                                    y,
-                                )
-                                .unwrap();
-                            })
-                            .last();
-                    }
+                    // Set Driver current.
+                    write_dac_spi::spawn(driver::Channel::LowNoise, y).unwrap();
+
+                    // Driver TODO: Rework Telemetry and Streaming.
 
                     // Stream the data.
+                    let adc_samples = [adc0, adc1];
+                    let dac_samples = [dac0, dac1];
                     const N: usize = BATCH_SIZE * core::mem::size_of::<i16>()
                         / core::mem::size_of::<MaybeUninit<u8>>();
                     generator.add::<_, { N * 4 }>(|buf| {
@@ -448,11 +388,16 @@ mod app {
         c.shared.network.lock(|net| net.direct_stream(target));
 
         c.shared.output_state.lock(|output| {
-            for (i, (&new_output_enabled, old_output_enabled)) in new_settings
-                .output_enabled
-                .iter()
-                .zip(old_settings.output_enabled)
-                .enumerate()
+            for (i, (&new_output_enabled, old_output_enabled)) in [
+                new_settings.low_noise.output_enabled,
+                new_settings.high_power.output_enabled,
+            ]
+            .iter()
+            .zip([
+                old_settings.low_noise.output_enabled,
+                old_settings.high_power.output_enabled,
+            ])
+            .enumerate()
             {
                 if new_output_enabled != old_output_enabled {
                     if let Ok(Some(delay)) =
@@ -471,6 +416,13 @@ mod app {
                         .unwrap();
                     }
                 }
+            }
+            if output[driver::Channel::HighPower as usize].is_enabled() {
+                write_dac_spi::spawn(
+                    driver::Channel::HighPower,
+                    new_settings.high_power.current,
+                )
+                .unwrap();
             }
         });
     }
@@ -541,18 +493,28 @@ mod app {
         mut c: handle_output_tick::Context,
         channel: driver::Channel,
     ) {
-        let iir = c
-            .shared
-            .settings
-            .lock(|settings| settings.iir_ch[channel as usize]);
+        let ramp_target = c.shared.settings.lock(|settings| match channel {
+            driver::Channel::LowNoise => settings.low_noise.iir.y_offset,
+            driver::Channel::HighPower => settings.high_power.current,
+        });
+
         c.shared.output_state.lock(|state| {
-            state[channel as usize].handle_tick(&iir).map(|del| {
-                handle_output_tick::Monotonic::spawn_after(
-                    del.convert(),
+            state[channel as usize]
+                .handle_tick(&ramp_target)
+                .map(|del| {
+                    handle_output_tick::Monotonic::spawn_after(
+                        del.convert(),
+                        channel,
+                    )
+                    .unwrap()
+                });
+            if channel == driver::Channel::HighPower {
+                write_dac_spi::spawn(
                     channel,
+                    state[channel as usize].iir().y_offset,
                 )
-                .unwrap()
-            })
+                .unwrap();
+            }
         });
     }
 
