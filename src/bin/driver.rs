@@ -138,6 +138,7 @@ pub struct Telemetry {
     monitor: Monitor,
     low_noise: LowNoise,
     // no high_power since it is fully defined by settings
+    header_adc_data: [u16; 8], // Todo this will be moved into photodiode currents/pressure sensor data
 }
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
@@ -256,13 +257,14 @@ mod app {
     ///
     /// Performs an IIR processing step on a sample from Stabilizer ADC0 and generates a new output
     /// sample for the Driver LowNoise channel. The output is also available at Stabilizer DAC0 at 1V/1A.
-    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[settings, telemetry, output_state], priority=4)]
+    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[settings, telemetry, output_state, header_adc_data], priority=4)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
             settings,
             telemetry,
             output_state,
+            header_adc_data,
         } = c.shared;
 
         let process::LocalResources {
@@ -273,8 +275,8 @@ mod app {
             generator,
         } = c.local;
 
-        (settings, telemetry, output_state).lock(
-            |settings, telemetry, output| {
+        (settings, telemetry, output_state, header_adc_data).lock(
+            |settings, telemetry, output, header_adc_data| {
                 let digital_inputs =
                     [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
 
@@ -329,6 +331,9 @@ mod app {
                     // Update telemetry measurements.
                     telemetry.low_noise.feedback_voltage = x;
                     telemetry.low_noise.output_current = y;
+                    // Todo: The raw photodiode samples should be converted to eqivalent photocurrent(?)
+                    // and incorporated into the signal processing.
+                    telemetry.header_adc_data = *header_adc_data;
 
                     // Preserve instruction and data ordering w.r.t. DMA flag access.
                     fence(Ordering::SeqCst);
