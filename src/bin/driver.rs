@@ -91,15 +91,17 @@ pub struct Settings {
     /// [Interlock]
     interlock: Interlock,
 
-    /// Output settings. Contains [driver::output::HighPowerSettings]
-    /// and [driver::output::LowNoiseSettings] for the respective channels.
-    ///
-    /// # Path
-    /// `output`
+    /// Low noise channel output settings
     ///
     /// # Value
-    /// See [driver::output::OutputSettings]
-    output: driver::output::OutputSettings,
+    /// See [LowNoiseSettings]
+    pub low_noise: driver::output::LowNoiseSettings,
+
+    /// High power channel output settings
+    ///
+    /// # Value
+    /// See [HighPowerSettings]
+    pub high_power: driver::output::HighPowerSettings,
 }
 
 impl Default for Settings {
@@ -109,12 +111,10 @@ impl Default for Settings {
             afe: [Gain::G1, Gain::G1],
             // The default telemetry period in seconds.
             telemetry_period: 1,
-
             stream_target: StreamTarget::default(),
-
             interlock: Interlock::default(),
-
-            output: driver::output::OutputSettings::default(),
+            low_noise: driver::output::LowNoiseSettings::default(),
+            high_power: driver::output::HighPowerSettings::default(),
         }
     }
 }
@@ -258,20 +258,21 @@ mod app {
                     [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
                 telemetry.digital_inputs = digital_inputs;
 
-                let hold = settings.output.low_noise.force_hold
-                    || (digital_inputs[1]
-                        && settings.output.low_noise.allow_hold);
+                let hold = settings.low_noise.force_hold
+                    || (digital_inputs[1] && settings.low_noise.allow_hold);
 
                 (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
                     // Preserve instruction and data ordering w.r.t. DMA flag access.
                     fence(Ordering::SeqCst);
 
                     // Perform processing for  ADC channel 0 --> Driver channel 0 (LowNoise)
-                    let x = f32::from(adc0[0]); // get adc sample in volt
+                    let x = f32::from(adc0[0])
+                        * settings.afe[driver::Channel::LowNoise as usize]
+                            .as_multiplier(); // get adc sample in volt * AFE gain for equivalent input voltage
                     let iir = if output[driver::Channel::LowNoise as usize]
                         .is_enabled()
                     {
-                        settings.output.low_noise.iir
+                        settings.low_noise.iir
                     } else {
                         *output[driver::Channel::LowNoise as usize].iir()
                     };
@@ -387,21 +388,16 @@ mod app {
         c.shared.network.lock(|net| net.direct_stream(target));
 
         c.shared.output_state.lock(|output| {
-            let (new_output_enabled, old_output_enabled) = (
-                [
-                    new_settings.output.low_noise.output_enabled,
-                    new_settings.output.high_power.output_enabled,
-                ],
-                [
-                    &old_settings.output.low_noise.output_enabled,
-                    &old_settings.output.high_power.output_enabled,
-                ],
-            );
-            for (i, (&new_output_enabled, &old_output_enabled)) in
-                new_output_enabled
-                    .iter()
-                    .zip(old_output_enabled)
-                    .enumerate()
+            for (i, (&new_output_enabled, old_output_enabled)) in [
+                new_settings.low_noise.output_enabled,
+                new_settings.high_power.output_enabled,
+            ]
+            .iter()
+            .zip([
+                old_settings.low_noise.output_enabled,
+                old_settings.high_power.output_enabled,
+            ])
+            .enumerate()
             {
                 if new_output_enabled != old_output_enabled {
                     if let Ok(Some(delay)) =
@@ -424,7 +420,7 @@ mod app {
             if output[driver::Channel::HighPower as usize].is_enabled() {
                 write_dac_spi::spawn(
                     driver::Channel::HighPower,
-                    new_settings.output.high_power.current,
+                    new_settings.high_power.current,
                 )
                 .unwrap();
             }
@@ -498,8 +494,8 @@ mod app {
         channel: driver::Channel,
     ) {
         let ramp_target = c.shared.settings.lock(|settings| match channel {
-            driver::Channel::LowNoise => settings.output.low_noise.iir.y_offset,
-            driver::Channel::HighPower => settings.output.high_power.current,
+            driver::Channel::LowNoise => settings.low_noise.iir.y_offset,
+            driver::Channel::HighPower => settings.high_power.current,
         });
 
         c.shared.output_state.lock(|state| {

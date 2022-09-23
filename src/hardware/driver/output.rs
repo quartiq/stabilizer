@@ -13,21 +13,6 @@ use super::{relay::Relay, Channel};
 
 const LN_MAX_I_DEFAULT: f32 = 0.2; // default maximum current for the low noise channel in ampere
 
-#[derive(Clone, Copy, Debug, Miniconf, Default)]
-pub struct OutputSettings {
-    /// Low noise channel output settings
-    ///
-    /// # Value
-    /// See [LowNoiseSettings]
-    pub low_noise: LowNoiseSettings,
-
-    /// High power channel output settings
-    ///
-    /// # Value
-    /// See [HighPowerSettings]
-    pub high_power: HighPowerSettings,
-}
-
 #[derive(Clone, Copy, Debug, Miniconf)]
 pub struct LowNoiseSettings {
     /// Configure the IIR filter parameters. Only active once channel is enabled.
