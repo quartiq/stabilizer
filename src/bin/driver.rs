@@ -121,16 +121,16 @@ impl Default for Settings {
 
 #[derive(Serialize, Copy, Clone, Default, Debug)]
 pub struct Monitor {
-    output_current: [f32; 2],
-    output_voltage: [f32; 2],
+    current: [f32; 2],
+    voltage: [f32; 2],
     cpu_temp: f32,
     overtemp: bool,
 }
 
 #[derive(Serialize, Copy, Clone, Default, Debug)]
 pub struct LowNoise {
-    feedback_voltage: f32, // Stabilizer ADC0 feedback signal
-    output_current: f32,   // Output current set by control loop
+    adc0: f32,    // Stabilizer ADC0 feedback signal
+    current: f32, // Output current set by control loop
 }
 
 #[derive(Serialize, Copy, Clone, Default, Debug)]
