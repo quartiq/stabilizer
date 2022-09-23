@@ -13,6 +13,7 @@ use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
 
 use fugit::{ExtU64, TimerInstantU64};
+use hardware::adc::AdcCode;
 use heapless::String;
 use mutex_trait::prelude::*;
 
