@@ -13,7 +13,6 @@ use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
 
 use fugit::{ExtU64, TimerInstantU64};
-use hardware::adc::AdcCode;
 use heapless::String;
 use mutex_trait::prelude::*;
 
@@ -23,7 +22,7 @@ use serde::Serialize;
 use stabilizer::{
     hardware::{
         self,
-        adc::{Adc0Input, Adc1Input},
+        adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
         design_parameters, driver,
