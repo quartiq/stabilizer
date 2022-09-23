@@ -94,13 +94,13 @@ pub struct Settings {
     /// Low noise channel output settings
     ///
     /// # Value
-    /// See [LowNoiseSettings]
+    /// See [driver::output::LowNoiseSettings]
     pub low_noise: driver::output::LowNoiseSettings,
 
     /// High power channel output settings
     ///
     /// # Value
-    /// See [HighPowerSettings]
+    /// See [driver::output::HighPowerSettings]
     pub high_power: driver::output::HighPowerSettings,
 }
 
