@@ -82,14 +82,21 @@ pub struct Settings {
     /// See [StreamTarget#miniconf]
     stream_target: StreamTarget,
 
-    /// Interlock settings.
+    /// Thermostat interlock settings.
     ///
-    /// # Path
-    /// `interlock`
     ///
     /// # Value
     /// [Interlock]
-    interlock: Interlock,
+    thermostat_interlock: Interlock,
+
+    /// Laser interlock reset.
+    /// A false -> true transition will reset a tripped laser interlock
+    /// if both Driver outputs are disabled at that time.
+    /// Note that the laser interlock is in a tripped state after Driver startup.
+    ///
+    /// # Value
+    /// true or false
+    reset_laser_interlock: bool,
 
     /// Low noise channel output settings
     ///
@@ -112,7 +119,8 @@ impl Default for Settings {
             // The default telemetry period in seconds.
             telemetry_period: 1,
             stream_target: StreamTarget::default(),
-            interlock: Interlock::default(),
+            thermostat_interlock: Interlock::default(),
+            reset_laser_interlock: false,
             low_noise: driver::output::LowNoiseSettings::default(),
             high_power: driver::output::HighPowerSettings::default(),
         }
@@ -366,11 +374,11 @@ mod app {
         let old_settings = c.shared.settings.lock(|current| *current);
 
         c.shared.interlock_handle.lock(|handle| {
-            if let Some(action) = new_settings.interlock.action(
+            if let Some(action) = new_settings.thermostat_interlock.action(
                 path.as_ref()
                     .map(|path| path.as_str().trim_start_matches("interlock/")),
                 handle.is_some(),
-                &old_settings.interlock,
+                &old_settings.thermostat_interlock,
             ) {
                 *handle = match action {
                    Action::Spawn(millis) => {
@@ -406,44 +414,44 @@ mod app {
         let target = new_settings.stream_target.into();
         c.shared.network.lock(|net| net.direct_stream(target));
 
-        c.shared.output_state.lock(|output| {
-            for (i, (&new_output_enabled, old_output_enabled)) in [
-                new_settings.low_noise.output_enabled,
-                new_settings.high_power.output_enabled,
-            ]
-            .iter()
-            .zip([
-                old_settings.low_noise.output_enabled,
-                old_settings.high_power.output_enabled,
-            ])
-            .enumerate()
-            {
-                if new_output_enabled != old_output_enabled {
-                    if let Ok(Some(delay)) =
-                        output[i].set_enable(new_output_enabled).map_err(|e| {
-                            log::error!(
-                                "Cannot enable/disable output {:?}! {:?}",
-                                i,
-                                e
-                            )
-                        })
-                    {
-                        handle_output_tick::spawn_after(
-                            delay.convert(),
-                            i.try_into().unwrap(),
+        for (i, (&new_output_enabled, old_output_enabled)) in [
+            new_settings.low_noise.output_enabled,
+            new_settings.high_power.output_enabled,
+        ]
+        .iter()
+        .zip([
+            old_settings.low_noise.output_enabled,
+            old_settings.high_power.output_enabled,
+        ])
+        .enumerate()
+        {
+            if new_output_enabled != old_output_enabled {
+                if let Ok(Some(delay)) = c.shared.output_state.lock(|output| {
+                    output[i].set_enable(new_output_enabled).map_err(|e| {
+                        log::error!(
+                            "Cannot enable/disable output {:?}! {:?}",
+                            i,
+                            e
                         )
-                        .unwrap();
-                    }
+                    })
+                }) {
+                    handle_output_tick::spawn_after(
+                        delay.convert(),
+                        i.try_into().unwrap(),
+                    )
+                    .unwrap();
                 }
             }
-            if output[driver::Channel::HighPower as usize].is_enabled() {
-                write_dac_spi::spawn(
-                    driver::Channel::HighPower,
-                    new_settings.high_power.current,
-                )
-                .unwrap();
-            }
-        });
+        }
+        if c.shared.output_state.lock(|output| {
+            output[driver::Channel::HighPower as usize].is_enabled()
+        }) {
+            write_dac_spi::spawn(
+                driver::Channel::HighPower,
+                new_settings.high_power.current,
+            )
+            .unwrap();
+        };
     }
 
     #[task(priority = 1, shared=[network, settings, telemetry, internal_adc], local=[cpu_temp_sensor, lm75])]
