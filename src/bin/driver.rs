@@ -133,6 +133,7 @@ pub struct Monitor {
     voltage: [f32; 2],
     cpu_temp: f32,
     header_temp: f32,
+    laser_interlock: bool,
 }
 
 #[derive(Serialize, Copy, Clone, Default, Debug)]
@@ -378,7 +379,7 @@ mod app {
         c.shared.interlock_handle.lock(|handle| {
             if let Some(action) = new_settings.thermostat_interlock.action(
                 path.as_ref()
-                    .map(|path| path.as_str().trim_start_matches("interlock/")),
+                    .map(|path| path.as_str().trim_start_matches("thermostat_interlock/")),
                 handle.is_some(),
                 &old_settings.thermostat_interlock,
             ) {
@@ -466,7 +467,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry, internal_adc], local=[cpu_temp_sensor, lm75])]
+    #[task(priority = 1, shared=[network, settings, telemetry, internal_adc, laser_interlock_pin], local=[cpu_temp_sensor, lm75])]
     fn telemetry(mut c: telemetry::Context) {
         let mut telemetry: Telemetry =
             c.shared.telemetry.lock(|telemetry| *telemetry);
@@ -489,6 +490,10 @@ mod app {
                     ],
                 )
             });
+        telemetry.monitor.laser_interlock = c
+            .shared
+            .laser_interlock_pin
+            .lock(|pin| pin.get_state() == hal::gpio::PinState::High);
         let telemetry_period = c
             .shared
             .settings
@@ -573,10 +578,11 @@ mod app {
         c.local.driver_dac[channel as usize].set(current).unwrap()
     }
 
-    #[task(priority = 1, shared=[interlock_handle])]
+    #[task(priority = 1, shared=[interlock_handle, laser_interlock_pin])]
     fn trip_interlock(mut c: trip_interlock::Context) {
         c.shared.interlock_handle.lock(|handle| *handle = None);
         log::error!("interlock tripped");
+        c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
     }
 
     #[task(binds = ETH, priority = 1)]
