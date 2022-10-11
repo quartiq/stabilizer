@@ -1097,12 +1097,16 @@ pub fn setup(
             ),
         ];
 
+        let mut laser_interlock_pin = gpiob.pb13.into_push_pull_output();
+        laser_interlock_pin.set_low();
+
         Mezzanine::Driver(DriverDevices {
             lm75,
             ltc2320,
             internal_adc,
             output_sm,
             dac,
+            laser_interlock_pin,
         })
     } else {
         Mezzanine::None

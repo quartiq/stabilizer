@@ -166,6 +166,7 @@ mod app {
         header_adc_data: [u16; 8],
         output_state: [output::sm::StateMachine<output::Output<I2c1Proxy>>; 2],
         interlock_handle: Option<trip_interlock::SpawnHandle>,
+        laser_interlock_pin: hal::gpio::Pin<'B', 13, hal::gpio::Output>,
     }
 
     #[local]
@@ -224,6 +225,7 @@ mod app {
             header_adc_data: [0u16; 8],
             output_state: driver.output_sm,
             interlock_handle: None,
+            laser_interlock_pin: driver.laser_interlock_pin,
         };
 
         let mut local = Local {
@@ -364,7 +366,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, interlock_handle, output_state])]
+    #[task(priority = 1, local=[afes], shared=[network, settings, interlock_handle, output_state, laser_interlock_pin])]
     fn settings_update(
         mut c: settings_update::Context,
         path: Option<String<64>>,
@@ -452,6 +454,16 @@ mod app {
             )
             .unwrap();
         };
+        // Only set interlock pin high if all channels disabled and false -> true transition.
+        if !old_settings.reset_laser_interlock
+            && new_settings.reset_laser_interlock
+            && c.shared.output_state.lock(|output| {
+                !output[driver::Channel::HighPower as usize].is_enabled()
+                    && !output[driver::Channel::LowNoise as usize].is_enabled()
+            })
+        {
+            c.shared.laser_interlock_pin.lock(|pin| pin.set_high());
+        }
     }
 
     #[task(priority = 1, shared=[network, settings, telemetry, internal_adc], local=[cpu_temp_sensor, lm75])]
