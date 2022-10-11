@@ -124,7 +124,7 @@ pub struct Monitor {
     current: [f32; 2],
     voltage: [f32; 2],
     cpu_temp: f32,
-    overtemp: bool,
+    header_temp: f32,
 }
 
 #[derive(Serialize, Copy, Clone, Default, Debug)]
@@ -172,6 +172,7 @@ mod app {
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
         header_adc_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
         driver_dac: [driver::dac::Dac<driver::Spi1Proxy>; 2],
+        lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
     }
 
     #[init]
@@ -228,6 +229,7 @@ mod app {
             cpu_temp_sensor: stabilizer.temperature_sensor,
             header_adc_conversion_scheduled: stabilizer.systick.now(),
             driver_dac: driver.dac,
+            lm75: driver.lm75,
         };
 
         // Enable ADC/DAC events
@@ -444,13 +446,15 @@ mod app {
         });
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry, internal_adc], local=[cpu_temp_sensor])]
+    #[task(priority = 1, shared=[network, settings, telemetry, internal_adc], local=[cpu_temp_sensor, lm75])]
     fn telemetry(mut c: telemetry::Context) {
         let mut telemetry: Telemetry =
             c.shared.telemetry.lock(|telemetry| *telemetry);
 
         telemetry.monitor.cpu_temp =
             c.local.cpu_temp_sensor.get_temperature().unwrap();
+        telemetry.monitor.header_temp =
+            c.local.lm75.read_temperature().unwrap();
         (telemetry.monitor.current, telemetry.monitor.voltage) =
             c.shared.internal_adc.lock(|adc| {
                 (
