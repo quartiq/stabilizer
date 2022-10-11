@@ -453,8 +453,9 @@ mod app {
 
         telemetry.monitor.cpu_temp =
             c.local.cpu_temp_sensor.get_temperature().unwrap();
-        telemetry.monitor.header_temp =
-            c.local.lm75.read_temperature().unwrap();
+        // Todo: uncomment once we have Hardware
+        // telemetry.monitor.header_temp =
+        //     c.local.lm75.read_temperature().unwrap();
         (telemetry.monitor.current, telemetry.monitor.voltage) =
             c.shared.internal_adc.lock(|adc| {
                 (
