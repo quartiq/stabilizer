@@ -58,7 +58,7 @@ impl ChannelVariant {
     Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize,
 )]
 pub enum LaserInterlock {
-    Asserted,
+    NotTripped,
     #[default]
     Tripped,
 }
@@ -66,7 +66,7 @@ pub enum LaserInterlock {
 impl From<PinState> for LaserInterlock {
     fn from(state: PinState) -> Self {
         match state {
-            PinState::High => Self::Asserted,
+            PinState::High => Self::NotTripped,
             PinState::Low => Self::Tripped,
         }
     }
