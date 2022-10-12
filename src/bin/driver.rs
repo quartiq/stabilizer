@@ -604,12 +604,12 @@ mod app {
             .shared
             .laser_interlock_pin
             .lock(|pin| pin.get_state() == PinState::High);
-        for (i, (ilock, read)) in interlock_current
+        for (i, (interlock_current, read)) in interlock_current
             .iter()
             .zip((current_reads).iter())
             .enumerate()
         {
-            if (read > ilock) & interlock_asserted {
+            if (read > interlock_current) & interlock_asserted {
                 c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
                 log::error!(
                     "Overcurrent condition in {:?}! Laser interlock tripped.",
@@ -617,12 +617,12 @@ mod app {
                 );
             }
         }
-        for (i, (ilock, read)) in interlock_voltage
+        for (i, (interlock_voltage, read)) in interlock_voltage
             .iter()
             .zip((voltage_reads).iter())
             .enumerate()
         {
-            if (read > ilock) & interlock_asserted {
+            if (read > interlock_voltage) & interlock_asserted {
                 c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
                 log::error!(
                     "Overvoltage condition in {:?}! Laser interlock tripped.",
