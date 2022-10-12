@@ -13,6 +13,7 @@ use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
 
 use fugit::{ExtU64, TimerInstantU64};
+use hal::gpio::PinState;
 use heapless::String;
 use mutex_trait::prelude::*;
 
@@ -152,8 +153,6 @@ pub struct Telemetry {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
-    use hal::gpio::PinState;
-
     use super::*;
 
     #[monotonic(binds = SysTick, default = true, priority = 2)]
