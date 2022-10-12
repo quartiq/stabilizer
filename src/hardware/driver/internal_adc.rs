@@ -80,25 +80,4 @@ impl InternalAdc {
         const OFFSET: f32 = 0.0; // Current sense offset         ToDo
         (ratio + OFFSET) * SCALE
     }
-
-    pub fn read_all(&mut self) -> [(f32, DriverMonitorChannel); 4] {
-        [
-            (
-                self.read_output_current(Channel::LowNoise),
-                DriverMonitorChannel::Current(Channel::LowNoise),
-            ),
-            (
-                self.read_output_current(Channel::HighPower),
-                DriverMonitorChannel::Current(Channel::HighPower),
-            ),
-            (
-                self.read_output_voltage(Channel::LowNoise),
-                DriverMonitorChannel::Voltage(Channel::LowNoise),
-            ),
-            (
-                self.read_output_voltage(Channel::HighPower),
-                DriverMonitorChannel::Voltage(Channel::HighPower),
-            ),
-        ]
-    }
 }

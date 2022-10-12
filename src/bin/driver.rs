@@ -12,7 +12,7 @@
 use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
 
-use fugit::{ExtU64, TimerInstantU64};
+use fugit::{Duration, ExtU64, TimerInstantU64};
 use hal::gpio::PinState;
 use heapless::String;
 use mutex_trait::prelude::*;
@@ -29,7 +29,7 @@ use stabilizer::{
         design_parameters, driver,
         driver::{
             interlock::{Action, Interlock},
-            output,
+            output, Channel,
         },
         hal,
         timers::SamplingTimer,
@@ -155,6 +155,10 @@ pub struct Telemetry {
 mod app {
     use super::*;
 
+    /// Period for checking the Driver output interlock voltage/current levels.
+    pub const DRIVER_MONITOR_PERIOD: Duration<u64, 1, 10000> =
+        Duration::<u64, 1, 10000>::millis(5); // 5 ms
+
     #[monotonic(binds = SysTick, default = true, priority = 2)]
     type Monotonic = Systick;
 
@@ -256,8 +260,7 @@ mod app {
         ethernet_link::spawn().unwrap();
         header_adc_start_conversion::spawn().unwrap();
         start::spawn_after(100.millis()).unwrap();
-        monitor_output::spawn_after(design_parameters::DRIVER_MONITOR_PERIOD)
-            .unwrap();
+        monitor_output::spawn_after(DRIVER_MONITOR_PERIOD).unwrap();
 
         (shared, local, init::Monotonics(stabilizer.systick))
     }
@@ -573,31 +576,64 @@ mod app {
 
     #[task(priority = 1, shared=[telemetry, settings, laser_interlock_pin], local=[internal_adc])]
     fn monitor_output(mut c: monitor_output::Context) {
-        let limits = c.shared.settings.lock(|settings| {
+        let (interlock_current, interlock_voltage) =
+            c.shared.settings.lock(|settings| {
+                (
+                    [
+                        settings.low_noise.interlock_current,
+                        settings.high_power.interlock_current,
+                    ],
+                    [
+                        settings.low_noise.interlock_voltage,
+                        settings.high_power.interlock_voltage,
+                    ],
+                )
+            });
+        let (voltage_reads, current_reads) = (
             [
-                settings.low_noise.interlock_current,
-                settings.high_power.interlock_current,
-                settings.low_noise.interlock_voltage,
-                settings.high_power.interlock_voltage,
-            ]
-        });
-        let measurements = c.local.internal_adc.read_all();
-        for (limit, measurement) in limits.iter().zip(measurements.iter()) {
-            if (measurement.0 > *limit)
-                && c.shared
-                    .laser_interlock_pin
-                    .lock(|pin| pin.get_state() == PinState::High)
-            {
+                c.local.internal_adc.read_output_current(Channel::LowNoise),
+                c.local.internal_adc.read_output_current(Channel::HighPower),
+            ],
+            [
+                c.local.internal_adc.read_output_voltage(Channel::LowNoise),
+                c.local.internal_adc.read_output_voltage(Channel::HighPower),
+            ],
+        );
+        let interlock_high = c
+            .shared
+            .laser_interlock_pin
+            .lock(|pin| pin.get_state() == PinState::High);
+        for (i, (ilock, read)) in interlock_current
+            .iter()
+            .zip((current_reads).iter())
+            .enumerate()
+        {
+            if (read > ilock) & interlock_high {
                 c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
-                log::info!("Driver output Overvoltage/current condition! {:?} Laser interlock tripped.", measurement.1);
+                log::error!(
+                    "Overcurrent condition in {:?}",
+                    Channel::try_from(i)
+                );
+            }
+        }
+        for (i, (ilock, read)) in interlock_voltage
+            .iter()
+            .zip((voltage_reads).iter())
+            .enumerate()
+        {
+            if (read > ilock) & interlock_high {
+                c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
+                log::error!(
+                    "Overvoltage condition in {:?}",
+                    Channel::try_from(i)
+                );
             }
         }
         c.shared.telemetry.lock(|tele| {
-            tele.monitor.current = [measurements[0].0, measurements[1].0];
-            tele.monitor.voltage = [measurements[2].0, measurements[3].0];
+            tele.monitor.current = current_reads;
+            tele.monitor.voltage = voltage_reads;
         });
-        monitor_output::spawn_after(design_parameters::DRIVER_MONITOR_PERIOD)
-            .unwrap();
+        monitor_output::spawn_after(DRIVER_MONITOR_PERIOD).unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]
