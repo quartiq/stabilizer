@@ -25,7 +25,7 @@ pub struct Interlock {
     ///
     /// # Value
     /// "true" or "false"
-    pub armed: bool,
+    armed: bool,
 
     /// Interlock timeout in milliseconds.
     ///
