@@ -4,9 +4,11 @@ pub mod ltc2320;
 pub mod output;
 pub mod relay;
 use super::I2c1Proxy;
+use hal::gpio::PinState;
 use lm75;
 pub mod interlock;
 use num_enum::TryFromPrimitive;
+use serde::{Deserialize, Serialize};
 use stm32h7xx_hal as hal;
 
 pub type Spi1Proxy = &'static shared_bus_rtic::CommonBus<
@@ -48,6 +50,24 @@ impl ChannelVariant {
             ChannelVariant::LowNoiseSource => Self::R_OUT_LN,
             ChannelVariant::HighPowerSink => -Self::R_OUT_HP, // negated
             ChannelVariant::HighPowerSource => Self::R_OUT_HP,
+        }
+    }
+}
+
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize,
+)]
+pub enum LaserInterlock {
+    Asserted,
+    #[default]
+    Tripped,
+}
+
+impl From<PinState> for LaserInterlock {
+    fn from(state: PinState) -> Self {
+        match state {
+            PinState::High => Self::Asserted,
+            PinState::Low => Self::Tripped,
         }
     }
 }

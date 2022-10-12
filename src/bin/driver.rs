@@ -20,6 +20,7 @@ use mutex_trait::prelude::*;
 use idsp::iir;
 
 use serde::Serialize;
+use stabilizer::hardware::driver::LaserInterlock;
 use stabilizer::{
     hardware::{
         self,
@@ -134,7 +135,7 @@ pub struct Monitor {
     voltage: [f32; 2],
     cpu_temp: f32,
     header_temp: f32,
-    laser_interlock: bool,
+    laser_interlock: LaserInterlock,
 }
 
 #[derive(Serialize, Copy, Clone, Default, Debug)]
@@ -486,7 +487,7 @@ mod app {
         telemetry.monitor.laser_interlock = c
             .shared
             .laser_interlock_pin
-            .lock(|pin| pin.get_state() == hal::gpio::PinState::High);
+            .lock(|pin| pin.get_state().into());
         let telemetry_period = c
             .shared
             .settings
@@ -599,7 +600,7 @@ mod app {
                 c.local.internal_adc.read_output_voltage(Channel::HighPower),
             ],
         );
-        let interlock_high = c
+        let interlock_asserted = c
             .shared
             .laser_interlock_pin
             .lock(|pin| pin.get_state() == PinState::High);
@@ -608,7 +609,7 @@ mod app {
             .zip((current_reads).iter())
             .enumerate()
         {
-            if (read > ilock) & interlock_high {
+            if (read > ilock) & interlock_asserted {
                 c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
                 log::error!(
                     "Overcurrent condition in {:?}",
@@ -621,7 +622,7 @@ mod app {
             .zip((voltage_reads).iter())
             .enumerate()
         {
-            if (read > ilock) & interlock_high {
+            if (read > ilock) & interlock_asserted {
                 c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
                 log::error!(
                     "Overvoltage condition in {:?}",
