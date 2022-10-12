@@ -28,7 +28,7 @@ use stabilizer::{
         design_parameters, driver,
         driver::{
             interlock::{Action, Interlock},
-            output,
+            output, Channel,
         },
         hal,
         timers::SamplingTimer,
@@ -585,17 +585,28 @@ mod app {
             ]
         });
         let measurements = c.local.internal_adc.read_all();
-        for (limit, measurement) in limits.iter().zip(measurements.iter()) {
+        for (i, (limit, measurement)) in
+            limits.iter().zip(measurements.iter()).enumerate()
+        {
             if measurement > limit {
                 c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
-                log::error!("interlock tripped");
+                if i < 2 {
+                    log::error!(
+                        "Overcurrent condition in {:?}! Laser Interlock tripped.",
+                        Channel::try_from(i).unwrap()
+                    )
+                } else {
+                    log::error!(
+                        "Overvoltage condition in {:?}! Laser Interlock tripped.",
+                        Channel::try_from(i-2).unwrap()
+                    )
+                }
             }
         }
         c.shared.telemetry.lock(|tele| {
             tele.monitor.current = measurements[..2].try_into().unwrap();
             tele.monitor.voltage = measurements[2..].try_into().unwrap()
         });
-        log::info!("limits: {:?}", limits);
         monitor_output::spawn_after(design_parameters::DRIVER_MONITOR_PERIOD)
             .unwrap();
     }
