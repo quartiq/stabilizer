@@ -612,7 +612,7 @@ mod app {
             if (read > ilock) & interlock_asserted {
                 c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
                 log::error!(
-                    "Overcurrent condition in {:?}",
+                    "Overcurrent condition in {:?}! Laser interlock tripped.",
                     Channel::try_from(i)
                 );
             }
@@ -625,7 +625,7 @@ mod app {
             if (read > ilock) & interlock_asserted {
                 c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
                 log::error!(
-                    "Overvoltage condition in {:?}",
+                    "Overvoltage condition in {:?}! Laser interlock tripped.",
                     Channel::try_from(i)
                 );
             }
