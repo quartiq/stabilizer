@@ -478,14 +478,13 @@ mod app {
             .network
             .lock(|net| net.telemetry.publish(&telemetry));
         // Schedule the telemetry task in the future.
-        telemetry::Monotonic::spawn_after((telemetry_period as u64).secs())
-            .unwrap();
+        telemetry::spawn_after((telemetry_period as u64).secs()).unwrap();
     }
 
     #[task(priority = 1, shared=[network])]
     fn ethernet_link(mut c: ethernet_link::Context) {
         c.shared.network.lock(|net| net.processor.handle_link());
-        ethernet_link::Monotonic::spawn_after(1.secs()).unwrap();
+        ethernet_link::spawn_after(1.secs()).unwrap();
     }
 
     #[task(priority = 3, shared=[header_adc], local=[header_adc_conversion_scheduled])]
@@ -498,7 +497,7 @@ mod app {
             .unwrap(); // panic if header_adc timing is not met
         *c.local.header_adc_conversion_scheduled +=
             design_parameters::HEADER_ADC_PERIOD.convert(); // update time at which the next conversion is scheduled
-        header_adc_start_conversion::Monotonic::spawn_at(
+        header_adc_start_conversion::spawn_at(
             *c.local.header_adc_conversion_scheduled,
         )
         .unwrap();
@@ -526,11 +525,8 @@ mod app {
             state[channel as usize]
                 .handle_tick(&ramp_target)
                 .map(|del| {
-                    handle_output_tick::Monotonic::spawn_after(
-                        del.convert(),
-                        channel,
-                    )
-                    .unwrap()
+                    handle_output_tick::spawn_after(del.convert(), channel)
+                        .unwrap()
                 });
             if channel == driver::Channel::HighPower {
                 write_dac_spi::spawn(
