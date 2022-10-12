@@ -1,3 +1,4 @@
+use fugit::Duration;
 use stm32h7xx_hal::time::MegaHertz;
 
 /// The system clock, used in various timer calculations
@@ -53,3 +54,6 @@ pub const DDS_SYNC_CLK_DIV: u8 = 4;
 pub const MAX_SAMPLE_BUFFER_SIZE: usize = 32;
 
 pub type SampleBuffer = [u16; MAX_SAMPLE_BUFFER_SIZE];
+
+pub const DRIVER_MONITOR_PERIOD: Duration<u64, 1, 10000> =
+    Duration::<u64, 1, 10000>::millis(500);

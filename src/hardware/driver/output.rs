@@ -38,6 +38,18 @@ pub struct LowNoiseSettings {
     /// # Value
     /// [bool]
     pub output_enabled: bool,
+
+    /// Configure the interlock current at which the laser interlock will trip.
+    ///
+    /// # Value
+    /// Any positive value.
+    pub interlock_current: f32,
+
+    /// Configure the interlock voltage at which the laser interlock will trip.
+    ///
+    /// # Value
+    /// Any positive value.
+    pub interlock_voltage: f32,
 }
 
 impl Default for LowNoiseSettings {
@@ -47,6 +59,8 @@ impl Default for LowNoiseSettings {
             allow_hold: false,
             force_hold: false,
             output_enabled: false,
+            interlock_current: 0.,
+            interlock_voltage: 0.,
         }
     }
 }
@@ -64,6 +78,18 @@ pub struct HighPowerSettings {
     /// # Value
     /// bool
     pub output_enabled: bool,
+
+    /// Configure the interlock current at which the laser interlock will trip.
+    ///
+    /// # Value
+    /// Any positive value.
+    pub interlock_current: f32,
+
+    /// Configure the interlock voltage at which the laser interlock will trip.
+    ///
+    /// # Value
+    /// Any positive value.
+    pub interlock_voltage: f32,
 }
 
 impl Default for HighPowerSettings {
@@ -71,6 +97,8 @@ impl Default for HighPowerSettings {
         Self {
             current: 0.0,
             output_enabled: false,
+            interlock_current: 0.,
+            interlock_voltage: 0.,
         }
     }
 }

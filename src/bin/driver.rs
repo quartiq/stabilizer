@@ -28,7 +28,7 @@ use stabilizer::{
         design_parameters, driver,
         driver::{
             interlock::{Action, Interlock},
-            output, Channel,
+            output,
         },
         hal,
         timers::SamplingTimer,
@@ -162,7 +162,6 @@ mod app {
         network: NetworkUsers<Settings, Telemetry>,
         settings: Settings,
         telemetry: Telemetry,
-        internal_adc: driver::internal_adc::InternalAdc,
         header_adc: driver::ltc2320::Ltc2320,
         header_adc_data: [u16; 8],
         output_state: [output::sm::StateMachine<output::Output<I2c1Proxy>>; 2],
@@ -180,6 +179,7 @@ mod app {
         iir_state: [iir::Vec5<f32>; 2],
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
+        internal_adc: driver::internal_adc::InternalAdc,
         header_adc_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
         driver_dac: [driver::dac::Dac<driver::Spi1Proxy>; 2],
         lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
@@ -221,7 +221,6 @@ mod app {
             network,
             settings,
             telemetry: Telemetry::default(),
-            internal_adc: driver.internal_adc,
             header_adc: driver.ltc2320,
             header_adc_data: [0u16; 8],
             output_state: driver.output_sm,
@@ -238,6 +237,7 @@ mod app {
             iir_state: [[0.; 5]; 2],
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
+            internal_adc: driver.internal_adc,
             header_adc_conversion_scheduled: stabilizer.systick.now(),
             driver_dac: driver.dac,
             lm75: driver.lm75,
@@ -255,6 +255,8 @@ mod app {
         ethernet_link::spawn().unwrap();
         header_adc_start_conversion::spawn().unwrap();
         start::spawn_after(100.millis()).unwrap();
+        monitor_output::spawn_after(design_parameters::DRIVER_MONITOR_PERIOD)
+            .unwrap();
 
         (shared, local, init::Monotonics(stabilizer.systick))
     }
@@ -467,7 +469,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry, internal_adc, laser_interlock_pin], local=[cpu_temp_sensor, lm75])]
+    #[task(priority = 1, shared=[network, settings, telemetry, laser_interlock_pin], local=[cpu_temp_sensor, lm75])]
     fn telemetry(mut c: telemetry::Context) {
         let mut telemetry: Telemetry =
             c.shared.telemetry.lock(|telemetry| *telemetry);
@@ -477,19 +479,6 @@ mod app {
         // Todo: uncomment once we have Hardware
         // telemetry.monitor.header_temp =
         //     c.local.lm75.read_temperature().unwrap();
-        (telemetry.monitor.current, telemetry.monitor.voltage) =
-            c.shared.internal_adc.lock(|adc| {
-                (
-                    [
-                        adc.read_output_current(Channel::LowNoise),
-                        adc.read_output_current(Channel::HighPower),
-                    ],
-                    [
-                        adc.read_output_voltage(Channel::LowNoise),
-                        adc.read_output_voltage(Channel::HighPower),
-                    ],
-                )
-            });
         telemetry.monitor.laser_interlock = c
             .shared
             .laser_interlock_pin
@@ -581,8 +570,34 @@ mod app {
     #[task(priority = 1, shared=[interlock_handle, laser_interlock_pin])]
     fn trip_interlock(mut c: trip_interlock::Context) {
         c.shared.interlock_handle.lock(|handle| *handle = None);
-        log::error!("interlock tripped");
+        log::error!("thermostat interlock tripped");
         c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
+    }
+
+    #[task(priority = 1, shared=[telemetry, settings, laser_interlock_pin], local=[internal_adc])]
+    fn monitor_output(mut c: monitor_output::Context) {
+        let limits = c.shared.settings.lock(|settings| {
+            [
+                settings.low_noise.interlock_current,
+                settings.high_power.interlock_current,
+                settings.low_noise.interlock_voltage,
+                settings.high_power.interlock_voltage,
+            ]
+        });
+        let measurements = c.local.internal_adc.read_all();
+        for (limit, measurement) in limits.iter().zip(measurements.iter()) {
+            if measurement > limit {
+                c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
+                log::error!("interlock tripped");
+            }
+        }
+        c.shared.telemetry.lock(|tele| {
+            tele.monitor.current = measurements[..2].try_into().unwrap();
+            tele.monitor.voltage = measurements[2..].try_into().unwrap()
+        });
+        log::info!("limits: {:?}", limits);
+        monitor_output::spawn_after(design_parameters::DRIVER_MONITOR_PERIOD)
+            .unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]

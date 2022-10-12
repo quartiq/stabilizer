@@ -79,4 +79,13 @@ impl InternalAdc {
         const OFFSET: f32 = 0.0; // Current sense offset         ToDo
         (ratio + OFFSET) * SCALE
     }
+
+    pub fn read_all(&mut self) -> [f32; 4] {
+        [
+            self.read_output_current(Channel::LowNoise),
+            self.read_output_current(Channel::HighPower),
+            self.read_output_voltage(Channel::LowNoise),
+            self.read_output_voltage(Channel::HighPower),
+        ]
+    }
 }
