@@ -55,5 +55,6 @@ pub const MAX_SAMPLE_BUFFER_SIZE: usize = 32;
 
 pub type SampleBuffer = [u16; MAX_SAMPLE_BUFFER_SIZE];
 
+/// Period for checking the Driver output interlock voltage/current levels.
 pub const DRIVER_MONITOR_PERIOD: Duration<u64, 1, 10000> =
-    Duration::<u64, 1, 10000>::millis(500);
+    Duration::<u64, 1, 10000>::millis(5); // 5 ms

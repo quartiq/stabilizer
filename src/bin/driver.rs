@@ -28,7 +28,7 @@ use stabilizer::{
         design_parameters, driver,
         driver::{
             interlock::{Action, Interlock},
-            output, Channel,
+            output,
         },
         hal,
         timers::SamplingTimer,
@@ -152,6 +152,8 @@ pub struct Telemetry {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
+    use hal::gpio::PinState;
+
     use super::*;
 
     #[monotonic(binds = SysTick, default = true, priority = 2)]
@@ -581,27 +583,19 @@ mod app {
             ]
         });
         let measurements = c.local.internal_adc.read_all();
-        for (i, (limit, measurement)) in
-            limits.iter().zip(measurements.iter()).enumerate()
-        {
-            if measurement > limit {
+        for (limit, measurement) in limits.iter().zip(measurements.iter()) {
+            if (measurement.0 > *limit)
+                && c.shared
+                    .laser_interlock_pin
+                    .lock(|pin| pin.get_state() == PinState::High)
+            {
                 c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
-                if i < 2 {
-                    log::error!(
-                        "Overcurrent condition in {:?}! Laser Interlock tripped.",
-                        Channel::try_from(i).unwrap()
-                    )
-                } else {
-                    log::error!(
-                        "Overvoltage condition in {:?}! Laser Interlock tripped.",
-                        Channel::try_from(i-2).unwrap()
-                    )
-                }
+                log::info!("Driver output Overvoltage/current condition! {:?} Laser interlock tripped.", measurement.1);
             }
         }
         c.shared.telemetry.lock(|tele| {
-            tele.monitor.current = measurements[..2].try_into().unwrap();
-            tele.monitor.voltage = measurements[2..].try_into().unwrap()
+            tele.monitor.current = [measurements[0].0, measurements[1].0];
+            tele.monitor.voltage = [measurements[2].0, measurements[3].0];
         });
         monitor_output::spawn_after(design_parameters::DRIVER_MONITOR_PERIOD)
             .unwrap();
