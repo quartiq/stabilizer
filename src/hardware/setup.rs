@@ -1097,12 +1097,17 @@ pub fn setup(
             ),
         ];
 
+        // The Pounder pgood pin was instantiated to check for Pounder. It is the same pin as the interlock on Driver.
+        let mut laser_interlock_pin = pounder_pgood.into_push_pull_output();
+        laser_interlock_pin.set_low();
+
         Mezzanine::Driver(DriverDevices {
             lm75,
             ltc2320,
             internal_adc,
             output_sm,
             dac,
+            laser_interlock_pin,
         })
     } else {
         Mezzanine::None

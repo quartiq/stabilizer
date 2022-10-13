@@ -1,6 +1,7 @@
 // This is a dummy driver for the Driver analog reads of the output Voltage and Current.
 // Exact Sacales and Pinout will be filled in once we have HW.
 
+use super::Channel;
 use crate::hardware::shared_adc::AdcChannel;
 
 use super::super::hal::{
@@ -11,11 +12,11 @@ use super::super::hal::{
 const V_REF: f32 = 2.048; // ADC reference voltage
 const R_SENSE: f32 = 0.1; // Driver output current sense resistor (Will maybe be something else on HW)
 
-pub enum DriverAdcChannel {
-    OutputVoltage(Channel),
-    OutputCurrent(Channel),
+#[derive(Clone, Copy, Debug)]
+pub enum DriverMonitorChannel {
+    Voltage(Channel),
+    Current(Channel),
 }
-use super::Channel;
 
 pub struct InternalAdc {
     output_voltage: (
@@ -45,10 +46,10 @@ impl InternalAdc {
         }
     }
 
-    pub fn read(&mut self, ch: DriverAdcChannel) -> f32 {
+    pub fn read(&mut self, ch: DriverMonitorChannel) -> f32 {
         match ch {
-            DriverAdcChannel::OutputVoltage(ch) => self.read_output_voltage(ch),
-            DriverAdcChannel::OutputCurrent(ch) => self.read_output_current(ch),
+            DriverMonitorChannel::Voltage(ch) => self.read_output_voltage(ch),
+            DriverMonitorChannel::Current(ch) => self.read_output_current(ch),
         }
     }
 

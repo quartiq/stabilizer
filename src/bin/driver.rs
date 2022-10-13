@@ -12,13 +12,15 @@
 use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
 
-use fugit::{ExtU64, TimerInstantU64};
+use fugit::{Duration, ExtU64, TimerInstantU64};
+use hal::gpio::PinState;
 use heapless::String;
 use mutex_trait::prelude::*;
 
 use idsp::iir;
 
 use serde::Serialize;
+use stabilizer::hardware::driver::LaserInterlock;
 use stabilizer::{
     hardware::{
         self,
@@ -82,14 +84,21 @@ pub struct Settings {
     /// See [StreamTarget#miniconf]
     stream_target: StreamTarget,
 
-    /// Interlock settings.
+    /// Thermostat interlock settings.
     ///
-    /// # Path
-    /// `interlock`
     ///
     /// # Value
     /// [Interlock]
-    interlock: Interlock,
+    thermostat_interlock: Interlock,
+
+    /// Laser interlock reset.
+    /// A false -> true transition will reset a tripped laser interlock
+    /// if both Driver outputs are disabled at that time.
+    /// Note that the laser interlock is in a tripped state after Driver startup.
+    ///
+    /// # Value
+    /// true or false
+    reset_laser_interlock: bool,
 
     /// Low noise channel output settings
     ///
@@ -112,7 +121,8 @@ impl Default for Settings {
             // The default telemetry period in seconds.
             telemetry_period: 1,
             stream_target: StreamTarget::default(),
-            interlock: Interlock::default(),
+            thermostat_interlock: Interlock::default(),
+            reset_laser_interlock: false,
             low_noise: driver::output::LowNoiseSettings::default(),
             high_power: driver::output::HighPowerSettings::default(),
         }
@@ -125,6 +135,7 @@ pub struct Monitor {
     voltage: [f32; 2],
     cpu_temp: f32,
     header_temp: f32,
+    laser_interlock: LaserInterlock,
 }
 
 #[derive(Serialize, Copy, Clone, Default, Debug)]
@@ -145,6 +156,10 @@ pub struct Telemetry {
 mod app {
     use super::*;
 
+    /// Period for checking the Driver output interlock voltage/current levels.
+    pub const DRIVER_MONITOR_PERIOD: Duration<u64, 1, 10000> =
+        Duration::<u64, 1, 10000>::millis(5); // 5 ms
+
     #[monotonic(binds = SysTick, default = true, priority = 2)]
     type Monotonic = Systick;
 
@@ -153,11 +168,11 @@ mod app {
         network: NetworkUsers<Settings, Telemetry>,
         settings: Settings,
         telemetry: Telemetry,
-        internal_adc: driver::internal_adc::InternalAdc,
         header_adc: driver::ltc2320::Ltc2320,
         header_adc_data: [u16; 8],
         output_state: [output::sm::StateMachine<output::Output<I2c1Proxy>>; 2],
         interlock_handle: Option<trip_interlock::SpawnHandle>,
+        laser_interlock_pin: hal::gpio::Pin<'B', 13, hal::gpio::Output>,
     }
 
     #[local]
@@ -170,6 +185,7 @@ mod app {
         iir_state: [iir::Vec5<f32>; 2],
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
+        internal_adc: driver::internal_adc::InternalAdc,
         header_adc_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
         driver_dac: [driver::dac::Dac<driver::Spi1Proxy>; 2],
         lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
@@ -211,11 +227,11 @@ mod app {
             network,
             settings,
             telemetry: Telemetry::default(),
-            internal_adc: driver.internal_adc,
             header_adc: driver.ltc2320,
             header_adc_data: [0u16; 8],
             output_state: driver.output_sm,
             interlock_handle: None,
+            laser_interlock_pin: driver.laser_interlock_pin,
         };
 
         let mut local = Local {
@@ -227,6 +243,7 @@ mod app {
             iir_state: [[0.; 5]; 2],
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
+            internal_adc: driver.internal_adc,
             header_adc_conversion_scheduled: stabilizer.systick.now(),
             driver_dac: driver.dac,
             lm75: driver.lm75,
@@ -244,6 +261,7 @@ mod app {
         ethernet_link::spawn().unwrap();
         header_adc_start_conversion::spawn().unwrap();
         start::spawn_after(100.millis()).unwrap();
+        monitor_output::spawn_after(DRIVER_MONITOR_PERIOD).unwrap();
 
         (shared, local, init::Monotonics(stabilizer.systick))
     }
@@ -356,7 +374,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, interlock_handle, output_state])]
+    #[task(priority = 1, local=[afes], shared=[network, settings, interlock_handle, output_state, laser_interlock_pin])]
     fn settings_update(
         mut c: settings_update::Context,
         path: Option<String<64>>,
@@ -366,11 +384,11 @@ mod app {
         let old_settings = c.shared.settings.lock(|current| *current);
 
         c.shared.interlock_handle.lock(|handle| {
-            if let Some(action) = new_settings.interlock.action(
+            if let Some(action) = new_settings.thermostat_interlock.action(
                 path.as_ref()
-                    .map(|path| path.as_str().trim_start_matches("interlock/")),
+                    .map(|path| path.as_str().trim_start_matches("thermostat_interlock/")),
                 handle.is_some(),
-                &old_settings.interlock,
+                &old_settings.thermostat_interlock,
             ) {
                 *handle = match action {
                    Action::Spawn(millis) => {
@@ -406,47 +424,57 @@ mod app {
         let target = new_settings.stream_target.into();
         c.shared.network.lock(|net| net.direct_stream(target));
 
-        c.shared.output_state.lock(|output| {
-            for (i, (&new_output_enabled, old_output_enabled)) in [
-                new_settings.low_noise.output_enabled,
-                new_settings.high_power.output_enabled,
-            ]
-            .iter()
-            .zip([
-                old_settings.low_noise.output_enabled,
-                old_settings.high_power.output_enabled,
-            ])
-            .enumerate()
-            {
-                if new_output_enabled != old_output_enabled {
-                    if let Ok(Some(delay)) =
-                        output[i].set_enable(new_output_enabled).map_err(|e| {
-                            log::error!(
-                                "Cannot enable/disable output {:?}! {:?}",
-                                i,
-                                e
-                            )
-                        })
-                    {
-                        handle_output_tick::spawn_after(
-                            delay.convert(),
-                            i.try_into().unwrap(),
+        for (i, (&new_output_enabled, old_output_enabled)) in [
+            new_settings.low_noise.output_enabled,
+            new_settings.high_power.output_enabled,
+        ]
+        .iter()
+        .zip([
+            old_settings.low_noise.output_enabled,
+            old_settings.high_power.output_enabled,
+        ])
+        .enumerate()
+        {
+            if new_output_enabled != old_output_enabled {
+                if let Ok(Some(delay)) = c.shared.output_state.lock(|output| {
+                    output[i].set_enable(new_output_enabled).map_err(|e| {
+                        log::error!(
+                            "Cannot enable/disable output {:?}! {:?}",
+                            i,
+                            e
                         )
-                        .unwrap();
-                    }
+                    })
+                }) {
+                    handle_output_tick::spawn_after(
+                        delay.convert(),
+                        i.try_into().unwrap(),
+                    )
+                    .unwrap();
                 }
             }
-            if output[driver::Channel::HighPower as usize].is_enabled() {
-                write_dac_spi::spawn(
-                    driver::Channel::HighPower,
-                    new_settings.high_power.current,
-                )
-                .unwrap();
-            }
-        });
+        }
+        if c.shared.output_state.lock(|output| {
+            output[driver::Channel::HighPower as usize].is_enabled()
+        }) {
+            write_dac_spi::spawn(
+                driver::Channel::HighPower,
+                new_settings.high_power.current,
+            )
+            .unwrap();
+        };
+        // Only set interlock pin high if all channels disabled and false -> true transition.
+        if !old_settings.reset_laser_interlock
+            && new_settings.reset_laser_interlock
+            && c.shared.output_state.lock(|output| {
+                !output[driver::Channel::HighPower as usize].is_enabled()
+                    && !output[driver::Channel::LowNoise as usize].is_enabled()
+            })
+        {
+            c.shared.laser_interlock_pin.lock(|pin| pin.set_high());
+        }
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry, internal_adc], local=[cpu_temp_sensor, lm75])]
+    #[task(priority = 1, shared=[network, settings, telemetry, laser_interlock_pin], local=[cpu_temp_sensor, lm75])]
     fn telemetry(mut c: telemetry::Context) {
         let mut telemetry: Telemetry =
             c.shared.telemetry.lock(|telemetry| *telemetry);
@@ -456,19 +484,10 @@ mod app {
         // Todo: uncomment once we have Hardware
         // telemetry.monitor.header_temp =
         //     c.local.lm75.read_temperature().unwrap();
-        (telemetry.monitor.current, telemetry.monitor.voltage) =
-            c.shared.internal_adc.lock(|adc| {
-                (
-                    [
-                        adc.read_output_current(Channel::LowNoise),
-                        adc.read_output_current(Channel::HighPower),
-                    ],
-                    [
-                        adc.read_output_voltage(Channel::LowNoise),
-                        adc.read_output_voltage(Channel::HighPower),
-                    ],
-                )
-            });
+        telemetry.monitor.laser_interlock = c
+            .shared
+            .laser_interlock_pin
+            .lock(|pin| pin.get_state().into());
         let telemetry_period = c
             .shared
             .settings
@@ -549,10 +568,73 @@ mod app {
         c.local.driver_dac[channel as usize].set(current).unwrap()
     }
 
-    #[task(priority = 1, shared=[interlock_handle])]
+    #[task(priority = 1, shared=[interlock_handle, laser_interlock_pin])]
     fn trip_interlock(mut c: trip_interlock::Context) {
         c.shared.interlock_handle.lock(|handle| *handle = None);
-        log::error!("interlock tripped");
+        log::error!("thermostat interlock tripped");
+        c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
+    }
+
+    #[task(priority = 1, shared=[telemetry, settings, laser_interlock_pin], local=[internal_adc])]
+    fn monitor_output(mut c: monitor_output::Context) {
+        let (interlock_current, interlock_voltage) =
+            c.shared.settings.lock(|settings| {
+                (
+                    [
+                        settings.low_noise.interlock_current,
+                        settings.high_power.interlock_current,
+                    ],
+                    [
+                        settings.low_noise.interlock_voltage,
+                        settings.high_power.interlock_voltage,
+                    ],
+                )
+            });
+        let (voltage_reads, current_reads) = (
+            [
+                c.local.internal_adc.read_output_current(Channel::LowNoise),
+                c.local.internal_adc.read_output_current(Channel::HighPower),
+            ],
+            [
+                c.local.internal_adc.read_output_voltage(Channel::LowNoise),
+                c.local.internal_adc.read_output_voltage(Channel::HighPower),
+            ],
+        );
+        let interlock_asserted = c
+            .shared
+            .laser_interlock_pin
+            .lock(|pin| pin.get_state() == PinState::High);
+        for (i, (interlock_current, read)) in interlock_current
+            .iter()
+            .zip((current_reads).iter())
+            .enumerate()
+        {
+            if (read > interlock_current) & interlock_asserted {
+                c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
+                log::error!(
+                    "Overcurrent condition in {:?}! Laser interlock tripped.",
+                    Channel::try_from(i)
+                );
+            }
+        }
+        for (i, (interlock_voltage, read)) in interlock_voltage
+            .iter()
+            .zip((voltage_reads).iter())
+            .enumerate()
+        {
+            if (read > interlock_voltage) & interlock_asserted {
+                c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
+                log::error!(
+                    "Overvoltage condition in {:?}! Laser interlock tripped.",
+                    Channel::try_from(i)
+                );
+            }
+        }
+        c.shared.telemetry.lock(|tele| {
+            tele.monitor.current = current_reads;
+            tele.monitor.voltage = voltage_reads;
+        });
+        monitor_output::spawn_after(DRIVER_MONITOR_PERIOD).unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]
