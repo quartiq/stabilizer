@@ -63,7 +63,7 @@ lm75 = "0.2"
 smlang = "0.5.1"
 enum-iterator = "1.1.3"
 rand_xorshift = "0.3.0"
-rand_core = "0.6.3"
+rand_core = "0.6.4"
 shared-bus-rtic = "0.2.2"
 
 [dependencies.stm32h7xx-hal]

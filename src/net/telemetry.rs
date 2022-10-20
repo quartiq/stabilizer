@@ -20,7 +20,7 @@ use minimq::embedded_nal::IpAddr;
 
 /// The telemetry client for reporting telemetry data over MQTT.
 pub struct TelemetryClient<T: Serialize> {
-    mqtt: minimq::Minimq<NetworkReference, SystemTimer, 512, 1>,
+    mqtt: minimq::Minimq<NetworkReference, SystemTimer, 1024, 1>,
     telemetry_topic: String<128>,
     _telemetry: core::marker::PhantomData<T>,
 }
@@ -146,6 +146,7 @@ impl<T: Serialize> TelemetryClient<T> {
                 Retain::NotRetained,
                 &[],
             )
+            .map_err(|e| log::error!("Telemetry publishing error: {:?}", e))
             .ok();
     }
 
