@@ -737,14 +737,14 @@ pub fn setup(
         let (mut adc1, mut adc2) = hal::adc::adc12(
             device.ADC1,
             device.ADC2,
-            stm32h7xx_hal::time::Hertz::MHz(25),
+            stm32h7xx_hal::time::Hertz::MHz(12),
             &mut delay,
             ccdr.peripheral.ADC12,
             &ccdr.clocks,
         );
         let mut adc3 = hal::adc::Adc::adc3(
             device.ADC3,
-            stm32h7xx_hal::time::Hertz::MHz(25),
+            stm32h7xx_hal::time::Hertz::MHz(12),
             &mut delay,
             ccdr.peripheral.ADC3,
             &ccdr.clocks,
