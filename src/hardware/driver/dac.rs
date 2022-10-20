@@ -184,7 +184,7 @@ where
         // set to 10 V plusminus 1.25 V referenece span
         dac.write(DAC_ADDR::CONFIG1, CONFIG1::VREFVAL::SPAN_10V);
         // perform calibration
-        dac.calibrate(delay);
+        // dac.calibrate(delay);
 
         dac
     }
