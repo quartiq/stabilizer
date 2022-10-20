@@ -377,7 +377,7 @@ mod app {
     #[task(priority = 1, local=[afes], shared=[network, settings, interlock_handle, output_state, laser_interlock_pin])]
     fn settings_update(
         mut c: settings_update::Context,
-        path: Option<String<64>>,
+        path: Option<String<128>>,
     ) {
         let new_settings =
             c.shared.network.lock(|net| *net.miniconf.settings());
