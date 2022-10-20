@@ -193,7 +193,7 @@ impl core::iter::Iterator for SignalGenerator {
             .wrapping_add(self.config.phase_increment[sign as usize]);
 
         let scale = match self.config.signal {
-            Signal::Cosine => (idsp::cossin(phase).0 >> 16),
+            Signal::Cosine => idsp::cossin(phase).0 >> 16,
             Signal::Square => {
                 if sign {
                     i16::MIN as i32

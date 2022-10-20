@@ -268,6 +268,8 @@ pub fn setup(
 
     device.RCC.d1ccipr.modify(|_, w| w.qspisel().rcc_hclk3());
 
+    device.RCC.d3ccipr.modify(|_, w| w.adcsel().per());
+
     let rcc = device.RCC.constrain();
     let ccdr = rcc
         .use_hse(8.MHz())
@@ -733,34 +735,31 @@ pub fn setup(
     fp_led_2.set_low();
     fp_led_3.set_low();
 
-    // Use default PLL2p clock input with 1/2 prescaler for a 25 MHz ADC kernel clock.
-    // Note that there is an additional, fixed 1/2 prescaler in the clock path.
     let (adc1, adc2, adc3) = {
         let (mut adc1, mut adc2) = hal::adc::adc12(
             device.ADC1,
             device.ADC2,
+            stm32h7xx_hal::time::Hertz::MHz(25),
             &mut delay,
             ccdr.peripheral.ADC12,
             &ccdr.clocks,
         );
         let mut adc3 = hal::adc::Adc::adc3(
             device.ADC3,
+            stm32h7xx_hal::time::Hertz::MHz(25),
             &mut delay,
             ccdr.peripheral.ADC3,
             &ccdr.clocks,
         );
-        // Set ADC clock prescaler after adc init but before enable
-        device.ADC12_COMMON.ccr.modify(|_, w| w.presc().div2());
-        device.ADC3_COMMON.ccr.modify(|_, w| w.presc().div2());
 
         adc1.set_sample_time(hal::adc::AdcSampleTime::T_810);
-        adc1.set_resolution(hal::adc::Resolution::SIXTEENBIT);
-        adc1.calibrate(); // re-calibrate after clock has changed
+        adc1.set_resolution(hal::adc::Resolution::SixteenBit);
+        adc1.calibrate();
         adc2.set_sample_time(hal::adc::AdcSampleTime::T_810);
-        adc2.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+        adc2.set_resolution(hal::adc::Resolution::SixteenBit);
         adc2.calibrate();
         adc3.set_sample_time(hal::adc::AdcSampleTime::T_810);
-        adc3.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+        adc3.set_resolution(hal::adc::Resolution::SixteenBit);
         adc3.calibrate();
 
         hal::adc::Temperature::new().enable(&adc3);
