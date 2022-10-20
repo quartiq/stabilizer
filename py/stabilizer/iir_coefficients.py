@@ -289,7 +289,7 @@ def _main():
         if len(devices) > 1:
             raise ValueError(f"Multiple prefixes discovered ({devices})."
                              "Please specify a more specific --prefix")
-        prefix = devices[0]
+        prefix = devices.pop()
         logger.info("Automatically using detected device prefix: %s", prefix)
 
     async def configure():
