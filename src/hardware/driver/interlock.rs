@@ -7,15 +7,15 @@ use miniconf::Miniconf;
 
 #[derive(Clone, Copy, Debug, Miniconf)]
 pub struct Interlock {
-    /// Interlock topic. Publishing "true" onto this topic renews the interlock timeout.
+    /// "Interlocked" topic. Publishing "true" onto this topic renews the interlock timeout.
     /// Publishing "false" trips the interlock.
     ///
     /// # Path
-    /// `interlock`
+    /// `interlocked`
     ///
     /// # Value
     /// "true" or "false"
-    interlock: bool,
+    interlocked: bool,
 
     /// Set interlock to armed/disarmed. If the interlock tripped, a false->true transition is
     /// required to re-arm the interlock.
@@ -40,7 +40,7 @@ pub struct Interlock {
 impl Default for Interlock {
     fn default() -> Self {
         Self {
-            interlock: false,
+            interlocked: false,
             armed: false,
             timeout: 1000,
         }
@@ -62,9 +62,9 @@ impl Interlock {
     ) -> Option<Action> {
         match path {
             Some("interlock") => {
-                if self.interlock && handle_is_some {
+                if self.interlocked && handle_is_some {
                     Some(Action::Reschedule(self.timeout.millis()))
-                } else if !self.interlock && handle_is_some {
+                } else if !self.interlocked && handle_is_some {
                     Some(Action::Reschedule(0.millis()))
                 } else {
                     None
@@ -76,7 +76,7 @@ impl Interlock {
                 } else if !old.armed
                     && self.armed
                     && !handle_is_some
-                    && self.interlock
+                    && self.interlocked
                 {
                     Some(Action::Spawn(self.timeout.millis()))
                 } else {
