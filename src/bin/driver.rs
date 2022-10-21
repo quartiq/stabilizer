@@ -13,14 +13,13 @@ use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
 
 use fugit::{Duration, ExtU64, TimerInstantU64};
-use hal::gpio::PinState;
 use heapless::String;
 use mutex_trait::prelude::*;
 
 use idsp::iir;
 
 use serde::Serialize;
-use stabilizer::hardware::driver::LaserInterlock;
+use stabilizer::hardware::driver::{LaserInterlock, LaserInterlockState};
 use stabilizer::{
     hardware::{
         self,
@@ -135,7 +134,7 @@ pub struct Monitor {
     voltage: [f32; 2],
     cpu_temp: f32,
     header_temp: f32,
-    laser_interlock: LaserInterlock,
+    laser_interlock: LaserInterlockState,
 }
 
 #[derive(Serialize, Copy, Clone, Default, Debug)]
@@ -172,7 +171,7 @@ mod app {
         header_adc_data: [u16; 8],
         output_state: [output::sm::StateMachine<output::Output<I2c1Proxy>>; 2],
         interlock_handle: Option<trip_interlock::SpawnHandle>,
-        laser_interlock_pin: hal::gpio::Pin<'B', 13, hal::gpio::Output>,
+        laser_interlock: LaserInterlock,
     }
 
     #[local]
@@ -231,7 +230,7 @@ mod app {
             header_adc_data: [0u16; 8],
             output_state: driver.output_sm,
             interlock_handle: None,
-            laser_interlock_pin: driver.laser_interlock_pin,
+            laser_interlock: LaserInterlock::new(driver.laser_interlock_pin),
         };
 
         let mut local = Local {
@@ -374,7 +373,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, interlock_handle, output_state, laser_interlock_pin])]
+    #[task(priority = 1, local=[afes], shared=[network, settings, interlock_handle, output_state, laser_interlock])]
     fn settings_update(
         mut c: settings_update::Context,
         path: Option<String<128>>,
@@ -470,11 +469,13 @@ mod app {
                     && !output[driver::Channel::LowNoise as usize].is_enabled()
             })
         {
-            c.shared.laser_interlock_pin.lock(|pin| pin.set_high());
+            c.shared
+                .laser_interlock
+                .lock(|ilock| ilock.set(LaserInterlockState::NotTripped));
         }
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry, laser_interlock_pin], local=[cpu_temp_sensor, lm75])]
+    #[task(priority = 1, shared=[network, settings, telemetry, laser_interlock], local=[cpu_temp_sensor, lm75])]
     fn telemetry(mut c: telemetry::Context) {
         let mut telemetry: Telemetry =
             c.shared.telemetry.lock(|telemetry| *telemetry);
@@ -484,10 +485,8 @@ mod app {
         // Todo: uncomment once we have Hardware
         // telemetry.monitor.header_temp =
         //     c.local.lm75.read_temperature().unwrap();
-        telemetry.monitor.laser_interlock = c
-            .shared
-            .laser_interlock_pin
-            .lock(|pin| pin.get_state().into());
+        telemetry.monitor.laser_interlock =
+            c.shared.laser_interlock.lock(|ilock| ilock.state);
         let telemetry_period = c
             .shared
             .settings
@@ -568,14 +567,16 @@ mod app {
         c.local.driver_dac[channel as usize].set(current).unwrap()
     }
 
-    #[task(priority = 1, shared=[interlock_handle, laser_interlock_pin])]
+    #[task(priority = 1, shared=[interlock_handle, laser_interlock])]
     fn trip_interlock(mut c: trip_interlock::Context) {
         c.shared.interlock_handle.lock(|handle| *handle = None);
         log::error!("thermostat interlock tripped");
-        c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
+        c.shared
+            .laser_interlock
+            .lock(|ilock| ilock.set(LaserInterlockState::TrippedThermostat));
     }
 
-    #[task(priority = 1, shared=[telemetry, settings, laser_interlock_pin], local=[internal_adc])]
+    #[task(priority = 1, shared=[telemetry, settings, laser_interlock], local=[internal_adc])]
     fn monitor_output(mut c: monitor_output::Context) {
         let (interlock_current, interlock_voltage) =
             c.shared.settings.lock(|settings| {
@@ -602,18 +603,21 @@ mod app {
         );
         let interlock_asserted = c
             .shared
-            .laser_interlock_pin
-            .lock(|pin| pin.get_state() == PinState::High);
+            .laser_interlock
+            .lock(|ilock| ilock.state == LaserInterlockState::NotTripped);
         for (i, (interlock_current, read)) in interlock_current
             .iter()
             .zip((current_reads).iter())
             .enumerate()
         {
             if (read > interlock_current) & interlock_asserted {
-                c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
+                let ch = Channel::try_from(i).unwrap();
+                c.shared.laser_interlock.lock(|ilock| {
+                    ilock.set(LaserInterlockState::TrippedOvercurrent(ch))
+                });
                 log::error!(
                     "Overcurrent condition in {:?}! Laser interlock tripped.",
-                    Channel::try_from(i)
+                    ch
                 );
             }
         }
@@ -623,10 +627,13 @@ mod app {
             .enumerate()
         {
             if (read > interlock_voltage) & interlock_asserted {
-                c.shared.laser_interlock_pin.lock(|pin| pin.set_low());
+                let ch = Channel::try_from(i).unwrap();
+                c.shared.laser_interlock.lock(|ilock| {
+                    ilock.set(LaserInterlockState::TrippedOvervoltage(ch))
+                });
                 log::error!(
                     "Overvoltage condition in {:?}! Laser interlock tripped.",
-                    Channel::try_from(i)
+                    ch
                 );
             }
         }

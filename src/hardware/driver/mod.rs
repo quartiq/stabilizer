@@ -25,7 +25,9 @@ pub struct DriverDevices {
     pub laser_interlock_pin: hal::gpio::Pin<'B', 13, hal::gpio::Output>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, TryFromPrimitive)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, TryFromPrimitive, Serialize, Deserialize,
+)]
 #[repr(usize)]
 pub enum Channel {
     LowNoise = 0,
@@ -57,17 +59,38 @@ impl ChannelVariant {
 #[derive(
     Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize,
 )]
-pub enum LaserInterlock {
-    NotTripped,
+pub enum LaserInterlockState {
     #[default]
-    Tripped,
+    TrippedReset, // Tripped after device reset
+    TrippedThermostat,
+    TrippedOvercurrent(Channel),
+    TrippedOvervoltage(Channel),
+    NotTripped,
+}
+pub struct LaserInterlock {
+    pub state: LaserInterlockState,
+    pin: hal::gpio::Pin<'B', 13, hal::gpio::Output>,
 }
 
-impl From<PinState> for LaserInterlock {
-    fn from(state: PinState) -> Self {
-        match state {
-            PinState::High => Self::NotTripped,
-            PinState::Low => Self::Tripped,
+impl LaserInterlock {
+    pub fn new(
+        mut pin: hal::gpio::Pin<'B', 13, hal::gpio::Output>,
+    ) -> LaserInterlock {
+        pin.set_low();
+        LaserInterlock {
+            state: LaserInterlockState::TrippedReset,
+            pin,
         }
+    }
+
+    pub fn set(&mut self, state: LaserInterlockState) {
+        match state {
+            LaserInterlockState::TrippedReset => self.pin.set_low(),
+            LaserInterlockState::TrippedThermostat => self.pin.set_low(),
+            LaserInterlockState::TrippedOvercurrent(_) => self.pin.set_low(),
+            LaserInterlockState::TrippedOvervoltage(_) => self.pin.set_low(),
+            LaserInterlockState::NotTripped => self.pin.set_high(),
+        }
+        self.state = state;
     }
 }
