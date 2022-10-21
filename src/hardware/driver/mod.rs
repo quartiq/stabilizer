@@ -58,7 +58,7 @@ impl ChannelVariant {
 #[derive(
     Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize,
 )]
-pub enum LaserInterlockTripped {
+pub enum Reason {
     #[default]
     Reset, // Tripped after device reset
     Thermostat,
@@ -66,7 +66,7 @@ pub enum LaserInterlockTripped {
     Overvoltage(Channel),
 }
 pub struct LaserInterlock {
-    pub state: Option<LaserInterlockTripped>,
+    reason: Option<Reason>,
     pin: hal::gpio::Pin<'B', 13, hal::gpio::Output>,
 }
 
@@ -76,19 +76,23 @@ impl LaserInterlock {
     ) -> LaserInterlock {
         pin.set_low();
         LaserInterlock {
-            state: Some(LaserInterlockTripped::Reset),
+            reason: Some(Reason::Reset),
             pin,
         }
     }
 
-    pub fn set(&mut self, state: Option<LaserInterlockTripped>) {
+    pub fn set(&mut self, state: Option<Reason>) {
         match state {
-            Some(LaserInterlockTripped::Reset) => self.pin.set_low(),
-            Some(LaserInterlockTripped::Thermostat) => self.pin.set_low(),
-            Some(LaserInterlockTripped::Overcurrent(_)) => self.pin.set_low(),
-            Some(LaserInterlockTripped::Overvoltage(_)) => self.pin.set_low(),
+            Some(Reason::Reset) => self.pin.set_low(),
+            Some(Reason::Thermostat) => self.pin.set_low(),
+            Some(Reason::Overcurrent(_)) => self.pin.set_low(),
+            Some(Reason::Overvoltage(_)) => self.pin.set_low(),
             None => self.pin.set_high(),
         }
-        self.state = state;
+        self.reason = state;
+    }
+
+    pub fn reason(&self) -> Option<Reason> {
+        self.reason
     }
 }
