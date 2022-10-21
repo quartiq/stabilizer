@@ -19,7 +19,7 @@ use mutex_trait::prelude::*;
 use idsp::iir;
 
 use serde::Serialize;
-use stabilizer::hardware::driver::{LaserInterlock, LaserInterlockState};
+use stabilizer::hardware::driver::{LaserInterlock, LaserInterlockTripped};
 use stabilizer::{
     hardware::{
         self,
@@ -134,7 +134,7 @@ pub struct Monitor {
     voltage: [f32; 2],
     cpu_temp: f32,
     header_temp: f32,
-    laser_interlock: LaserInterlockState,
+    laser_interlock_tripped: Option<LaserInterlockTripped>,
 }
 
 #[derive(Serialize, Copy, Clone, Default, Debug)]
@@ -387,7 +387,6 @@ mod app {
                 path.as_ref()
                     .map(|path| path.as_str().trim_start_matches("thermostat_interlock/")),
                 handle.is_some(),
-                &old_settings.thermostat_interlock,
             ) {
                 *handle = match action {
                    Action::Spawn(millis) => {
@@ -415,6 +414,34 @@ mod app {
                 };
             }
         });
+
+        // Only set interlock pin high if all channels disabled and false -> true transition.
+        if !old_settings.reset_laser_interlock
+            && new_settings.reset_laser_interlock
+        {
+            if c.shared.output_state.lock(|output| {
+                output[driver::Channel::HighPower as usize].is_enabled()
+            }) {
+                log::error!("Cannot reset laser interlock while HighPower channel is enabled.")
+            } else if c.shared.output_state.lock(|output| {
+                output[driver::Channel::LowNoise as usize].is_enabled()
+            }) {
+                log::error!("Cannot reset laser interlock while LowNoise channel is enabled.")
+            } else {
+                log::info!("Laser interlock reset.");
+                c.shared.laser_interlock.lock(|ilock| ilock.set(None));
+                c.shared.interlock_handle.lock(|handle| {
+                    if let Some(millis) = new_settings
+                        .thermostat_interlock
+                        .rearm(handle.is_some())
+                    {
+                        log::info!("Thermostat interlock re-armed.");
+                        *handle =
+                            Some(trip_interlock::spawn_after(millis).unwrap())
+                    }
+                });
+            }
+        }
 
         c.shared.settings.lock(|current| *current = new_settings);
         c.local.afes.0.set_gain(new_settings.afe[0]);
@@ -461,18 +488,6 @@ mod app {
             )
             .unwrap();
         };
-        // Only set interlock pin high if all channels disabled and false -> true transition.
-        if !old_settings.reset_laser_interlock
-            && new_settings.reset_laser_interlock
-            && c.shared.output_state.lock(|output| {
-                !output[driver::Channel::HighPower as usize].is_enabled()
-                    && !output[driver::Channel::LowNoise as usize].is_enabled()
-            })
-        {
-            c.shared
-                .laser_interlock
-                .lock(|ilock| ilock.set(LaserInterlockState::NotTripped));
-        }
     }
 
     #[task(priority = 1, shared=[network, settings, telemetry, laser_interlock], local=[cpu_temp_sensor, lm75])]
@@ -485,7 +500,7 @@ mod app {
         // Todo: uncomment once we have Hardware
         // telemetry.monitor.header_temp =
         //     c.local.lm75.read_temperature().unwrap();
-        telemetry.monitor.laser_interlock =
+        telemetry.monitor.laser_interlock_tripped =
             c.shared.laser_interlock.lock(|ilock| ilock.state);
         let telemetry_period = c
             .shared
@@ -573,7 +588,7 @@ mod app {
         log::error!("thermostat interlock tripped");
         c.shared
             .laser_interlock
-            .lock(|ilock| ilock.set(LaserInterlockState::TrippedThermostat));
+            .lock(|ilock| ilock.set(Some(LaserInterlockTripped::Thermostat)));
     }
 
     #[task(priority = 1, shared=[telemetry, settings, laser_interlock], local=[internal_adc])]
@@ -601,10 +616,8 @@ mod app {
                 c.local.internal_adc.read_output_voltage(Channel::HighPower),
             ],
         );
-        let interlock_asserted = c
-            .shared
-            .laser_interlock
-            .lock(|ilock| ilock.state == LaserInterlockState::NotTripped);
+        let interlock_asserted =
+            c.shared.laser_interlock.lock(|ilock| ilock.state.is_none());
         for (i, (interlock_current, read)) in interlock_current
             .iter()
             .zip((current_reads).iter())
@@ -613,7 +626,7 @@ mod app {
             if (read > interlock_current) & interlock_asserted {
                 let ch = Channel::try_from(i).unwrap();
                 c.shared.laser_interlock.lock(|ilock| {
-                    ilock.set(LaserInterlockState::TrippedOvercurrent(ch))
+                    ilock.set(Some(LaserInterlockTripped::Overcurrent(ch)))
                 });
                 log::error!(
                     "Overcurrent condition in {:?}! Laser interlock tripped.",
@@ -629,7 +642,7 @@ mod app {
             if (read > interlock_voltage) & interlock_asserted {
                 let ch = Channel::try_from(i).unwrap();
                 c.shared.laser_interlock.lock(|ilock| {
-                    ilock.set(LaserInterlockState::TrippedOvervoltage(ch))
+                    ilock.set(Some(LaserInterlockTripped::Overvoltage(ch)))
                 });
                 log::error!(
                     "Overvoltage condition in {:?}! Laser interlock tripped.",

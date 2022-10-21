@@ -8,7 +8,7 @@ use miniconf::Miniconf;
 #[derive(Clone, Copy, Debug, Miniconf)]
 pub struct Interlock {
     /// "Interlocked" topic. Publishing "true" onto this topic renews the interlock timeout.
-    /// Publishing "false" trips the interlock.
+    /// Publishing "false" or failing to publish `true` for `timeout` trips the interlock.
     ///
     /// # Path
     /// `interlocked`
@@ -17,8 +17,7 @@ pub struct Interlock {
     /// "true" or "false"
     interlocked: bool,
 
-    /// Set interlock to armed/disarmed. If the interlock tripped, a false->true transition is
-    /// required to re-arm the interlock.
+    /// Set interlock to armed/disarmed.
     ///
     /// # Path
     /// `armed`
@@ -58,10 +57,9 @@ impl Interlock {
         &self,
         path: Option<&str>,
         handle_is_some: bool,
-        old: &Self,
     ) -> Option<Action> {
         match path {
-            Some("interlock") => {
+            Some("interlocked") => {
                 if self.interlocked && handle_is_some {
                     Some(Action::Reschedule(self.timeout.millis()))
                 } else if !self.interlocked && handle_is_some {
@@ -73,17 +71,24 @@ impl Interlock {
             Some("armed") => {
                 if !self.armed && handle_is_some {
                     Some(Action::Cancel)
-                } else if !old.armed
-                    && self.armed
-                    && !handle_is_some
-                    && self.interlocked
-                {
+                } else if self.armed && !handle_is_some && self.interlocked {
                     Some(Action::Spawn(self.timeout.millis()))
                 } else {
                     None
                 }
             }
             _ => None,
+        }
+    }
+
+    pub fn rearm(
+        &self,
+        handle_is_some: bool,
+    ) -> Option<fugit::Duration<u64, 1, 10000_u32>> {
+        if !handle_is_some && self.armed {
+            return Some(self.timeout.millis());
+        } else {
+            return None;
         }
     }
 }

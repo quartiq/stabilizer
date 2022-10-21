@@ -4,7 +4,6 @@ pub mod ltc2320;
 pub mod output;
 pub mod relay;
 use super::I2c1Proxy;
-use hal::gpio::PinState;
 use lm75;
 pub mod interlock;
 use num_enum::TryFromPrimitive;
@@ -59,16 +58,15 @@ impl ChannelVariant {
 #[derive(
     Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize,
 )]
-pub enum LaserInterlockState {
+pub enum LaserInterlockTripped {
     #[default]
-    TrippedReset, // Tripped after device reset
-    TrippedThermostat,
-    TrippedOvercurrent(Channel),
-    TrippedOvervoltage(Channel),
-    NotTripped,
+    Reset, // Tripped after device reset
+    Thermostat,
+    Overcurrent(Channel),
+    Overvoltage(Channel),
 }
 pub struct LaserInterlock {
-    pub state: LaserInterlockState,
+    pub state: Option<LaserInterlockTripped>,
     pin: hal::gpio::Pin<'B', 13, hal::gpio::Output>,
 }
 
@@ -78,18 +76,18 @@ impl LaserInterlock {
     ) -> LaserInterlock {
         pin.set_low();
         LaserInterlock {
-            state: LaserInterlockState::TrippedReset,
+            state: Some(LaserInterlockTripped::Reset),
             pin,
         }
     }
 
-    pub fn set(&mut self, state: LaserInterlockState) {
+    pub fn set(&mut self, state: Option<LaserInterlockTripped>) {
         match state {
-            LaserInterlockState::TrippedReset => self.pin.set_low(),
-            LaserInterlockState::TrippedThermostat => self.pin.set_low(),
-            LaserInterlockState::TrippedOvercurrent(_) => self.pin.set_low(),
-            LaserInterlockState::TrippedOvervoltage(_) => self.pin.set_low(),
-            LaserInterlockState::NotTripped => self.pin.set_high(),
+            Some(LaserInterlockTripped::Reset) => self.pin.set_low(),
+            Some(LaserInterlockTripped::Thermostat) => self.pin.set_low(),
+            Some(LaserInterlockTripped::Overcurrent(_)) => self.pin.set_low(),
+            Some(LaserInterlockTripped::Overvoltage(_)) => self.pin.set_low(),
+            None => self.pin.set_high(),
         }
         self.state = state;
     }
