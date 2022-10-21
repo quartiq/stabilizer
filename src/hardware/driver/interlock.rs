@@ -86,9 +86,9 @@ impl Interlock {
         handle_is_some: bool,
     ) -> Option<fugit::Duration<u64, 1, 10000_u32>> {
         if !handle_is_some && self.armed {
-            return Some(self.timeout.millis());
+            Some(self.timeout.millis())
         } else {
-            return None;
+            None
         }
     }
 }
