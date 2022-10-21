@@ -81,15 +81,9 @@ impl LaserInterlock {
         }
     }
 
-    pub fn set(&mut self, state: Option<Reason>) {
-        match state {
-            Some(Reason::Reset) => self.pin.set_low(),
-            Some(Reason::Thermostat) => self.pin.set_low(),
-            Some(Reason::Overcurrent(_)) => self.pin.set_low(),
-            Some(Reason::Overvoltage(_)) => self.pin.set_low(),
-            None => self.pin.set_high(),
-        }
-        self.reason = state;
+    pub fn set(&mut self, reason: Option<Reason>) {
+        self.pin.set_state(reason.is_none().into());
+        self.reason = reason;
     }
 
     pub fn reason(&self) -> Option<Reason> {
