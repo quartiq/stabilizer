@@ -83,11 +83,7 @@ impl LaserInterlock {
 
     pub fn set(&mut self, state: Option<LaserInterlockTripped>) {
         match state {
-            Some(LaserInterlockTripped::Reset) => self.pin.set_low(),
-            Some(LaserInterlockTripped::Thermostat) => self.pin.set_low(),
-            Some(LaserInterlockTripped::Overcurrent(_)) => self.pin.set_low(),
-            Some(LaserInterlockTripped::Overvoltage(_)) => self.pin.set_low(),
-            None => self.pin.set_high(),
+            self.pin.set_state(state.is_none().into());
         }
         self.state = state;
     }
