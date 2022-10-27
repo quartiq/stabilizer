@@ -82,8 +82,11 @@ impl LaserInterlock {
     }
 
     pub fn set(&mut self, reason: Option<Reason>) {
-        self.pin.set_state(reason.is_none().into());
-        self.reason = reason;
+        // only update if no reason yet or if clearing (remember first reason)
+        if !self.reason.is_none() || reason.is_none() {
+            self.pin.set_state(reason.is_none().into());
+            self.reason = reason;
+        }
     }
 
     pub fn reason(&self) -> Option<Reason> {
