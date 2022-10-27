@@ -5,7 +5,7 @@ pub mod output;
 pub mod relay;
 use super::I2c1Proxy;
 use lm75;
-pub mod interlock;
+pub mod alarm;
 use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Serialize};
 use stm32h7xx_hal as hal;
@@ -61,7 +61,8 @@ impl ChannelVariant {
 pub enum Reason {
     #[default]
     Reset, // Tripped after device reset
-    Thermostat,
+    Alarm,
+    AlarmTimeout,
     Overcurrent(Channel),
     Overvoltage(Channel),
 }
