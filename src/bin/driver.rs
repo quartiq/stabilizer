@@ -83,8 +83,10 @@ pub struct Settings {
     /// See [StreamTarget#miniconf]
     stream_target: StreamTarget,
 
-    /// Thermostat alarm settings.
-    ///
+    /// Alarm settings.
+    /// Alarm for safe co-operation with other device like
+    /// [Thermostat-EEM](https://github.com/quartiq/thermostat-eem).
+    /// See [Alarm] for more details.
     ///
     /// # Value
     /// [Alarm]
@@ -394,12 +396,12 @@ mod app {
                         Some(
                             trip_alarm::spawn_after(
                                 millis,
-                                Reason::ThermostatTimeout,
+                                Reason::AlarmTimeout,
                             )
                             .unwrap(),
                         )
                     }
-                    Action::Trip(millis) => {
+                    Action::Trip => {
                         log::info!("Alarm tripped");
                         let _ = handle.take().unwrap().cancel().map_err(|e| {
                             log::error!(
@@ -408,11 +410,8 @@ mod app {
                             )
                         });
                         Some(
-                            trip_alarm::spawn_after(
-                                millis,
-                                Reason::ThermostatLimits,
-                            )
-                            .unwrap(),
+                            trip_alarm::spawn_after(0.millis(), Reason::Alarm)
+                                .unwrap(),
                         )
                     }
                     Action::Reschedule(millis) => handle
@@ -458,11 +457,11 @@ mod app {
                     if let Some(millis) =
                         new_settings.alarm.rearm(handle.is_some())
                     {
-                        log::info!("Thermostat alarm re-armed.");
+                        log::info!("Alarm re-armed.");
                         *handle = Some(
                             trip_alarm::spawn_after(
                                 millis,
-                                Reason::ThermostatTimeout,
+                                Reason::AlarmTimeout,
                             )
                             .unwrap(),
                         )
@@ -613,7 +612,7 @@ mod app {
     #[task(priority = 1, shared=[alarm_handle, laser_interlock])]
     fn trip_alarm(mut c: trip_alarm::Context, reason: Reason) {
         c.shared.alarm_handle.lock(|handle| *handle = None);
-        log::error!("Thermostat alarm! {:?} Laser Interlock tripped.", reason);
+        log::error!("Alarm! {:?} Laser Interlock tripped.", reason);
         c.shared
             .laser_interlock
             .lock(|ilock| ilock.set(Some(reason)));

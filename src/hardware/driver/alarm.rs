@@ -1,14 +1,18 @@
-///! Driver alarm functionality
-///!
-///! Driver features an alarm to ensure safe co-operation with other devices.
-///! The alarm is implemented via MQTT. See [Alarm] for details about the MQTT interface.
 use fugit::ExtU64;
 use miniconf::Miniconf;
 
 #[derive(Clone, Copy, Debug, Miniconf)]
+/// Driver alarm functionality
+///
+/// Driver features an alarm to ensure safe co-operation with other devices.
+/// The alarm is implemented via MQTT.
+///
 pub struct Alarm {
     /// "Alarm" topic. Publish "false" onto this topic to indicate valid operating conditions. This renews the alarm timeout.
-    /// Publishing "true" or failing to publish "false" for `timeout` trips the alarm.
+    /// Publishing "true" or failing to publish "false" for [`timeout`] trips the alarm.
+    /// In the case of Driver this will trip the [super::LaserInterlock].
+    /// After the alarm is tripped, it has to be [rearm](Self::rearm())ed.
+    /// For Driver this will happen when the [super::LaserInterlock] is cleared).
     ///
     /// # Path
     /// `alarm`
@@ -49,7 +53,7 @@ impl Default for Alarm {
 pub enum Action {
     Spawn(fugit::Duration<u64, 1, 10000_u32>),
     Reschedule(fugit::Duration<u64, 1, 10000_u32>),
-    Trip(fugit::Duration<u64, 1, 10000_u32>),
+    Trip,
     Cancel,
 }
 
@@ -64,7 +68,7 @@ impl Alarm {
                 if !self.alarm && handle_is_some {
                     Some(Action::Reschedule(self.timeout.millis()))
                 } else if self.alarm && handle_is_some {
-                    Some(Action::Trip(100.millis()))
+                    Some(Action::Trip)
                 } else {
                     None
                 }
@@ -82,6 +86,7 @@ impl Alarm {
         }
     }
 
+    /// rearm the alarm
     pub fn rearm(
         &self,
         handle_is_some: bool,

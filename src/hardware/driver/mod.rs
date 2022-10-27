@@ -61,8 +61,8 @@ impl ChannelVariant {
 pub enum Reason {
     #[default]
     Reset, // Tripped after device reset
-    ThermostatLimits,
-    ThermostatTimeout,
+    Alarm,
+    AlarmTimeout,
     Overcurrent(Channel),
     Overvoltage(Channel),
 }
