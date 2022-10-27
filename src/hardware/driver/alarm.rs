@@ -1,23 +1,23 @@
-///! Driver interlock functionality
+///! Driver alarm functionality
 ///!
-///! Driver features an interlock to ensure safe co-operation with other devices.
-///! The interlock is implemented via MQTT. See [Interlock] for details about the MQTT interface.
+///! Driver features an alarm to ensure safe co-operation with other devices.
+///! The alarm is implemented via MQTT. See [Alarm] for details about the MQTT interface.
 use fugit::ExtU64;
 use miniconf::Miniconf;
 
 #[derive(Clone, Copy, Debug, Miniconf)]
-pub struct Interlock {
-    /// "Interlocked" topic. Publishing "true" onto this topic renews the interlock timeout.
-    /// Publishing "false" or failing to publish `true` for `timeout` trips the interlock.
+pub struct Alarm {
+    /// "Alarm" topic. Publishing "false" onto this topic renews the alarm timeout.
+    /// Publishing "true" or failing to publish "false" for `timeout` trips the alarm.
     ///
     /// # Path
-    /// `interlocked`
+    /// `alarm`
     ///
     /// # Value
     /// "true" or "false"
-    interlocked: bool,
+    alarm: bool,
 
-    /// Set interlock to armed/disarmed.
+    /// Set alarm to armed/disarmed.
     ///
     /// # Path
     /// `armed`
@@ -26,7 +26,7 @@ pub struct Interlock {
     /// "true" or "false"
     armed: bool,
 
-    /// Interlock timeout in milliseconds.
+    /// Alarm timeout in milliseconds.
     ///
     /// # Path
     /// `timeout`
@@ -36,10 +36,10 @@ pub struct Interlock {
     timeout: u64,
 }
 
-impl Default for Interlock {
+impl Default for Alarm {
     fn default() -> Self {
         Self {
-            interlocked: false,
+            alarm: true,
             armed: false,
             timeout: 1000,
         }
@@ -49,21 +49,22 @@ impl Default for Interlock {
 pub enum Action {
     Spawn(fugit::Duration<u64, 1, 10000_u32>),
     Reschedule(fugit::Duration<u64, 1, 10000_u32>),
+    Trip(fugit::Duration<u64, 1, 10000_u32>),
     Cancel,
 }
 
-impl Interlock {
+impl Alarm {
     pub fn action(
         &self,
         path: Option<&str>,
         handle_is_some: bool,
     ) -> Option<Action> {
         match path {
-            Some("interlocked") => {
-                if self.interlocked && handle_is_some {
+            Some("alarm") => {
+                if !self.alarm && handle_is_some {
                     Some(Action::Reschedule(self.timeout.millis()))
-                } else if !self.interlocked && handle_is_some {
-                    Some(Action::Reschedule(0.millis()))
+                } else if self.alarm && handle_is_some {
+                    Some(Action::Trip(100.millis()))
                 } else {
                     None
                 }
@@ -71,7 +72,7 @@ impl Interlock {
             Some("armed") => {
                 if !self.armed && handle_is_some {
                     Some(Action::Cancel)
-                } else if self.armed && !handle_is_some && self.interlocked {
+                } else if self.armed && !handle_is_some && !self.alarm {
                     Some(Action::Spawn(self.timeout.millis()))
                 } else {
                     None

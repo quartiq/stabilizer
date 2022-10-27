@@ -28,7 +28,7 @@ use stabilizer::{
         dac::{Dac0Output, Dac1Output, DacCode},
         design_parameters, driver,
         driver::{
-            interlock::{Action, Interlock},
+            alarm::{Action, Alarm},
             output, Channel,
         },
         hal,
@@ -83,12 +83,12 @@ pub struct Settings {
     /// See [StreamTarget#miniconf]
     stream_target: StreamTarget,
 
-    /// Thermostat interlock settings.
+    /// Thermostat alarm settings.
     ///
     ///
     /// # Value
-    /// [Interlock]
-    thermostat_interlock: Interlock,
+    /// [Alarm]
+    alarm: Alarm,
 
     /// Laser interlock reset.
     /// A false -> true transition will reset a tripped laser interlock
@@ -120,7 +120,7 @@ impl Default for Settings {
             // The default telemetry period in seconds.
             telemetry_period: 1,
             stream_target: StreamTarget::default(),
-            thermostat_interlock: Interlock::default(),
+            alarm: Alarm::default(),
             reset_laser_interlock: false,
             low_noise: driver::output::LowNoiseSettings::default(),
             high_power: driver::output::HighPowerSettings::default(),
@@ -170,7 +170,7 @@ mod app {
         header_adc: driver::ltc2320::Ltc2320,
         header_adc_data: [u16; 8],
         output_state: [output::sm::StateMachine<output::Output<I2c1Proxy>>; 2],
-        interlock_handle: Option<trip_interlock::SpawnHandle>,
+        interlock_handle: Option<trip_alarm::SpawnHandle>,
         laser_interlock: LaserInterlock,
     }
 
@@ -383,34 +383,58 @@ mod app {
         let old_settings = c.shared.settings.lock(|current| *current);
 
         c.shared.interlock_handle.lock(|handle| {
-            if let Some(action) = new_settings.thermostat_interlock.action(
+            if let Some(action) = new_settings.alarm.action(
                 path.as_ref()
-                    .map(|path| path.as_str().trim_start_matches("thermostat_interlock/")),
+                    .map(|path| path.as_str().trim_start_matches("alarm/")),
                 handle.is_some(),
             ) {
                 *handle = match action {
-                   Action::Spawn(millis) => {
-                        log::info!("Interlock armed");
-                        Some(trip_interlock::spawn_after(millis).unwrap())
+                    Action::Spawn(millis) => {
+                        log::info!("Alarm armed");
+                        Some(
+                            trip_alarm::spawn_after(
+                                millis,
+                                Reason::ThermostatTimeout,
+                            )
+                            .unwrap(),
+                        )
                     }
-                   Action::Reschedule(millis) => {
-                        handle
-                            .take()
-                            .unwrap()
-                            .reschedule_after(millis)
-                        .map_err(|e|
+                    Action::Trip(millis) => {
+                        log::info!("Alarm tripped");
+                        let _ = handle.take().unwrap().cancel().map_err(|e| {
                             log::error!(
-                                "Cannot reschedule. Interlock already tripped! {:?}"
-                            , e))
-                        .ok()
-                    } // return `None` if rescheduled too late aka interlock already tripped
-                   Action::Cancel => {
-                        let _ = handle.take().unwrap().cancel().map_err(|e|
+                                "Cannot trip. Alarm already tripped! {:?}",
+                                e
+                            )
+                        });
+                        Some(
+                            trip_alarm::spawn_after(
+                                millis,
+                                Reason::ThermostatLimits,
+                            )
+                            .unwrap(),
+                        )
+                    }
+                    Action::Reschedule(millis) => handle
+                        .take()
+                        .unwrap()
+                        .reschedule_after(millis)
+                        .map_err(|e| {
                             log::error!(
-                                "Cannot cancel. Interlock already tripped! {:?}"
-                            , e));
+                                "Cannot reschedule. Alarm already tripped! {:?}"
+                            , e)
+                        })
+                        .ok(), // return `None` if rescheduled too late aka interlock already tripped
+                    Action::Cancel => {
+                        log::info!("Alarm disarmed");
+                        let _ = handle.take().unwrap().cancel().map_err(|e| {
+                            log::error!(
+                                "Cannot disarm. Alarm already tripped! {:?}",
+                                e
+                            )
+                        });
                         None
-                    } // Ignore error if cancelled too late. This is ok since we don't want to cancel if the interlock already tripped. 
+                    } // Ignore error if cancelled too late. This is ok since we don't want to cancel if the interlock already tripped.
                 };
             }
         });
@@ -431,13 +455,17 @@ mod app {
                 log::info!("Laser interlock reset.");
                 c.shared.laser_interlock.lock(|ilock| ilock.set(None));
                 c.shared.interlock_handle.lock(|handle| {
-                    if let Some(millis) = new_settings
-                        .thermostat_interlock
-                        .rearm(handle.is_some())
+                    if let Some(millis) =
+                        new_settings.alarm.rearm(handle.is_some())
                     {
-                        log::info!("Thermostat interlock re-armed.");
-                        *handle =
-                            Some(trip_interlock::spawn_after(millis).unwrap())
+                        log::info!("Thermostat alarm re-armed.");
+                        *handle = Some(
+                            trip_alarm::spawn_after(
+                                millis,
+                                Reason::ThermostatTimeout,
+                            )
+                            .unwrap(),
+                        )
                     }
                 });
             }
@@ -583,12 +611,12 @@ mod app {
     }
 
     #[task(priority = 1, shared=[interlock_handle, laser_interlock])]
-    fn trip_interlock(mut c: trip_interlock::Context) {
+    fn trip_alarm(mut c: trip_alarm::Context, reason: Reason) {
         c.shared.interlock_handle.lock(|handle| *handle = None);
-        log::error!("thermostat interlock tripped");
+        log::error!("thermostat alarm");
         c.shared
             .laser_interlock
-            .lock(|ilock| ilock.set(Some(Reason::Thermostat)));
+            .lock(|ilock| ilock.set(Some(reason)));
     }
 
     #[task(priority = 1, shared=[telemetry, settings, laser_interlock], local=[internal_adc])]
