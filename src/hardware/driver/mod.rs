@@ -4,7 +4,6 @@ pub mod ltc2320;
 pub mod output;
 pub mod relay;
 use super::I2c1Proxy;
-use hal::gpio::PinState;
 use lm75;
 pub mod interlock;
 use num_enum::TryFromPrimitive;
@@ -25,7 +24,9 @@ pub struct DriverDevices {
     pub laser_interlock_pin: hal::gpio::Pin<'B', 13, hal::gpio::Output>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, TryFromPrimitive)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, TryFromPrimitive, Serialize, Deserialize,
+)]
 #[repr(usize)]
 pub enum Channel {
     LowNoise = 0,
@@ -57,17 +58,38 @@ impl ChannelVariant {
 #[derive(
     Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize,
 )]
-pub enum LaserInterlock {
-    NotTripped,
+pub enum Reason {
     #[default]
-    Tripped,
+    Reset, // Tripped after device reset
+    Thermostat,
+    Overcurrent(Channel),
+    Overvoltage(Channel),
+}
+pub struct LaserInterlock {
+    reason: Option<Reason>,
+    pin: hal::gpio::Pin<'B', 13, hal::gpio::Output>,
 }
 
-impl From<PinState> for LaserInterlock {
-    fn from(state: PinState) -> Self {
-        match state {
-            PinState::High => Self::NotTripped,
-            PinState::Low => Self::Tripped,
+impl LaserInterlock {
+    pub fn new(
+        mut pin: hal::gpio::Pin<'B', 13, hal::gpio::Output>,
+    ) -> LaserInterlock {
+        pin.set_low();
+        LaserInterlock {
+            reason: Some(Reason::Reset),
+            pin,
         }
+    }
+
+    pub fn set(&mut self, reason: Option<Reason>) {
+        // only update if no reason yet or if clearing (remember first reason)
+        if self.reason.is_none() || reason.is_none() {
+            self.pin.set_state(reason.is_none().into());
+            self.reason = reason;
+        }
+    }
+
+    pub fn reason(&self) -> Option<Reason> {
+        self.reason
     }
 }
