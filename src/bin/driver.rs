@@ -170,7 +170,7 @@ mod app {
         header_adc: driver::ltc2320::Ltc2320,
         header_adc_data: [u16; 8],
         output_state: [output::sm::StateMachine<output::Output<I2c1Proxy>>; 2],
-        interlock_handle: Option<trip_alarm::SpawnHandle>,
+        alarm_handle: Option<trip_alarm::SpawnHandle>,
         laser_interlock: LaserInterlock,
     }
 
@@ -229,7 +229,7 @@ mod app {
             header_adc: driver.ltc2320,
             header_adc_data: [0u16; 8],
             output_state: driver.output_sm,
-            interlock_handle: None,
+            alarm_handle: None,
             laser_interlock: LaserInterlock::new(driver.laser_interlock_pin),
         };
 
@@ -373,7 +373,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, interlock_handle, output_state, laser_interlock])]
+    #[task(priority = 1, local=[afes], shared=[network, settings, alarm_handle, output_state, laser_interlock])]
     fn settings_update(
         mut c: settings_update::Context,
         path: Option<String<128>>,
@@ -382,7 +382,7 @@ mod app {
             c.shared.network.lock(|net| *net.miniconf.settings());
         let old_settings = c.shared.settings.lock(|current| *current);
 
-        c.shared.interlock_handle.lock(|handle| {
+        c.shared.alarm_handle.lock(|handle| {
             if let Some(action) = new_settings.alarm.action(
                 path.as_ref()
                     .map(|path| path.as_str().trim_start_matches("alarm/")),
@@ -424,7 +424,7 @@ mod app {
                                 "Cannot reschedule. Alarm already tripped! {:?}"
                             , e)
                         })
-                        .ok(), // return `None` if rescheduled too late aka interlock already tripped
+                        .ok(), // return `None` if rescheduled too late aka alarm already tripped
                     Action::Cancel => {
                         log::info!("Alarm disarmed");
                         let _ = handle.take().unwrap().cancel().map_err(|e| {
@@ -434,7 +434,7 @@ mod app {
                             )
                         });
                         None
-                    } // Ignore error if cancelled too late. This is ok since we don't want to cancel if the interlock already tripped.
+                    } // Ignore error if cancelled too late. This is ok since we don't want to cancel if the alarm already tripped.
                 };
             }
         });
@@ -454,7 +454,7 @@ mod app {
             } else {
                 log::info!("Laser interlock reset.");
                 c.shared.laser_interlock.lock(|ilock| ilock.set(None));
-                c.shared.interlock_handle.lock(|handle| {
+                c.shared.alarm_handle.lock(|handle| {
                     if let Some(millis) =
                         new_settings.alarm.rearm(handle.is_some())
                     {
@@ -610,10 +610,10 @@ mod app {
         c.local.driver_dac[channel as usize].set(current).unwrap()
     }
 
-    #[task(priority = 1, shared=[interlock_handle, laser_interlock])]
+    #[task(priority = 1, shared=[alarm_handle, laser_interlock])]
     fn trip_alarm(mut c: trip_alarm::Context, reason: Reason) {
-        c.shared.interlock_handle.lock(|handle| *handle = None);
-        log::error!("thermostat alarm");
+        c.shared.alarm_handle.lock(|handle| *handle = None);
+        log::error!("Thermostat alarm! {:?} Laser Interlock tripped.", reason);
         c.shared
             .laser_interlock
             .lock(|ilock| ilock.set(Some(reason)));
