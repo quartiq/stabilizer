@@ -7,7 +7,7 @@ use miniconf::Miniconf;
 
 #[derive(Clone, Copy, Debug, Miniconf)]
 pub struct Alarm {
-    /// "Alarm" topic. Publishing "false" onto this topic renews the alarm timeout.
+    /// "Alarm" topic. Publish "false" onto this topic to indicate valid operating conditions. This renews the alarm timeout.
     /// Publishing "true" or failing to publish "false" for `timeout` trips the alarm.
     ///
     /// # Path
