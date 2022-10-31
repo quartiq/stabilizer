@@ -16,6 +16,8 @@ use stm32h7xx_hal::{
 
 use smoltcp_nal::smoltcp;
 
+use crate::hardware::driver::LaserInterlock;
+
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
     driver, eeprom, input_stamper::InputStamper, pounder,
@@ -1098,8 +1100,8 @@ pub fn setup(
         ];
 
         // The Pounder pgood pin was instantiated to check for Pounder. It is the same pin as the interlock on Driver.
-        let mut laser_interlock_pin = pounder_pgood.into_push_pull_output();
-        laser_interlock_pin.set_low();
+        let laser_interlock_pin = pounder_pgood.into_push_pull_output();
+        let laser_interlock = LaserInterlock::new(laser_interlock_pin);
 
         Mezzanine::Driver(DriverDevices {
             lm75,
@@ -1107,7 +1109,7 @@ pub fn setup(
             internal_adc,
             output_sm,
             dac,
-            laser_interlock_pin,
+            laser_interlock,
         })
     } else {
         Mezzanine::None

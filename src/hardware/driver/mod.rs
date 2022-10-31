@@ -21,7 +21,7 @@ pub struct DriverDevices {
     pub lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
     pub output_sm: [output::sm::StateMachine<output::Output<I2c1Proxy>>; 2],
     pub dac: [dac::Dac<Spi1Proxy>; 2],
-    pub laser_interlock_pin: hal::gpio::Pin<'B', 13, hal::gpio::Output>,
+    pub laser_interlock: LaserInterlock,
 }
 
 #[derive(

@@ -232,7 +232,7 @@ mod app {
             header_adc_data: [0u16; 8],
             output_state: driver.output_sm,
             alarm_handle: None,
-            laser_interlock: LaserInterlock::new(driver.laser_interlock_pin),
+            laser_interlock: driver.laser_interlock,
         };
 
         let mut local = Local {
