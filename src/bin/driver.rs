@@ -571,7 +571,7 @@ mod app {
     }
 
     // Task for handling the Powerup/-down sequence
-    #[task(priority = 3, capacity = 2, shared=[output_state, settings, internal_adc])]
+    #[task(priority = 1, capacity = 2, shared=[output_state, settings, internal_adc])]
     fn handle_output_tick(
         mut c: handle_output_tick::Context,
         channel: driver::Channel,
