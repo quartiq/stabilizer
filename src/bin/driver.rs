@@ -174,6 +174,7 @@ mod app {
         output_state: [output::sm::StateMachine<output::Output<I2c1Proxy>>; 2],
         alarm_handle: Option<trip_alarm::SpawnHandle>,
         laser_interlock: LaserInterlock,
+        internal_adc: driver::internal_adc::InternalAdc,
     }
 
     #[local]
@@ -186,7 +187,6 @@ mod app {
         iir_state: [iir::Vec5<f32>; 2],
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
-        internal_adc: driver::internal_adc::InternalAdc,
         header_adc_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
         driver_dac: [driver::dac::Dac<driver::Spi1Proxy>; 2],
         lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
@@ -233,6 +233,7 @@ mod app {
             output_state: driver.output_sm,
             alarm_handle: None,
             laser_interlock: driver.laser_interlock,
+            internal_adc: driver.internal_adc,
         };
 
         let mut local = Local {
@@ -244,7 +245,6 @@ mod app {
             iir_state: [[0.; 5]; 2],
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
-            internal_adc: driver.internal_adc,
             header_adc_conversion_scheduled: stabilizer.systick.now(),
             driver_dac: driver.dac,
             lm75: driver.lm75,
@@ -571,7 +571,7 @@ mod app {
     }
 
     // Task for handling the Powerup/-down sequence
-    #[task(priority = 3, capacity = 2, shared=[output_state, settings])]
+    #[task(priority = 3, capacity = 2, shared=[output_state, settings, internal_adc])]
     fn handle_output_tick(
         mut c: handle_output_tick::Context,
         channel: driver::Channel,
@@ -581,9 +581,9 @@ mod app {
             driver::Channel::HighPower => settings.high_power.current,
         });
 
-        c.shared.output_state.lock(|state| {
+        (c.shared.output_state, c.shared.internal_adc).lock(|state, adc| {
             state[channel as usize]
-                .handle_tick(&ramp_target)
+                .handle_tick(&ramp_target, adc, channel)
                 .map(|del| {
                     handle_output_tick::spawn_after(del.convert(), channel)
                         .unwrap()
@@ -618,7 +618,7 @@ mod app {
             .lock(|ilock| ilock.set(Some(reason)));
     }
 
-    #[task(priority = 1, shared=[telemetry, settings, laser_interlock], local=[internal_adc])]
+    #[task(priority = 1, shared=[telemetry, settings, laser_interlock, internal_adc])]
     fn monitor_output(mut c: monitor_output::Context) {
         let (interlock_current, interlock_voltage) =
             c.shared.settings.lock(|settings| {
@@ -633,16 +633,19 @@ mod app {
                     ],
                 )
             });
-        let (voltage_reads, current_reads) = (
-            [
-                c.local.internal_adc.read_output_current(Channel::LowNoise),
-                c.local.internal_adc.read_output_current(Channel::HighPower),
-            ],
-            [
-                c.local.internal_adc.read_output_voltage(Channel::LowNoise),
-                c.local.internal_adc.read_output_voltage(Channel::HighPower),
-            ],
-        );
+        let (voltage_reads, current_reads) =
+            c.shared.internal_adc.lock(|adc| {
+                (
+                    [
+                        adc.read_output_current(Channel::LowNoise),
+                        adc.read_output_current(Channel::HighPower),
+                    ],
+                    [
+                        adc.read_output_voltage(Channel::LowNoise),
+                        adc.read_output_voltage(Channel::HighPower),
+                    ],
+                )
+            });
         let interlock_asserted = c
             .shared
             .laser_interlock

@@ -2,14 +2,14 @@
 ///!
 ///! Driver has two independent output channels.
 ///! Each channel can be in various states during operation, powerup and powerdown.
-use core::fmt::Debug;
+use core::{fmt::Debug, ops::Range};
 use embedded_hal::blocking::i2c::{Write, WriteRead};
 use idsp::iir;
 use mcp230xx::{Mcp23008, Mcp230xx};
 use miniconf::Miniconf;
 use smlang::statemachine;
 
-use super::{relay::Relay, Channel};
+use super::{internal_adc, relay::Relay, Channel};
 
 const LN_MAX_I_DEFAULT: f32 = 0.2; // default maximum current for the low noise channel in ampere
 
@@ -121,6 +121,15 @@ where
     const RAMP_DELAY: fugit::MillisDuration<u64> =
         fugit::MillisDurationU64::millis(1);
 
+    // Delay for the selftest measurement after the testcurrent was set.
+    const SELFTEST_DELAY: fugit::MillisDuration<u64> =
+        fugit::MillisDurationU64::millis(1);
+    const TESTCURRENT: f32 = 0.01; // 10 mA
+    const VALID_CURRENT: Range<f32> = 0.009..0.011; // Valid measured output current range from 9 mA to 11 mA
+
+    // Driver headboard has a 10 ohm shunt resistor.
+    const VALID_VOLTAGE: Range<f32> = 0.09..0.11; // Valid output voltage range from 90 mV to 110 mV
+
     pub fn new(
         gpio: &'static spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
         channel: Channel,
@@ -140,7 +149,8 @@ pub mod sm {
     statemachine! {
         transitions: {
             // Enable sequence
-            *Disabled + Enable / engage_k0 = EnableWaitK0,
+            *Disabled + Enable / set_test_current = Selftest,
+            SetTestCurrent + Tick / engage_k0 = EnableWaitK0,
             EnableWaitK0 + Tick / disengage_k1 = EnableWaitK1,
             EnableWaitK1 + Tick = RampCurrent,
             RampCurrent + Tick / increment_current = RampCurrent,
@@ -166,12 +176,17 @@ where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     E: Debug,
 {
-    fn increment_current(&mut self) {
-        self.iir.y_offset += Output::<I2C>::RAMP_STEP;
+    // Relay K0 is in the lower position, connecting the output to a 10 ohm shunt resistor.
+    fn set_test_current(&mut self) -> () {
+        self.iir.y_offset = Self::TESTCURRENT;
     }
 
     fn engage_k0(&mut self) {
         self.relay.engage_k0();
+    }
+
+    fn increment_current(&mut self) {
+        self.iir.y_offset += Output::<I2C>::RAMP_STEP;
     }
 
     fn disengage_k0_and_reset_iir(&mut self) {
@@ -207,7 +222,7 @@ where
             false => sm::Events::Disable,
         };
         if *self.process_event(event)? != sm::States::Abort {
-            Ok(Some(Relay::<I2C>::K0_DELAY)) // engage K0 first
+            Ok(Some(Output::<I2C>::SELFTEST_DELAY)) // selftest is the first step.
         } else {
             Ok(None)
         }
@@ -217,6 +232,8 @@ where
     pub fn handle_tick(
         &mut self,
         target: &f32,
+        adc: &mut internal_adc::InternalAdc,
+        channel: Channel,
     ) -> Option<fugit::MillisDuration<u64>> {
         match *self.state() {
             sm::States::EnableWaitK0
@@ -235,6 +252,13 @@ where
                 } else {
                     self.process_event(sm::Events::Tick).unwrap();
                 }
+            }
+            // perform selftest by checking output current and voltage
+            sm::States::Selftest => {
+                let voltage = adc.read_output_voltage(channel);
+                let current = adc.read_output_current(channel);
+                debug_assert!(Output::<I2C>::VALID_VOLTAGE.contains(&voltage));
+                debug_assert!(Output::<I2C>::VALID_CURRENT.contains(&current));
             }
             _ => (),
         };
