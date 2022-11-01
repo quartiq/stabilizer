@@ -256,6 +256,20 @@ mod app {
         local.dacs.0.start();
         local.dacs.1.start();
 
+        // Check that output delays are sufficiently long for internal adc measurements to be updated.
+        assert!(
+            driver::output::Output::<I2c1Proxy>::SET_DELAY
+                >= 2 * DRIVER_MONITOR_PERIOD
+        );
+        assert!(
+            driver::relay::Relay::<I2c1Proxy>::K0_DELAY
+                >= 2 * DRIVER_MONITOR_PERIOD
+        );
+        assert!(
+            driver::relay::Relay::<I2c1Proxy>::K1_DELAY
+                >= 2 * DRIVER_MONITOR_PERIOD
+        );
+
         // Spawn a settings update for default settings.
         settings_update::spawn(None).unwrap();
         telemetry::spawn().unwrap();
@@ -571,7 +585,7 @@ mod app {
     }
 
     // Task for handling the Powerup/-down sequence
-    #[task(priority = 1, capacity = 2, shared=[output_state, settings, internal_adc])]
+    #[task(priority = 1, capacity = 2, shared=[output_state, settings, internal_adc, laser_interlock])]
     fn handle_output_tick(
         mut c: handle_output_tick::Context,
         channel: driver::Channel,
@@ -581,21 +595,26 @@ mod app {
             driver::Channel::HighPower => settings.high_power.current,
         });
 
-        (c.shared.output_state, c.shared.internal_adc).lock(|state, adc| {
-            state[channel as usize]
-                .handle_tick(&ramp_target, adc, channel)
-                .map(|del| {
-                    handle_output_tick::spawn_after(del.convert(), channel)
-                        .unwrap()
-                });
-            if channel == driver::Channel::HighPower {
-                write_dac_spi::spawn(
-                    channel,
-                    state[channel as usize].iir().y_offset,
-                )
-                .unwrap();
-            }
-        });
+        (
+            c.shared.output_state,
+            c.shared.internal_adc,
+            c.shared.laser_interlock,
+        )
+            .lock(|state, adc, ilock| {
+                state[channel as usize]
+                    .handle_tick(&ramp_target, adc, channel, ilock)
+                    .map(|del| {
+                        handle_output_tick::spawn_after(del.convert(), channel)
+                            .unwrap()
+                    });
+                if channel == driver::Channel::HighPower {
+                    write_dac_spi::spawn(
+                        channel,
+                        state[channel as usize].iir().y_offset,
+                    )
+                    .unwrap();
+                }
+            });
     }
 
     // Driver DAC SPI write task. This effectively makes the slow, blocking SPI writes non-blocking

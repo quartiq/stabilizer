@@ -7,9 +7,12 @@ use embedded_hal::blocking::i2c::{Write, WriteRead};
 use idsp::iir;
 use mcp230xx::{Mcp23008, Mcp230xx};
 use miniconf::Miniconf;
+use serde::{Deserialize, Serialize};
 use smlang::statemachine;
 
-use super::{internal_adc, relay::Relay, Channel};
+use crate::hardware::driver::Reason;
+
+use super::{internal_adc, relay::Relay, Channel, LaserInterlock};
 
 const LN_MAX_I_DEFAULT: f32 = 0.2; // default maximum current for the low noise channel in ampere
 
@@ -103,6 +106,22 @@ impl Default for HighPowerSettings {
     }
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum SelftestFail {
+    ZeroCurrent(Read),
+    ZeroVoltage(Read),
+    ShuntCurrent(Read),
+    ShuntVoltage(Read),
+    ShortCurrent(Read),
+    ShortVoltage(Read),
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct Read {
+    value: f32,
+    channel: Channel,
+}
+
 /// Driver [Output].
 /// An Output consits of the output [Relay]s and an IIR to implement a current ramp
 /// during an enabling sequence and a current hold during powerdown.
@@ -121,14 +140,19 @@ where
     const RAMP_DELAY: fugit::MillisDuration<u64> =
         fugit::MillisDurationU64::millis(1);
 
-    // Delay for the selftest measurement after the testcurrent was set.
-    const SELFTEST_DELAY: fugit::MillisDuration<u64> =
-        fugit::MillisDurationU64::millis(1);
+    // Delay after setting a current
+    pub const SET_DELAY: fugit::MillisDuration<u64> =
+        fugit::MillisDurationU64::millis(10);
+
     const TESTCURRENT: f32 = 0.01; // 10 mA
-    const VALID_CURRENT: Range<f32> = 0.009..0.011; // Valid measured output current range from 9 mA to 11 mA
+
+    const VALID_CURRENT_ENABLED: Range<f32> = 0.009..0.011; // 9 mA to 11 mA
+    const VALID_CURRENT_ZERO: Range<f32> = 0.0..0.001; // 0 mA to 1 mA
 
     // Driver headboard has a 10 ohm shunt resistor.
-    const VALID_VOLTAGE: Range<f32> = 0.09..0.11; // Valid output voltage range from 90 mV to 110 mV
+    const VALID_VOLTAGE_SHUNT: Range<f32> = 0.09..0.11; // 90 mV to 110 mV
+    const VALID_VOLTAGE_SHORT: Range<f32> = 0.0..0.01; // 0 mV to 10 mV
+    const VALID_VOLTAGE_ZERO: Range<f32> = 0.0..0.01; // 0 mV to 10 mV
 
     pub fn new(
         gpio: &'static spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
@@ -149,9 +173,13 @@ pub mod sm {
     statemachine! {
         transitions: {
             // Enable sequence
-            *Disabled + Enable / set_test_current = Selftest,
-            SetTestCurrent + Tick / engage_k0 = EnableWaitK0,
-            EnableWaitK0 + Tick / disengage_k1 = EnableWaitK1,
+            // *Disabled + Enable / set_test_current = SelftestShunt,
+            *Disabled + Enable = SelftestZero,
+            SelftestZero + Tick / set_test_current = SelftestShunt,
+            SelftestShunt + Tick / engage_k0 = EnableWaitK0,
+            // EnableWaitK0 + Tick / disengage_k1 = EnableWaitK1,
+            EnableWaitK0 + Tick / set_test_current = SelftestShort,
+            SelftestShort + Tick / disengage_k1 = EnableWaitK1,
             EnableWaitK1 + Tick = RampCurrent,
             RampCurrent + Tick / increment_current = RampCurrent,
             RampCurrent + RampDone = Enabled,
@@ -182,6 +210,7 @@ where
     }
 
     fn engage_k0(&mut self) {
+        self.iir.y_offset = 0.;
         self.relay.engage_k0();
     }
 
@@ -196,6 +225,7 @@ where
     }
 
     fn disengage_k1(&mut self) {
+        self.iir.y_offset = 0.;
         self.relay.disengage_k1();
     }
 
@@ -222,7 +252,7 @@ where
             false => sm::Events::Disable,
         };
         if *self.process_event(event)? != sm::States::Abort {
-            Ok(Some(Output::<I2C>::SELFTEST_DELAY)) // selftest is the first step.
+            Ok(Some(Output::<I2C>::SET_DELAY))
         } else {
             Ok(None)
         }
@@ -234,6 +264,7 @@ where
         target: &f32,
         adc: &mut internal_adc::InternalAdc,
         channel: Channel,
+        interlock: &mut LaserInterlock,
     ) -> Option<fugit::MillisDuration<u64>> {
         match *self.state() {
             sm::States::EnableWaitK0
@@ -253,12 +284,70 @@ where
                     self.process_event(sm::Events::Tick).unwrap();
                 }
             }
-            // perform selftest by checking output current and voltage
-            sm::States::Selftest => {
+            sm::States::SelftestZero => {
                 let voltage = adc.read_output_voltage(channel);
                 let current = adc.read_output_current(channel);
-                debug_assert!(Output::<I2C>::VALID_VOLTAGE.contains(&voltage));
-                debug_assert!(Output::<I2C>::VALID_CURRENT.contains(&current));
+                if !Output::<I2C>::VALID_VOLTAGE_ZERO.contains(&voltage) {
+                    interlock.set(Some(Reason::Selftest(
+                        SelftestFail::ZeroVoltage(Read {
+                            value: voltage,
+                            channel,
+                        }),
+                    )))
+                } else if !Output::<I2C>::VALID_CURRENT_ZERO.contains(&current)
+                {
+                    interlock.set(Some(Reason::Selftest(
+                        SelftestFail::ZeroCurrent(Read {
+                            value: current,
+                            channel,
+                        }),
+                    )))
+                }
+                self.process_event(sm::Events::Tick).unwrap();
+            }
+            sm::States::SelftestShunt => {
+                let voltage = adc.read_output_voltage(channel);
+                let current = adc.read_output_current(channel);
+                if !Output::<I2C>::VALID_VOLTAGE_SHUNT.contains(&voltage) {
+                    interlock.set(Some(Reason::Selftest(
+                        SelftestFail::ShuntVoltage(Read {
+                            value: voltage,
+                            channel,
+                        }),
+                    )))
+                } else if !Output::<I2C>::VALID_CURRENT_ENABLED
+                    .contains(&current)
+                {
+                    interlock.set(Some(Reason::Selftest(
+                        SelftestFail::ShuntCurrent(Read {
+                            value: current,
+                            channel,
+                        }),
+                    )))
+                }
+                self.process_event(sm::Events::Tick).unwrap();
+            }
+            sm::States::SelftestShort => {
+                let voltage = adc.read_output_voltage(channel);
+                let current = adc.read_output_current(channel);
+                if !Output::<I2C>::VALID_VOLTAGE_SHORT.contains(&voltage) {
+                    interlock.set(Some(Reason::Selftest(
+                        SelftestFail::ShortVoltage(Read {
+                            value: voltage,
+                            channel,
+                        }),
+                    )))
+                } else if !Output::<I2C>::VALID_CURRENT_ENABLED
+                    .contains(&current)
+                {
+                    interlock.set(Some(Reason::Selftest(
+                        SelftestFail::ShortCurrent(Read {
+                            value: current,
+                            channel,
+                        }),
+                    )))
+                }
+                self.process_event(sm::Events::Tick).unwrap();
             }
             _ => (),
         };
@@ -268,6 +357,8 @@ where
             sm::States::EnableWaitK0 => Some(Relay::<I2C>::K0_DELAY),
             sm::States::EnableWaitK1 => Some(Relay::<I2C>::K1_DELAY),
             sm::States::RampCurrent => Some(Output::<I2C>::RAMP_DELAY),
+            sm::States::SelftestShunt => Some(Output::<I2C>::SET_DELAY),
+            sm::States::SelftestShort => Some(Output::<I2C>::SET_DELAY),
             _ => None,
         }
     }

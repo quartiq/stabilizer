@@ -3,6 +3,8 @@ pub mod internal_adc;
 pub mod ltc2320;
 pub mod output;
 pub mod relay;
+use self::output::SelftestFail;
+
 use super::I2c1Proxy;
 use lm75;
 pub mod alarm;
@@ -55,9 +57,7 @@ impl ChannelVariant {
     }
 }
 
-#[derive(
-    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize,
-)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 pub enum Reason {
     #[default]
     Reset, // Tripped after device reset
@@ -65,6 +65,7 @@ pub enum Reason {
     AlarmTimeout,
     Overcurrent(Channel),
     Overvoltage(Channel),
+    Selftest(SelftestFail),
 }
 pub struct LaserInterlock {
     reason: Option<Reason>,
