@@ -104,14 +104,14 @@ pub struct Settings {
     /// Low noise channel output settings
     ///
     /// # Value
-    /// See [driver::output::LowNoiseSettings]
-    pub low_noise: driver::output::LowNoiseSettings,
+    /// See [driver::LowNoiseSettings]
+    pub low_noise: driver::LowNoiseSettings,
 
     /// High power channel output settings
     ///
     /// # Value
-    /// See [driver::output::HighPowerSettings]
-    pub high_power: driver::output::HighPowerSettings,
+    /// See [driver::HighPowerSettings]
+    pub high_power: driver::HighPowerSettings,
 }
 
 impl Default for Settings {
@@ -124,8 +124,8 @@ impl Default for Settings {
             stream_target: StreamTarget::default(),
             alarm: Alarm::default(),
             reset_laser_interlock: false,
-            low_noise: driver::output::LowNoiseSettings::default(),
-            high_power: driver::output::HighPowerSettings::default(),
+            low_noise: driver::LowNoiseSettings::default(),
+            high_power: driver::HighPowerSettings::default(),
         }
     }
 }
