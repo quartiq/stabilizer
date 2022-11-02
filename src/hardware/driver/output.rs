@@ -5,6 +5,7 @@
 use core::{fmt::Debug, ops::Range};
 use embedded_hal::blocking::i2c::{Write, WriteRead};
 use idsp::iir;
+use log::debug;
 use mcp230xx::{Mcp23008, Mcp230xx};
 use miniconf::Miniconf;
 use serde::{Deserialize, Serialize};
@@ -173,11 +174,9 @@ pub mod sm {
     statemachine! {
         transitions: {
             // Enable sequence
-            // *Disabled + Enable / set_test_current = SelftestShunt,
             *Disabled + Enable = SelftestZero,
             SelftestZero + Tick / set_test_current = SelftestShunt,
             SelftestShunt + Tick / engage_k0 = EnableWaitK0,
-            // EnableWaitK0 + Tick / disengage_k1 = EnableWaitK1,
             EnableWaitK0 + Tick / set_test_current = SelftestShort,
             SelftestShort + Tick / disengage_k1 = EnableWaitK1,
             EnableWaitK1 + Tick = RampCurrent,
@@ -262,9 +261,10 @@ where
     pub fn handle_tick(
         &mut self,
         target: &f32,
-        adc: &mut internal_adc::InternalAdc,
         channel: Channel,
         interlock: &mut LaserInterlock,
+        current: f32,
+        voltage: f32,
     ) -> Option<fugit::MillisDuration<u64>> {
         match *self.state() {
             sm::States::EnableWaitK0
@@ -274,19 +274,7 @@ where
             | sm::States::Abort => {
                 self.process_event(sm::Events::Tick).unwrap();
             }
-            // handle the ramp
-            sm::States::RampCurrent => {
-                if self.context().iir.y_offset
-                    >= (*target - Output::<I2C>::RAMP_STEP)
-                {
-                    self.process_event(sm::Events::RampDone).unwrap();
-                } else {
-                    self.process_event(sm::Events::Tick).unwrap();
-                }
-            }
             sm::States::SelftestZero => {
-                let voltage = adc.read_output_voltage(channel);
-                let current = adc.read_output_current(channel);
                 if !Output::<I2C>::VALID_VOLTAGE_ZERO.contains(&voltage) {
                     interlock.set(Some(Reason::Selftest(
                         SelftestFail::ZeroVoltage(Read {
@@ -294,8 +282,8 @@ where
                             channel,
                         }),
                     )))
-                } else if !Output::<I2C>::VALID_CURRENT_ZERO.contains(&current)
-                {
+                }
+                if !Output::<I2C>::VALID_CURRENT_ZERO.contains(&current) {
                     interlock.set(Some(Reason::Selftest(
                         SelftestFail::ZeroCurrent(Read {
                             value: current,
@@ -306,8 +294,6 @@ where
                 self.process_event(sm::Events::Tick).unwrap();
             }
             sm::States::SelftestShunt => {
-                let voltage = adc.read_output_voltage(channel);
-                let current = adc.read_output_current(channel);
                 if !Output::<I2C>::VALID_VOLTAGE_SHUNT.contains(&voltage) {
                     interlock.set(Some(Reason::Selftest(
                         SelftestFail::ShuntVoltage(Read {
@@ -315,9 +301,8 @@ where
                             channel,
                         }),
                     )))
-                } else if !Output::<I2C>::VALID_CURRENT_ENABLED
-                    .contains(&current)
-                {
+                }
+                if !Output::<I2C>::VALID_CURRENT_ENABLED.contains(&current) {
                     interlock.set(Some(Reason::Selftest(
                         SelftestFail::ShuntCurrent(Read {
                             value: current,
@@ -328,8 +313,6 @@ where
                 self.process_event(sm::Events::Tick).unwrap();
             }
             sm::States::SelftestShort => {
-                let voltage = adc.read_output_voltage(channel);
-                let current = adc.read_output_current(channel);
                 if !Output::<I2C>::VALID_VOLTAGE_SHORT.contains(&voltage) {
                     interlock.set(Some(Reason::Selftest(
                         SelftestFail::ShortVoltage(Read {
@@ -337,9 +320,8 @@ where
                             channel,
                         }),
                     )))
-                } else if !Output::<I2C>::VALID_CURRENT_ENABLED
-                    .contains(&current)
-                {
+                }
+                if !Output::<I2C>::VALID_CURRENT_ENABLED.contains(&current) {
                     interlock.set(Some(Reason::Selftest(
                         SelftestFail::ShortCurrent(Read {
                             value: current,
@@ -348,6 +330,17 @@ where
                     )))
                 }
                 self.process_event(sm::Events::Tick).unwrap();
+            }
+            // handle the ramp
+            sm::States::RampCurrent => {
+                if self.context().iir.y_offset
+                    >= (*target - Output::<I2C>::RAMP_STEP)
+                {
+                    debug!("Current ramp done. Output enabled.");
+                    self.process_event(sm::Events::RampDone).unwrap();
+                } else {
+                    self.process_event(sm::Events::Tick).unwrap();
+                }
             }
             _ => (),
         };
