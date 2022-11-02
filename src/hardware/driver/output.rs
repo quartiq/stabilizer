@@ -147,13 +147,14 @@ where
 
     const TESTCURRENT: f32 = 0.01; // 10 mA
 
-    const VALID_CURRENT_ENABLED: Range<f32> = 0.009..0.011; // 9 mA to 11 mA
     const VALID_CURRENT_ZERO: Range<f32> = 0.0..0.001; // 0 mA to 1 mA
+    const VALID_CURRENT_SHUNT: Range<f32> = 0.009..0.011; // 9 mA to 11 mA
+    const VALID_CURRENT_SHORT: Range<f32> = 0.009..0.011; // 9 mA to 11 mA
 
     // Driver headboard has a 10 ohm shunt resistor.
+    const VALID_VOLTAGE_ZERO: Range<f32> = 0.0..0.01; // 0 mV to 10 mV
     const VALID_VOLTAGE_SHUNT: Range<f32> = 0.09..0.11; // 90 mV to 110 mV
     const VALID_VOLTAGE_SHORT: Range<f32> = 0.0..0.01; // 0 mV to 10 mV
-    const VALID_VOLTAGE_ZERO: Range<f32> = 0.0..0.01; // 0 mV to 10 mV
 
     pub fn new(
         gpio: &'static spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
@@ -302,7 +303,7 @@ where
                         }),
                     )))
                 }
-                if !Output::<I2C>::VALID_CURRENT_ENABLED.contains(&current) {
+                if !Output::<I2C>::VALID_CURRENT_SHUNT.contains(&current) {
                     interlock.set(Some(Reason::Selftest(
                         SelftestFail::ShuntCurrent(Read {
                             value: current,
@@ -321,7 +322,7 @@ where
                         }),
                     )))
                 }
-                if !Output::<I2C>::VALID_CURRENT_ENABLED.contains(&current) {
+                if !Output::<I2C>::VALID_CURRENT_SHORT.contains(&current) {
                     interlock.set(Some(Reason::Selftest(
                         SelftestFail::ShortCurrent(Read {
                             value: current,
