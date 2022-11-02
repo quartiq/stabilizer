@@ -594,16 +594,16 @@ mod app {
             driver::Channel::LowNoise => settings.low_noise.iir.y_offset,
             driver::Channel::HighPower => settings.high_power.current,
         });
-        let (current, voltage) = c.shared.telemetry.lock(|tele| {
-            (
+        let reads = c.shared.telemetry.lock(|tele| {
+            [
                 tele.monitor.current[channel as usize],
                 tele.monitor.voltage[channel as usize],
-            )
+            ]
         });
         (c.shared.output_state, c.shared.laser_interlock).lock(
             |state, ilock| {
                 state[channel as usize]
-                    .handle_tick(&ramp_target, channel, ilock, current, voltage)
+                    .handle_tick(&ramp_target, channel, ilock, reads)
                     .map(|del| {
                         handle_output_tick::spawn_after(del.convert(), channel)
                             .unwrap()

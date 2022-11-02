@@ -16,22 +16,24 @@ use crate::hardware::driver::Reason;
 
 use super::{relay::Relay, Channel, LaserInterlock};
 
-/// Reason for why a selftest failed.
+/// Selftest struct that can be reported by telemetry.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub enum SelftestFail {
-    ZeroCurrent(Read),
-    ZeroVoltage(Read),
-    ShuntCurrent(Read),
-    ShuntVoltage(Read),
-    ShortCurrent(Read),
-    ShortVoltage(Read),
-}
-
-/// A read of an output voltage/current on a [Channel].
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub struct Read {
+pub struct Selftest {
+    reason: FailReason,
     value: f32,
     channel: Channel,
+}
+
+/// Reason for why a selftest failed.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+///
+pub enum FailReason {
+    ZeroCurrent,
+    ZeroVoltage,
+    ShuntCurrent,
+    ShuntVoltage,
+    ShortCurrent,
+    ShortVoltage,
 }
 
 /// Driver [Output].
@@ -175,8 +177,7 @@ where
         target: &f32,
         channel: Channel,
         interlock: &mut LaserInterlock,
-        current: f32,
-        voltage: f32,
+        reads: [f32; 2],
     ) -> Option<fugit::MillisDuration<u64>> {
         match *self.state() {
             sm::States::EnableWaitK0
@@ -187,59 +188,61 @@ where
                 self.process_event(sm::Events::Tick).unwrap();
             }
             sm::States::SelftestZero => {
-                if !Output::<I2C>::VALID_VOLTAGE_ZERO.contains(&voltage) {
-                    interlock.set(Some(Reason::Selftest(
-                        SelftestFail::ZeroVoltage(Read {
-                            value: voltage,
+                for ((range, &value), &reason) in [
+                    Output::<I2C>::VALID_VOLTAGE_ZERO,
+                    Output::<I2C>::VALID_CURRENT_ZERO,
+                ]
+                .iter()
+                .zip(reads.iter())
+                .zip([FailReason::ZeroVoltage, FailReason::ZeroCurrent].iter())
+                {
+                    if !range.contains(&value) {
+                        interlock.set(Some(Reason::Selftest(Selftest {
+                            reason,
+                            value,
                             channel,
-                        }),
-                    )))
-                }
-                if !Output::<I2C>::VALID_CURRENT_ZERO.contains(&current) {
-                    interlock.set(Some(Reason::Selftest(
-                        SelftestFail::ZeroCurrent(Read {
-                            value: current,
-                            channel,
-                        }),
-                    )))
+                        })));
+                    }
                 }
                 self.process_event(sm::Events::Tick).unwrap();
             }
             sm::States::SelftestShunt => {
-                if !Output::<I2C>::VALID_VOLTAGE_SHUNT.contains(&voltage) {
-                    interlock.set(Some(Reason::Selftest(
-                        SelftestFail::ShuntVoltage(Read {
-                            value: voltage,
+                for ((range, &value), &reason) in [
+                    Output::<I2C>::VALID_VOLTAGE_SHUNT,
+                    Output::<I2C>::VALID_CURRENT_SHUNT,
+                ]
+                .iter()
+                .zip(reads.iter())
+                .zip(
+                    [FailReason::ShuntVoltage, FailReason::ShuntCurrent].iter(),
+                ) {
+                    if !range.contains(&value) {
+                        interlock.set(Some(Reason::Selftest(Selftest {
+                            reason,
+                            value,
                             channel,
-                        }),
-                    )))
-                }
-                if !Output::<I2C>::VALID_CURRENT_SHUNT.contains(&current) {
-                    interlock.set(Some(Reason::Selftest(
-                        SelftestFail::ShuntCurrent(Read {
-                            value: current,
-                            channel,
-                        }),
-                    )))
+                        })));
+                    }
                 }
                 self.process_event(sm::Events::Tick).unwrap();
             }
             sm::States::SelftestShort => {
-                if !Output::<I2C>::VALID_VOLTAGE_SHORT.contains(&voltage) {
-                    interlock.set(Some(Reason::Selftest(
-                        SelftestFail::ShortVoltage(Read {
-                            value: voltage,
+                for ((range, &value), &reason) in [
+                    Output::<I2C>::VALID_VOLTAGE_SHORT,
+                    Output::<I2C>::VALID_CURRENT_SHORT,
+                ]
+                .iter()
+                .zip(reads.iter())
+                .zip(
+                    [FailReason::ShortVoltage, FailReason::ShortCurrent].iter(),
+                ) {
+                    if !range.contains(&value) {
+                        interlock.set(Some(Reason::Selftest(Selftest {
+                            reason,
+                            value,
                             channel,
-                        }),
-                    )))
-                }
-                if !Output::<I2C>::VALID_CURRENT_SHORT.contains(&current) {
-                    interlock.set(Some(Reason::Selftest(
-                        SelftestFail::ShortCurrent(Read {
-                            value: current,
-                            channel,
-                        }),
-                    )))
+                        })));
+                    }
                 }
                 self.process_event(sm::Events::Tick).unwrap();
             }
