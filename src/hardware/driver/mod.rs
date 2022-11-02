@@ -1,3 +1,4 @@
+pub mod alarm;
 pub mod dac;
 pub mod internal_adc;
 pub mod ltc2320;
@@ -8,7 +9,6 @@ use self::output::Selftest;
 use super::I2c1Proxy;
 use idsp::iir;
 use lm75;
-pub mod alarm;
 use log::error;
 use miniconf::Miniconf;
 use num_enum::TryFromPrimitive;

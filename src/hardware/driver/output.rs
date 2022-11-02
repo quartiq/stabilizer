@@ -12,9 +12,7 @@ use mcp230xx::{Mcp23008, Mcp230xx};
 use serde::{Deserialize, Serialize};
 use smlang::statemachine;
 
-use crate::hardware::driver::Reason;
-
-use super::{relay::Relay, Channel, LaserInterlock};
+use super::{relay::Relay, Channel, LaserInterlock, Reason};
 
 /// Selftest struct that can be reported by telemetry.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -26,7 +24,6 @@ pub struct Selftest {
 
 /// Reason for why a selftest failed.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-///
 pub enum FailReason {
     ZeroCurrent,
     ZeroVoltage,
