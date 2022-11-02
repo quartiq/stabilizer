@@ -684,10 +684,6 @@ mod app {
                 c.shared
                     .laser_interlock
                     .lock(|ilock| ilock.set(Some(Reason::Overcurrent(ch))));
-                log::error!(
-                    "Overcurrent condition in {:?}! Laser interlock tripped.",
-                    ch
-                );
             }
         }
         for (i, ((interlock_voltage, read), output_en)) in interlock_voltage
@@ -701,10 +697,6 @@ mod app {
                 c.shared
                     .laser_interlock
                     .lock(|ilock| ilock.set(Some(Reason::Overvoltage(ch))));
-                log::error!(
-                    "Overvoltage condition in {:?}! Laser interlock tripped.",
-                    ch
-                );
             }
         }
         c.shared.telemetry.lock(|tele| {

@@ -8,6 +8,7 @@ use self::output::SelftestFail;
 use super::I2c1Proxy;
 use lm75;
 pub mod alarm;
+use log::error;
 use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Serialize};
 use stm32h7xx_hal as hal;
@@ -88,6 +89,9 @@ impl LaserInterlock {
         if self.reason.is_none() || reason.is_none() {
             self.pin.set_state(reason.is_none().into());
             self.reason = reason;
+            if let Some(re) = reason {
+                error!("Interlock tripped! {:?}", re)
+            }
         }
     }
 
