@@ -4,7 +4,7 @@ use rand_xorshift::XorShiftRng;
 use serde::{Deserialize, Serialize};
 
 /// Types of signals that can be generated.
-#[derive(Copy, Clone, Debug, Deserialize, Serialize, Miniconf)]
+#[derive(Copy, Clone, Debug, Deserialize, Serialize)]
 pub enum Signal {
     Cosine,
     Square,
@@ -20,7 +20,7 @@ pub enum Signal {
 /// Where `<signal>` may be any of [Signal] variants, `frequency` specifies the signal frequency
 /// in Hertz, `symmetry` specifies the normalized signal symmetry which ranges from 0 - 1.0, and
 /// `amplitude` specifies the signal amplitude in Volts.
-#[derive(Copy, Clone, Debug, Miniconf, Deserialize)]
+#[derive(Copy, Clone, Debug, Miniconf, Serialize, Deserialize)]
 pub struct BasicConfig {
     /// The signal type that should be generated. See [Signal] variants.
     pub signal: Signal,
