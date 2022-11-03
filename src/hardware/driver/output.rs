@@ -25,12 +25,31 @@ pub struct Selftest {
 /// Reason for why a selftest failed.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum FailReason {
-    ZeroCurrent,
+    /// Current was set to zero and measured voltage was out of range. [Output::<I2C>::VALID_VOLTAGE_ZERO]
     ZeroVoltage,
-    ShuntCurrent,
+
+    /// Current was set to zero and measured current was out of range. [Output::<I2C>::VALID_CURRENT_ZERO]
+    ZeroCurrent,
+
+    /// Driver output was connected to a 10 ohm shunt.
+    /// Current was set to [Output::<I2C>::TESTCURRENT] and measured voltage was out of range.
+    /// [Output::<I2C>::VALID_VOLTAGE_SHUNT]
     ShuntVoltage,
-    ShortCurrent,
+
+    /// Driver output was connected to a 10 ohm shunt.
+    /// Current was set to [Output::<I2C>::TESTCURRENT] and measured current was out of range.
+    /// [Output::<I2C>::VALID_CURRENT_SHUNT]
+    ShuntCurrent,
+
+    /// Driver output was shorted to ground.
+    /// Current was set to [Output::<I2C>::TESTCURRENT] and measured voltage was out of range.
+    /// [Output::<I2C>::VALID_VOLTAGE_SHORT]
     ShortVoltage,
+
+    /// Driver output was shorted to ground.
+    /// Current was set to [Output::<I2C>::TESTCURRENT] and measured current was out of range.
+    /// [Output::<I2C>::VALID_CURRENTSHORT]
+    ShortCurrent,
 }
 
 /// Driver [Output].
