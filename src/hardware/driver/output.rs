@@ -18,7 +18,7 @@ use super::{relay::Relay, Channel, LaserInterlock, Reason};
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Selftest {
     reason: FailReason,
-    value: f32,
+    read: f32,
     channel: Channel,
 }
 
@@ -249,13 +249,13 @@ where
         };
 
         if let Some(tests) = tests {
-            for ((range, &value), &reason) in
+            for ((range, &read), &reason) in
                 tests.0.iter().zip(reads.iter()).zip(tests.1.iter())
             {
-                if !range.contains(&value) {
+                if !range.contains(&read) {
                     interlock.set(Some(Reason::Selftest(Selftest {
                         reason,
-                        value,
+                        read,
                         channel,
                     })));
                 }
