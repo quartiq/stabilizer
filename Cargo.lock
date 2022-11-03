@@ -914,7 +914,6 @@ dependencies = [
  "rtt-logger",
  "rtt-target",
  "serde",
- "serde-json-core",
  "shared-bus",
  "smoltcp-nal",
  "spin",
