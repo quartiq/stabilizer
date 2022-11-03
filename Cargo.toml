@@ -47,9 +47,9 @@ num_enum = { version = "0.5.7", default-features = false }
 paste = "1"
 idsp = "0.9"
 ad9959 = { path = "ad9959", version = "0.2.0" }
-miniconf = { git = "https://github.com/quartiq/miniconf.git", branch = "develop" }
+miniconf = { git = "https://github.com/quartiq/miniconf.git", branch = "rj/bump-serde-json-core" }
 smoltcp-nal = { version = "0.2", features = ["shared-stack"] }
-serde-json-core = "0.4"
+serde-json-core = { git = "https://github.com/quartiq/serde-json-core", branch = "rj/maybeuninit" }
 mcp230xx = "0.1"
 mutex-trait = "0.2"
 minimq = "0.6.0"
