@@ -1,12 +1,9 @@
-use miniconf::Miniconf;
 use serde::{Deserialize, Serialize};
 
 use core::convert::TryFrom;
 use num_enum::TryFromPrimitive;
 
-#[derive(
-    Copy, Clone, Debug, Serialize, Deserialize, TryFromPrimitive, Miniconf,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, TryFromPrimitive)]
 #[repr(u8)]
 pub enum Gain {
     G1 = 0b00,

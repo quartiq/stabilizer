@@ -7,13 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-### Added
-
-### Removed
-
-### Changed
-
-### Fixed
+* MSRV bumped to 1.63 (`array_from_fn` via `enum_iterator`)
 
 ## [v0.7.0] - 2022-08-10
 
