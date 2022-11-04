@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-* MSRV bumped to 1.63 (`array_from_fn` via `enum_iterator`)
+* [breaking] MSRV bumped to 1.63 (`array_from_fn` via `enum_iterator`)
+* [breaking] Bumped dependencies on `miniconf`, `minimq` leading to changes in the `Miniconf` settings API
+* Bumped HAL dependency to fix a crucial I2C bug
+* Added gain limits for `iir_coefficients`
+* Added a IIR transfer function plotting tool
+* Fixed a bug in the Python telemetry client that led to no data being returned
+* EEM Gpio pins are now available from `setup()`
+* Added white noise output to `signal_generator`
 
 ## [v0.7.0] - 2022-08-10
 
