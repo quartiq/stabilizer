@@ -52,7 +52,7 @@ smoltcp-nal = { version = "0.2", features = ["shared-stack"] }
 serde-json-core = "0.4"
 mcp230xx = "0.1"
 mutex-trait = "0.2"
-minimq = "0.5.3"
+minimq = "0.6.1"
 fugit = "0.3"
 rtt-logger = "0.2"
 systick-monotonic = "1.0"

@@ -459,10 +459,10 @@ dependencies = [
  "derive_miniconf",
  "heapless",
  "log",
- "minimq",
+ "minimq 0.5.3",
  "serde",
  "serde-json-core",
- "smlang",
+ "smlang 0.4.2",
 ]
 
 [[package]]
@@ -476,7 +476,23 @@ dependencies = [
  "embedded-time",
  "enum-iterator 0.6.0",
  "heapless",
- "smlang",
+ "smlang 0.4.2",
+]
+
+[[package]]
+name = "minimq"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b76ac76e900c755ca49946b2316d76c13e8af097495cd250acea7d09218b7e5"
+dependencies = [
+ "bit_field",
+ "embedded-nal",
+ "embedded-time",
+ "heapless",
+ "num_enum",
+ "serde",
+ "smlang 0.6.0",
+ "varint-rs",
 ]
 
 [[package]]
@@ -860,7 +876,16 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75f6a641648330c38cc8e0574ddc03807617dc8f27f3005c368522769f818896"
 dependencies = [
- "smlang-macros",
+ "smlang-macros 0.2.1",
+]
+
+[[package]]
+name = "smlang"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b62b263177e999fea25b50588d4413d1686f070d6fe986c3b2e5a7a4d2c532e9"
+dependencies = [
+ "smlang-macros 0.6.0",
 ]
 
 [[package]]
@@ -868,6 +893,17 @@ name = "smlang-macros"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac6db7d915f8478423db4889a8933f0f557ec345b3e94495800d7b32b1ac7250"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "smlang-macros"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c682cc05cd4c0dce61656d654b1aef023e7d4b27b58834af94b31391df081469"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -925,7 +961,7 @@ dependencies = [
  "log",
  "mcp230xx",
  "miniconf",
- "minimq",
+ "minimq 0.6.1",
  "mono-clock",
  "mutex-trait",
  "nb 1.0.0",
@@ -1021,6 +1057,12 @@ name = "unicode-ident"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4f5b37a154999a8f3f98cc23a628d850e154479cd94decf3414696e12e31aaf"
+
+[[package]]
+name = "varint-rs"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f54a172d0620933a27a4360d3db3e2ae0dd6cceae9730751a036bbf182c4b23"
 
 [[package]]
 name = "vcell"
