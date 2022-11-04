@@ -68,22 +68,22 @@ docker run -p 1883:1883 --name mosquitto -v ${pwd}/mosquitto.conf:/mosquitto/con
 ## Building
 
 1. Get and install [rustup](https://rustup.rs/) and use it to install a current stable Rust toolchain.
-    The minimum supported Rust version (MSRV) is 1.62.0 (2021 edition).
-1. Install target support
+    Stabilizer tracks stable Tust. The minimum supported Rust version (MSRV) is specified in the manifest (`Cargo.toml`).
+2. Install target support
     ```bash
     rustup target add thumbv7em-none-eabihf
     ```
-2. Install [cargo-binutils](https://github.com/rust-embedded/cargo-binutils/)
+3. Install [cargo-binutils](https://github.com/rust-embedded/cargo-binutils/)
     ```bash
     cargo install cargo-binutils
     rustup component add llvm-tools-preview
     ```
-3. Clone or download the firmware
+4. Clone or download the firmware
     ```bash
     git clone https://github.com/quartiq/stabilizer
     cd stabilizer
     ```
-4. Build firmware specifying the MQTT broker IP. Replace `10.34.16.10` by the
+5. Build firmware specifying the MQTT broker IP. Replace `10.34.16.10` by the
     stable and reachable broker IPv4 address determined above.
     ```bash
     # Bash
@@ -93,7 +93,7 @@ docker run -p 1883:1883 --name mosquitto -v ${pwd}/mosquitto.conf:/mosquitto/con
     # Note: This sets the broker for all future builds as well.
     $env:BROKER='10.34.16.10'; cargo build --release
     ```
-5. Extract the application binary (substitute `dual-iir` below with the desired application name)
+6. Extract the application binary (substitute `dual-iir` below with the desired application name)
     ```bash
     # Bash
     BROKER="10.34.16.10" cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin

@@ -16,7 +16,7 @@ readme = "README.md"
 documentation = "https://docs.rs/stabilizer/"
 edition = "2021"
 # keep MSRV in sync in ci.yaml, bors.toml, Cargo.toml, and setup.md
-rust-version = "1.62"
+rust-version = "1.63"
 exclude = [
 	".gitignore",
 	"doc/",
@@ -65,9 +65,7 @@ rand_core = "0.6.4"
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "ethernet", "xspi"]
-# version = "0.13.0"
-git = "https://github.com/stm32-rs/stm32h7xx-hal.git"
-branch = "master"
+version = "0.13.0"
 
 [features]
 nightly = [ ]
