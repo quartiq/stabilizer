@@ -65,7 +65,9 @@ rand_core = "0.6.4"
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "ethernet", "xspi"]
-version = "0.13.0"
+# version = "0.13.0"
+git = "https://github.com/stm32-rs/stm32h7xx-hal.git"
+branch = "master"
 
 [features]
 nightly = [ ]
