@@ -68,7 +68,7 @@ docker run -p 1883:1883 --name mosquitto -v ${pwd}/mosquitto.conf:/mosquitto/con
 ## Building
 
 1. Get and install [rustup](https://rustup.rs/) and use it to install a current stable Rust toolchain.
-    Stabilizer tracks stable Tust. The minimum supported Rust version (MSRV) is specified in the manifest (`Cargo.toml`).
+    Stabilizer tracks stable Rust. The minimum supported Rust version (MSRV) is specified in the manifest (`Cargo.toml`).
 2. Install target support
     ```bash
     rustup target add thumbv7em-none-eabihf
