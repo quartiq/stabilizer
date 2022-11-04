@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## Unreleased
+## [v0.8.0](https://github.com/quartiq/stabilizer/compare/v0.7.0...v0.8.0) - 2022-11-04
 
 * [breaking] MSRV bumped to 1.63 (`array_from_fn` via `enum_iterator`)
 * [breaking] Bumped dependencies on `miniconf`, `minimq` leading to changes in the `Miniconf` settings API
@@ -144,7 +144,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 * First bits of code published
 
-[Unreleased]: https://github.com/quartiq/stabilizer/compare/v0.7.0...HEAD
 [v0.7.0]: https://github.com/quartiq/stabilizer/compare/v0.6.0...v0.7.0
 [v0.6.0]: https://github.com/quartiq/stabilizer/compare/v0.5.0...v0.6.0
 [v0.5.0]: https://github.com/quartiq/stabilizer/compare/v0.4.1...v0.5.0

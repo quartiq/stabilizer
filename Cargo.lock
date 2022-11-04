@@ -891,7 +891,7 @@ dependencies = [
 
 [[package]]
 name = "stabilizer"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "ad9959",
  "cortex-m 0.7.6",
