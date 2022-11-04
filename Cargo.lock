@@ -201,8 +201,9 @@ dependencies = [
 
 [[package]]
 name = "derive_miniconf"
-version = "0.5.0"
-source = "git+https://github.com/quartiq/miniconf.git?branch=rj/bump-serde-json-core#100ebcbaca3531c5a2fee812fa1f802eb76ea716"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93708083974cee8a199ab2015adaa909e132834e9120fb5bb63989c4cd2a2306"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -430,8 +431,9 @@ checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 
 [[package]]
 name = "miniconf"
-version = "0.5.0"
-source = "git+https://github.com/quartiq/miniconf.git?branch=rj/bump-serde-json-core#100ebcbaca3531c5a2fee812fa1f802eb76ea716"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "051b0a88cfaf74360a9a686aacb2dc4786d59c53fa2e41dac06c3f49a9326af8"
 dependencies = [
  "derive_miniconf",
  "heapless",
@@ -801,8 +803,9 @@ dependencies = [
 
 [[package]]
 name = "serde-json-core"
-version = "0.4.0"
-source = "git+https://github.com/quartiq/serde-json-core?branch=rj/maybeuninit#f1a97547f5f312515aad3224f708330e764453d6"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58ec3c8fe427f45ee3aaa0ebb9f0d9ab8ae9ad05d12047fe7249ae5ea9374ff0"
 dependencies = [
  "heapless",
  "ryu",
