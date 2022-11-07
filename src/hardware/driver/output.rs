@@ -1,106 +1,106 @@
 ///! Driver output state handling.
 ///!
 ///! Driver has two independent output channels.
-///! Each channel can be in various states during operation, powerup and powerdown.
-use core::fmt::Debug;
+///! Each channel can be in various states during powerup and powerdown.
+///! At powerup the device goes through the relay sequence and performs various selfchecks along the way.
+///! See state machine transitions for details.
+use core::{fmt::Debug, ops::Range};
 use embedded_hal::blocking::i2c::{Write, WriteRead};
 use idsp::iir;
+use log::debug;
 use mcp230xx::{Mcp23008, Mcp230xx};
-use miniconf::Miniconf;
+use serde::{Deserialize, Serialize};
 use smlang::statemachine;
 
-use super::{relay::Relay, Channel};
+use crate::hardware::I2c1Proxy;
 
-const LN_MAX_I_DEFAULT: f32 = 0.2; // default maximum current for the low noise channel in ampere
+use super::{relay::Relay, Channel, LaserInterlock, Reason};
 
-#[derive(Clone, Copy, Debug, Miniconf)]
-pub struct LowNoiseSettings {
-    /// Configure the IIR filter parameters. Only active once channel is enabled.
-    ///
-    /// # Value
-    /// See [iir::IIR#miniconf]
-    pub iir: iir::IIR<f32>,
-
-    /// Specified true if DI1 should be used as a "hold" input.
-    ///
-    /// # Value
-    /// "true" or "false"
-    pub allow_hold: bool,
-
-    /// Specified true if "hold" should be forced regardless of DI1 state and hold allowance.
-    ///
-    /// # Value
-    /// "true" or "false"
-    pub force_hold: bool,
-
-    /// Output enabled. `True` to enable, `False` to disable.
-    ///
-    /// # Value
-    /// [bool]
-    pub output_enabled: bool,
-
-    /// Configure the interlock current at which the laser interlock will trip.
-    ///
-    /// # Value
-    /// Any positive value.
-    pub interlock_current: f32,
-
-    /// Configure the interlock voltage at which the laser interlock will trip.
-    ///
-    /// # Value
-    /// Any positive value.
-    pub interlock_voltage: f32,
+/// Selftest struct that can be reported by telemetry.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct SelfTest {
+    reason: FailReason,
+    read: f32,
+    channel: Channel,
 }
 
-impl Default for LowNoiseSettings {
-    fn default() -> Self {
-        Self {
-            iir: iir::IIR::new(0., 0.0, LN_MAX_I_DEFAULT),
-            allow_hold: false,
-            force_hold: false,
-            output_enabled: false,
-            interlock_current: 0.,
-            interlock_voltage: 0.,
+impl SelfTest {
+    fn test(
+        state: &sm::States,
+        channel: &Channel,
+        interlock: &mut LaserInterlock,
+        reads: &[f32; 2], // voltage/current reads
+    ) -> Option<Self> {
+        let tests = match state {
+            sm::States::SelftestZero => Some((
+                [
+                    Output::<I2c1Proxy>::VALID_VOLTAGE_ZERO,
+                    Output::<I2c1Proxy>::VALID_CURRENT_ZERO,
+                ],
+                [FailReason::ZeroVoltage, FailReason::ZeroCurrent],
+            )),
+            sm::States::SelftestShunt => Some((
+                [
+                    Output::<I2c1Proxy>::VALID_VOLTAGE_SHUNT,
+                    Output::<I2c1Proxy>::VALID_CURRENT_SHUNT,
+                ],
+                [FailReason::ShuntVoltage, FailReason::ShuntCurrent],
+            )),
+            sm::States::SelftestShort => Some((
+                [
+                    Output::<I2c1Proxy>::VALID_VOLTAGE_SHORT,
+                    Output::<I2c1Proxy>::VALID_CURRENT_SHORT,
+                ],
+                [FailReason::ShortVoltage, FailReason::ShortCurrent],
+            )),
+            _ => None,
+        };
+
+        if let Some(tests) = tests {
+            for ((range, &read), &reason) in
+                tests.0.iter().zip(reads.iter()).zip(tests.1.iter())
+            {
+                if !range.contains(&read) {
+                    interlock.set(Some(Reason::Selftest(SelfTest {
+                        reason,
+                        read,
+                        channel: *channel,
+                    })));
+                }
+            }
         }
+        None
     }
 }
 
-#[derive(Clone, Copy, Debug, Miniconf)]
-pub struct HighPowerSettings {
-    /// Configure the output current. Only active once channel is enabled.
-    ///
-    /// # Value
-    /// Any positive value up to the maximum current for the high power channel.
-    pub current: f32,
+/// Reason for why a selftest failed.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum FailReason {
+    /// Current was set to zero and measured voltage was out of range. [Output::<I2C>::VALID_VOLTAGE_ZERO]
+    ZeroVoltage,
 
-    /// Output enabled. `True` to enable, `False` to disable.
-    ///
-    /// # Value
-    /// bool
-    pub output_enabled: bool,
+    /// Current was set to zero and measured current was out of range. [Output::<I2C>::VALID_CURRENT_ZERO]
+    ZeroCurrent,
 
-    /// Configure the interlock current at which the laser interlock will trip.
-    ///
-    /// # Value
-    /// Any positive value.
-    pub interlock_current: f32,
+    /// Driver output was connected to a 10 ohm shunt.
+    /// Current was set to [Output::<I2C>::TESTCURRENT] and measured voltage was out of range.
+    /// [Output::<I2C>::VALID_VOLTAGE_SHUNT]
+    ShuntVoltage,
 
-    /// Configure the interlock voltage at which the laser interlock will trip.
-    ///
-    /// # Value
-    /// Any positive value.
-    pub interlock_voltage: f32,
-}
+    /// Driver output was connected to a 10 ohm shunt.
+    /// Current was set to [Output::<I2C>::TESTCURRENT] and measured current was out of range.
+    /// [Output::<I2C>::VALID_CURRENT_SHUNT]
+    ShuntCurrent,
 
-impl Default for HighPowerSettings {
-    fn default() -> Self {
-        Self {
-            current: 0.0,
-            output_enabled: false,
-            interlock_current: 0.,
-            interlock_voltage: 0.,
-        }
-    }
+    /// Driver output was shorted to ground.
+    /// Current was set to [Output::<I2C>::TESTCURRENT] and measured voltage was out of range.
+    /// [Output::<I2C>::VALID_VOLTAGE_SHORT]
+    ShortVoltage,
+
+    /// Driver output was shorted to ground.
+    /// Current was set to [Output::<I2C>::TESTCURRENT] and measured current was out of range.
+    /// [Output::<I2C>::VALID_CURRENTSHORT]
+    ShortCurrent,
 }
 
 /// Driver [Output].
@@ -121,6 +121,21 @@ where
     const RAMP_DELAY: fugit::MillisDuration<u64> =
         fugit::MillisDurationU64::millis(1);
 
+    // Delay after setting a current
+    pub const SET_DELAY: fugit::MillisDuration<u64> =
+        fugit::MillisDurationU64::millis(10);
+
+    const TESTCURRENT: f32 = 0.01; // 10 mA
+
+    const VALID_CURRENT_ZERO: Range<f32> = 0.0..0.001; // 0 mA to 1 mA
+    const VALID_CURRENT_SHUNT: Range<f32> = 0.009..0.011; // 9 mA to 11 mA
+    const VALID_CURRENT_SHORT: Range<f32> = 0.009..0.011; // 9 mA to 11 mA
+
+    // Driver headboard has a 10 ohm shunt resistor.
+    const VALID_VOLTAGE_ZERO: Range<f32> = 0.0..0.01; // 0 mV to 10 mV
+    const VALID_VOLTAGE_SHUNT: Range<f32> = 0.09..0.11; // 90 mV to 110 mV
+    const VALID_VOLTAGE_SHORT: Range<f32> = 0.0..0.01; // 0 mV to 10 mV
+
     pub fn new(
         gpio: &'static spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
         channel: Channel,
@@ -140,8 +155,11 @@ pub mod sm {
     statemachine! {
         transitions: {
             // Enable sequence
-            *Disabled + Enable / engage_k0 = EnableWaitK0,
-            EnableWaitK0 + Tick / disengage_k1 = EnableWaitK1,
+            *Disabled + Enable = SelftestZero,
+            SelftestZero + Tick / set_test_current = SelftestShunt,
+            SelftestShunt + Tick / engage_k0 = EnableWaitK0,
+            EnableWaitK0 + Tick / set_test_current = SelftestShort,
+            SelftestShort + Tick / disengage_k1 = EnableWaitK1,
             EnableWaitK1 + Tick = RampCurrent,
             RampCurrent + Tick / increment_current = RampCurrent,
             RampCurrent + RampDone = Enabled,
@@ -166,12 +184,18 @@ where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     E: Debug,
 {
-    fn increment_current(&mut self) {
-        self.iir.y_offset += Output::<I2C>::RAMP_STEP;
+    // Relay K0 is in the lower position, connecting the output to a 10 ohm shunt resistor.
+    fn set_test_current(&mut self) -> () {
+        self.iir.y_offset = Self::TESTCURRENT;
     }
 
     fn engage_k0(&mut self) {
+        self.iir.y_offset = 0.;
         self.relay.engage_k0();
+    }
+
+    fn increment_current(&mut self) {
+        self.iir.y_offset += Output::<I2C>::RAMP_STEP;
     }
 
     fn disengage_k0_and_reset_iir(&mut self) {
@@ -181,6 +205,7 @@ where
     }
 
     fn disengage_k1(&mut self) {
+        self.iir.y_offset = 0.;
         self.relay.disengage_k1();
     }
 
@@ -207,7 +232,7 @@ where
             false => sm::Events::Disable,
         };
         if *self.process_event(event)? != sm::States::Abort {
-            Ok(Some(Relay::<I2C>::K0_DELAY)) // engage K0 first
+            Ok(Some(Output::<I2C>::SET_DELAY))
         } else {
             Ok(None)
         }
@@ -217,13 +242,20 @@ where
     pub fn handle_tick(
         &mut self,
         target: &f32,
+        channel: &Channel,
+        interlock: &mut LaserInterlock,
+        reads: &[f32; 2], // voltage/current reads
     ) -> Option<fugit::MillisDuration<u64>> {
+        SelfTest::test(self.state(), channel, interlock, reads); // execute selftest if necessary in States
         match *self.state() {
             sm::States::EnableWaitK0
             | sm::States::DisableWaitK1
             | sm::States::EnableWaitK1
             | sm::States::DisableWaitK0
-            | sm::States::Abort => {
+            | sm::States::Abort
+            | sm::States::SelftestZero
+            | sm::States::SelftestShunt
+            | sm::States::SelftestShort => {
                 self.process_event(sm::Events::Tick).unwrap();
             }
             // handle the ramp
@@ -231,19 +263,24 @@ where
                 if self.context().iir.y_offset
                     >= (*target - Output::<I2C>::RAMP_STEP)
                 {
+                    debug!("Current ramp done. Output enabled.");
                     self.process_event(sm::Events::RampDone).unwrap();
                 } else {
                     self.process_event(sm::Events::Tick).unwrap();
                 }
             }
-            _ => (),
-        };
+            sm::States::Enabled | sm::States::Disabled => {
+                panic!("unexpected state during output tick!")
+            }
+        }
         match *self.state() {
             sm::States::DisableWaitK0 => Some(Relay::<I2C>::K0_DELAY),
             sm::States::DisableWaitK1 => Some(Relay::<I2C>::K1_DELAY),
             sm::States::EnableWaitK0 => Some(Relay::<I2C>::K0_DELAY),
             sm::States::EnableWaitK1 => Some(Relay::<I2C>::K1_DELAY),
             sm::States::RampCurrent => Some(Output::<I2C>::RAMP_DELAY),
+            sm::States::SelftestShunt => Some(Output::<I2C>::SET_DELAY),
+            sm::States::SelftestShort => Some(Output::<I2C>::SET_DELAY),
             _ => None,
         }
     }

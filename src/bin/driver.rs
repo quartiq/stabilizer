@@ -104,14 +104,14 @@ pub struct Settings {
     /// Low noise channel output settings
     ///
     /// # Value
-    /// See [driver::output::LowNoiseSettings]
-    pub low_noise: driver::output::LowNoiseSettings,
+    /// See [driver::LowNoiseSettings]
+    pub low_noise: driver::LowNoiseSettings,
 
     /// High power channel output settings
     ///
     /// # Value
-    /// See [driver::output::HighPowerSettings]
-    pub high_power: driver::output::HighPowerSettings,
+    /// See [driver::HighPowerSettings]
+    pub high_power: driver::HighPowerSettings,
 }
 
 impl Default for Settings {
@@ -124,8 +124,8 @@ impl Default for Settings {
             stream_target: StreamTarget::default(),
             alarm: Alarm::default(),
             reset_laser_interlock: false,
-            low_noise: driver::output::LowNoiseSettings::default(),
-            high_power: driver::output::HighPowerSettings::default(),
+            low_noise: driver::LowNoiseSettings::default(),
+            high_power: driver::HighPowerSettings::default(),
         }
     }
 }
@@ -186,10 +186,10 @@ mod app {
         iir_state: [iir::Vec5<f32>; 2],
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
-        internal_adc: driver::internal_adc::InternalAdc,
         header_adc_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
         driver_dac: [driver::dac::Dac<driver::Spi1Proxy>; 2],
         lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
+        internal_adc: driver::internal_adc::InternalAdc,
     }
 
     #[init]
@@ -232,7 +232,7 @@ mod app {
             header_adc_data: [0u16; 8],
             output_state: driver.output_sm,
             alarm_handle: None,
-            laser_interlock: LaserInterlock::new(driver.laser_interlock_pin),
+            laser_interlock: driver.laser_interlock,
         };
 
         let mut local = Local {
@@ -244,10 +244,10 @@ mod app {
             iir_state: [[0.; 5]; 2],
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
-            internal_adc: driver.internal_adc,
             header_adc_conversion_scheduled: stabilizer.systick.now(),
             driver_dac: driver.dac,
             lm75: driver.lm75,
+            internal_adc: driver.internal_adc,
         };
 
         // Enable ADC/DAC events
@@ -255,6 +255,20 @@ mod app {
         local.adcs.1.start();
         local.dacs.0.start();
         local.dacs.1.start();
+
+        // Check that output delays are sufficiently long for internal adc measurements to be updated.
+        assert!(
+            driver::output::Output::<I2c1Proxy>::SET_DELAY
+                >= 2 * DRIVER_MONITOR_PERIOD
+        );
+        assert!(
+            driver::relay::Relay::<I2c1Proxy>::K0_DELAY
+                >= 2 * DRIVER_MONITOR_PERIOD
+        );
+        assert!(
+            driver::relay::Relay::<I2c1Proxy>::K1_DELAY
+                >= 2 * DRIVER_MONITOR_PERIOD
+        );
 
         // Spawn a settings update for default settings.
         settings_update::spawn(None).unwrap();
@@ -571,7 +585,7 @@ mod app {
     }
 
     // Task for handling the Powerup/-down sequence
-    #[task(priority = 3, capacity = 2, shared=[output_state, settings])]
+    #[task(priority = 1, capacity = 2, shared=[output_state, settings, laser_interlock, telemetry])]
     fn handle_output_tick(
         mut c: handle_output_tick::Context,
         channel: driver::Channel,
@@ -580,22 +594,29 @@ mod app {
             driver::Channel::LowNoise => settings.low_noise.iir.y_offset,
             driver::Channel::HighPower => settings.high_power.current,
         });
-
-        c.shared.output_state.lock(|state| {
-            state[channel as usize]
-                .handle_tick(&ramp_target)
-                .map(|del| {
-                    handle_output_tick::spawn_after(del.convert(), channel)
-                        .unwrap()
-                });
-            if channel == driver::Channel::HighPower {
-                write_dac_spi::spawn(
-                    channel,
-                    state[channel as usize].iir().y_offset,
-                )
-                .unwrap();
-            }
+        let reads = c.shared.telemetry.lock(|tele| {
+            [
+                tele.monitor.current[channel as usize],
+                tele.monitor.voltage[channel as usize],
+            ]
         });
+        (c.shared.output_state, c.shared.laser_interlock).lock(
+            |state, ilock| {
+                state[channel as usize]
+                    .handle_tick(&ramp_target, &channel, ilock, &reads)
+                    .map(|del| {
+                        handle_output_tick::spawn_after(del.convert(), channel)
+                            .unwrap()
+                    });
+                if channel == driver::Channel::HighPower {
+                    write_dac_spi::spawn(
+                        channel,
+                        state[channel as usize].iir().y_offset,
+                    )
+                    .unwrap();
+                }
+            },
+        );
     }
 
     // Driver DAC SPI write task. This effectively makes the slow, blocking SPI writes non-blocking
@@ -618,7 +639,7 @@ mod app {
             .lock(|ilock| ilock.set(Some(reason)));
     }
 
-    #[task(priority = 1, shared=[telemetry, settings, laser_interlock], local=[internal_adc])]
+    #[task(priority = 1, shared=[telemetry, settings, laser_interlock, output_state], local=[internal_adc])]
     fn monitor_output(mut c: monitor_output::Context) {
         let (interlock_current, interlock_voltage) =
             c.shared.settings.lock(|settings| {
@@ -633,50 +654,49 @@ mod app {
                     ],
                 )
             });
+        let output_enabled = c
+            .shared
+            .output_state
+            .lock(|output| [output[0].is_enabled(), output[1].is_enabled()]);
+        let adc = c.local.internal_adc;
         let (voltage_reads, current_reads) = (
             [
-                c.local.internal_adc.read_output_current(Channel::LowNoise),
-                c.local.internal_adc.read_output_current(Channel::HighPower),
+                adc.read_output_current(Channel::LowNoise),
+                adc.read_output_current(Channel::HighPower),
             ],
             [
-                c.local.internal_adc.read_output_voltage(Channel::LowNoise),
-                c.local.internal_adc.read_output_voltage(Channel::HighPower),
+                adc.read_output_voltage(Channel::LowNoise),
+                adc.read_output_voltage(Channel::HighPower),
             ],
         );
         let interlock_asserted = c
             .shared
             .laser_interlock
             .lock(|ilock| ilock.reason().is_none());
-        for (i, (interlock_current, read)) in interlock_current
+        for (i, ((interlock_current, read), output_en)) in interlock_current
             .iter()
-            .zip((current_reads).iter())
+            .zip(current_reads.iter())
+            .zip(output_enabled.iter())
             .enumerate()
         {
-            if (read > interlock_current) & interlock_asserted {
+            if (read > interlock_current) & interlock_asserted & output_en {
                 let ch = Channel::try_from(i).unwrap();
                 c.shared
                     .laser_interlock
                     .lock(|ilock| ilock.set(Some(Reason::Overcurrent(ch))));
-                log::error!(
-                    "Overcurrent condition in {:?}! Laser interlock tripped.",
-                    ch
-                );
             }
         }
-        for (i, (interlock_voltage, read)) in interlock_voltage
+        for (i, ((interlock_voltage, read), output_en)) in interlock_voltage
             .iter()
             .zip((voltage_reads).iter())
+            .zip((output_enabled).iter())
             .enumerate()
         {
-            if (read > interlock_voltage) & interlock_asserted {
+            if (read > interlock_voltage) & interlock_asserted & output_en {
                 let ch = Channel::try_from(i).unwrap();
                 c.shared
                     .laser_interlock
                     .lock(|ilock| ilock.set(Some(Reason::Overvoltage(ch))));
-                log::error!(
-                    "Overvoltage condition in {:?}! Laser interlock tripped.",
-                    ch
-                );
             }
         }
         c.shared.telemetry.lock(|tele| {
