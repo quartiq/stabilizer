@@ -71,8 +71,10 @@ features = ["stm32h743v", "rt", "ethernet", "xspi"]
 version = "0.12.2"
 
 [features]
+default = ["ai_artiq_laser_module"]
 nightly = [ ]
 pounder_v1_0 = [ ]
+ai_artiq_laser_module = [ ]
 
 [profile.dev]
 codegen-units = 1

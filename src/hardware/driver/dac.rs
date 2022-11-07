@@ -171,7 +171,7 @@ where
         spi: SPI,
         sync_n: gpio::ErasedPin<gpio::Output>,
         channel: ChannelVariant,
-        delay: &mut impl DelayUs<u8>,
+        #[allow(unused)] delay: &mut impl DelayUs<u8>,
     ) -> Self {
         let mut dac = Dac {
             spi,
@@ -184,6 +184,7 @@ where
         // set to 10 V plusminus 1.25 V referenece span
         dac.write(DAC_ADDR::CONFIG1, CONFIG1::VREFVAL::SPAN_10V);
         // perform calibration
+        // don't try to calibrate without driver because it will wait forever
         // dac.calibrate(delay);
 
         dac

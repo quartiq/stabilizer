@@ -185,12 +185,14 @@ where
     E: Debug,
 {
     // Relay K0 is in the lower position, connecting the output to a 10 ohm shunt resistor.
-    fn set_test_current(&mut self) -> () {
+    fn set_test_current(&mut self) {
         self.iir.y_offset = Self::TESTCURRENT;
     }
 
     fn engage_k0(&mut self) {
         self.iir.y_offset = 0.;
+        // don't perform I2C transactions to MCP23008 on the headboard if it is intentionally not connected
+        #[cfg(feature = "ai_artiq_laser_module")]
         self.relay.engage_k0();
     }
 
@@ -201,17 +203,20 @@ where
     fn disengage_k0_and_reset_iir(&mut self) {
         self.iir.y_offset = 0.;
         self.iir.ba = [0., 0., 0., 0., 0.];
+        #[cfg(feature = "ai_artiq_laser_module")]
         self.relay.disengage_k0();
     }
 
     fn disengage_k1(&mut self) {
         self.iir.y_offset = 0.;
+        #[cfg(feature = "ai_artiq_laser_module")]
         self.relay.disengage_k1();
     }
 
     fn engage_k1_and_hold_iir(&mut self) {
         self.iir.y_offset = 0.;
         self.iir.ba = [0., 0., 0., 1., 0.];
+        #[cfg(feature = "ai_artiq_laser_module")]
         self.relay.engage_k1();
     }
 }
