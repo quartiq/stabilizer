@@ -5,7 +5,7 @@ pub mod ltc2320;
 pub mod output;
 pub mod relay;
 
-use self::output::Selftest;
+use self::output::SelfTest;
 use super::I2c1Proxy;
 use idsp::iir;
 use lm75;
@@ -81,7 +81,7 @@ pub enum Reason {
 
     /// The device selftest during the channel enabling sequence failed.
     /// See [SelftestFail] for details.
-    Selftest(Selftest),
+    Selftest(SelfTest),
 }
 pub struct LaserInterlock {
     reason: Option<Reason>,

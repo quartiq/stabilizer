@@ -12,14 +12,65 @@ use mcp230xx::{Mcp23008, Mcp230xx};
 use serde::{Deserialize, Serialize};
 use smlang::statemachine;
 
+use crate::hardware::I2c1Proxy;
+
 use super::{relay::Relay, Channel, LaserInterlock, Reason};
 
 /// Selftest struct that can be reported by telemetry.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub struct Selftest {
+pub struct SelfTest {
     reason: FailReason,
     read: f32,
     channel: Channel,
+}
+
+impl SelfTest {
+    fn test(
+        state: &sm::States,
+        channel: &Channel,
+        interlock: &mut LaserInterlock,
+        reads: &[f32; 2], // voltage/current reads
+    ) -> Option<Self> {
+        let tests = match state {
+            sm::States::SelftestZero => Some((
+                [
+                    Output::<I2c1Proxy>::VALID_VOLTAGE_ZERO,
+                    Output::<I2c1Proxy>::VALID_CURRENT_ZERO,
+                ],
+                [FailReason::ZeroVoltage, FailReason::ZeroCurrent],
+            )),
+            sm::States::SelftestShunt => Some((
+                [
+                    Output::<I2c1Proxy>::VALID_VOLTAGE_SHUNT,
+                    Output::<I2c1Proxy>::VALID_CURRENT_SHUNT,
+                ],
+                [FailReason::ShuntVoltage, FailReason::ShuntCurrent],
+            )),
+            sm::States::SelftestShort => Some((
+                [
+                    Output::<I2c1Proxy>::VALID_VOLTAGE_SHORT,
+                    Output::<I2c1Proxy>::VALID_CURRENT_SHORT,
+                ],
+                [FailReason::ShortVoltage, FailReason::ShortCurrent],
+            )),
+            _ => None,
+        };
+
+        if let Some(tests) = tests {
+            for ((range, &read), &reason) in
+                tests.0.iter().zip(reads.iter()).zip(tests.1.iter())
+            {
+                if !range.contains(&read) {
+                    interlock.set(Some(Reason::Selftest(SelfTest {
+                        reason,
+                        read,
+                        channel: *channel,
+                    })));
+                }
+            }
+        }
+        None
+    }
 }
 
 /// Reason for why a selftest failed.
@@ -191,17 +242,20 @@ where
     pub fn handle_tick(
         &mut self,
         target: &f32,
-        channel: Channel,
+        channel: &Channel,
         interlock: &mut LaserInterlock,
-        reads: [f32; 2], // voltage/current reads
+        reads: &[f32; 2], // voltage/current reads
     ) -> Option<fugit::MillisDuration<u64>> {
-        let mut tests: Option<([Range<f32>; 2], [FailReason; 2])> = None;
+        SelfTest::test(self.state(), channel, interlock, reads); // execute selftest if necessary in States
         match *self.state() {
             sm::States::EnableWaitK0
             | sm::States::DisableWaitK1
             | sm::States::EnableWaitK1
             | sm::States::DisableWaitK0
-            | sm::States::Abort => {
+            | sm::States::Abort
+            | sm::States::SelftestZero
+            | sm::States::SelftestShunt
+            | sm::States::SelftestShort => {
                 self.process_event(sm::Events::Tick).unwrap();
             }
             // handle the ramp
@@ -215,50 +269,8 @@ where
                     self.process_event(sm::Events::Tick).unwrap();
                 }
             }
-            sm::States::SelftestZero => {
-                tests = Some((
-                    [
-                        Output::<I2C>::VALID_VOLTAGE_ZERO,
-                        Output::<I2C>::VALID_CURRENT_ZERO,
-                    ],
-                    [FailReason::ZeroVoltage, FailReason::ZeroCurrent],
-                ));
-                self.process_event(sm::Events::Tick).unwrap();
-            }
-            sm::States::SelftestShunt => {
-                tests = Some((
-                    [
-                        Output::<I2C>::VALID_VOLTAGE_SHUNT,
-                        Output::<I2C>::VALID_CURRENT_SHUNT,
-                    ],
-                    [FailReason::ShuntVoltage, FailReason::ShuntCurrent],
-                ));
-                self.process_event(sm::Events::Tick).unwrap();
-            }
-            sm::States::SelftestShort => {
-                tests = Some((
-                    [
-                        Output::<I2C>::VALID_VOLTAGE_SHORT,
-                        Output::<I2C>::VALID_CURRENT_SHORT,
-                    ],
-                    [FailReason::ShortVoltage, FailReason::ShortCurrent],
-                ));
-                self.process_event(sm::Events::Tick).unwrap();
-            }
-            _ => (),
-        };
-
-        if let Some(tests) = tests {
-            for ((range, &read), &reason) in
-                tests.0.iter().zip(reads.iter()).zip(tests.1.iter())
-            {
-                if !range.contains(&read) {
-                    interlock.set(Some(Reason::Selftest(Selftest {
-                        reason,
-                        read,
-                        channel,
-                    })));
-                }
+            sm::States::Enabled | sm::States::Disabled => {
+                panic!("unexpected state during output tick!")
             }
         }
         match *self.state() {

@@ -603,7 +603,7 @@ mod app {
         (c.shared.output_state, c.shared.laser_interlock).lock(
             |state, ilock| {
                 state[channel as usize]
-                    .handle_tick(&ramp_target, channel, ilock, reads)
+                    .handle_tick(&ramp_target, &channel, ilock, &reads)
                     .map(|del| {
                         handle_output_tick::spawn_after(del.convert(), channel)
                             .unwrap()
