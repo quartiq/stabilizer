@@ -184,7 +184,9 @@ where
         // set to 10 V plusminus 1.25 V referenece span
         dac.write(DAC_ADDR::CONFIG1, CONFIG1::VREFVAL::SPAN_10V);
         // perform calibration
-        // dac.calibrate(delay);
+        // don't try to calibrate without driver because it will wait forever
+        #[cfg(not(feature = "no_driver"))]
+        dac.calibrate(delay);
 
         dac
     }

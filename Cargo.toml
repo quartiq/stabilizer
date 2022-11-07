@@ -73,6 +73,8 @@ version = "0.12.2"
 [features]
 nightly = [ ]
 pounder_v1_0 = [ ]
+no_driver = [ ]
+no_headboard = [ ]
 
 [profile.dev]
 codegen-units = 1
