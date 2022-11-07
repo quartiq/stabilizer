@@ -6,6 +6,5 @@ status = [
   "style",
   "compile (stable)",
   "compile (1.63.0)",
-  "doc",
   "HITL Run Status"
 ]
