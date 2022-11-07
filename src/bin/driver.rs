@@ -675,8 +675,8 @@ mod app {
             .lock(|ilock| ilock.reason().is_none());
         for (i, ((interlock_current, read), output_en)) in interlock_current
             .iter()
-            .zip((current_reads).iter())
-            .zip((output_enabled).iter())
+            .zip(current_reads.iter())
+            .zip(output_enabled.iter())
             .enumerate()
         {
             if (read > interlock_current) & interlock_asserted & output_en {
