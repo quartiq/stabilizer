@@ -185,7 +185,7 @@ where
     E: Debug,
 {
     // Relay K0 is in the lower position, connecting the output to a 10 ohm shunt resistor.
-    fn set_test_current(&mut self) -> () {
+    fn set_test_current(&mut self) {
         self.iir.y_offset = Self::TESTCURRENT;
     }
 
