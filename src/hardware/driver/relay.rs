@@ -99,7 +99,7 @@ where
         let mut mcp = gpio.try_lock().unwrap();
 
         // don't perform I2C transactions to MCP23008 on the headboard if it is intentionally not connected
-        #[cfg(not(feature = "no_headboard"))]
+        #[cfg(feature = "ai_artiq_laser_module")]
         {
             // set GPIOs to default position
             mcp.set_gpio(k1_en.into(), Level::Low).unwrap();
