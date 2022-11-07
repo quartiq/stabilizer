@@ -1,7 +1,7 @@
 [package]
 name = "stabilizer"
 # Keep versions in Cargo.toml and py/setup.py synchronized.
-version = "0.7.0"
+version = "0.8.0"
 resolver = "2"
 authors = [
 	"Robert Jördens <rj@quartiq.de>",
@@ -65,7 +65,7 @@ rand_core = "0.6.4"
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "ethernet", "xspi"]
-version = "0.13.0"
+version = "0.13.1"
 
 [features]
 nightly = [ ]
