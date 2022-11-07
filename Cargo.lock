@@ -944,9 +944,9 @@ dependencies = [
 
 [[package]]
 name = "stm32h7xx-hal"
-version = "0.13.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dda245c7f589b34be09d9a9e9bb3d2bcba6e51aeb6db04ba58cfe376f687f8f3"
+checksum = "c74a1d83bf1e19db5e504c2cb2d98e7ca5f7ff758ca69f44cf6bfddc90af30dc"
 dependencies = [
  "bare-metal 1.0.0",
  "bitflags",
