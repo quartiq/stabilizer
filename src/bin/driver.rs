@@ -71,8 +71,8 @@ pub struct Settings {
     /// `telemetry_period`
     ///
     /// # Value
-    /// Any non-zero value less than 65536.
-    telemetry_period: u16,
+    /// Any positive, non-zero f32. Will be rounded to milliseconds.
+    telemetry_period: f32,
 
     /// Specifies the target for data livestreaming.
     ///
@@ -120,7 +120,7 @@ impl Default for Settings {
             // Analog frontend programmable gain amplifier gains (G1, G2, G5, G10)
             afe: [Gain::G1, Gain::G1],
             // The default telemetry period in seconds.
-            telemetry_period: 1,
+            telemetry_period: 1.0,
             stream_target: StreamTarget::default(),
             alarm: Alarm::default(),
             reset_laser_interlock: false,
@@ -552,7 +552,8 @@ mod app {
             .network
             .lock(|net| net.telemetry.publish(&telemetry));
         // Schedule the telemetry task in the future.
-        telemetry::spawn_after((telemetry_period as u64).secs()).unwrap();
+        telemetry::spawn_after(((telemetry_period * 1000.0) as u64).millis())
+            .unwrap();
     }
 
     #[task(priority = 1, shared=[network])]
