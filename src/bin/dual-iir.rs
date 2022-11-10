@@ -157,9 +157,9 @@ impl Default for Settings {
             // The array is `iir_state[channel-index][cascade-index][coeff-index]`.
             // The IIR coefficients can be mapped to other transfer function
             // representations, for example as described in https://arxiv.org/abs/1508.06319
-            iir_ch: miniconf::Array(
-                [[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2],
-            ),
+            iir_ch: [[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2]
+                .into(),
+
             // Permit the DI1 digital input to suppress filter output updates.
             allow_hold: false,
             // Force suppress filter output updates.
@@ -167,9 +167,8 @@ impl Default for Settings {
             // The default telemetry period in seconds.
             telemetry_period: 10,
 
-            signal_generator: miniconf::Array(
-                [signal_generator::BasicConfig::default(); 2],
-            ),
+            signal_generator: [signal_generator::BasicConfig::default(); 2]
+                .into(),
 
             stream_target: StreamTarget::default(),
         }
