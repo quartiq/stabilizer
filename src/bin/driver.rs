@@ -18,7 +18,7 @@ use mutex_trait::prelude::*;
 
 use idsp::iir;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use stabilizer::hardware::driver::{LaserInterlock, Reason};
 use stabilizer::{
     hardware::{
@@ -52,7 +52,7 @@ const BATCH_SIZE: usize = 1;
 const SAMPLE_TICKS_LOG2: u8 = 10;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 
-#[derive(Clone, Copy, Debug, Miniconf)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Miniconf)]
 pub struct Settings {
     /// Configure the Analog Front End (AFE) gain.
     ///
@@ -63,6 +63,7 @@ pub struct Settings {
     ///
     /// # Value
     /// Any of the variants of [Gain] enclosed in double quotes.
+    #[miniconf(defer)]
     afe: [Gain; 2],
 
     /// Specifies the telemetry output period in seconds.
@@ -90,6 +91,7 @@ pub struct Settings {
     ///
     /// # Value
     /// [Alarm]
+    #[miniconf(defer)]
     alarm: Alarm,
 
     /// Laser interlock reset.
@@ -105,12 +107,14 @@ pub struct Settings {
     ///
     /// # Value
     /// See [driver::LowNoiseSettings]
+    #[miniconf(defer)]
     pub low_noise: driver::LowNoiseSettings,
 
     /// High power channel output settings
     ///
     /// # Value
     /// See [driver::HighPowerSettings]
+    #[miniconf(defer)]
     pub high_power: driver::HighPowerSettings,
 }
 

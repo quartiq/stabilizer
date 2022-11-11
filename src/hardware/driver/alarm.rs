@@ -1,7 +1,8 @@
 use fugit::ExtU64;
 use miniconf::Miniconf;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, Miniconf)]
+#[derive(Clone, Copy, Debug, Miniconf, Serialize, Deserialize)]
 /// Driver alarm functionality
 ///
 /// Driver features an alarm to ensure safe co-operation with other devices.

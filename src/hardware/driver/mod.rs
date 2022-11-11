@@ -115,7 +115,7 @@ impl LaserInterlock {
     }
 }
 
-#[derive(Clone, Copy, Debug, Miniconf)]
+#[derive(Clone, Copy, Debug, Miniconf, Serialize, Deserialize)]
 pub struct LowNoiseSettings {
     /// Configure the IIR filter parameters. Only active once channel is enabled.
     ///
@@ -167,7 +167,7 @@ impl Default for LowNoiseSettings {
     }
 }
 
-#[derive(Clone, Copy, Debug, Miniconf)]
+#[derive(Clone, Copy, Debug, Miniconf, Serialize, Deserialize)]
 pub struct HighPowerSettings {
     /// Configure the output current. Only active once channel is enabled.
     ///
