@@ -434,10 +434,10 @@ macro_rules! adc_input {
 }
 
 adc_input!(
-    Adc0Input, 0, Stream0, Stream1, Stream2, SPI2, Channel1, TIM2_CH1,
-    Channel1, TIM3_CH1
+    Adc0Input, 0, Stream0, Stream1, Stream2, SPI2, Channel1, Tim2Ch1, Channel1,
+    Tim3Ch1
 );
 adc_input!(
-    Adc1Input, 1, Stream3, Stream4, Stream5, SPI3, Channel2, TIM2_CH2,
-    Channel2, TIM3_CH2
+    Adc1Input, 1, Stream3, Stream4, Stream5, SPI3, Channel2, Tim2Ch2, Channel2,
+    Tim3Ch2
 );

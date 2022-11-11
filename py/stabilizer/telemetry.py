@@ -47,8 +47,8 @@ class Telemetry:
 
     async def get(self):
         """Retrieve the latest telemetry message in the queue or wait for a new one"""
-        await self.queue.get()
+        return await self.queue.get()
 
     async def get_nowait(self):
         """Retrieve the latest telemetry message already in the queue"""
-        await self.queue.get_nowait()
+        return await self.queue.get_nowait()

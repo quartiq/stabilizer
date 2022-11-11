@@ -1,11 +1,10 @@
 block_labels = [ "S-blocked" ]
 delete_merged_branches = true
 timeout_sec = 1200
-# keep MSRV in sync in ci.yaml, bors.toml, Cargo.toml, and setup.md
+# keep MSRV in sync in ci.yaml, bors.toml, Cargo.toml
 status = [
   "style",
   "compile (stable)",
-  "compile (1.62.0)",
-  "doc",
+  "compile (1.63.0)",
   "HITL Run Status"
 ]
