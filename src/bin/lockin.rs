@@ -71,7 +71,7 @@ const BATCH_SIZE: usize = 1 << BATCH_SIZE_LOG2;
 const SAMPLE_TICKS_LOG2: u32 = 7;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, Miniconf)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 enum Conf {
     /// Output the lockin magnitude.
     Magnitude,
@@ -89,7 +89,7 @@ enum Conf {
     Modulation,
 }
 
-#[derive(Copy, Clone, Debug, Miniconf, Serialize, Deserialize, PartialEq)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
 enum LockinMode {
     /// Utilize an internally generated reference for demodulation
     Internal,
@@ -108,6 +108,7 @@ pub struct Settings {
     ///
     /// # Value
     /// Any of the variants of [Gain] enclosed in double quotes.
+    #[miniconf(defer)]
     afe: [Gain; 2],
 
     /// Specifies the operational mode of the lockin.
@@ -167,6 +168,7 @@ pub struct Settings {
     ///
     /// # Value
     /// One of the variants of [Conf] enclosed in double quotes.
+    #[miniconf(defer)]
     output_conf: [Conf; 2],
 
     /// Specifies the telemetry output period in seconds.
