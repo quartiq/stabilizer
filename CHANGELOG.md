@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [v0.8.1](https://github.com/quartiq/stabilizer/compare/v0.7.0...v0.8.0) - 2022-11-14)
+## [v0.8.1](https://github.com/quartiq/stabilizer/compare/v0.8.0...v0.8.1) - 2022-11-14)
 
 * Fixed the python package dependencies
 
