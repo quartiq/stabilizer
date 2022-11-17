@@ -1,16 +1,9 @@
-[![QUARTIQ Matrix Chat](https://img.shields.io/matrix/quartiq:matrix.org)](https://matrix.to/#/#quartiq:matrix.org)
-[![Continuous Integration](https://github.com/quartiq/stabilizer/actions/workflows/ci.yml/badge.svg)](https://github.com/quartiq/stabilizer/actions/workflows/ci.yml)
-[![Stabilizer HITL [Nightly]](https://github.com/quartiq/hitl/actions/workflows/stabilizer-nightly.yml/badge.svg)](https://github.com/quartiq/hitl/actions/workflows/stabilizer-nightly.yml)
+![download](https://user-images.githubusercontent.com/17088194/202477035-237e7824-ab1d-4d32-a172-004ab3f2cd8f.png)
 
-# Stabilizer Firmware
+# Driver Firmware
+Embedded software for [Stabilizer](https://github.com/sinara-hw/Stabilizer) + [Driver](https://github.com/sinara-hw/Driver) + [Headboard](https://github.com/sinara-hw/Laser_Module/tree/master/Laser_Module), which together form a system for driving an integrated MOPA laser module.
 
-## Applications
-
-Check out the [Documentation](https://quartiq.de/stabilizer) for more information on usage,
-configuration, and development.
-
-## Hardware
-
-[![Stabilizer](https://github.com/sinara-hw/Stabilizer/wiki/Stabilizer_v1.0_top_small.jpg)](https://github.com/sinara-hw/Stabilizer)
-
-[![Pounder](https://user-images.githubusercontent.com/1338946/125936814-3664aa2d-a530-4c85-9393-999a7173424e.png)](https://github.com/sinara-hw/Pounder/wiki)
+- using [STM32H7 HAL](https://github.com/stm32-rs/stm32h7xx-hal) 
+- [RTIC](https://github.com/rtic-rs/cortex-m-rtic) based task scheduling
+- [MQTT](https://mqtt.org/) networking using the [smoltcp](https://github.com/smoltcp-rs/smoltcp) tcp/ip stack, [minimq](https://github.com/quartiq/minimq) for embedded MQTT and [miniconf](https://github.com/quartiq/miniconf) for settings
+- signal processing and control based on biquad IIR filters from [idsp](https://github.com/quartiq/idsp)
