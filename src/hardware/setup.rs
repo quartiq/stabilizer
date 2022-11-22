@@ -275,7 +275,7 @@ pub fn setup(
         .use_hse(8.MHz())
         .sysclk(design_parameters::SYSCLK.convert())
         .hclk(200.MHz())
-        .per_ck(64.MHz()) // 64 MHz HSI clk selected per default (this setting changes nothing)
+        .per_ck(64.MHz()) // fixed frequency HSI, only used for internal ADC. This is not the "peripheral" clock for timers and others.
         .pll2_p_ck(100.MHz())
         .pll2_q_ck(100.MHz())
         .freeze(vos, &device.SYSCFG);
