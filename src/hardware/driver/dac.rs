@@ -42,7 +42,7 @@ pub mod CONFIG1 {
         pub const DISABLED: u32 = 0b0 << 12;
         pub const ENABLED: u32 = 0b1 << 12;
     }
-    pub mod DSOO {
+    pub mod DSDO {
         pub const DISABLED: u32 = 0b0 << 11;
         pub const ENABLED: u32 = 0b1 << 11;
     }
@@ -163,8 +163,6 @@ where
     /// - reset
     /// - 10 V plusminus 1.25 V refernece span configured
     /// - temperature drift calibration performed
-    /// - deglitch circuit is enabled by default (fast-settling off)
-    /// - asyncronous output update (when sync goes high) by default
     /// - 0.5-MHz max DAC update rate by default for enhanced THD performance
     /// - TNH masked for code jump > 2^14 (default)
     pub fn new(
@@ -181,8 +179,14 @@ where
 
         // reset DAC
         dac.write(DAC_ADDR::TRIGGER, TRIGGER::SRST::RESET);
-        // set to 10 V plusminus 1.25 V referenece span
-        dac.write(DAC_ADDR::CONFIG1, CONFIG1::VREFVAL::SPAN_10V);
+        // set to 10 V plusminus 1.25 V referenece span, retain defaults
+        dac.write(
+            DAC_ADDR::CONFIG1,
+            CONFIG1::VREFVAL::SPAN_10V
+                | CONFIG1::DSDO::ENABLED // set to retain default
+                | CONFIG1::FSET::ENABLED // set to retain default
+                | CONFIG1::LDACMODE::ASYNC, // set to retain default
+        );
         // perform calibration
         // don't try to calibrate without driver because it will wait forever
         // dac.calibrate(delay);
