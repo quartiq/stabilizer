@@ -31,8 +31,8 @@ pub mod CONFIG1 {
         pub const JUMP12: u32 = 0b11 << 18;
     }
     pub mod LDACMODE {
-        pub const SYNC: u32 = 0b0 << 14;
-        pub const ASYNC: u32 = 0b1 << 14;
+        pub const ASYNC: u32 = 0b0 << 14;
+        pub const SYNC: u32 = 0b1 << 14;
     }
     pub mod FSDO {
         pub const DISABLED: u32 = 0b0 << 13;
