@@ -1064,6 +1064,11 @@ pub fn setup(
         let mut dac1_cs = gpioa.pa0.into_push_pull_output().erase();
         dac1_cs.set_high();
 
+        let mut clr_n = gpioc.pc7.into_push_pull_output().erase();
+        clr_n.set_high();
+
+        let mut ldac_n = gpioc.pc6.into_push_pull_output().erase();
+
         let dac_spi = device.SPI1.spi(
             (
                 gpiog.pg11.into_alternate(),
@@ -1085,7 +1090,7 @@ pub fn setup(
 
         let dac_bus_manager =
             shared_bus_rtic::new!(dac_spi, hal::spi::Spi<SPI1,Enabled,u8>);
-        let dac = [
+        let mut dac = [
             driver::dac::Dac::new(
                 dac_bus_manager.acquire(),
                 dac0_cs,
@@ -1099,6 +1104,17 @@ pub fn setup(
                 &mut delay,
             ),
         ];
+
+        loop {
+            dac[0].set(0.249);
+            ldac_n.set_high();
+            cortex_m::asm::delay(400000000);
+            log::info!("0.249");
+            ldac_n.set_low();
+            dac[0].set(0.05);
+            cortex_m::asm::delay(400000000);
+            log::info!("0.05");
+        }
 
         // The Pounder pgood pin was instantiated to check for Pounder. It is the same pin as the interlock on Driver.
         let laser_interlock_pin = pounder_pgood.into_push_pull_output();
