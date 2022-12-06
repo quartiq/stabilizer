@@ -825,9 +825,9 @@ dependencies = [
 
 [[package]]
 name = "shared-bus"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5bd050817922c3d71af0bf2df2e7f9a182065932dfc78e35500bc550f938005"
+checksum = "05f8438a40b91c8b9531c664e9680c55b92bd78cd6809a8b45b4512b1e5765f2"
 dependencies = [
  "atomic-polyfill",
  "cortex-m 0.6.7",
