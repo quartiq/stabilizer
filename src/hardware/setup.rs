@@ -1106,15 +1106,6 @@ pub fn setup(
             ),
         ];
 
-        loop {
-            dac[0].set(0.249);
-            cortex_m::asm::delay(400000000);
-            log::info!("0.249");
-            dac[0].set(0.05);
-            cortex_m::asm::delay(400000000);
-            log::info!("0.05");
-        }
-
         // The Pounder pgood pin was instantiated to check for Pounder. It is the same pin as the interlock on Driver.
         let laser_interlock_pin = pounder_pgood.into_push_pull_output();
         let laser_interlock = LaserInterlock::new(laser_interlock_pin);
