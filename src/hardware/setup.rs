@@ -1064,10 +1064,11 @@ pub fn setup(
         let mut dac1_cs = gpioa.pa0.into_push_pull_output().erase();
         dac1_cs.set_high();
 
+        // Initialize the two DAC input pins that we don't actively make use of to the correct idle states.
         let mut clr_n = gpioc.pc7.into_push_pull_output().erase();
         clr_n.set_high();
-
         let mut ldac_n = gpioc.pc6.into_push_pull_output().erase();
+        ldac_n.set_low();
 
         let dac_spi = device.SPI1.spi(
             (
@@ -1107,10 +1108,8 @@ pub fn setup(
 
         loop {
             dac[0].set(0.249);
-            ldac_n.set_high();
             cortex_m::asm::delay(400000000);
             log::info!("0.249");
-            ldac_n.set_low();
             dac[0].set(0.05);
             cortex_m::asm::delay(400000000);
             log::info!("0.05");
