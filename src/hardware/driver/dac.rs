@@ -187,12 +187,6 @@ where
                 | CONFIG1::FSET::ENABLED // set to retain default
                 | CONFIG1::LDACMODE::ASYNC, // set to use SPI SYNC
         );
-        log::info!("val: {:b}", 
-            CONFIG1::VREFVAL::SPAN_10V
-            | CONFIG1::DSDO::ENABLED // set to retain default
-            | CONFIG1::FSET::ENABLED // set to retain default
-            | CONFIG1::LDACMODE::ASYNC, // set to use SPI SYNC
-        );
         // perform calibration
         // don't try to calibrate without driver because it will wait forever
         // dac.calibrate(delay);
