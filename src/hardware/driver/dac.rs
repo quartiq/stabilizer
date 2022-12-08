@@ -125,6 +125,7 @@ impl DacCode {
 impl TryFrom<(f32, ChannelVariant)> for DacCode {
     type Error = Error;
     /// Convert an f32 representing a current into the corresponding DAC output code for the respective channel.
+    /// Note that 0 A output is invalid for current source, since the DAC can only output a voltage one LSB below its positive reference.
     fn try_from(current_channel: (f32, ChannelVariant)) -> Result<Self, Error> {
         let (current, channel) = current_channel;
         let scale = channel.transimpedance()
