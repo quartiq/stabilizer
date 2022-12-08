@@ -52,10 +52,10 @@ impl ChannelVariant {
     const R_OUT_HP: f32 = 0.68; // High power side output resistor
     fn transimpedance(&self) -> f32 {
         match self {
-            ChannelVariant::LowNoiseSink => -Self::R_OUT_LN, // negated
-            ChannelVariant::LowNoiseSource => Self::R_OUT_LN,
-            ChannelVariant::HighPowerSink => -Self::R_OUT_HP, // negated
-            ChannelVariant::HighPowerSource => Self::R_OUT_HP,
+            ChannelVariant::LowNoiseSource => -Self::R_OUT_LN, // negated
+            ChannelVariant::LowNoiseSink => Self::R_OUT_LN,
+            ChannelVariant::HighPowerSource => -Self::R_OUT_HP, // negated
+            ChannelVariant::HighPowerSink => Self::R_OUT_HP,
         }
     }
 }
