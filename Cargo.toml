@@ -47,7 +47,7 @@ num_enum = { version = "0.5.7", default-features = false }
 paste = "1"
 idsp = "0.9"
 ad9959 = { path = "ad9959", version = "0.2.0" }
-miniconf = "0.6.2"
+miniconf = "0.6.3"
 smoltcp-nal = { version = "0.2", features = ["shared-stack"] }
 mcp230xx = "0.1"
 mutex-trait = "0.2"
