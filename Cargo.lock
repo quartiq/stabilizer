@@ -420,9 +420,9 @@ checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 
 [[package]]
 name = "miniconf"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "184b4633fb234558e57a3f1105c63358d0ff224cf8d75cc8b9621df597b7a16e"
+checksum = "07df30ef660fa32d54836743fbdf8208747a559fc4296ec07dc12b6df65343b2"
 dependencies = [
  "heapless",
  "log",
