@@ -1107,12 +1107,21 @@ pub fn setup(
         ];
 
         loop {
-            dac[0].set(0.249);
-            cortex_m::asm::delay(400000000);
-            log::info!("0.249");
-            dac[0].set(0.05);
-            cortex_m::asm::delay(400000000);
-            log::info!("0.05");
+            dac[1].set(0.0001).unwrap();
+            log::info!("0.0001");
+            cortex_m::asm::delay(4000000000);
+            dac[1].set(0.1).unwrap();
+            log::info!("0.1");
+            cortex_m::asm::delay(4000000000);
+            dac[1].set(0.5).unwrap();
+            log::info!("0.5");
+            cortex_m::asm::delay(4000000000);
+            dac[1].set(1.).unwrap();
+            log::info!("1.");
+            cortex_m::asm::delay(4000000000);
+            dac[1].set(1.8).unwrap();
+            log::info!("1.8");
+            cortex_m::asm::delay(4000000000);
         }
 
         // The Pounder pgood pin was instantiated to check for Pounder. It is the same pin as the interlock on Driver.
