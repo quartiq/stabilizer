@@ -46,11 +46,11 @@ pub enum Mode {
 bitflags! {
     /// Specifies an output channel of the AD9959 DDS chip.
     pub struct Channel: u8 {
-        const ZERO  = 0b00010000;
-        const ONE   = 0b00100000;
-        const TWO   = 0b01000000;
-        const THREE = 0b10000000;
-        const ALL   = Self::ZERO.bits | Self::ONE.bits | Self::TWO.bits | Self::THREE.bits;
+        const ONE   = 0b00010000;
+        const TWO   = 0b00100000;
+        const THREE = 0b01000000;
+        const FOUR  = 0b10000000;
+        const ALL   = Self::ONE.bits | Self::TWO.bits | Self::THREE.bits | Self::FOUR.bits;
     }
 }
 
