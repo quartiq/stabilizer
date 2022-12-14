@@ -125,6 +125,7 @@ impl DacCode {
 impl TryFrom<(f32, ChannelVariant)> for DacCode {
     type Error = Error;
     /// Convert an f32 representing a current into the corresponding DAC output code for the respective channel.
+    /// Note that 0 A output is invalid for current source, since the DAC can only output a voltage one LSB below its positive reference.
     fn try_from(current_channel: (f32, ChannelVariant)) -> Result<Self, Error> {
         let (current, channel) = current_channel;
         let scale = channel.transimpedance()
@@ -186,12 +187,6 @@ where
                 | CONFIG1::DSDO::ENABLED // set to retain default
                 | CONFIG1::FSET::ENABLED // set to retain default
                 | CONFIG1::LDACMODE::ASYNC, // set to use SPI SYNC
-        );
-        log::info!("val: {:b}", 
-            CONFIG1::VREFVAL::SPAN_10V
-            | CONFIG1::DSDO::ENABLED // set to retain default
-            | CONFIG1::FSET::ENABLED // set to retain default
-            | CONFIG1::LDACMODE::ASYNC, // set to use SPI SYNC
         );
         // perform calibration
         // don't try to calibrate without driver because it will wait forever
