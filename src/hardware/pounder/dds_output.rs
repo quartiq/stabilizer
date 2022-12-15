@@ -56,7 +56,7 @@ use log::warn;
 use stm32h7xx_hal as hal;
 
 use super::{hrtimer::HighResTimerE, QspiInterface};
-use ad9959::{Channel, DdsProfile, Mode, ProfileSerializer};
+use ad9959::{Channel, Mode, Profile, ProfileSerializer};
 
 /// The DDS profile update stream.
 pub struct DdsOutput {
@@ -169,10 +169,14 @@ impl<'a> ProfileBuilder<'a> {
     pub fn update_channels_with_profile(
         &mut self,
         channels: Channel,
-        profile: DdsProfile,
+        profile: Profile,
     ) -> &mut Self {
-        self.serializer
-            .update_channels_with_profile(channels, profile);
+        self.serializer.update_channels(
+            channels,
+            Some(profile.ftw),
+            Some(profile.pow),
+            Some(profile.acr),
+        );
         self
     }
 

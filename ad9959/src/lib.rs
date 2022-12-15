@@ -600,27 +600,6 @@ impl ProfileSerializer {
         }
     }
 
-    /// Update a number of channels with fully defined profile settings.
-    ///
-    /// # Args
-    /// * `channels` - A set of channels to apply the configuration to.
-    /// * `profile` - The complete DDS profile, which defines the frequency tuning word,
-    ///   amplitude control register & the phase offset word of the channels. Note that the ACR
-    ///   should be stored in the 3 LSB of the word. If amplitude scaling is to be used, the
-    ///   "Amplitude multiplier enable" bit must be set.
-    #[inline]
-    pub fn update_channels_with_profile(
-        &mut self,
-        channels: Channel,
-        profile: DdsProfile,
-    ) {
-        let csr = [self.mode as u8 | channels.bits()];
-        self.add_write(Register::CSR, &csr);
-        self.add_write(Register::CFTW0, &profile.ftw.to_be_bytes());
-        self.add_write(Register::CPOW0, &profile.pow.to_be_bytes());
-        self.add_write(Register::ACR, &profile.acr.to_be_bytes()[1..]);
-    }
-
     /// Update the system clock configuration.
     ///
     /// # Args
