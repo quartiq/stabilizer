@@ -692,33 +692,8 @@ impl ProfileSerializer {
 }
 
 /// Represents a fully defined DDS profile, with parameters expressed in machine units
-pub struct DdsProfile {
+pub struct Profile {
     pub ftw: u32,
     pub pow: u16,
     pub acr: u32,
-}
-
-impl DdsProfile {
-    /// Construct a new DDS profile
-    ///
-    /// Args:
-    /// * `frequency` - The desired output frequency in Hz.
-    /// * `phase_turns` - The desired phase offset in turns.
-    /// * `amplitude` - A normalized amplitude setting [0, 1].
-    /// * `system_clock_frequency` - The system clock frequency of Ad9959.
-    pub fn new(
-        frequency: f32,
-        phase_turns: f32,
-        amplitude: f32,
-        system_clock_frequency: f32,
-    ) -> Result<Self, Error> {
-        Ok(DdsProfile {
-            ftw: Ad9959::<()>::frequency_to_ftw(
-                frequency,
-                system_clock_frequency,
-            )?,
-            pow: Ad9959::<()>::phase_to_pow(phase_turns)?,
-            acr: Ad9959::<()>::amplitude_to_acr(amplitude)?,
-        })
-    }
 }
