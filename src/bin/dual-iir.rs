@@ -162,13 +162,8 @@ pub struct Settings {
     pounder: Option<PounderConfig>,
 }
 
-impl Settings {
-    fn new_default(pounder_found: bool) -> Self {
-        let pounder_config = if pounder_found {
-            Some(PounderConfig::default())
-        } else {
-            None
-        };
+impl Default for Settings {
+    fn default() -> Self {
         Self {
             // Analog frontend programmable gain amplifier gains (G1, G2, G5, G10)
             afe: [Gain::G1, Gain::G1],
@@ -192,8 +187,14 @@ impl Settings {
 
             stream_target: StreamTarget::default(),
 
-            pounder: pounder_config,
+            pounder: None,
         }
+    }
+}
+
+impl Settings {
+    fn enable_pounder_config(&mut self) {
+        self.pounder = Some(PounderConfig::default());
     }
 }
 
@@ -240,13 +241,12 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let dds_clock_state = if pounder.is_some() {
-            Some(DdsClockConfig::default())
-        } else {
-            None
-        };
 
-        let settings = Settings::new_default(pounder.is_some());
+        let mut settings = Settings::default();
+        if pounder.is_some() {
+            settings.enable_pounder_config()
+        }
+
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
