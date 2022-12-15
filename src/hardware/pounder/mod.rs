@@ -103,7 +103,7 @@ pub struct DdsChannelConfig {
 impl Default for DdsChannelConfig {
     fn default() -> Self {
         Self {
-            frequency: 10.0e6,
+            frequency: 0.0,
             phase_offset: 0.0,
             amplitude: 0.0,
         }
