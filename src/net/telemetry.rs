@@ -39,8 +39,6 @@ pub struct TelemetryBuffer {
     pub dacs: [DacCode; 2],
     /// The latest digital input states during processing.
     pub digital_inputs: [bool; 2],
-    /// The latest CPU temperature.
-    pub cpu_temp: f32,
     /// The latest measured status related to pounder. See [PounderTelemetry].
     pub pounder: Option<PounderTelemetry>,
 }
@@ -88,7 +86,6 @@ impl Default for TelemetryBuffer {
             adcs: [AdcCode(0), AdcCode(0)],
             dacs: [DacCode(0), DacCode(0)],
             digital_inputs: [false, false],
-            cpu_temp: 0.0,
             pounder: None,
         }
     }
@@ -104,15 +101,15 @@ impl TelemetryBuffer {
     ///
     /// # Returns
     /// The finalized telemetry structure that can be serialized and reported.
-    pub fn finalize(self, afe0: Gain, afe1: Gain) -> Telemetry {
+    pub fn finalize(self, afe0: Gain, afe1: Gain, cpu_temp: f32) -> Telemetry {
         let in0_volts = Into::<f32>::into(self.adcs[0]) / afe0.as_multiplier();
         let in1_volts = Into::<f32>::into(self.adcs[1]) / afe1.as_multiplier();
 
         Telemetry {
+            cpu_temp,
             adcs: [in0_volts, in1_volts],
             dacs: [self.dacs[0].into(), self.dacs[1].into()],
             digital_inputs: self.digital_inputs,
-            cpu_temp: self.cpu_temp,
             pounder: self.pounder,
         }
     }
