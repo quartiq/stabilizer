@@ -493,8 +493,11 @@ mod app {
             .lock(|settings| (settings.afe, settings.telemetry_period));
 
         c.shared.network.lock(|net| {
-            net.telemetry
-                .publish(&telemetry.finalize(gains[0], gains[1]))
+            net.telemetry.publish(&telemetry.finalize(
+                gains[0],
+                gains[1],
+                c.local.cpu_temp_sensor.get_temperature().unwrap(),
+            ))
         });
 
         // Schedule the telemetry task in the future.
