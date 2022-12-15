@@ -44,11 +44,7 @@ use stabilizer::{
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
         hal,
-        pounder::{
-            attenuators::AttenuatorInterface,
-            rf_power::PowerMeasurementInterface, Channel as PounderChannel,
-            DdsClockConfig, PounderConfig,
-        },
+        pounder::{ClockConfig, PounderConfig},
         setup::PounderDevices as Pounder,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
@@ -57,7 +53,7 @@ use stabilizer::{
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Miniconf,
-        telemetry::{PounderTelemetry, Telemetry, TelemetryBuffer},
+        telemetry::{Telemetry, TelemetryBuffer},
         NetworkState, NetworkUsers,
     },
 };
