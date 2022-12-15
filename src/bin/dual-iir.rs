@@ -465,70 +465,10 @@ mod app {
 
         // Update Pounder configurations
         c.shared.pounder.lock(|pounder| {
-            if let (
-                Some(Pounder {
-                    pounder: pounder_devices,
-                    dds_output: ddses,
-                    ..
-                }),
-                Some(pounder_settings),
-                Some(clocking),
-            ) = (pounder, settings.pounder, c.local.dds_clock_state)
+            if let (Some(pounder), Some(pounder_settings), Some(clocking)) =
+                (pounder, settings.pounder, c.local.dds_clock_state)
             {
-                if *clocking != pounder_settings.dds_clock {
-                    *clocking = pounder_settings.dds_clock;
-                    pounder_devices
-                        .set_ext_clk(pounder_settings.dds_clock.external_clock)
-                        .unwrap();
-
-                    ddses
-                        .builder()
-                        .set_system_clock(
-                            pounder_settings.dds_clock.reference_clock,
-                            pounder_settings.dds_clock.multiplier,
-                        )
-                        .unwrap()
-                        .write();
-                }
-
-                let system_clock_frequency =
-                    pounder_settings.dds_clock.reference_clock
-                        * pounder_settings.dds_clock.multiplier as f32;
-
-                for (channel_config, pounder_channel) in pounder_settings
-                    .in_ch
-                    .iter()
-                    .chain(pounder_settings.out_ch.iter())
-                    .zip([
-                        PounderChannel::In0,
-                        PounderChannel::In1,
-                        PounderChannel::Out0,
-                        PounderChannel::Out1,
-                    ])
-                {
-                    let dds_profile = channel_config
-                        .dds
-                        .try_into_dds_profile(system_clock_frequency)
-                        .unwrap();
-                    ddses
-                        .builder()
-                        .update_channels_with_profile(
-                            pounder_channel.into(),
-                            dds_profile,
-                        )
-                        .write();
-
-                    if pounder_devices.get_attenuation(pounder_channel).unwrap()
-                        != channel_config.attenuation
-                    {
-                        pounder_devices
-                            .set_attenuation(
-                                pounder_channel,
-                                channel_config.attenuation,
-                            )
-                            .unwrap();
-                    }
-                }
+                pounder.update_dds(pounder_settings, clocking);
             }
         });
 
@@ -541,29 +481,9 @@ mod app {
         let mut telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
 
-        telemetry.cpu_temp = c.local.cpu_temp_sensor.get_temperature().unwrap();
-        telemetry.pounder = c.shared.pounder.lock(|pounder| {
-            if let Some(Pounder {
-                pounder: pounder_devices,
-                ..
-            }) = pounder
-            {
-                Some(PounderTelemetry {
-                    temperature: pounder_devices
-                        .lm75
-                        .read_temperature()
-                        .unwrap(),
-                    input_powers: [
-                        pounder_devices
-                            .measure_power(PounderChannel::In0)
-                            .unwrap(),
-                        pounder_devices
-                            .measure_power(PounderChannel::In1)
-                            .unwrap(),
-                    ],
-                })
-            } else {
-                None
+        c.shared.pounder.lock(|pounder| {
+            if let Some(pounder) = pounder {
+                telemetry.pounder = Some(pounder.get_telemetry());
             }
         });
 

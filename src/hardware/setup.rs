@@ -21,6 +21,16 @@ use super::{
     SystemTimer, Systick, AFE0, AFE1,
 };
 
+use crate::{
+    hardware::pounder::{
+        attenuators::AttenuatorInterface, rf_power::PowerMeasurementInterface,
+        Channel as PounderChannel, ClockConfig, PounderConfig, ProfileWrapper,
+    },
+    net::telemetry::PounderTelemetry,
+};
+
+use ad9959::validate_clocking;
+
 const NUM_TCP_SOCKETS: usize = 4;
 const NUM_UDP_SOCKETS: usize = 1;
 const NUM_SOCKETS: usize = NUM_UDP_SOCKETS + NUM_TCP_SOCKETS;
@@ -131,6 +141,80 @@ pub struct PounderDevices {
 
     #[cfg(not(feature = "pounder_v1_0"))]
     pub timestamper: pounder::timestamp::Timestamper,
+}
+
+impl PounderDevices {
+    pub fn update_dds(
+        &mut self,
+        settings: PounderConfig,
+        clocking: &mut ClockConfig,
+    ) {
+        if *clocking != settings.clock {
+            validate_clocking(
+                settings.clock.reference_clock,
+                settings.clock.multiplier,
+            )
+            .unwrap();
+
+            self.pounder
+                .set_ext_clk(settings.clock.external_clock)
+                .unwrap();
+
+            self.dds_output
+                .builder()
+                .set_system_clock(
+                    settings.clock.reference_clock,
+                    settings.clock.multiplier,
+                )
+                .unwrap()
+                .write();
+            
+            *clocking = settings.clock;
+        }
+
+        for (channel_config, pounder_channel) in
+            settings.in_ch.iter().chain(settings.out_ch.iter()).zip([
+                PounderChannel::In0,
+                PounderChannel::In1,
+                PounderChannel::Out0,
+                PounderChannel::Out1,
+            ])
+        {
+            let dds_profile = ProfileWrapper::from((
+                clocking.clone(),
+                channel_config.clone(),
+            ))
+            .0;
+            self.dds_output
+                .builder()
+                .update_channels_with_profile(
+                    pounder_channel.into(),
+                    dds_profile,
+                )
+                .write();
+
+            if self.pounder.get_attenuation(pounder_channel).unwrap()
+                != channel_config.attenuation
+            {
+                self.pounder
+                    .set_attenuation(
+                        pounder_channel,
+                        channel_config.attenuation,
+                    )
+                    .unwrap();
+            }
+        }
+    }
+
+    pub fn get_telemetry(&mut self) -> PounderTelemetry {
+        PounderTelemetry {
+            temperature: self.pounder.lm75.read_temperature().unwrap(),
+            input_powers: [
+                self.pounder.measure_power(PounderChannel::In0).unwrap(),
+                self.pounder.measure_power(PounderChannel::In1).unwrap(),
+            ],
+        }
+    }
 }
 
 #[link_section = ".sram3.eth"]
