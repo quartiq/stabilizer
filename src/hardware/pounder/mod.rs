@@ -2,7 +2,7 @@ use self::attenuators::AttenuatorInterface;
 
 use super::hal;
 use crate::hardware::{shared_adc::AdcChannel, I2c1Proxy};
-use ad9959::DdsProfile;
+use ad9959::{amplitude_to_acr, frequency_to_ftw, phase_to_pow, Profile};
 use embedded_hal::blocking::spi::Transfer;
 use enum_iterator::Sequence;
 use miniconf::{Miniconf, MiniconfAtomic};
@@ -119,8 +119,8 @@ impl From<(ClockConfig, ChannelConfig)> for ProfileWrapper {
         ProfileWrapper(Profile {
             ftw: frequency_to_ftw(
                 channel.dds.frequency,
-            system_clock_frequency,
-        )
+                system_clock_frequency,
+            )
             .unwrap(),
             pow: phase_to_pow(channel.dds.phase_offset).unwrap(),
             acr: amplitude_to_acr(channel.dds.amplitude).unwrap(),
