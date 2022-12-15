@@ -626,16 +626,12 @@ impl ProfileSerializer {
     /// # Args
     /// * `reference_clock_frequency` - The reference clock frequency provided to the AD9959 core.
     /// * `multiplier` - The frequency multiplier of the system clock. Must be 1 or 4-20.
-    #[inline]
-    pub fn update_system_clock(
+    pub fn set_system_clock(
         &mut self,
         reference_clock_frequency: f32,
         multiplier: u8,
     ) -> Result<f32, Error> {
-        let frequency = Ad9959::<()>::validate_system_clock(
-            reference_clock_frequency,
-            multiplier,
-        )?;
+        let frequency = reference_clock_frequency * multiplier as f32;
 
         // The enabled channel will be updated after clock reconfig
         let mut fr1 = [0u8; 3];

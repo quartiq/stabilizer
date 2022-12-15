@@ -191,7 +191,7 @@ impl<'a> ProfileBuilder<'a> {
         multiplier: u8,
     ) -> Result<&mut Self, ad9959::Error> {
         self.serializer
-            .update_system_clock(reference_clock_frequency, multiplier)?;
+            .set_system_clock(reference_clock_frequency, multiplier)?;
         Ok(self)
     }
 
