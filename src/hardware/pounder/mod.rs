@@ -110,17 +110,21 @@ impl Default for DdsChannelConfig {
     }
 }
 
-impl DdsChannelConfig {
-    pub fn try_into_dds_profile(
-        self,
-        system_clock_frequency: f32,
-    ) -> Result<DdsProfile, ad9959::Error> {
-        DdsProfile::new(
-            self.frequency,
-            self.phase_offset,
-            self.amplitude,
+pub struct ProfileWrapper(pub Profile);
+
+impl From<(ClockConfig, ChannelConfig)> for ProfileWrapper {
+    fn from((clocking, channel): (ClockConfig, ChannelConfig)) -> Self {
+        let system_clock_frequency =
+            clocking.reference_clock * clocking.multiplier as f32;
+        ProfileWrapper(Profile {
+            ftw: frequency_to_ftw(
+                channel.dds.frequency,
             system_clock_frequency,
         )
+            .unwrap(),
+            pow: phase_to_pow(channel.dds.phase_offset).unwrap(),
+            acr: amplitude_to_acr(channel.dds.amplitude).unwrap(),
+        })
     }
 }
 
