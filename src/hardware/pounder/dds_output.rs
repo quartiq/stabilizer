@@ -176,14 +176,11 @@ impl<'a> ProfileBuilder<'a> {
         self
     }
 
-    /// Update a number of channels with fully defined profile settings.
+    /// Update the system clock configuration.
     ///
     /// # Args
-    /// * `channels` - A set of channels to apply the configuration to.
-    /// * `profile` - The complete DDS profile, which defines the frequency tuning word,
-    ///   amplitude control register & the phase offset word of the channels. Note that the ACR
-    ///   should be stored in the 3 LSB of the word. If amplitude scaling is to be used, the
-    ///   "Amplitude multiplier enable" bit must be set.
+    /// * `reference_clock_frequency` - The reference clock frequency provided to the AD9959 core.
+    /// * `multiplier` - The frequency multiplier of the system clock. Must be 1 or 4-20.
     #[inline]
     pub fn set_system_clock(
         &mut self,
