@@ -146,13 +146,13 @@ impl Default for ChannelConfig {
 #[derive(
     Serialize, Deserialize, Copy, Clone, Debug, PartialEq, MiniconfAtomic,
 )]
-pub struct DdsClockConfig {
+pub struct ClockConfig {
     pub multiplier: u8,
     pub reference_clock: f32,
     pub external_clock: bool,
 }
 
-impl Default for DdsClockConfig {
+impl Default for ClockConfig {
     fn default() -> Self {
         Self {
             multiplier: super::design_parameters::DDS_MULTIPLIER,
@@ -165,7 +165,7 @@ impl Default for DdsClockConfig {
 
 #[derive(Serialize, Deserialize, Copy, Clone, Debug, Default, Miniconf)]
 pub struct PounderConfig {
-    pub dds_clock: DdsClockConfig,
+    pub clock: ClockConfig,
     pub in_ch: [ChannelConfig; 2],
     pub out_ch: [ChannelConfig; 2],
 }

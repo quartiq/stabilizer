@@ -223,7 +223,7 @@ mod app {
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
-        dds_clock_state: Option<DdsClockConfig>,
+        dds_clock_state: Option<ClockConfig>,
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
     }
@@ -241,6 +241,7 @@ mod app {
             SAMPLE_TICKS,
         );
 
+        let dds_clock_state = pounder.as_ref().map(|_| ClockConfig::default());
 
         let mut settings = Settings::default();
         if pounder.is_some() {
