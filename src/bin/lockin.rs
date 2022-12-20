@@ -406,11 +406,9 @@ mod app {
                         let value = match settings.output_conf[channel] {
                             Conf::Magnitude => output.abs_sqr() as i32 >> 16,
                             Conf::Phase => output.arg() >> 16,
-                            Conf::LogPower => {
-                                (output.log2() << 24) as i32 >> 16
-                            }
+                            Conf::LogPower => output.log2() << 8,
                             Conf::ReferenceFrequency => {
-                                reference_frequency as i32 >> 16
+                                reference_frequency >> 16
                             }
                             Conf::InPhase => output.re >> 16,
                             Conf::Quadrature => output.im >> 16,
