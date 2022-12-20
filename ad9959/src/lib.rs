@@ -222,8 +222,7 @@ impl<I: Interface> Ad9959<I> {
             return Err(Error::Bounds);
         }
 
-        let frequency =
-            multiplier as f32 * self.reference_clock_frequency;
+        let frequency = multiplier as f32 * self.reference_clock_frequency;
         if frequency > 500_000_000.0f32 {
             return Err(Error::Frequency);
         }
@@ -298,8 +297,7 @@ impl<I: Interface> Ad9959<I> {
 
     /// Get the current system clock frequency in Hz.
     fn system_clock_frequency(&self) -> f32 {
-        self.system_clock_multiplier as f32
-            * self.reference_clock_frequency
+        self.system_clock_multiplier as f32 * self.reference_clock_frequency
     }
 
     /// Update an output channel configuration register.
@@ -470,9 +468,9 @@ impl<I: Interface> Ad9959<I> {
 
         // The function for channel frequency is `f_out = FTW * f_s / 2^32`, where FTW is the
         // frequency tuning word and f_s is the system clock rate.
-        let tuning_word: u32 =
-            ((frequency / self.system_clock_frequency())
-                * 1u64.wrapping_shl(32) as f32) as u32;
+        let tuning_word: u32 = ((frequency / self.system_clock_frequency())
+            * 1u64.wrapping_shl(32) as f32)
+            as u32;
 
         self.modify_channel(
             channel,
