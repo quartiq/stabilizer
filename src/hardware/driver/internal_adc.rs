@@ -1,6 +1,3 @@
-// This is a dummy driver for the Driver analog reads of the output Voltage and Current.
-// Exact Sacales and Pinout will be filled in once we have HW.
-
 use super::{Channel, ChannelVariant};
 use crate::hardware::shared_adc::AdcChannel;
 
@@ -73,7 +70,7 @@ impl InternalAdc {
                 self.output_voltage.1.read_normalized().unwrap()
             }
         };
-        const SCALE: f32 = V_SCALE * V_REF; // voltage sense scale
+        const SCALE: f32 = V_SCALE * V_REF;
         const OFFSET: f32 = V_OFFSET / V_REF; // voltage sense offset relative to V_REF
         (ratio - OFFSET) * SCALE
     }
