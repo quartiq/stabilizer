@@ -1108,33 +1108,6 @@ pub fn setup(
             ),
         ];
 
-        loop {
-            dac[0].set(0.0001).unwrap();
-            log::info!("0.0001");
-            cortex_m::asm::delay(400000000);
-            log::info!(
-                "output_voltage: {:?}",
-                internal_adc.read_output_voltage(Channel::LowNoise)
-            );
-            cortex_m::asm::delay(4000000000);
-            dac[0].set(0.1).unwrap();
-            log::info!("0.1");
-            cortex_m::asm::delay(400000000);
-            log::info!(
-                "output_voltage: {:?}",
-                internal_adc.read_output_voltage(Channel::LowNoise)
-            );
-            cortex_m::asm::delay(4000000000);
-            dac[0].set(0.2).unwrap();
-            log::info!("0.2");
-            cortex_m::asm::delay(400000000);
-            log::info!(
-                "output_voltage: {:?}",
-                internal_adc.read_output_voltage(Channel::LowNoise)
-            );
-            cortex_m::asm::delay(4000000000);
-        }
-
         // The Pounder pgood pin was instantiated to check for Pounder. It is the same pin as the interlock on Driver.
         let laser_interlock_pin = pounder_pgood.into_push_pull_output();
         let laser_interlock = LaserInterlock::new(laser_interlock_pin);
