@@ -16,7 +16,7 @@ use stm32h7xx_hal::{
 
 use smoltcp_nal::smoltcp;
 
-use crate::hardware::driver::LaserInterlock;
+use crate::hardware::driver::{LaserInterlock, Channel};
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
@@ -1022,10 +1022,10 @@ pub fn setup(
             adc3.create_channel(gpiof.pf3.into_analog()),
         );
         let output_current = (
-            adc1.create_channel(gpiof.pf12.into_analog()),
-            adc3.create_channel(gpiof.pf4.into_analog()),
+            adc2.create_channel(gpiof.pf13.into_analog()),
+            adc2.create_channel(gpiof.pf14.into_analog()),
         );
-        let internal_adc = driver::internal_adc::InternalAdc::new(
+        let mut internal_adc = driver::internal_adc::InternalAdc::new(
             output_voltage,
             output_current,
         );

@@ -6,7 +6,7 @@ use crate::hardware::shared_adc::AdcChannel;
 
 use super::super::hal::{
     gpio::{gpiof::*, Analog},
-    stm32::{ADC1, ADC3},
+    stm32::{ADC1, ADC2, ADC3},
 };
 
 const V_REF: f32 = 2.048; // ADC reference voltage
@@ -24,8 +24,8 @@ pub struct InternalAdc {
         AdcChannel<'static, ADC3, PF3<Analog>>,
     ),
     output_current: (
-        AdcChannel<'static, ADC1, PF12<Analog>>,
-        AdcChannel<'static, ADC3, PF4<Analog>>,
+        AdcChannel<'static, ADC2, PF13<Analog>>,
+        AdcChannel<'static, ADC2, PF14<Analog>>,
     ),
 }
 
@@ -36,8 +36,8 @@ impl InternalAdc {
             AdcChannel<'static, ADC3, PF3<Analog>>,
         ),
         output_current: (
-            AdcChannel<'static, ADC1, PF12<Analog>>,
-            AdcChannel<'static, ADC3, PF4<Analog>>,
+            AdcChannel<'static, ADC2, PF13<Analog>>,
+            AdcChannel<'static, ADC2, PF14<Analog>>,
         ),
     ) -> Self {
         InternalAdc {
@@ -76,7 +76,7 @@ impl InternalAdc {
                 self.output_current.1.read_normalized().unwrap()
             }
         };
-        const SCALE: f32 = V_REF / R_SENSE; // Current sense scale       ToDo
+        const SCALE: f32 = V_REF; // Current sense scale       ToDo
         const OFFSET: f32 = 0.0; // Current sense offset         ToDo
         (ratio + OFFSET) * SCALE
     }
