@@ -51,7 +51,7 @@ impl ChannelVariant {
     const R_OUT_LN: f32 = 40.0; // Low noise side output resistor
     const R_OUT_HP: f32 = 0.068; // High power side output resistor
     const DIVIDER_HP: f32 = 1. / 41.; // High power side DAC output divider ratio
-    fn transimpedance(&self) -> f32 {
+    fn scale(&self) -> f32 {
         match self {
             ChannelVariant::LowNoiseSource => -Self::R_OUT_LN, // negated
             ChannelVariant::LowNoiseSink => Self::R_OUT_LN,
@@ -59,6 +59,16 @@ impl ChannelVariant {
                 -Self::R_OUT_HP / Self::DIVIDER_HP
             } // negated
             ChannelVariant::HighPowerSink => Self::R_OUT_HP / Self::DIVIDER_HP,
+        }
+    }
+    fn transimpedance(&self) -> f32 {
+        match self {
+            ChannelVariant::LowNoiseSource => Self::R_OUT_LN,
+            ChannelVariant::LowNoiseSink => -Self::R_OUT_LN, // negative transimpedance for sink
+            ChannelVariant::HighPowerSource => {
+                Self::R_OUT_HP
+            }
+            ChannelVariant::HighPowerSink => -Self::R_OUT_HP, // negative transimpedance for sink
         }
     }
 }

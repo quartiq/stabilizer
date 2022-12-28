@@ -128,7 +128,7 @@ impl TryFrom<(f32, ChannelVariant)> for DacCode {
     /// Note that 0 A output is invalid for current source, since the DAC can only output a voltage one LSB below its positive reference.
     fn try_from(current_channel: (f32, ChannelVariant)) -> Result<Self, Error> {
         let (current, channel) = current_channel;
-        let scale = channel.transimpedance()
+        let scale = channel.scale()
             * (DacCode::MAX_DAC_WORD as f32 / DacCode::VREF_DAC);
         let mut code = (current * scale) as i32;
         if scale < 0. {

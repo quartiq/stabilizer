@@ -16,7 +16,7 @@ use stm32h7xx_hal::{
 
 use smoltcp_nal::smoltcp;
 
-use crate::hardware::driver::{LaserInterlock, Channel};
+use crate::hardware::driver::{Channel, ChannelVariant, LaserInterlock};
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
@@ -1028,6 +1028,8 @@ pub fn setup(
         let mut internal_adc = driver::internal_adc::InternalAdc::new(
             output_voltage,
             output_current,
+            ChannelVariant::LowNoiseSource,
+            ChannelVariant::HighPowerSource,
         );
 
         let lm75 =
@@ -1111,24 +1113,24 @@ pub fn setup(
             log::info!("0.0001");
             cortex_m::asm::delay(400000000);
             log::info!(
-                "output_current: {:?}",
-                internal_adc.read_output_current(Channel::LowNoise)
+                "output_voltage: {:?}",
+                internal_adc.read_output_voltage(Channel::LowNoise)
             );
             cortex_m::asm::delay(4000000000);
             dac[0].set(0.1).unwrap();
             log::info!("0.1");
             cortex_m::asm::delay(400000000);
             log::info!(
-                "output_current: {:?}",
-                internal_adc.read_output_current(Channel::LowNoise)
+                "output_voltage: {:?}",
+                internal_adc.read_output_voltage(Channel::LowNoise)
             );
             cortex_m::asm::delay(4000000000);
             dac[0].set(0.2).unwrap();
             log::info!("0.2");
             cortex_m::asm::delay(400000000);
             log::info!(
-                "output_current: {:?}",
-                internal_adc.read_output_current(Channel::LowNoise)
+                "output_voltage: {:?}",
+                internal_adc.read_output_voltage(Channel::LowNoise)
             );
             cortex_m::asm::delay(4000000000);
         }
