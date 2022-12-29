@@ -67,7 +67,7 @@ impl ChannelVariant {
     }
     /// Returns the transadmittance of the channel output shunt resistor (A/V). Negative for sink variants
     /// since current flowing into the output leads to a positive shunt voltage.
-    fn output_transadmittance(&self) -> f32 {
+    fn current_sense_transadmittance(&self) -> f32 {
         match self {
             ChannelVariant::LowNoiseSource => 1. / Self::R_SHUNT_LN,
             ChannelVariant::LowNoiseSink => -1. / Self::R_SHUNT_LN, // negative transadmittance for sink
