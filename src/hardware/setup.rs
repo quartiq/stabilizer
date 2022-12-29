@@ -16,7 +16,7 @@ use stm32h7xx_hal::{
 
 use smoltcp_nal::smoltcp;
 
-use crate::hardware::driver::{Channel, ChannelVariant, LaserInterlock};
+use crate::hardware::driver::{ChannelVariant, LaserInterlock};
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
@@ -1025,7 +1025,7 @@ pub fn setup(
             adc2.create_channel(gpiof.pf13.into_analog()),
             adc2.create_channel(gpiof.pf14.into_analog()),
         );
-        let mut internal_adc = driver::internal_adc::InternalAdc::new(
+        let internal_adc = driver::internal_adc::InternalAdc::new(
             output_voltage,
             output_current,
             ChannelVariant::LowNoiseSource,
@@ -1093,7 +1093,7 @@ pub fn setup(
 
         let dac_bus_manager =
             shared_bus_rtic::new!(dac_spi, hal::spi::Spi<SPI1,Enabled,u8>);
-        let mut dac = [
+        let dac = [
             driver::dac::Dac::new(
                 dac_bus_manager.acquire(),
                 dac0_cs,

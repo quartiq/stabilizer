@@ -9,7 +9,6 @@ use self::output::SelfTest;
 use super::I2c1Proxy;
 use idsp::iir;
 use lm75;
-use log::error;
 use miniconf::Miniconf;
 use num_enum::TryFromPrimitive;
 use serde::{Deserialize, Serialize};
