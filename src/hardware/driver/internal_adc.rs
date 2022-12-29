@@ -85,7 +85,9 @@ impl InternalAdc {
                 self.output_current.1.read_normalized().unwrap()
             }
         };
-        let scale = V_REF * I_SCALE * self.variant[ch as usize].output_transadmittance(); // current sense scale
+        let scale = V_REF
+            * I_SCALE
+            * self.variant[ch as usize].output_transadmittance(); // current sense scale
         ratio * scale
     }
 }
