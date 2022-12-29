@@ -64,9 +64,7 @@ impl ChannelVariant {
         match self {
             ChannelVariant::LowNoiseSource => Self::R_OUT_LN,
             ChannelVariant::LowNoiseSink => -Self::R_OUT_LN, // negative transimpedance for sink
-            ChannelVariant::HighPowerSource => {
-                Self::R_OUT_HP
-            }
+            ChannelVariant::HighPowerSource => Self::R_OUT_HP,
             ChannelVariant::HighPowerSink => -Self::R_OUT_HP, // negative transimpedance for sink
         }
     }
