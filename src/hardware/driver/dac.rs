@@ -1,4 +1,5 @@
 ///! Driver DAC11001 driver
+///! https://www.ti.com/lit/ds/slasel0b/slasel0b.pdf?ts=1672306760190&ref_url=https%253A%252F%252Fwww.google.com%252F
 use core::fmt::Debug;
 use embedded_hal::blocking::spi::{Transfer, Write};
 use stm32h7xx_hal::gpio;
@@ -132,6 +133,12 @@ impl TryFrom<(f32, ChannelVariant)> for DacCode {
             * (DacCode::MAX_DAC_WORD as f32 / DacCode::VREF_DAC);
         let mut code = (current * scale) as i32;
         if scale < 0. {
+            // Explicitly subtract one LSB. This is done so zero ampere is a valid output current for the source channel variant.
+            // Since the output conversion is inverted, the DAC would have to set its output to its positive reference.
+            // This is not possible, it can only output one LSB below that. Simply subtracting one LSB here leads to an error
+            // of one LSB but makes the default 0A current valid. The accuracy of the DAC and its reference is worse than one
+            // LSB anyways so this should not be a significant error.
+            code -= 1;
             // Flip the sign and overflow bits
             code ^= !(DacCode::MAX_DAC_WORD - 1);
         }
@@ -180,24 +187,28 @@ where
 
         // reset DAC
         dac.write(DAC_ADDR::TRIGGER, TRIGGER::SRST::RESET);
+        delay.delay_us(200);
         // set to 10 V plusminus 1.25 V referenece span, retain defaults
         dac.write(
             DAC_ADDR::CONFIG1,
             CONFIG1::VREFVAL::SPAN_10V
-                | CONFIG1::DSDO::ENABLED // set to retain default
-                | CONFIG1::FSET::ENABLED // set to retain default
-                | CONFIG1::LDACMODE::ASYNC, // set to use SPI SYNC
+            | CONFIG1::DSDO::ENABLED // set to retain default
+            | CONFIG1::FSET::ENABLED // set to retain default
+            | CONFIG1::LDACMODE::ASYNC, // set to use SPI SYNC
         );
         // perform calibration
         // don't try to calibrate without driver because it will wait forever
         // dac.calibrate(delay);
-
+        delay.delay_us(200);
+        dac.set(0.).unwrap();
         dac
     }
 
     /// Perform temperature drift calibration (waits until calibration is done).
     pub fn calibrate(&mut self, delay: &mut impl DelayUs<u8>) {
+        delay.delay_us(1);
         self.write(DAC_ADDR::CONFIG1, CONFIG1::EN_TMP_CAL::ENABLED);
+        delay.delay_us(1);
         self.write(DAC_ADDR::TRIGGER, TRIGGER::RCLTMP::RECAL);
         // continuously read recalibration done bit until it is set
         while (self.read(DAC_ADDR::STATUS, delay) & STATUS::ALM::RECALIBRATED)
