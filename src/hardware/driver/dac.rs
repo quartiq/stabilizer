@@ -120,7 +120,7 @@ pub struct DacCode(u32);
 impl DacCode {
     // DAC constants
     const MAX_DAC_WORD: i32 = 1 << 24; // maximum DAC dataword plus 4 bits to avoid shift later (exclusive)
-    const VREF_DAC: f32 = 10.0; // Difference between positive and negaitiv reference pin
+    const VREF_DAC: f32 = 10.0; // Difference between positive and negaitiv reference pin (V)
 }
 
 impl TryFrom<(f32, ChannelVariant)> for DacCode {
@@ -129,7 +129,7 @@ impl TryFrom<(f32, ChannelVariant)> for DacCode {
     /// Note that 0 A output is invalid for current source, since the DAC can only output a voltage one LSB below its positive reference.
     fn try_from(current_channel: (f32, ChannelVariant)) -> Result<Self, Error> {
         let (current, channel) = current_channel;
-        let scale = channel.scale()
+        let scale = channel.dac_to_output_current_scale()
             * (DacCode::MAX_DAC_WORD as f32 / DacCode::VREF_DAC);
         let mut code = (current * scale) as i32;
         if scale < 0. {

@@ -9,11 +9,11 @@ use super::super::hal::{
 const V_REF: f32 = 2.048; // ADC reference voltage
 
 // See schematic "diagnostics" sheet. Output voltage sense.
-const V_OFFSET: f32 = 1.; // divider/shifter opamp offset
-const V_SCALE: f32 = 3.; // divider/shifter opamp gain
+const V_OFFSET: f32 = 1.; // divider/shifter opamp offset in (V)
+const V_SCALE: f32 = 3.; // divider/shifter opamp gain in (V/V)
 
 // See schematic "output_stage" sheet. Output current sense.
-const I_SCALE: f32 = 10000. / 2000.; // current sense scale
+const I_SCALE: f32 = 10000. / 2000.; // current sense scale (V/A)
 
 #[derive(Clone, Copy, Debug)]
 pub enum DriverMonitorChannel {
@@ -85,8 +85,8 @@ impl InternalAdc {
                 self.output_current.1.read_normalized().unwrap()
             }
         };
-        let scale =
-            V_REF * I_SCALE / self.variant[ch as usize].transimpedance(); // current sense scale
+        let scale = V_REF * I_SCALE
+            / self.variant[ch as usize].output_transadmittance(); // current sense scale
         ratio * scale
     }
 }

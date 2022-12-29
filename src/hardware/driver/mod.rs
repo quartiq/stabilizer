@@ -47,25 +47,32 @@ pub enum ChannelVariant {
 }
 
 impl ChannelVariant {
-    const R_OUT_LN: f32 = 40.0; // Low noise side output resistor
-    const R_OUT_HP: f32 = 0.068; // High power side output resistor
-    const DIVIDER_HP: f32 = 1. / 41.; // High power side DAC output divider ratio
-    fn scale(&self) -> f32 {
+    const R_SHUNT_LN: f32 = 40.0; // Low noise side output resistor (Ω)
+    const R_SHUNT_HP: f32 = 0.068; // High power side output resistor (Ω)
+    const GAIN_FOLLOWER_HP: f32 = 1. / 41.; // High power side DAC output divider ratio (V/V)
+
+    /// Returns the effective scale of the DAC output voltage to the channel output current.
+    /// The scale is negative for source channels since a lower DAC voltage leads to more current.
+    fn dac_to_output_current_scale(&self) -> f32 {
         match self {
-            ChannelVariant::LowNoiseSource => -Self::R_OUT_LN, // negated
-            ChannelVariant::LowNoiseSink => Self::R_OUT_LN,
+            ChannelVariant::LowNoiseSource => -Self::R_SHUNT_LN, // negated
+            ChannelVariant::LowNoiseSink => Self::R_SHUNT_LN,
             ChannelVariant::HighPowerSource => {
-                -Self::R_OUT_HP / Self::DIVIDER_HP
+                -Self::R_SHUNT_HP / Self::GAIN_FOLLOWER_HP
             } // negated
-            ChannelVariant::HighPowerSink => Self::R_OUT_HP / Self::DIVIDER_HP,
+            ChannelVariant::HighPowerSink => {
+                Self::R_SHUNT_HP / Self::GAIN_FOLLOWER_HP
+            }
         }
     }
-    fn transimpedance(&self) -> f32 {
+    /// Returns the transadmittance of the channel output shunt resistor (A/V). Negative for sink variants
+    /// since current flowing into the output leads to a positive shunt voltage.
+    fn output_transadmittance(&self) -> f32 {
         match self {
-            ChannelVariant::LowNoiseSource => Self::R_OUT_LN,
-            ChannelVariant::LowNoiseSink => -Self::R_OUT_LN, // negative transimpedance for sink
-            ChannelVariant::HighPowerSource => Self::R_OUT_HP,
-            ChannelVariant::HighPowerSink => -Self::R_OUT_HP, // negative transimpedance for sink
+            ChannelVariant::LowNoiseSource => 1. / Self::R_SHUNT_LN,
+            ChannelVariant::LowNoiseSink => -1. / Self::R_SHUNT_LN, // negative transadmittance for sink
+            ChannelVariant::HighPowerSource => 1. / Self::R_SHUNT_HP,
+            ChannelVariant::HighPowerSink => -1. / Self::R_SHUNT_HP, // negative transadmittance for sink
         }
     }
 }
