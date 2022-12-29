@@ -13,7 +13,7 @@ const V_OFFSET: f32 = 1.; // divider/shifter opamp offset
 const V_SCALE: f32 = 3.; // divider/shifter opamp gain
 
 // See schematic "output_stage" sheet. Output current sense.
-const I_SCALE: f32 = 10000. / 2000.; // current sense transimpedance
+const I_SCALE: f32 = 10000. / 2000.; // current sense scale
 
 #[derive(Clone, Copy, Debug)]
 pub enum DriverMonitorChannel {
