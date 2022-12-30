@@ -664,7 +664,7 @@ mod app {
             .output_state
             .lock(|output| [output[0].is_enabled(), output[1].is_enabled()]);
         let adc = c.local.internal_adc;
-        let (voltage_reads, current_reads) = (
+        let (current_reads, voltage_reads) = (
             [
                 adc.read_output_current(Channel::LowNoise),
                 adc.read_output_current(Channel::HighPower),

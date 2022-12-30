@@ -1,16 +1,19 @@
-// This is a dummy driver for the Driver analog reads of the output Voltage and Current.
-// Exact Sacales and Pinout will be filled in once we have HW.
-
-use super::Channel;
+use super::{Channel, ChannelVariant};
 use crate::hardware::shared_adc::AdcChannel;
 
 use super::super::hal::{
     gpio::{gpiof::*, Analog},
-    stm32::{ADC1, ADC3},
+    stm32::{ADC1, ADC2, ADC3},
 };
 
 const V_REF: f32 = 2.048; // ADC reference voltage
-const R_SENSE: f32 = 0.1; // Driver output current sense resistor (Will maybe be something else on HW)
+
+// See schematic "diagnostics" sheet. Output voltage sense.
+const V_OFFSET: f32 = 1.; // divider/shifter opamp offset in (V)
+const V_SCALE: f32 = 3.; // divider/shifter opamp gain in (V/V)
+
+// See schematic "output_stage" sheet. Output current sense.
+const I_SCALE: f32 = 10000. / 2000.; // current sense scale (V/A)
 
 #[derive(Clone, Copy, Debug)]
 pub enum DriverMonitorChannel {
@@ -24,9 +27,10 @@ pub struct InternalAdc {
         AdcChannel<'static, ADC3, PF3<Analog>>,
     ),
     output_current: (
-        AdcChannel<'static, ADC1, PF12<Analog>>,
-        AdcChannel<'static, ADC3, PF4<Analog>>,
+        AdcChannel<'static, ADC2, PF13<Analog>>,
+        AdcChannel<'static, ADC2, PF14<Analog>>,
     ),
+    variant: [ChannelVariant; 2],
 }
 
 impl InternalAdc {
@@ -36,13 +40,16 @@ impl InternalAdc {
             AdcChannel<'static, ADC3, PF3<Analog>>,
         ),
         output_current: (
-            AdcChannel<'static, ADC1, PF12<Analog>>,
-            AdcChannel<'static, ADC3, PF4<Analog>>,
+            AdcChannel<'static, ADC2, PF13<Analog>>,
+            AdcChannel<'static, ADC2, PF14<Analog>>,
         ),
+        ln_varinat: ChannelVariant,
+        hp_varinat: ChannelVariant,
     ) -> Self {
         InternalAdc {
             output_voltage,
             output_current,
+            variant: [ln_varinat, hp_varinat],
         }
     }
 
@@ -53,6 +60,7 @@ impl InternalAdc {
         }
     }
 
+    /// Reads the voltage of the channel output with respect to ground.
     pub fn read_output_voltage(&mut self, ch: Channel) -> f32 {
         let ratio: f32 = match ch {
             Channel::LowNoise => {
@@ -62,11 +70,12 @@ impl InternalAdc {
                 self.output_voltage.1.read_normalized().unwrap()
             }
         };
-        const SCALE: f32 = V_REF; // Differential voltage sense gain      ToDo
-        const OFFSET: f32 = 0.0; // Differential voltage sense offset       ToDo
-        (ratio + OFFSET) * SCALE
+        const SCALE: f32 = V_SCALE * V_REF;
+        const OFFSET: f32 = V_OFFSET / V_REF; // voltage sense offset relative to V_REF
+        (ratio - OFFSET) * SCALE
     }
 
+    /// Reads the current of the channel output (negative for inflowing current).
     pub fn read_output_current(&mut self, ch: Channel) -> f32 {
         let ratio: f32 = match ch {
             Channel::LowNoise => {
@@ -76,8 +85,9 @@ impl InternalAdc {
                 self.output_current.1.read_normalized().unwrap()
             }
         };
-        const SCALE: f32 = V_REF / R_SENSE; // Current sense scale       ToDo
-        const OFFSET: f32 = 0.0; // Current sense offset         ToDo
-        (ratio + OFFSET) * SCALE
+        let scale = V_REF
+            * I_SCALE
+            * self.variant[ch as usize].current_sense_transadmittance(); // current sense scale
+        ratio * scale
     }
 }
