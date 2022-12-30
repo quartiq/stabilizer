@@ -99,7 +99,7 @@ pub enum FailReason {
 
     /// Driver output was shorted to ground.
     /// Current was set to [Output::<I2C>::TESTCURRENT] and measured current was out of range.
-    /// [Output::<I2C>::VALID_CURRENTSHORT]
+    /// [Output::<I2C>::VALID_CURRENT_SHORT]
     ShortCurrent,
 }
 
