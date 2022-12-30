@@ -198,7 +198,7 @@ where
             | CONFIG1::LDACMODE::ASYNC, // set to use SPI SYNC
         );
         // perform calibration
-        // don't try to calibrate without driver because it will wait forever
+        // No calibration on current Driver V1.0 HW since there is no DAC readback because of an error with the isolators.
         // dac.calibrate(delay);
         delay.delay_us(200);
         dac.set(0.).unwrap();
