@@ -167,9 +167,6 @@ pub struct Monitor {
     cpu_temp: f32,
     /// The measured temperature of the Headboard temperature sensor. (°C)
     header_temp: f32,
-    /// The state of the laser interlock. `None` if the interlock is not tripped or
-    /// `Some([Reason])` if it is tripped.
-    interlock_tripped: Option<Reason>,
 }
 
 /// Telemetry of low noise channel signals.
@@ -191,6 +188,9 @@ pub struct Telemetry {
     // no high_power since it is fully defined by settings
     /// Data from the Headboard ADC.
     headboard_adc_data: [u16; 8], // Todo this will be moved into photodiode currents/pressure sensor data
+    /// The state of the laser interlock. `None` if the interlock is not tripped or
+    /// `Some(`[Reason]`)` if it is tripped.
+    interlock_tripped: Option<Reason>,
 }
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
@@ -579,7 +579,7 @@ mod app {
         // Todo: uncomment once we have Hardware
         // telemetry.monitor.header_temp =
         //     c.local.lm75.read_temperature().unwrap();
-        telemetry.monitor.interlock_tripped =
+        telemetry.interlock_tripped =
             c.shared.laser_interlock.lock(|ilock| ilock.reason());
         let telemetry_period = c
             .shared
