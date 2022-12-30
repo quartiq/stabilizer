@@ -8,13 +8,13 @@
 //!
 //! # Features
 //! * A high power output whose current can be configured to constant values via [driver::HighPowerSettings].
-//! * A low power output whose current can be modulated using feedback from a Stabilizer input channel.
-//!   The parameters can be configured via [driver::LowNoiseSettings].
+//! * A low noise output whose current can be modulated using feedback from a Stabilizer input channel.
+//!   The parameters can be configured via [driver::LowNoiseSettings]. The sampling frequency is set to 97.66 kHz.
 //! * Output current and voltage [Monitor]ing.
 //! * A state machine that performs various tests on the outputs and safely connects them to the laser diodes
-//!   in a safe way using the relays on the headboard. The state transitions happen automatically when the output is enabled.
+//!   in a safe way using the relays on the Headboard. The state transitions happen automatically when the output is enabled.
 //! * A laser interlock that can trip for a number of [Reason]s and reset via [Settings]. The interlock simply shorts
-//!   the laser diodes on the headboard using a relay. Without the headboard, the interlock has no effect!
+//!   the laser diodes on the Headboard using a relay. Without the Headboard, the interlock has no effect!
 //! * An [Alarm] functionality.
 //!
 //! ## Settings
@@ -152,27 +152,45 @@ impl Default for Settings {
     }
 }
 
+/// Monitoring telemetry.
 #[derive(Serialize, Copy, Clone, Default, Debug)]
 pub struct Monitor {
+    /// The measured output current on the low noise (<0>) and high power (<1>) channels. (A)
+    /// Driver samples the voltage across its output current sense resistor to measure
+    /// the actual output current.
+    /// The current will be negative if the channel is configured as a current sink.
     current: [f32; 2],
+    /// The measured output voltage on the low noise (<0>) and high power (<1>) channels. (V)
+    /// The voltage will be negative if the channel is configured as a current sink.
     voltage: [f32; 2],
+    /// The measured CPU temperature. (°C)
     cpu_temp: f32,
+    /// The measured temperature of the Headboard temperature sensor. (°C)
     header_temp: f32,
-    laser_interlock_tripped: Option<Reason>,
+    /// The state of the laser interlock. `None` if the interlock is not tripped or
+    /// `Some([Reason])` if it is tripped.
+    interlock_tripped: Option<Reason>,
 }
 
+/// Telemetry of low noise channel signals.
 #[derive(Serialize, Copy, Clone, Default, Debug)]
 pub struct LowNoise {
-    adc0: f32,    // Stabilizer ADC0 feedback signal
-    current: f32, // Output current set by control loop
+    /// Stabilizer ADC0 feedback signal. Can be used to modulate the low noise current.
+    adc0: f32,
+    /// The output current of the low noise channel. Controled by the [LowNoise] IIR filter.
+    /// Note that this is only the set value, not the actually measured monitor current.
+    current: f32,
 }
 
 #[derive(Serialize, Copy, Clone, Default, Debug)]
 pub struct Telemetry {
+    /// Refer to [Monitor]
     monitor: Monitor,
+    /// Refer to [LowNoise]
     low_noise: LowNoise,
     // no high_power since it is fully defined by settings
-    header_adc_data: [u16; 8], // Todo this will be moved into photodiode currents/pressure sensor data
+    /// Data from the Headboard ADC.
+    headboard_adc_data: [u16; 8], // Todo this will be moved into photodiode currents/pressure sensor data
 }
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
@@ -332,7 +350,7 @@ mod app {
         } = c.local;
 
         (settings, telemetry, output_state, header_adc_data).lock(
-            |settings, telemetry, output, header_adc_data| {
+            |settings, telemetry, output, headboard_adc_data| {
                 let digital_inputs =
                     [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
 
@@ -362,8 +380,6 @@ mod app {
                     // Set Driver current.
                     write_dac_spi::spawn(driver::Channel::LowNoise, y).unwrap();
 
-                    // Driver TODO: Rework Telemetry and Streaming.
-
                     // Stream the data.
                     let adc_samples = [adc0, adc1];
                     let dac_samples = [dac0, dac1];
@@ -389,7 +405,7 @@ mod app {
                     telemetry.low_noise.current = y;
                     // Todo: The raw photodiode samples should be converted to eqivalent photocurrent(?)
                     // and incorporated into the signal processing.
-                    telemetry.header_adc_data = *header_adc_data;
+                    telemetry.headboard_adc_data = *headboard_adc_data;
 
                     // Preserve instruction and data ordering w.r.t. DMA flag access.
                     fence(Ordering::SeqCst);
@@ -563,7 +579,7 @@ mod app {
         // Todo: uncomment once we have Hardware
         // telemetry.monitor.header_temp =
         //     c.local.lm75.read_temperature().unwrap();
-        telemetry.monitor.laser_interlock_tripped =
+        telemetry.monitor.interlock_tripped =
             c.shared.laser_interlock.lock(|ilock| ilock.reason());
         let telemetry_period = c
             .shared
