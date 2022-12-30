@@ -187,7 +187,8 @@ where
 
         // reset DAC
         dac.write(DAC_ADDR::TRIGGER, TRIGGER::SRST::RESET);
-        delay.delay_us(200);
+        delay.delay_us(200); // Wait a bit after reset out of caution.
+
         // set to 10 V plusminus 1.25 V referenece span, retain defaults
         dac.write(
             DAC_ADDR::CONFIG1,
