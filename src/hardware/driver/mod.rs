@@ -97,7 +97,7 @@ pub enum Reason {
     Overvoltage(Channel),
 
     /// The device selftest during the channel enabling sequence failed.
-    /// See [SelftestFail] for details.
+    /// See [output::FailReason] for details.
     Selftest(SelfTest),
 }
 pub struct LaserInterlock {

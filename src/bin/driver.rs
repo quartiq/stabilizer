@@ -1,10 +1,28 @@
 //! # Driver
 //!
-//! Firmware for "Driver", an intelligent, high performance laser current driver.
-//! Driver is a mezzanine module to Stabilizer, on which the firmware is deployed.
+//! Firmware for "Driver", an intelligent, high performance laser current driver mezzanine for Stabilizer.
+//! [Hardware repository](https://github.com/sinara-hw/Driver)
+//! Driver can be used in combination with the [Headboard](https://github.com/sinara-hw/Laser_Module/tree/master/Laser_Module),
+//! a PCB that is physically close to a laser module and features various laser protection methods like relays as
+//! well as an ADC for sampling photodiode signals.
 //!
-//! This software is currently just the groundwork for the future developments.
-
+//! # Features
+//! * A high power output whose current can be configured to constant values via [driver::HighPowerSettings].
+//! * A low power output whose current can be modulated using feedback from a Stabilizer input channel.
+//!   The parameters can be configured via [driver::LowNoiseSettings].
+//! * Output current and voltage [Monitor]ing.
+//! * A state machine that performs various tests on the outputs and safely connects them to the laser diodes
+//!   in a safe way using the relays on the headboard. The state transitions happen automatically when the output is enabled.
+//! * A laser interlock that can trip for a number of [Reason]s and reset via [Settings]. The interlock simply shorts
+//!   the laser diodes on the headboard using a relay. Without the headboard, the interlock has no effect!
+//! * An [Alarm] functionality.
+//!
+//! ## Settings
+//! Refer to the [Settings] structure for documentation of run-time configurable settings for this
+//! application.
+//!
+//! ## Telemetry
+//! Refer to [Telemetry] for information about telemetry reported by this application.
 #![deny(warnings)]
 #![no_std]
 #![no_main]
