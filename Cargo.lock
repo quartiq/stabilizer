@@ -123,15 +123,15 @@ dependencies = [
  "aligned",
  "bare-metal 0.2.5",
  "bitfield",
- "cortex-m 0.7.6",
+ "cortex-m 0.7.7",
  "volatile-register",
 ]
 
 [[package]]
 name = "cortex-m"
-version = "0.7.6"
+version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70858629a458fdfd39f9675c4dc309411f2a3f83bede76988d81bf1a0ecee9e0"
+checksum = "8ec610d8f49840a5b376c69663b6369e71f4b34484b9b2eb29fb918d92516cb9"
 dependencies = [
  "bare-metal 0.2.5",
  "bitfield",
@@ -166,7 +166,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6b82f1c39acd6c3a35c2013b6110c20f5bc534522791fabadeed49ccada2dce"
 dependencies = [
  "bare-metal 1.0.0",
- "cortex-m 0.7.6",
+ "cortex-m 0.7.7",
  "cortex-m-rtic-macros",
  "heapless",
  "rtic-core",
@@ -195,7 +195,7 @@ checksum = "95da181745b56d4bd339530ec393508910c909c784e8962d15d722bacf0bcbcd"
 dependencies = [
  "bare-metal 1.0.0",
  "cfg-if",
- "cortex-m 0.7.6",
+ "cortex-m 0.7.7",
  "riscv",
 ]
 
@@ -737,7 +737,7 @@ version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "065d6058bb1204f51a562a67209e1817cf714759d5cf845aa45c75fa7b0b9d9b"
 dependencies = [
- "cortex-m 0.7.6",
+ "cortex-m 0.7.7",
  "ufmt-write",
 ]
 
@@ -894,7 +894,7 @@ name = "stabilizer"
 version = "0.8.1"
 dependencies = [
  "ad9959",
- "cortex-m 0.7.6",
+ "cortex-m 0.7.7",
  "cortex-m-rt",
  "cortex-m-rtic",
  "embedded-hal",
@@ -937,7 +937,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "362f288cd8341e9209587b889c385f323e82fc237b60c272868965bb879bb9b1"
 dependencies = [
  "bare-metal 1.0.0",
- "cortex-m 0.7.6",
+ "cortex-m 0.7.7",
  "cortex-m-rt",
  "vcell",
 ]
@@ -951,7 +951,7 @@ dependencies = [
  "bare-metal 1.0.0",
  "bitflags",
  "cast",
- "cortex-m 0.7.6",
+ "cortex-m 0.7.7",
  "embedded-dma",
  "embedded-hal",
  "fugit",
@@ -979,7 +979,7 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67fb822d5c615a0ae3a4795ee5b1d06381c7faf488d861c0a4fa8e6a88d5ff84"
 dependencies = [
- "cortex-m 0.7.6",
+ "cortex-m 0.7.7",
  "fugit",
  "rtic-monotonic",
 ]
