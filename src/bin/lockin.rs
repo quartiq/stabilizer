@@ -75,7 +75,7 @@ const BATCH_SIZE: usize = 1 << BATCH_SIZE_LOG2;
 const SAMPLE_TICKS_LOG2: u32 = 7;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, Miniconf)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 enum Conf {
     /// Output the lockin magnitude.
     Magnitude,
@@ -93,7 +93,7 @@ enum Conf {
     Modulation,
 }
 
-#[derive(Copy, Clone, Debug, Miniconf, Serialize, Deserialize, PartialEq)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
 enum LockinMode {
     /// Utilize an internally generated reference for demodulation
     Internal,
@@ -112,6 +112,7 @@ pub struct Settings {
     ///
     /// # Value
     /// Any of the variants of [Gain] enclosed in double quotes.
+    #[miniconf(defer)]
     afe: [Gain; 2],
 
     /// Specifies the operational mode of the lockin.
@@ -171,6 +172,7 @@ pub struct Settings {
     ///
     /// # Value
     /// One of the variants of [Conf] enclosed in double quotes.
+    #[miniconf(defer)]
     output_conf: [Conf; 2],
 
     /// Specifies the telemetry output period in seconds.
@@ -414,11 +416,9 @@ mod app {
                         let value = match settings.output_conf[channel] {
                             Conf::Magnitude => output.abs_sqr() as i32 >> 16,
                             Conf::Phase => output.arg() >> 16,
-                            Conf::LogPower => {
-                                (output.log2() << 24) as i32 >> 16
-                            }
+                            Conf::LogPower => output.log2() << 8,
                             Conf::ReferenceFrequency => {
-                                reference_frequency as i32 >> 16
+                                reference_frequency >> 16
                             }
                             Conf::InPhase => output.re >> 16,
                             Conf::Quadrature => output.im >> 16,

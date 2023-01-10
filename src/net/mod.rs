@@ -31,14 +31,13 @@ pub type NetworkReference =
 /// The default MQTT broker IP address if unspecified.
 pub const DEFAULT_MQTT_BROKER: [u8; 4] = [10, 34, 16, 10];
 
-#[derive(Copy, Clone, PartialEq)]
 pub enum UpdateState {
     NoChange,
     Updated,
 }
 
 pub enum NetworkState {
-    SettingsChanged(String<64>),
+    SettingsChanged(String<128>),
     Updated,
     NoChange,
 }
@@ -162,9 +161,10 @@ where
             UpdateState::Updated => NetworkState::Updated,
         };
 
-        let mut settings_path = String::new();
+        // `settings_path` has to be at least as large as `miniconf::mqtt_client::MAX_TOPIC_LENGTH`.
+        let mut settings_path: String<128> = String::new();
         match self.miniconf.handled_update(|path, old, new| {
-            settings_path.push_str(path).unwrap();
+            settings_path = path.into();
             *old = new.clone();
             Result::<(), &'static str>::Ok(())
         }) {

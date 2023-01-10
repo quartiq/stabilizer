@@ -53,7 +53,7 @@ impl Timestamper {
 
         // The capture channel should capture whenever the trigger input occurs.
         let mut input_capture = capture_channel
-            .into_input_capture(timers::tim8::CaptureSource1::TRC);
+            .into_input_capture(timers::tim8::CaptureSource1::Trc);
 
         let prescaler = match batch_size {
             1 => timers::Prescaler::Div1,

@@ -27,7 +27,6 @@ use heapless::{
     pool::{Box, Init, Pool, Uninit},
     spsc::{Consumer, Producer, Queue},
 };
-use miniconf::MiniconfAtomic;
 use num_enum::IntoPrimitive;
 use serde::{Deserialize, Serialize};
 use smoltcp_nal::embedded_nal::{IpAddr, Ipv4Addr, SocketAddr, UdpClientStack};
@@ -71,9 +70,7 @@ type Frame = [MaybeUninit<u8>; FRAME_SIZE];
 ///
 /// ## Example
 /// `{"ip": [192, 168,0, 1], "port": 1111}`
-#[derive(
-    Copy, Clone, Debug, MiniconfAtomic, Serialize, Deserialize, Default,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, Default)]
 pub struct StreamTarget {
     pub ip: [u8; 4],
     pub port: u16,
@@ -81,7 +78,7 @@ pub struct StreamTarget {
 
 /// Specifies the format of streamed data
 #[repr(u8)]
-#[derive(Debug, Copy, Clone, PartialEq, IntoPrimitive)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive)]
 pub enum StreamFormat {
     /// Reserved, unused format specifier.
     Unknown = 0,
@@ -250,7 +247,7 @@ impl FrameGenerator {
             if let Some(buffer) = self.pool.alloc() {
                 self.current_frame.replace(StreamFrame::new(
                     buffer,
-                    self.format as u8,
+                    self.format,
                     self.batch_size,
                     sequence_number,
                 ));

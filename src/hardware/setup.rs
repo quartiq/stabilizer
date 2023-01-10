@@ -16,8 +16,9 @@ use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
     eeprom, input_stamper::InputStamper, pounder,
     pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
-    DigitalInput0, DigitalInput1, EthernetPhy, NetworkStack, SystemTimer,
-    Systick, AFE0, AFE1,
+    DigitalInput0, DigitalInput1, EemDigitalInput0, EemDigitalInput1,
+    EemDigitalOutput0, EemDigitalOutput1, EthernetPhy, NetworkStack,
+    SystemTimer, Systick, AFE0, AFE1,
 };
 
 use crate::{
@@ -110,6 +111,14 @@ pub struct NetworkDevices {
     pub mac_address: smoltcp::wire::EthernetAddress,
 }
 
+/// The GPIO pins available on the EEM connector, if Pounder is not present.
+pub struct EemGpioDevices {
+    pub lvds4: EemDigitalInput0,
+    pub lvds5: EemDigitalInput1,
+    pub lvds6: EemDigitalOutput0,
+    pub lvds7: EemDigitalOutput1,
+}
+
 /// The available hardware interfaces on Stabilizer.
 pub struct StabilizerDevices {
     pub systick: Systick,
@@ -122,6 +131,7 @@ pub struct StabilizerDevices {
     pub timestamp_timer: timers::TimestampTimer,
     pub net: NetworkDevices,
     pub digital_inputs: (DigitalInput0, DigitalInput1),
+    pub eem_gpio: EemGpioDevices,
 }
 
 /// The available Pounder-specific hardware interfaces.
@@ -342,12 +352,14 @@ pub fn setup(
 
     device.RCC.d1ccipr.modify(|_, w| w.qspisel().rcc_hclk3());
 
+    device.RCC.d3ccipr.modify(|_, w| w.adcsel().per());
+
     let rcc = device.RCC.constrain();
     let ccdr = rcc
         .use_hse(8.MHz())
         .sysclk(design_parameters::SYSCLK.convert())
         .hclk(200.MHz())
-        .per_ck(design_parameters::TIMER_FREQUENCY.convert())
+        .per_ck(64.MHz()) // fixed frequency HSI, only used for internal ADC. This is not the "peripheral" clock for timers and others.
         .pll2_p_ck(100.MHz())
         .pll2_q_ck(100.MHz())
         .freeze(vos, &device.SYSCFG);
@@ -807,34 +819,31 @@ pub fn setup(
     fp_led_2.set_low();
     fp_led_3.set_low();
 
-    // Use default PLL2p clock input with 1/2 prescaler for a 25 MHz ADC kernel clock.
-    // Note that there is an additional, fixed 1/2 prescaler in the clock path.
     let (adc1, adc2, adc3) = {
         let (mut adc1, mut adc2) = hal::adc::adc12(
             device.ADC1,
             device.ADC2,
+            stm32h7xx_hal::time::Hertz::MHz(25),
             &mut delay,
             ccdr.peripheral.ADC12,
             &ccdr.clocks,
         );
         let mut adc3 = hal::adc::Adc::adc3(
             device.ADC3,
+            stm32h7xx_hal::time::Hertz::MHz(25),
             &mut delay,
             ccdr.peripheral.ADC3,
             &ccdr.clocks,
         );
-        // Set ADC clock prescaler after adc init but before enable
-        device.ADC12_COMMON.ccr.modify(|_, w| w.presc().div2());
-        device.ADC3_COMMON.ccr.modify(|_, w| w.presc().div2());
 
         adc1.set_sample_time(hal::adc::AdcSampleTime::T_810);
-        adc1.set_resolution(hal::adc::Resolution::SIXTEENBIT);
-        adc1.calibrate(); // re-calibrate after clock has changed
+        adc1.set_resolution(hal::adc::Resolution::SixteenBit);
+        adc1.calibrate();
         adc2.set_sample_time(hal::adc::AdcSampleTime::T_810);
-        adc2.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+        adc2.set_resolution(hal::adc::Resolution::SixteenBit);
         adc2.calibrate();
         adc3.set_sample_time(hal::adc::AdcSampleTime::T_810);
-        adc3.set_resolution(hal::adc::Resolution::SIXTEENBIT);
+        adc3.set_resolution(hal::adc::Resolution::SixteenBit);
         adc3.calibrate();
 
         hal::adc::Temperature::new().enable(&adc3);
@@ -1057,6 +1066,13 @@ pub fn setup(
         None
     };
 
+    let eem_gpio = EemGpioDevices {
+        lvds4: gpiod.pd1.into_floating_input(),
+        lvds5: gpiod.pd2.into_floating_input(),
+        lvds6: gpiod.pd3.into_push_pull_output(),
+        lvds7: gpiod.pd4.into_push_pull_output(),
+    };
+
     let stabilizer = StabilizerDevices {
         systick,
         afes,
@@ -1070,6 +1086,7 @@ pub fn setup(
         adc_dac_timer: sampling_timer,
         timestamp_timer,
         digital_inputs,
+        eem_gpio,
     };
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());

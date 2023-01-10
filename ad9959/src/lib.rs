@@ -34,7 +34,7 @@ pub trait Interface {
 
 /// Indicates various communication modes of the DDS. The value of this enumeration is equivalent to
 /// the configuration bits of the DDS CSR register.
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Mode {
     SingleBitTwoWire = 0b000,
@@ -244,7 +244,7 @@ impl<I: Interface> Ad9959<I> {
         let mut fr1: [u8; 3] = [0, 0, 0];
         self.read(Register::FR1, &mut fr1)?;
 
-        Ok(fr1[0].get_bits(2..=6) as u8)
+        Ok(fr1[0].get_bits(2..=6))
     }
 
     /// Perform a self-test of the communication interface.
@@ -290,8 +290,7 @@ impl<I: Interface> Ad9959<I> {
 
     /// Get the current system clock frequency in Hz.
     fn system_clock_frequency(&self) -> f32 {
-        self.system_clock_multiplier as f32
-            * self.reference_clock_frequency as f32
+        self.system_clock_multiplier as f32 * self.reference_clock_frequency
     }
 
     /// Update an output channel configuration register.
@@ -443,8 +442,15 @@ impl<I: Interface> Ad9959<I> {
         channel: Channel,
         frequency: f32,
     ) -> Result<f32, Error> {
-        let tuning_word =
-            frequency_to_ftw(frequency, self.system_clock_frequency())?;
+        if frequency < 0.0 || frequency > self.system_clock_frequency() {
+            return Err(Error::Bounds);
+        }
+
+        // The function for channel frequency is `f_out = FTW * f_s / 2^32`, where FTW is the
+        // frequency tuning word and f_s is the system clock rate.
+        let tuning_word: u32 =
+            ((frequency as f32 / self.system_clock_frequency())
+                * 1u64.wrapping_shl(32) as f32) as u32;
 
         self.modify_channel(
             channel,

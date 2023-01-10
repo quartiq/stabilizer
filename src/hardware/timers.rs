@@ -272,7 +272,7 @@ macro_rules! timer_channels {
                     let regs = unsafe { &*<$TY>::ptr() };
                     let arr = regs.arr.read().bits() as $size;
                     assert!(value <= arr);
-                    regs.[< ccr $index >].write(|w| w.ccr().bits(value));
+                    regs.ccr[$index - 1].write(|w| w.ccr().bits(value));
                     regs.[< $ccmrx _output >]()
                         .modify(|_, w| unsafe { w.[< cc $index s >]().bits(0) });
                 }
@@ -302,7 +302,7 @@ macro_rules! timer_channels {
                     if regs.sr.read().[< cc $index if >]().bit_is_set() {
                         // Read the capture value. Reading the captured value clears the flag in the
                         // status register automatically.
-                        let result = regs.[< ccr $index >].read().ccr().bits();
+                        let result = regs.ccr[$index - 1].read().ccr().bits();
 
                         // Read SR again to check for a potential over-capture. Return an error in
                         // that case.
@@ -383,11 +383,11 @@ macro_rules! timer_channels {
             unsafe impl TargetAddress<PeripheralToMemory> for [< Channel $index InputCapture >] {
                 type MemSize = $size;
 
-                const REQUEST_LINE: Option<u8> = Some(DMAReq::[< $TY _CH $index >]as u8);
+                const REQUEST_LINE: Option<u8> = Some(DMAReq::[< $TY:camel Ch $index >]as u8);
 
                 fn address(&self) -> usize {
                     let regs = unsafe { &*<$TY>::ptr() };
-                    &regs.[<ccr $index >] as *const _ as usize
+                    &regs.ccr[$index - 1] as *const _ as usize
                 }
             }
         }

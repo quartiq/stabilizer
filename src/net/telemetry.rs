@@ -11,7 +11,6 @@
 ///! required immediately before transmission. This ensures that any slower computation required
 ///! for unit conversion can be off-loaded to lower priority tasks.
 use heapless::{String, Vec};
-use minimq::{QoS, Retain};
 use serde::Serialize;
 
 use super::NetworkReference;
@@ -20,7 +19,7 @@ use minimq::embedded_nal::IpAddr;
 
 /// The telemetry client for reporting telemetry data over MQTT.
 pub struct TelemetryClient<T: Serialize> {
-    mqtt: minimq::Minimq<NetworkReference, SystemTimer, 512, 1>,
+    mqtt: minimq::Minimq<NetworkReference, SystemTimer, 1024, 1>,
     telemetry_topic: String<128>,
     _telemetry: core::marker::PhantomData<T>,
 }
@@ -157,16 +156,16 @@ impl<T: Serialize> TelemetryClient<T> {
     /// * `telemetry` - The telemetry to report
     pub fn publish(&mut self, telemetry: &T) {
         let telemetry: Vec<u8, 512> =
-            serde_json_core::to_vec(telemetry).unwrap();
+            miniconf::serde_json_core::to_vec(telemetry).unwrap();
         self.mqtt
-            .client
+            .client()
             .publish(
-                &self.telemetry_topic,
-                &telemetry,
-                QoS::AtMostOnce,
-                Retain::NotRetained,
-                &[],
+                minimq::Publication::new(&telemetry)
+                    .topic(&self.telemetry_topic)
+                    .finish()
+                    .unwrap(),
             )
+            .map_err(|e| log::error!("Telemetry publishing error: {:?}", e))
             .ok();
     }
 

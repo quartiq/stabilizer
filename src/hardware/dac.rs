@@ -268,5 +268,5 @@ macro_rules! dac_output {
     };
 }
 
-dac_output!(Dac0Output, 0, Stream6, SPI4, Channel3, TIM2_CH3);
-dac_output!(Dac1Output, 1, Stream7, SPI5, Channel4, TIM2_CH4);
+dac_output!(Dac0Output, 0, Stream6, SPI4, Channel3, Tim2Ch3);
+dac_output!(Dac1Output, 1, Stream7, SPI5, Channel4, Tim2Ch4);
