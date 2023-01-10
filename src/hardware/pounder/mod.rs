@@ -144,9 +144,7 @@ impl Default for ChannelConfig {
     }
 }
 
-#[derive(
-    Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Miniconf,
-)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Miniconf)]
 pub struct ClockConfig {
     pub multiplier: u8,
     pub reference_clock: f32,
