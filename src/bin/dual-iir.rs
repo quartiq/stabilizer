@@ -155,6 +155,7 @@ pub struct Settings {
     ///
     /// # Value
     /// See [PounderConfig#miniconf]
+    #[miniconf(defer)]
     pounder: Option<PounderConfig>,
 }
 

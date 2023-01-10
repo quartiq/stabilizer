@@ -5,7 +5,7 @@ use crate::hardware::{shared_adc::AdcChannel, I2c1Proxy};
 use ad9959::{amplitude_to_acr, frequency_to_ftw, phase_to_pow, Profile};
 use embedded_hal::blocking::spi::Transfer;
 use enum_iterator::Sequence;
-use miniconf::{Miniconf, MiniconfAtomic};
+use miniconf::Miniconf;
 use serde::{Deserialize, Serialize};
 
 pub mod attenuators;
@@ -130,6 +130,7 @@ impl From<(ClockConfig, ChannelConfig)> for ProfileWrapper {
 
 #[derive(Serialize, Deserialize, Copy, Clone, Debug, Miniconf)]
 pub struct ChannelConfig {
+    #[miniconf(defer)]
     pub dds: DdsChannelConfig,
     pub attenuation: f32,
 }
@@ -144,7 +145,7 @@ impl Default for ChannelConfig {
 }
 
 #[derive(
-    Serialize, Deserialize, Copy, Clone, Debug, PartialEq, MiniconfAtomic,
+    Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Miniconf,
 )]
 pub struct ClockConfig {
     pub multiplier: u8,
@@ -166,7 +167,9 @@ impl Default for ClockConfig {
 #[derive(Serialize, Deserialize, Copy, Clone, Debug, Default, Miniconf)]
 pub struct PounderConfig {
     pub clock: ClockConfig,
+    #[miniconf(defer)]
     pub in_ch: [ChannelConfig; 2],
+    #[miniconf(defer)]
     pub out_ch: [ChannelConfig; 2],
 }
 
