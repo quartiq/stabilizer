@@ -156,7 +156,7 @@ pub struct Settings {
     /// # Value
     /// See [PounderConfig#miniconf]
     #[miniconf(defer)]
-    pounder: Option<PounderConfig>,
+    pounder: miniconf::Option<PounderConfig>,
 }
 
 impl Default for Settings {
@@ -184,14 +184,14 @@ impl Default for Settings {
 
             stream_target: StreamTarget::default(),
 
-            pounder: None,
+            pounder: None.into(),
         }
     }
 }
 
 impl Settings {
     fn enable_pounder_config(&mut self) {
-        self.pounder = Some(PounderConfig::default());
+        self.pounder = Some(PounderConfig::default()).into();
     }
 }
 
@@ -464,9 +464,9 @@ mod app {
         // Update Pounder configurations
         c.shared.pounder.lock(|pounder| {
             if let (Some(pounder), Some(pounder_settings), Some(clocking)) =
-                (pounder, settings.pounder, c.local.dds_clock_state)
+                (pounder, settings.pounder.as_ref(), c.local.dds_clock_state)
             {
-                pounder.update_dds(pounder_settings, clocking);
+                pounder.update_dds(*pounder_settings, clocking);
             }
         });
 
