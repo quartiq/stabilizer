@@ -47,10 +47,6 @@ use stabilizer::{
         dac::{Dac0Output, Dac1Output, DacCode},
         hal,
         input_stamper::InputStamper,
-        pounder::{
-            rf_power::PowerMeasurementInterface, Channel as PounderChannel,
-            PounderDevices,
-        },
         signal_generator,
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
@@ -59,7 +55,7 @@ use stabilizer::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Miniconf,
         serde::{Deserialize, Serialize},
-        telemetry::{PounderTelemetry, Telemetry, TelemetryBuffer},
+        telemetry::{Telemetry, TelemetryBuffer},
         NetworkState, NetworkUsers,
     },
 };
@@ -239,7 +235,6 @@ mod app {
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         pll: RPLL,
-        pounder_devices: Option<PounderDevices>,
         lockin: Lockin<4>,
         signal_generator: signal_generator::SignalGenerator,
         generator: FrameGenerator,
@@ -251,7 +246,7 @@ mod app {
         let clock = SystemTimer::new(|| monotonics::now().ticks() as u32);
 
         // Configure the microcontroller
-        let (mut stabilizer, pounder) = hardware::setup::setup(
+        let (mut stabilizer, _pounder) = hardware::setup::setup(
             c.core,
             c.device,
             clock,
@@ -260,7 +255,6 @@ mod app {
         );
 
         let settings = Settings::default();
-        let pounder_devices = pounder.map(|pounder| pounder.pounder);
 
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
@@ -302,7 +296,6 @@ mod app {
             timestamper: stabilizer.timestamper,
 
             pll: RPLL::new(SAMPLE_TICKS_LOG2 + BATCH_SIZE_LOG2),
-            pounder_devices,
             lockin: Lockin::default(),
             signal_generator: signal_generator::SignalGenerator::new(
                 signal_config,
@@ -489,7 +482,7 @@ mod app {
         c.shared.network.lock(|net| net.direct_stream(target));
     }
 
-    #[task(priority = 1, local=[digital_inputs, cpu_temp_sensor, pounder_devices], shared=[network, settings, telemetry])]
+    #[task(priority = 1, local=[digital_inputs, cpu_temp_sensor], shared=[network, settings, telemetry])]
     fn telemetry(mut c: telemetry::Context) {
         let mut telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
@@ -499,27 +492,17 @@ mod app {
             c.local.digital_inputs.1.is_high(),
         ];
 
-        telemetry.cpu_temp = c.local.cpu_temp_sensor.get_temperature().unwrap();
-        telemetry.pounder = if let Some(dev) = c.local.pounder_devices {
-            Some(PounderTelemetry {
-                temperature: dev.lm75.read_temperature().unwrap(),
-                input_powers: [
-                    dev.measure_power(PounderChannel::In0).unwrap(),
-                    dev.measure_power(PounderChannel::In1).unwrap(),
-                ],
-            })
-        } else {
-            None
-        };
-
         let (gains, telemetry_period) = c
             .shared
             .settings
             .lock(|settings| (settings.afe, settings.telemetry_period));
 
         c.shared.network.lock(|net| {
-            net.telemetry
-                .publish(&telemetry.finalize(gains[0], gains[1]))
+            net.telemetry.publish(&telemetry.finalize(
+                gains[0],
+                gains[1],
+                c.local.cpu_temp_sensor.get_temperature().unwrap(),
+            ))
         });
 
         // Schedule the telemetry task in the future.
