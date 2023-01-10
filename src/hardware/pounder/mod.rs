@@ -162,13 +162,13 @@ impl Default for ClockConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, Default, Miniconf)]
+#[derive(Copy, Clone, Debug, Default, Miniconf)]
 pub struct PounderConfig {
     pub clock: ClockConfig,
     #[miniconf(defer)]
-    pub in_ch: [ChannelConfig; 2],
+    pub in_ch: miniconf::Array<ChannelConfig, 2>,
     #[miniconf(defer)]
-    pub out_ch: [ChannelConfig; 2],
+    pub out_ch: miniconf::Array<ChannelConfig, 2>,
 }
 
 impl From<Channel> for ad9959::Channel {
