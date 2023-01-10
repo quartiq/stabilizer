@@ -396,7 +396,7 @@ impl<I: Interface> Ad9959<I> {
         amplitude: f32,
     ) -> Result<f32, Error> {
         let acr = amplitude_to_acr(amplitude)?;
-        let amplitude = if (acr & (1 << 12)) != 0  {
+        let amplitude = if (acr & (1 << 12)) != 0 {
             // Isolate the amplitude scaling factor from ACR
             (acr & ((1 << 10) - 1)) as f32 / (1 << 10) as f32
         } else {
