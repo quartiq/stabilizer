@@ -688,7 +688,7 @@ impl ProfileSerializer {
     /// * `multiplier` - The frequency multiplier of the system clock. Must be 1 or 4-20.
     ///
     /// # Limitations
-    /// The correctness of the FR1 register setting code rely on FR1[0:17] staying 0.
+    /// The correctness of the FR1 register setting code rely on FR1\[0:17\] staying 0.
     pub fn set_system_clock(
         &mut self,
         reference_clock_frequency: f32,
