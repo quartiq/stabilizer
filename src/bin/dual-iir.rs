@@ -242,7 +242,7 @@ mod app {
 
         let mut settings = Settings::default();
         if pounder.is_some() {
-            settings.enable_pounder_config()
+            settings.pounder.replace(PounderConfig::default());
         }
 
         let mut network = NetworkUsers::new(
