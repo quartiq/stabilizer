@@ -592,7 +592,7 @@ pub fn amplitude_to_acr(amplitude: f32) -> Result<u32, Error> {
     // Enable the amplitude multiplier for the channel if required. The amplitude control has
     // full-scale at 0x3FF (amplitude of 1), so the multiplier should be disabled whenever
     // full-scale is used.
-    let acr = if amplitude_control < (1 << 10) {
+    let acr = if amplitude != 1.0 {
         // Enable the amplitude multiplier
         (amplitude_control & 0x3FF) | (1 << 12)
     } else {
