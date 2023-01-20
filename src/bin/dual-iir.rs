@@ -189,12 +189,6 @@ impl Default for Settings {
     }
 }
 
-impl Settings {
-    fn enable_pounder_config(&mut self) {
-        self.pounder = Some(PounderConfig::default()).into();
-    }
-}
-
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
     use super::*;
