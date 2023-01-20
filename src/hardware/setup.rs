@@ -24,7 +24,7 @@ use super::{
 use crate::{
     hardware::pounder::{
         attenuators::AttenuatorInterface, rf_power::PowerMeasurementInterface,
-        Channel as PounderChannel, ClockConfig, PounderConfig, ProfileWrapper,
+        Channel as PounderChannel, ClockConfig, PounderConfig, Profile,
     },
     net::telemetry::PounderTelemetry,
 };
@@ -150,58 +150,63 @@ impl PounderDevices {
         clocking: &mut ClockConfig,
     ) {
         if *clocking != settings.clock {
-            validate_clocking(
+            match validate_clocking(
                 settings.clock.reference_clock,
                 settings.clock.multiplier,
-            )
-            .unwrap();
+            ) {
+                Ok(_frequency) => {
+                    self.pounder
+                        .set_ext_clk(settings.clock.external_clock)
+                        .unwrap();
 
-            self.pounder
-                .set_ext_clk(settings.clock.external_clock)
-                .unwrap();
+                    self.dds_output
+                        .builder()
+                        .set_system_clock(
+                            settings.clock.reference_clock,
+                            settings.clock.multiplier,
+                        )
+                        .unwrap()
+                        .write();
 
-            self.dds_output
-                .builder()
-                .set_system_clock(
-                    settings.clock.reference_clock,
-                    settings.clock.multiplier,
-                )
-                .unwrap()
-                .write();
-
-            *clocking = settings.clock;
+                    *clocking = settings.clock;
+                }
+                Err(err) => {
+                    log::error!("Invalid AD9959 clocking parameters: {:?}", err)
+                }
+            }
         }
 
-        for (channel_config, pounder_channel) in
-            settings.in_ch.iter().chain(settings.out_ch.iter()).zip([
+        for (channel_config, pounder_channel) in settings
+            .in_channel
+            .iter()
+            .chain(settings.out_channel.iter())
+            .zip([
                 PounderChannel::In0,
                 PounderChannel::In1,
                 PounderChannel::Out0,
                 PounderChannel::Out1,
             ])
         {
-            let dds_profile = ProfileWrapper::from((
-                clocking.clone(),
-                channel_config.clone(),
-            ))
-            .0;
-            self.dds_output
-                .builder()
-                .update_channels_with_profile(
-                    pounder_channel.into(),
-                    dds_profile,
-                )
-                .write();
+            match Profile::try_from((*clocking, *channel_config)) {
+                Ok(dds_profile) => {
+                    self.dds_output
+                        .builder()
+                        .update_channels_with_profile(
+                            pounder_channel.into(),
+                            dds_profile,
+                        )
+                        .write();
 
-            if self.pounder.get_attenuation(pounder_channel).unwrap()
-                != channel_config.attenuation
-            {
-                self.pounder
-                    .set_attenuation(
+                    if let Err(err) = self.pounder.set_attenuation(
                         pounder_channel,
                         channel_config.attenuation,
-                    )
-                    .unwrap();
+                    ) {
+                        log::error!("Invalid attenuation settings: {:?}", err)
+                    }
+                }
+                Err(err) => {
+                    log::error!("Invalid AD9959 profile settings: {:?}", err)
+                }
             }
         }
     }
