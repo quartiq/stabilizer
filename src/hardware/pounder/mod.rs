@@ -183,9 +183,9 @@ impl Default for ClockConfig {
 pub struct PounderConfig {
     pub clock: ClockConfig,
     #[miniconf(defer)]
-    pub in_ch: miniconf::Array<ChannelConfig, 2>,
+    pub in_channel: miniconf::Array<ChannelConfig, 2>,
     #[miniconf(defer)]
-    pub out_ch: miniconf::Array<ChannelConfig, 2>,
+    pub out_channel: miniconf::Array<ChannelConfig, 2>,
 }
 
 impl From<Channel> for ad9959::Channel {
