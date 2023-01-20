@@ -662,6 +662,9 @@ impl ProfileSerializer {
     /// # Args
     /// * `reference_clock_frequency` - The reference clock frequency provided to the AD9959 core.
     /// * `multiplier` - The frequency multiplier of the system clock. Must be 1 or 4-20.
+    ///
+    /// # Limitations
+    /// The correctness of the FR1 register setting code rely on FR1[0:17] staying 0.
     pub fn set_system_clock(
         &mut self,
         reference_clock_frequency: f32,
@@ -674,6 +677,9 @@ impl ProfileSerializer {
 
         // The ad9959 crate does not modify FR1[0:17]. These bits keep their default value.
         // These bits by default are 0.
+        // Reading the register then update is not possible to implement in a serializer, where
+        // many QSPI writes are performed in burst. Switching between read and write requires
+        // breaking the QSPI indirect write mode and switch into the QSPI indirect read mode.
         fr1[0].set_bits(2..=6, multiplier);
 
         // Frequencies within the VCO forbidden range (160e6, 255e6) are already rejected.
