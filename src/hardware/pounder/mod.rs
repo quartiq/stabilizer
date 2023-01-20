@@ -110,8 +110,6 @@ impl Default for DdsChannelConfig {
     }
 }
 
-pub struct ProfileWrapper(pub Profile);
-
 /// Represents a fully defined DDS profile, with parameters expressed in machine units
 pub struct Profile {
     // A 32-bits representation of DDS frequency in relation to the system clock frequency.
