@@ -4,19 +4,20 @@ use bit_field::BitField;
 use bitflags::bitflags;
 use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
 
-// An arbitrary frequency that sits between the 160 MHz to 255 MHz zone, where system clock frequency is not supported by both high frequency and low frequency VCO settings.
+/// An arbitrary frequency that sits between the 160 MHz to 255 MHz zone, where system clock
+/// frequency is not supported by both high frequency and low frequency VCO settings.
 const VCO_MIN_FREQUENCY: f32 = 200e6;
-// The minimum reference clock input frequency with REFCLK multiplier disabled.
+/// The minimum reference clock input frequency with REFCLK multiplier disabled.
 const MIN_REFCLK_FREQUENCY: f32 = 1e6;
-// The minimum reference clock input frequency with REFCLK multiplier enabled.
+/// The minimum reference clock input frequency with REFCLK multiplier enabled.
 const MIN_MULTIPLIED_REFCLK_FREQUENCY: f32 = 10e6;
-// The maximum system clock frequency with high frequency range VCO.
+/// The maximum system clock frequency with high frequency range VCO.
 const MAX_VCO_OUTPUT_FREQUENCY: f32 = 500e6;
-// The minimum system clock frequency with high frequency range VCO.
+/// The minimum system clock frequency with high frequency range VCO.
 const MIN_VCO_OUTPUT_FREQUENCY: f32 = 255e6;
-// The maximum system clock frequency with low frequency range VCO.
+/// The maximum system clock frequency with low frequency range VCO.
 const MAX_OUTPUT_FREQUENCY: f32 = 160e6;
-// The minimum system clock frequency with low frequency range VCO.
+/// The minimum system clock frequency with low frequency range VCO.
 const MIN_OUTPUT_FREQUENCY: f32 = 100e6;
 
 /// A device driver for the AD9959 direct digital synthesis (DDS) chip.
