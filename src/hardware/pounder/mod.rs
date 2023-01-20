@@ -2,7 +2,7 @@ use self::attenuators::AttenuatorInterface;
 
 use super::hal;
 use crate::hardware::{shared_adc::AdcChannel, I2c1Proxy};
-use ad9959::{amplitude_to_acr, frequency_to_ftw, phase_to_pow, Profile};
+use ad9959::{amplitude_to_acr, frequency_to_ftw, phase_to_pow};
 use embedded_hal::blocking::spi::Transfer;
 use enum_iterator::Sequence;
 use miniconf::Miniconf;
@@ -112,18 +112,35 @@ impl Default for DdsChannelConfig {
 
 pub struct ProfileWrapper(pub Profile);
 
-impl From<(ClockConfig, ChannelConfig)> for ProfileWrapper {
-    fn from((clocking, channel): (ClockConfig, ChannelConfig)) -> Self {
+/// Represents a fully defined DDS profile, with parameters expressed in machine units
+pub struct Profile {
+    // A 32-bits representation of DDS frequency in relation to the system clock frequency.
+    // This value corresponds to the AD9959 CFTW0 register, which specifies the frequency
+    // of DDS channels.
+    pub frequency_tuning_word: u32,
+    // The DDS phase offset. It corresponds to the AD9959 CPOW0 register, which specifies
+    // the phase offset of DDS channels.
+    pub phase_offset: u16,
+    // Control amplitudes of DDS channels. It corresponds to the AD9959 ACR register, which
+    // controls the amplitude scaling factor of DDS channels.
+    pub amplitude_control: u32,
+}
+
+impl TryFrom<(ClockConfig, ChannelConfig)> for Profile {
+    type Error = ad9959::Error;
+
+    fn try_from(
+        (clocking, channel): (ClockConfig, ChannelConfig),
+    ) -> Result<Self, Self::Error> {
         let system_clock_frequency =
             clocking.reference_clock * clocking.multiplier as f32;
-        ProfileWrapper(Profile {
-            ftw: frequency_to_ftw(
+        Ok(Profile {
+            frequency_tuning_word: frequency_to_ftw(
                 channel.dds.frequency,
                 system_clock_frequency,
-            )
-            .unwrap(),
-            pow: phase_to_pow(channel.dds.phase_offset).unwrap(),
-            acr: amplitude_to_acr(channel.dds.amplitude).unwrap(),
+            )?,
+            phase_offset: phase_to_pow(channel.dds.phase_offset)?,
+            amplitude_control: amplitude_to_acr(channel.dds.amplitude)?,
         })
     }
 }
