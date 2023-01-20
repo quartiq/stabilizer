@@ -38,8 +38,6 @@ pub struct TelemetryBuffer {
     pub dacs: [DacCode; 2],
     /// The latest digital input states during processing.
     pub digital_inputs: [bool; 2],
-    /// The latest measured status related to pounder. See [PounderTelemetry].
-    pub pounder: Option<PounderTelemetry>,
 }
 
 /// The telemetry structure is data that is ultimately reported as telemetry over MQTT.
@@ -85,7 +83,6 @@ impl Default for TelemetryBuffer {
             adcs: [AdcCode(0), AdcCode(0)],
             dacs: [DacCode(0), DacCode(0)],
             digital_inputs: [false, false],
-            pounder: None,
         }
     }
 }
@@ -97,10 +94,17 @@ impl TelemetryBuffer {
     /// * `afe0` - The current AFE configuration for channel 0.
     /// * `afe1` - The current AFE configuration for channel 1.
     /// * `cpu_temp` - The current CPU temperature.
+    /// * `pounder` - The current Pounder telemetry.
     ///
     /// # Returns
     /// The finalized telemetry structure that can be serialized and reported.
-    pub fn finalize(self, afe0: Gain, afe1: Gain, cpu_temp: f32) -> Telemetry {
+    pub fn finalize(
+        self,
+        afe0: Gain,
+        afe1: Gain,
+        cpu_temp: f32,
+        pounder: Option<PounderTelemetry>,
+    ) -> Telemetry {
         let in0_volts = Into::<f32>::into(self.adcs[0]) / afe0.as_multiplier();
         let in1_volts = Into::<f32>::into(self.adcs[1]) / afe1.as_multiplier();
 
@@ -109,7 +113,7 @@ impl TelemetryBuffer {
             adcs: [in0_volts, in1_volts],
             dacs: [self.dacs[0].into(), self.dacs[1].into()],
             digital_inputs: self.digital_inputs,
-            pounder: self.pounder,
+            pounder,
         }
     }
 }

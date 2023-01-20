@@ -476,13 +476,11 @@ mod app {
 
     #[task(priority = 1, shared=[network, settings, telemetry, pounder], local=[cpu_temp_sensor])]
     fn telemetry(mut c: telemetry::Context) {
-        let mut telemetry: TelemetryBuffer =
+        let telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
 
-        c.shared.pounder.lock(|pounder| {
-            if let Some(pounder) = pounder {
-                telemetry.pounder = Some(pounder.get_telemetry());
-            }
+        let pounder_telemetry = c.shared.pounder.lock(|pounder| {
+            pounder.as_mut().map(|pounder| pounder.get_telemetry())
         });
 
         let (gains, telemetry_period) = c
@@ -495,6 +493,7 @@ mod app {
                 gains[0],
                 gains[1],
                 c.local.cpu_temp_sensor.get_temperature().unwrap(),
+                pounder_telemetry,
             ))
         });
 

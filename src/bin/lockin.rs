@@ -502,6 +502,7 @@ mod app {
                 gains[0],
                 gains[1],
                 c.local.cpu_temp_sensor.get_temperature().unwrap(),
+                None,
             ))
         });
 
