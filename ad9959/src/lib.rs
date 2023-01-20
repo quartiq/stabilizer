@@ -4,6 +4,21 @@ use bit_field::BitField;
 use bitflags::bitflags;
 use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
 
+// An arbitrary frequency that sits between the 160 MHz to 255 MHz zone, where system clock frequency is not supported by both high frequency and low frequency VCO settings.
+const VCO_MIN_FREQUENCY: f32 = 200e6;
+// The minimum reference clock input frequency with REFCLK multiplier disabled.
+const MIN_REFCLK_FREQUENCY: f32 = 1e6;
+// The minimum reference clock input frequency with REFCLK multiplier enabled.
+const MIN_MULTIPLIED_REFCLK_FREQUENCY: f32 = 10e6;
+// The maximum system clock frequency with high frequency range VCO.
+const MAX_VCO_OUTPUT_FREQUENCY: f32 = 500e6;
+// The minimum system clock frequency with high frequency range VCO.
+const MIN_VCO_OUTPUT_FREQUENCY: f32 = 255e6;
+// The maximum system clock frequency with low frequency range VCO.
+const MAX_OUTPUT_FREQUENCY: f32 = 160e6;
+// The minimum system clock frequency with low frequency range VCO.
+const MIN_OUTPUT_FREQUENCY: f32 = 100e6;
+
 /// A device driver for the AD9959 direct digital synthesis (DDS) chip.
 ///
 /// This chip provides four independently controllable digital-to-analog output sinusoids with
@@ -225,7 +240,7 @@ impl<I: Interface> Ad9959<I> {
         self.read(Register::FR1, &mut fr1)?;
         fr1[0].set_bits(2..=6, multiplier);
 
-        let vco_range = frequency > 200e6;
+        let vco_range = frequency > VCO_MIN_FREQUENCY;
         fr1[0].set_bit(7, vco_range);
 
         self.write(Register::FR1, &fr1)?;
@@ -503,22 +518,41 @@ pub fn validate_clocking(
     reference_clock_frequency: f32,
     multiplier: u8,
 ) -> Result<f32, Error> {
-    if multiplier != 1 && !(4..=20).contains(&multiplier)
-        || (multiplier != 1 && reference_clock_frequency < 10e6)
-        || reference_clock_frequency < 1e6
+    // If the REFCLK multiplier is enabled, the multiplier (FR1[22:18]) must be between 4 to 20.
+    // Alternatively, the clock multiplier can be disabled. The multiplication factor is 1.
+    if multiplier != 1 && !(4..=20).contains(&multiplier) {
+        return Err(Error::Bounds);
+    }
+    // If the REFCLK multiplier is enabled, the REFCLK frequency must be at least 10 MHz.
+    if multiplier != 1
+        && reference_clock_frequency < MIN_MULTIPLIED_REFCLK_FREQUENCY
     {
+        return Err(Error::Bounds);
+    }
+    // The REFCLK frequency must be at least 1 MHz with REFCLK multiplier disabled.
+    if multiplier == 1 && reference_clock_frequency < MIN_REFCLK_FREQUENCY {
         return Err(Error::Bounds);
     }
 
     let frequency = multiplier as f32 * reference_clock_frequency;
-    if !(255e6..=500e6).contains(&frequency)
-        && !(100e6..=160e6).contains(&frequency)
-        && (multiplier != 1 || !(0.0..100e6).contains(&frequency))
+    // SYSCLK frequency between 255 MHz and 500 MHz (inclusive) is valid with high range VCO
+    if (MIN_VCO_OUTPUT_FREQUENCY..=MAX_VCO_OUTPUT_FREQUENCY)
+        .contains(&frequency)
     {
-        return Err(Error::Frequency);
+        return Ok(frequency);
     }
 
-    Ok(frequency)
+    // SYSCLK frequency between 100 MHz and 160 MHz (inclusive) is valid with low range VCO
+    if (MIN_OUTPUT_FREQUENCY..=MAX_OUTPUT_FREQUENCY).contains(&frequency) {
+        return Ok(frequency);
+    }
+
+    // When the REFCLK multiplier is disabled, SYSCLK frequency can go below 100 MHz
+    if multiplier == 1 && (0.0..MIN_OUTPUT_FREQUENCY).contains(&frequency) {
+        return Ok(frequency);
+    }
+
+    Err(Error::Frequency)
 }
 
 pub fn frequency_to_ftw(
@@ -632,7 +666,7 @@ impl ProfileSerializer {
         fr1[0].set_bits(2..=6, multiplier);
 
         // Frequencies within the VCO forbidden range (160e6, 255e6) are already rejected.
-        let vco_range = frequency > 200e6;
+        let vco_range = frequency > VCO_MIN_FREQUENCY;
         fr1[0].set_bit(7, vco_range);
 
         self.add_write(Register::FR1, &fr1);
