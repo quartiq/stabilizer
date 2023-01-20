@@ -410,18 +410,29 @@ impl<I: Interface> Ad9959<I> {
         channel: Channel,
         amplitude: f32,
     ) -> Result<f32, Error> {
-        let acr = amplitude_to_acr(amplitude)?;
-        let amplitude = if (acr & (1 << 12)) != 0 {
-            // Isolate the amplitude scaling factor from ACR
-            (acr & ((1 << 10) - 1)) as f32 / (1 << 10) as f32
-        } else {
-            // Amplitude is always at full-scale with amplitude multiplier disabled
-            1.0
-        };
-        // ACR is a 24-bits register, the MSB of the calculated ACR must be discarded.
-        self.modify_channel(channel, Register::ACR, &acr.to_be_bytes()[1..])?;
+        if !(0.0..=1.0).contains(&amplitude) {
+            return Err(Error::Bounds);
+        }
 
-        Ok(amplitude)
+        let amplitude_control: u16 = (amplitude * (1 << 10) as f32) as u16;
+
+        let mut acr: [u8; 3] = [0; 3];
+
+        // Enable the amplitude multiplier for the channel if required. The amplitude control has
+        // full-scale at 0x3FF (amplitude of 1), so the multiplier should be disabled whenever
+        // full-scale is used.
+        if amplitude_control < (1 << 10) {
+            let masked_control = amplitude_control & 0x3FF;
+            acr[1] = masked_control.to_be_bytes()[0];
+            acr[2] = masked_control.to_be_bytes()[1];
+
+            // Enable the amplitude multiplier
+            acr[1].set_bit(4, true);
+        }
+
+        self.modify_channel(channel, Register::ACR, &acr)?;
+
+        Ok(amplitude_control as f32 / (1 << 10) as f32)
     }
 
     /// Get the configured amplitude of a channel.
