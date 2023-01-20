@@ -468,15 +468,22 @@ impl<I: Interface> Ad9959<I> {
         channel: Channel,
         frequency: f32,
     ) -> Result<f32, Error> {
-        let tuning_word =
-            frequency_to_ftw(frequency, self.system_clock_frequency())?;
+        if frequency < 0.0 || frequency > self.system_clock_frequency() {
+            return Err(Error::Bounds);
+        }
+
+        // The function for channel frequency is `f_out = FTW * f_s / 2^32`, where FTW is the
+        // frequency tuning word and f_s is the system clock rate.
+        let tuning_word: u32 = ((frequency / self.system_clock_frequency())
+            * 1u64.wrapping_shl(32) as f32)
+            as u32;
 
         self.modify_channel(
             channel,
             Register::CFTW0,
             &tuning_word.to_be_bytes(),
         )?;
-        Ok((tuning_word as f32 / (1u64 << 32) as f32)
+        Ok((tuning_word as f32 / 1u64.wrapping_shl(32) as f32)
             * self.system_clock_frequency())
     }
 
@@ -572,7 +579,7 @@ pub fn frequency_to_ftw(
 }
 
 pub fn phase_to_pow(phase_turns: f32) -> Result<u16, Error> {
-    Ok((phase_turns * (1 << 14) as f32) as u16 & ((1 << 14) - 1))
+    Ok((phase_turns * (1 << 14) as f32) as u16 & 0x3FFFu16)
 }
 
 pub fn amplitude_to_acr(amplitude: f32) -> Result<u32, Error> {
