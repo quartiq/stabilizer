@@ -7,6 +7,7 @@ use embedded_hal::blocking::spi::Transfer;
 use enum_iterator::Sequence;
 use miniconf::Miniconf;
 use serde::{Deserialize, Serialize};
+use stm32h7xx_hal::time::MegaHertz;
 
 pub mod attenuators;
 pub mod dds_output;
@@ -169,9 +170,8 @@ pub struct ClockConfig {
 impl Default for ClockConfig {
     fn default() -> Self {
         Self {
-            multiplier: super::design_parameters::DDS_MULTIPLIER,
-            reference_clock: super::design_parameters::DDS_REF_CLK.to_Hz()
-                as f32,
+            multiplier: 5,
+            reference_clock: MegaHertz::MHz(100).to_Hz() as f32,
             external_clock: false,
         }
     }
