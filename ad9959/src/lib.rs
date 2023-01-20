@@ -601,7 +601,7 @@ pub fn phase_to_pow(phase_turns: f32) -> Result<u16, Error> {
 /// Convert amplitude into amplitude control register values.
 ///
 /// Arguments:
-/// * `amplitude` - The amplitude of a DDS channel.
+/// * `amplitude` - The amplitude scaling factor of a DDS channel.
 ///
 /// Returns:
 /// The corresponding value in the amplitude control register.
