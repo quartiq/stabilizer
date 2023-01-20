@@ -55,8 +55,8 @@
 use log::warn;
 use stm32h7xx_hal as hal;
 
-use super::{hrtimer::HighResTimerE, QspiInterface};
-use ad9959::{Channel, Mode, Profile, ProfileSerializer};
+use super::{hrtimer::HighResTimerE, Profile, QspiInterface};
+use ad9959::{Channel, Mode, ProfileSerializer};
 
 /// The DDS profile update stream.
 pub struct DdsOutput {
@@ -163,8 +163,9 @@ impl<'a> ProfileBuilder<'a> {
     /// * `channels` - A set of channels to apply the configuration to.
     /// * `profile` - The complete DDS profile, which defines the frequency tuning word,
     ///   amplitude control register & the phase offset word of the channels.
-    ///   Note that the ACR should be stored in the 3 LSB of the word.
-    ///   If amplitude scaling is to be used, the "Amplitude multiplier enable" bit must be set.
+    /// # Note
+    /// The ACR should be stored in the 3 LSB of the word.
+    /// If amplitude scaling is to be used, the "Amplitude multiplier enable" bit must be set.
     #[inline]
     pub fn update_channels_with_profile(
         &mut self,
@@ -173,9 +174,9 @@ impl<'a> ProfileBuilder<'a> {
     ) -> &mut Self {
         self.serializer.update_channels(
             channels,
-            Some(profile.ftw),
-            Some(profile.pow),
-            Some(profile.acr),
+            Some(profile.frequency_tuning_word),
+            Some(profile.phase_offset),
+            Some(profile.amplitude_control),
         );
         self
     }
