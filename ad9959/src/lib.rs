@@ -751,10 +751,3 @@ impl ProfileSerializer {
         bytemuck::cast_slice(&self.data[..self.index])
     }
 }
-
-/// Represents a fully defined DDS profile, with parameters expressed in machine units
-pub struct Profile {
-    pub ftw: u32,
-    pub pow: u16,
-    pub acr: u32,
-}
