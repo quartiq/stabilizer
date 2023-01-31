@@ -31,7 +31,7 @@ sleep 30
 # * The stabilizer application is operational
 ping -c 5 -w 20 stabilizer-hitl
 
-# Test the MQTT interface.
+# Test the MQTT interface. This uses the default broker "mqtt"
 python3 -m miniconf $PREFIX afe/0='"G2"'
 python3 -m stabilizer.iir_coefficients -p $PREFIX -c 0 -v pid --Ki 10 --Kp 1
 
