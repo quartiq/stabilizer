@@ -56,9 +56,9 @@ used:
 * `value` = `{"ip": [192, 168, 0, 1], "port": 4000}`
 
 ```
-python -m miniconf --broker 10.34.16.10 dt/sinara/dual-iir/00-11-22-33-44-55 stream_target='{"ip": [10, 34, 16, 123], "port": 4000}'
+python -m miniconf --broker 10.34.16.1 dt/sinara/dual-iir/00-11-22-33-44-55 stream_target='{"ip": [10, 34, 16, 123], "port": 4000}'
 
-Where `10.34.16.10` is the MQTT broker address that matches the one configured in the source code and `10.34.16.123` and `4000` are the desire stream target IP and port.
+Where `10.34.16.1` is the MQTT broker address that matches the one configured in the source code and `10.34.16.123` and `4000` are the desire stream target IP and port.
 ```
 
 The prefix can be found for a specific device by looking at the topic on which telemetry that is
