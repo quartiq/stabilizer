@@ -187,7 +187,7 @@ fn get_client_id(
     mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
 ) -> String<64> {
     let mut identifier = String::new();
-    write!(&mut identifier, "{}-{}-{}", app, mac, client).unwrap();
+    write!(&mut identifier, "{app}-{mac}-{client}").unwrap();
     identifier
 }
 
@@ -206,7 +206,7 @@ pub fn get_device_prefix(
     // Note(unwrap): The mac address + binary name must be short enough to fit into this string. If
     // they are defined too long, this will panic and the device will fail to boot.
     let mut prefix: String<128> = String::new();
-    write!(&mut prefix, "dt/sinara/{}/{}", app, mac).unwrap();
+    write!(&mut prefix, "dt/sinara/{app}/{mac}").unwrap();
 
     prefix
 }
