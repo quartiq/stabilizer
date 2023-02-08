@@ -171,7 +171,7 @@ def notch_coefficients(args):
     """Calculate notch IIR filter coefficients."""
     f0_bar = pi * args.f0 * args.sample_period
 
-    denominator = (1 + f0_bar / args.Q + f0_bar ** 2)
+    denominator = 1 + f0_bar / args.Q + f0_bar ** 2
 
     a1 = 2 * (1 - f0_bar ** 2) / denominator
     a2 = - (1 - f0_bar / args.Q + f0_bar ** 2) / denominator
