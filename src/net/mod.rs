@@ -55,7 +55,7 @@ pub struct NetworkUsers<S: Default + Miniconf + Clone, T: Serialize> {
     stream: DataStream,
     generator: Option<FrameGenerator>,
     pub telemetry: TelemetryClient<T>,
-    pub alarm: Alarm<NetworkReference, SystemTimer, 128>,
+    pub alarm: Alarm<NetworkReference, SystemTimer, 128, 256>,
 }
 
 impl<S, T> NetworkUsers<S, T>
@@ -116,6 +116,7 @@ where
         let alarm = Alarm::new(
             stack_manager.acquire_stack(),
             &get_client_id(app, "alarm", mac),
+            &prefix,
             broker,
             clock,
         )
