@@ -46,7 +46,7 @@ use stabilizer::{
         dac::{Dac0Output, Dac1Output, DacCode},
         design_parameters, driver,
         driver::{
-            alarm::{Action, Alarm},
+            alarm::{Action, AlarmSettings},
             output, Channel,
         },
         hal,
@@ -110,7 +110,7 @@ pub struct Settings {
     /// # Value
     /// [Alarm]
     #[miniconf(defer)]
-    alarm: Alarm,
+    alarm: AlarmSettings,
 
     /// Laser interlock reset.
     /// A false -> true transition will reset a tripped laser interlock
@@ -144,7 +144,7 @@ impl Default for Settings {
             // The default telemetry period in seconds.
             telemetry_period: 1.0,
             stream_target: StreamTarget::default(),
-            alarm: Alarm::default(),
+            alarm: AlarmSettings::default(),
             reset_laser_interlock: false,
             low_noise: driver::LowNoiseSettings::default(),
             high_power: driver::HighPowerSettings::default(),

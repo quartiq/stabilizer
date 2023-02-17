@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// Driver features an alarm to ensure safe co-operation with other devices.
 /// The alarm is implemented via MQTT.
 ///
-pub struct Alarm {
+pub struct AlarmSettings {
     /// "Alarm" topic. Publish "false" onto this topic to indicate valid operating conditions. This renews the alarm timeout.
     /// Publishing "true" or failing to publish "false" for [`timeout`] trips the alarm.
     /// In the case of Driver this will trip the [super::LaserInterlock].
@@ -41,7 +41,7 @@ pub struct Alarm {
     timeout: u64,
 }
 
-impl Default for Alarm {
+impl Default for AlarmSettings {
     fn default() -> Self {
         Self {
             alarm: true,
@@ -58,7 +58,7 @@ pub enum Action {
     Cancel,
 }
 
-impl Alarm {
+impl AlarmSettings {
     pub fn action(
         &self,
         path: Option<&str>,
