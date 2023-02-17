@@ -121,10 +121,6 @@ impl LaserInterlock {
         if self.reason.is_none() || reason.is_none() {
             self.pin.set_state(reason.is_none().into());
             self.reason = reason;
-            // Todo: I would like to keep this error print but it takes too much time here in some circumstances.
-            // if let Some(re) = reason {
-            //     error!("Interlock tripped! {:?}", re)
-            // }
         }
     }
 
