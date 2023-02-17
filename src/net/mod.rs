@@ -115,7 +115,7 @@ where
 
         let alarm = Alarm::new(
             stack_manager.acquire_stack(),
-            &get_client_id(app, "settings", mac),
+            &get_client_id(app, "alarm", mac),
             broker,
             clock,
         )
@@ -175,7 +175,7 @@ where
             UpdateState::Updated => NetworkState::Updated,
         };
 
-        let _ = self.alarm.update().unwrap();
+        let _ = self.alarm.update();
 
         // `settings_path` has to be at least as large as `miniconf::mqtt_client::MAX_TOPIC_LENGTH`.
         let mut settings_path: String<128> = String::new();

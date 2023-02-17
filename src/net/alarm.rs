@@ -35,38 +35,34 @@ where
     }
 
     pub fn update(&mut self) -> Result<bool, minimq::Error<Stack::Error>> {
-        if self.mqtt.client().is_connected() {
-            if !self.subscribed {
-                log::info!("alarm subed");
-                self.subscribed = true;
-                self.mqtt
-                    .client()
-                    .subscribe(&["topic".into()], &[])
-                    .map(|_| false)
-            } else {
-                log::info!("alarm polling");
-                self.mqtt
-                    .poll(|client, topic, message, _properties| match topic {
-                        "topic" => {
-                            log::info!("{:?}", message);
-                            let response = Publication::new(message)
-                                .topic("echo")
-                                .finish()
-                                .unwrap();
-                            client.publish(response).unwrap();
-                            true
-                        }
-                        topic => {
-                            log::info!("Unknown topic: {}", topic);
-                            false
-                        }
-                    })
-                    .map(|res| res.unwrap())
-            }
-        } else {
+        if !self.subscribed && self.mqtt.client().is_connected() {
+            log::info!("alarm subed");
             self.subscribed = true;
-            log::info!("alarm disconnected");
-            Ok(false)
+            self.mqtt
+                .client()
+                .subscribe(&["topic".into()], &[])
+                .map(|_| false)
+        } else {
+            self.mqtt
+                .poll(|client, topic, message, _properties| match topic {
+                    "topic" => {
+                        log::info!("{:?}", message);
+                        let response = Publication::new(message)
+                            .topic("echo")
+                            .finish()
+                            .unwrap();
+                        client.publish(response).unwrap();
+                        true
+                    }
+                    topic => {
+                        log::info!("Unknown topic: {}", topic);
+                        false
+                    }
+                })
+                .map(|res| {
+                    // log::info!("res: {:?}", res);
+                    false
+                })
         }
     }
 }
