@@ -13,8 +13,12 @@ const FALSE: &'static [u8] = &[102, 97, 108, 115, 101]; // "false" in raw bytes
 /// Driver alarm functionality
 ///
 /// Driver features an alarm to ensure safe co-operation with other devices.
-/// The alarm is implemented via MQTT.
-///
+/// The alarm is implemented via MQTT as a separate topic besides settings and telemetry.
+/// Publish "false" onto the alarm topic to indicate valid operating conditions. This renews the alarm timeout.
+/// Publishing "true" or failing to publish "false" for [`Self::timeout`] trips the alarm.
+/// In the case of Driver this will trip the [super::LaserInterlock].
+/// After the alarm is tripped, it has to be [rearm](Self::rearm())ed.
+/// For Driver this will happen when the [super::LaserInterlock] is cleared.
 pub struct AlarmSettings {
     /// Set alarm to armed/disarmed.
     ///
@@ -104,11 +108,6 @@ impl AlarmSettings {
 }
 
 /// Stabilizer mqtt alarm listener.
-/// Publish "false" onto the alarm topic to indicate valid operating conditions. This renews the alarm timeout.
-/// Publishing "true" or failing to publish "false" for [`AlarmSettings::timeout`] trips the alarm.
-/// In the case of Driver this will trip the [super::LaserInterlock].
-/// After the alarm is tripped, it has to be [rearm](AlarmSettings::rearm())ed.
-/// For Driver this will happen when the [super::LaserInterlock] is cleared.
 pub struct Alarm<
     Stack,
     Clock,
