@@ -163,7 +163,7 @@ where
         }
         if !self.subscribed && self.mqtt.client().is_connected() {
             self.subscribed = true;
-            log::info!("alarm subscribed to {:?}", self.prefix);
+            log::info!("Alarm subscribed to {:?}", self.prefix);
             self.mqtt
                 .client()
                 .subscribe(&[(self.prefix.as_str()).into()], &[])

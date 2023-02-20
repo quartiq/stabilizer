@@ -403,7 +403,7 @@ mod app {
                     settings_update::spawn().unwrap()
                 }
                 NetworkState::Updated => {}
-                NetworkState::NoChange => cortex_m::asm::wfi(),
+                _ => cortex_m::asm::wfi(),
             }
         }
     }
