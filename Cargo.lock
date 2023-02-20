@@ -723,9 +723,9 @@ dependencies = [
 
 [[package]]
 name = "rtt-logger"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c83752c03884a6a08abe7aa352f468ff2dc2b3dd4e5a32bdcc34b1cfbef4b6b"
+checksum = "b2f42c228caf6eab0fe8374ef3988b9db07dbe0b12b65b4a02aaacb48b03354e"
 dependencies = [
  "log",
  "rtt-target",
