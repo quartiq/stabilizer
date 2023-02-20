@@ -14,12 +14,9 @@ pub mod data_stream;
 pub mod network_processor;
 pub mod telemetry;
 
-use crate::hardware::{
-    driver::alarm::AlarmSettings, EthernetPhy, NetworkManager, NetworkStack,
-    SystemTimer,
-};
+use crate::hardware::{EthernetPhy, NetworkManager, NetworkStack, SystemTimer};
 use data_stream::{DataStream, FrameGenerator};
-use minimq::{embedded_nal::IpAddr, Minimq};
+use minimq::embedded_nal::IpAddr;
 use network_processor::NetworkProcessor;
 use telemetry::TelemetryClient;
 
@@ -44,6 +41,7 @@ pub enum UpdateState {
 
 pub enum NetworkState {
     SettingsChanged(String<128>),
+    AlarmChanged(bool),
     Updated,
     NoChange,
 }
@@ -176,7 +174,9 @@ where
             UpdateState::Updated => NetworkState::Updated,
         };
 
-        let _ = self.alarm.update();
+        if let Some(alarm) = self.alarm.update().unwrap_or(None) {
+            return NetworkState::AlarmChanged(alarm);
+        };
 
         // `settings_path` has to be at least as large as `miniconf::mqtt_client::MAX_TOPIC_LENGTH`.
         let mut settings_path: String<128> = String::new();

@@ -31,7 +31,6 @@ use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
 
 use fugit::{Duration, ExtU64, TimerInstantU64};
-use heapless::String;
 use mutex_trait::prelude::*;
 
 use idsp::iir;
@@ -45,16 +44,15 @@ use stabilizer::{
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
         design_parameters, driver,
-        driver::{
-            alarm::{Action, AlarmSettings},
-            output, Channel,
-        },
+        driver::{output, Channel},
         hal,
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, I2c1Proxy, SystemTimer, Systick, AFE0,
         AFE1, MONOTONIC_FREQUENCY,
     },
     net::{
+        alarm::Action,
+        alarm::AlarmSettings,
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Miniconf,
         NetworkState, NetworkUsers,
@@ -195,6 +193,8 @@ pub struct Telemetry {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
+    use stabilizer::net::alarm::Change;
+
     use super::*;
 
     /// Period for checking the Driver output interlock voltage/current levels.
@@ -311,7 +311,7 @@ mod app {
         );
 
         // Spawn a settings update for default settings.
-        settings_update::spawn(None).unwrap();
+        settings_update::spawn().unwrap();
         telemetry::spawn().unwrap();
         ethernet_link::spawn().unwrap();
         header_adc_start_conversion::spawn().unwrap();
@@ -418,8 +418,11 @@ mod app {
     fn idle(mut c: idle::Context) -> ! {
         loop {
             match c.shared.network.lock(|net| net.update()) {
-                NetworkState::SettingsChanged(path) => {
-                    settings_update::spawn(Some(path)).unwrap()
+                NetworkState::SettingsChanged(_) => {
+                    settings_update::spawn().unwrap()
+                }
+                NetworkState::AlarmChanged(alarm) => {
+                    alarm_update::spawn(Change::Alarm(alarm)).unwrap()
                 }
                 NetworkState::Updated => {}
                 NetworkState::NoChange => cortex_m::asm::wfi(),
@@ -427,21 +430,14 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, alarm_handle, output_state, laser_interlock])]
-    fn settings_update(
-        mut c: settings_update::Context,
-        path: Option<String<128>>,
-    ) {
-        let new_settings =
-            c.shared.network.lock(|net| *net.miniconf.settings());
-        let old_settings = c.shared.settings.lock(|current| *current);
+    #[task(priority = 1, shared=[alarm_handle, settings])]
+    fn alarm_update(mut c: alarm_update::Context, change: Change) {
+        let settings = c.shared.settings.lock(|settings| *settings);
 
         c.shared.alarm_handle.lock(|handle| {
-            if let Some(action) = new_settings.alarm.action(
-                path.as_ref()
-                    .map(|path| path.as_str().trim_start_matches("alarm/")),
-                handle.is_some(),
-            ) {
+            if let Some(action) =
+                settings.alarm.action(change, handle.is_some())
+            {
                 *handle = match action {
                     Action::Spawn(millis) => {
                         log::info!("Alarm armed");
@@ -489,6 +485,17 @@ mod app {
                 };
             }
         });
+    }
+
+    #[task(priority = 1, local=[afes], shared=[network, settings, alarm_handle, output_state, laser_interlock])]
+    fn settings_update(mut c: settings_update::Context) {
+        let new_settings =
+            c.shared.network.lock(|net| *net.miniconf.settings());
+        let old_settings = c.shared.settings.lock(|current| *current);
+
+        if old_settings.alarm.armed != new_settings.alarm.armed {
+            alarm_update::spawn(Change::Armed).unwrap()
+        }
 
         // Only set interlock pin high if all channels disabled and false -> true transition.
         if !old_settings.reset_laser_interlock

@@ -1,12 +1,114 @@
 use heapless::String;
 use miniconf::embedded_time;
-use minimq::{
-    embedded_nal::{IpAddr, TcpClientStack},
-    Publication,
-};
-use stm32h7xx_hal::device::iwdg::pr;
+use minimq::embedded_nal::{IpAddr, TcpClientStack};
 
-/// Stabilizer mqtt alarm listener
+use fugit::ExtU64;
+use miniconf::Miniconf;
+use serde::{Deserialize, Serialize};
+
+const TRUE: &'static [u8] = &[116, 114, 117, 101]; // "true" in raw bytes
+const FALSE: &'static [u8] = &[102, 97, 108, 115, 101]; // "false" in raw bytes
+
+#[derive(Clone, Copy, Debug, Miniconf, Serialize, Deserialize)]
+/// Driver alarm functionality
+///
+/// Driver features an alarm to ensure safe co-operation with other devices.
+/// The alarm is implemented via MQTT.
+///
+pub struct AlarmSettings {
+    /// Set alarm to armed/disarmed.
+    ///
+    /// # Path
+    /// `armed`
+    ///
+    /// # Value
+    /// "true" or "false"
+    pub armed: bool,
+
+    /// Alarm timeout in milliseconds.
+    ///
+    /// # Path
+    /// `timeout`
+    ///
+    /// # Value
+    /// "true" or "false"
+    timeout: u64,
+}
+
+impl Default for AlarmSettings {
+    fn default() -> Self {
+        Self {
+            armed: false,
+            timeout: 1000,
+        }
+    }
+}
+
+pub enum Action {
+    Spawn(fugit::Duration<u64, 1, 10000_u32>),
+    Reschedule(fugit::Duration<u64, 1, 10000_u32>),
+    Trip,
+    Cancel,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Change {
+    Alarm(bool),
+    Armed,
+}
+
+impl AlarmSettings {
+    pub fn action(
+        &self,
+        change: Change,
+        handle_is_some: bool,
+    ) -> Option<Action> {
+        match change {
+            Change::Alarm(false) => {
+                if handle_is_some {
+                    Some(Action::Reschedule(self.timeout.millis()))
+                } else {
+                    None
+                }
+            }
+            Change::Alarm(true) => {
+                if handle_is_some {
+                    Some(Action::Trip)
+                } else {
+                    None
+                }
+            }
+            Change::Armed => {
+                if !self.armed && handle_is_some {
+                    Some(Action::Cancel)
+                } else if self.armed && !handle_is_some {
+                    Some(Action::Spawn(self.timeout.millis()))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    /// rearm the alarm
+    pub fn rearm(
+        &self,
+        handle_is_some: bool,
+    ) -> Option<fugit::Duration<u64, 1, 10000_u32>> {
+        if !handle_is_some && self.armed {
+            Some(self.timeout.millis())
+        } else {
+            None
+        }
+    }
+}
+
+/// Stabilizer mqtt alarm listener.
+/// Publish "false" onto this topic to indicate valid operating conditions. This renews the alarm timeout.
+/// Publishing "true" or failing to publish "false" for [`timeout`] trips the alarm.
+/// In the case of Driver this will trip the [super::LaserInterlock].
+/// After the alarm is tripped, it has to be [rearm](Self::rearm())ed.
+/// For Driver this will happen when the [super::LaserInterlock] is cleared.
 pub struct Alarm<
     Stack,
     Clock,
@@ -51,33 +153,33 @@ where
 
     /// Update the alarm mqtt interface. Returns Ok(false) if the alarm was renewed.
     /// (aka if true has been published on the alarm topic)
-    /// Returns Ok(true) if the alarm is set.
-    pub fn update(&mut self) -> Result<bool, minimq::Error<Stack::Error>> {
+    /// Returns Ok(true) if the alarm was triggered.
+    /// Returns None if we only just subscribed or if there was an invalid message on the alarm topic.
+    pub fn update(
+        &mut self,
+    ) -> Result<Option<bool>, minimq::Error<Stack::Error>> {
+        if !self.mqtt.client().is_connected() {
+            // reset subscription if client disconnects
+            self.subscribed = false;
+        }
         if !self.subscribed && self.mqtt.client().is_connected() {
-            log::info!("alarm subed");
             self.subscribed = true;
+            log::info!("alarm subscribed to {:?}", self.prefix);
             self.mqtt
                 .client()
                 .subscribe(&[(self.prefix.as_str()).into()], &[])
-                .map(|_| false)
+                .map(|_| None) // return None if we just subscribed
         } else {
             self.mqtt
-                .poll(|client, topic, message, _properties| match topic {
-                    // Todo: get this to use prefix from outside closure
-                    prefix => {
-                        log::info!("{:?}", message);
-                        let response = Publication::new(message)
-                            .topic("echo")
-                            .finish()
-                            .unwrap();
-                        client.publish(response).unwrap();
-                        true
+                .poll(|_client, _topic, message, _properties| match message {
+                    TRUE => Some(true),
+                    FALSE => Some(false),
+                    _ => {
+                        log::error!("Invalid alarm message: {:?}", message);
+                        None
                     }
                 })
-                .map(|res| {
-                    // log::info!("res: {:?}", res);
-                    false
-                })
+                .map(|res| res.flatten())
         }
     }
 }
