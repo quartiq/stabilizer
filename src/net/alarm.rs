@@ -104,10 +104,10 @@ impl AlarmSettings {
 }
 
 /// Stabilizer mqtt alarm listener.
-/// Publish "false" onto this topic to indicate valid operating conditions. This renews the alarm timeout.
-/// Publishing "true" or failing to publish "false" for [`timeout`] trips the alarm.
+/// Publish "false" onto the alarm topic to indicate valid operating conditions. This renews the alarm timeout.
+/// Publishing "true" or failing to publish "false" for [`AlarmSettings::timeout`] trips the alarm.
 /// In the case of Driver this will trip the [super::LaserInterlock].
-/// After the alarm is tripped, it has to be [rearm](Self::rearm())ed.
+/// After the alarm is tripped, it has to be [rearm](AlarmSettings::rearm())ed.
 /// For Driver this will happen when the [super::LaserInterlock] is cleared.
 pub struct Alarm<
     Stack,

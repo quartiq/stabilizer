@@ -174,6 +174,7 @@ where
             UpdateState::Updated => NetworkState::Updated,
         };
 
+        // Poll the alarm interface. Discard any errors in the interface like when we don't have an IP yet.
         if let Some(alarm) = self.alarm.update().unwrap_or(None) {
             return NetworkState::AlarmChanged(alarm);
         };
