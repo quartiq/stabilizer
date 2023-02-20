@@ -6,8 +6,8 @@ use fugit::ExtU64;
 use miniconf::Miniconf;
 use serde::{Deserialize, Serialize};
 
-const TRUE: &'static [u8] = &[116, 114, 117, 101]; // "true" in raw bytes
-const FALSE: &'static [u8] = &[102, 97, 108, 115, 101]; // "false" in raw bytes
+const TRUE: &[u8] = &[116, 114, 117, 101]; // "true" in raw bytes
+const FALSE: &[u8] = &[102, 97, 108, 115, 101]; // "false" in raw bytes
 
 #[derive(Clone, Copy, Debug, Miniconf, Serialize, Deserialize)]
 /// Driver alarm functionality
@@ -139,8 +139,7 @@ where
         broker: IpAddr,
         clock: Clock,
     ) -> Result<Self, minimq::Error<Stack::Error>> {
-        let mqtt =
-            minimq::Minimq::new(broker, client_id, stack, clock.clone())?;
+        let mqtt = minimq::Minimq::new(broker, client_id, stack, clock)?;
         let mut prefix = String::from(prefix);
         prefix.push_str("/alarm").unwrap();
         Ok(Self {
