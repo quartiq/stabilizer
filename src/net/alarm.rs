@@ -1,5 +1,5 @@
 use heapless::String;
-use miniconf::embedded_time;
+use miniconf::{embedded_time, serde_json_core::from_slice};
 use minimq::embedded_nal::{IpAddr, TcpClientStack};
 
 use fugit::ExtU64;
@@ -165,9 +165,9 @@ where
             result
         } else {
             self.mqtt
-                .poll(|_client, _topic, message, _properties| match message {
-                    b"true" => Some(true),
-                    b"false" => Some(false),
+                .poll(|_client, _topic, message, _properties| match from_slice(message) {
+                    Ok((true, 4)) => Some(true),
+                    Ok((false, 5)) => Some(false),
                     _ => {
                         log::error!("Invalid alarm message: {:?}", message);
                         None
