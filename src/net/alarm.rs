@@ -7,16 +7,13 @@ use miniconf::Miniconf;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Miniconf, Serialize, Deserialize)]
-/// Driver alarm functionality
+/// Alarm functionality. Ensures safe co-operation with other devices.
 ///
-/// Driver features an alarm to ensure safe co-operation with other devices.
 /// The alarm is implemented via MQTT as a separate topic besides settings and telemetry.
 /// Publish "false" onto the alarm topic to indicate valid operating conditions. This renews the alarm timeout.
 /// Publishing "true" or failing to publish "false" for [`Self::timeout`] trips the alarm.
-/// In the case of Driver this will trip the [super::LaserInterlock].
 /// After the alarm is tripped, it has to be [rearm](Self::rearm())ed.
-/// For Driver this will happen when the [super::LaserInterlock] is cleared.
-pub struct AlarmSettings {
+pub struct Settings {
     /// Set alarm to armed/disarmed.
     ///
     /// # Path
@@ -36,7 +33,7 @@ pub struct AlarmSettings {
     timeout: u64,
 }
 
-impl Default for AlarmSettings {
+impl Default for Settings {
     fn default() -> Self {
         Self {
             armed: false,
@@ -58,7 +55,7 @@ pub enum Change {
     Armed,
 }
 
-impl AlarmSettings {
+impl Settings {
     pub fn action(
         &self,
         change: Change,
@@ -158,12 +155,14 @@ where
             self.subscribed = false;
         }
         if !self.subscribed && self.mqtt.client().is_connected() {
-            self.subscribed = true;
-            log::info!("Alarm subscribed to {:?}", self.prefix);
-            self.mqtt
+            let result = self
+                .mqtt
                 .client()
                 .subscribe(&[(self.prefix.as_str()).into()], &[])
-                .map(|_| None) // return None if we just subscribed
+                .map(|_| None); // return None if we just subscribed
+            self.subscribed = true;
+            log::info!("Alarm subscribed to {:?}", self.prefix);
+            result
         } else {
             self.mqtt
                 .poll(|_client, _topic, message, _properties| match message {

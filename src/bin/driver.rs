@@ -51,8 +51,7 @@ use stabilizer::{
         AFE1, MONOTONIC_FREQUENCY,
     },
     net::{
-        alarm::Action,
-        alarm::AlarmSettings,
+        alarm,
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Miniconf,
         NetworkState, NetworkUsers,
@@ -108,7 +107,7 @@ pub struct Settings {
     /// # Value
     /// [Alarm]
     #[miniconf(defer)]
-    alarm: AlarmSettings,
+    alarm: alarm::Settings,
 
     /// Laser interlock reset.
     /// A false -> true transition will reset a tripped laser interlock
@@ -142,7 +141,7 @@ impl Default for Settings {
             // The default telemetry period in seconds.
             telemetry_period: 1.0,
             stream_target: StreamTarget::default(),
-            alarm: AlarmSettings::default(),
+            alarm: alarm::Settings::default(),
             reset_laser_interlock: false,
             low_noise: driver::LowNoiseSettings::default(),
             high_power: driver::HighPowerSettings::default(),
@@ -439,7 +438,7 @@ mod app {
                 settings.alarm.action(change, handle.is_some())
             {
                 *handle = match action {
-                    Action::Spawn(millis) => {
+                    alarm::Action::Spawn(millis) => {
                         log::info!("Alarm armed");
                         Some(
                             trip_alarm::spawn_after(
@@ -449,7 +448,7 @@ mod app {
                             .unwrap(),
                         )
                     }
-                    Action::Trip => {
+                    alarm::Action::Trip => {
                         log::info!("Alarm tripped");
                         let _ = handle.take().unwrap().cancel().map_err(|e| {
                             log::error!(
@@ -462,7 +461,7 @@ mod app {
                                 .unwrap(),
                         )
                     }
-                    Action::Reschedule(millis) => handle
+                    alarm::Action::Reschedule(millis) => handle
                         .take()
                         .unwrap()
                         .reschedule_after(millis)
@@ -472,7 +471,7 @@ mod app {
                             , e)
                         })
                         .ok(), // return `None` if rescheduled too late aka alarm already tripped
-                    Action::Cancel => {
+                    alarm::Action::Cancel => {
                         log::info!("Alarm disarmed");
                         let _ = handle.take().unwrap().cancel().map_err(|e| {
                             log::error!(
