@@ -53,7 +53,7 @@ pub struct NetworkUsers<S: Default + Miniconf + Clone, T: Serialize> {
     stream: DataStream,
     generator: Option<FrameGenerator>,
     pub telemetry: TelemetryClient<T>,
-    pub alarm: Alarm<NetworkReference, SystemTimer, 128, 256>,
+    pub alarm: Alarm<NetworkReference, SystemTimer, 128, 128>,
 }
 
 impl<S, T> NetworkUsers<S, T>
