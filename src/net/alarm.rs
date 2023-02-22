@@ -6,9 +6,6 @@ use fugit::ExtU64;
 use miniconf::Miniconf;
 use serde::{Deserialize, Serialize};
 
-const TRUE: &[u8] = &[116, 114, 117, 101]; // "true" in raw bytes
-const FALSE: &[u8] = &[102, 97, 108, 115, 101]; // "false" in raw bytes
-
 #[derive(Clone, Copy, Debug, Miniconf, Serialize, Deserialize)]
 /// Driver alarm functionality
 ///
@@ -170,8 +167,8 @@ where
         } else {
             self.mqtt
                 .poll(|_client, _topic, message, _properties| match message {
-                    TRUE => Some(true),
-                    FALSE => Some(false),
+                    b"true" => Some(true),
+                    b"false" => Some(false),
                     _ => {
                         log::error!("Invalid alarm message: {:?}", message);
                         None
