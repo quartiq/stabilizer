@@ -4,7 +4,7 @@ setup(
     name="stabilizer",
     packages=find_packages(),
     # Keep versions in Cargo.toml and py/setup.py synchronized.
-    version="0.8.0",
+    version="0.8.1",
     description="Stabilizer Utilities",
     author="QUARTIQ GmbH",
     license="MIT",
@@ -14,6 +14,6 @@ setup(
         "scipy",
         "matplotlib",
         "gmqtt",
-        "miniconf-mqtt@git+https://github.com/quartiq/miniconf@main#subdirectory=py/miniconf-mqtt",
+        "miniconf-mqtt@git+https://github.com/quartiq/miniconf@22feaa7#subdirectory=py/miniconf-mqtt",
     ],
 )

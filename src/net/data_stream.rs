@@ -247,7 +247,7 @@ impl FrameGenerator {
             if let Some(buffer) = self.pool.alloc() {
                 self.current_frame.replace(StreamFrame::new(
                     buffer,
-                    self.format as u8,
+                    self.format,
                     self.batch_size,
                     sequence_number,
                 ));

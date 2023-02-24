@@ -83,23 +83,23 @@ docker run -p 1883:1883 --name mosquitto -v ${pwd}/mosquitto.conf:/mosquitto/con
     git clone https://github.com/quartiq/stabilizer
     cd stabilizer
     ```
-5. Build firmware specifying the MQTT broker IP. Replace `10.34.16.10` by the
+5. Build firmware specifying the MQTT broker IP. Replace `10.34.16.1` by the
     stable and reachable broker IPv4 address determined above.
     ```bash
     # Bash
-    BROKER="10.34.16.10" cargo build --release
+    BROKER="10.34.16.1" cargo build --release
 
     # Powershell
     # Note: This sets the broker for all future builds as well.
-    $env:BROKER='10.34.16.10'; cargo build --release
+    $env:BROKER='10.34.16.1'; cargo build --release
     ```
 6. Extract the application binary (substitute `dual-iir` below with the desired application name)
     ```bash
     # Bash
-    BROKER="10.34.16.10" cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin
+    BROKER="10.34.16.1" cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin
 
     # Powershell
-    $env:BROKER='10.34.16.10'; cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin
+    $env:BROKER='10.34.16.1'; cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin
     ```
 
 ## Flashing
@@ -163,10 +163,10 @@ described [above](#st-link-virtual-mass-storage).
 2. Build and run firmware on the device
     ```bash
     # Bash
-    BROKER="10.34.16.10" cargo run --release --bin dual-iir
+    BROKER="10.34.16.1" cargo run --release --bin dual-iir
 
     # Powershell
-    $Env:BROKER='10.34.16.10'; cargo run --release --bin dual-iir
+    $Env:BROKER='10.34.16.1'; cargo run --release --bin dual-iir
     ```
 
 When using debug (non `--release`) mode, decrease the sampling frequency significantly.

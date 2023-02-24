@@ -261,7 +261,7 @@ mod app {
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
             option_env!("BROKER")
-                .unwrap_or("10.34.16.10")
+                .unwrap_or("10.34.16.1")
                 .parse()
                 .unwrap(),
         );
@@ -406,11 +406,9 @@ mod app {
                         let value = match settings.output_conf[channel] {
                             Conf::Magnitude => output.abs_sqr() as i32 >> 16,
                             Conf::Phase => output.arg() >> 16,
-                            Conf::LogPower => {
-                                (output.log2() << 24) as i32 >> 16
-                            }
+                            Conf::LogPower => output.log2() << 8,
                             Conf::ReferenceFrequency => {
-                                reference_frequency as i32 >> 16
+                                reference_frequency >> 16
                             }
                             Conf::InPhase => output.re >> 16,
                             Conf::Quadrature => output.im >> 16,

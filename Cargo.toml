@@ -1,7 +1,7 @@
 [package]
 name = "stabilizer"
 # Keep versions in Cargo.toml and py/setup.py synchronized.
-version = "0.8.0"
+version = "0.8.1"
 resolver = "2"
 authors = [
 	"Robert Jördens <rj@quartiq.de>",
@@ -34,7 +34,7 @@ default-target = "thumbv7em-none-eabihf"
 members = ["ad9959"]
 
 [dependencies]
-cortex-m = { version = "0.7.6", features = ["inline-asm"] }
+cortex-m = { version = "0.7.7", features = ["inline-asm"] }
 cortex-m-rt = { version = "0.7", features = ["device"] }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
 rtt-target = { version = "0.3", features = ["cortex-m"] }
@@ -43,11 +43,11 @@ heapless = { version = "0.7.16", features = ["serde"] }
 cortex-m-rtic = "1.0"
 embedded-hal = "0.2.7"
 nb = "1.0.0"
-num_enum = { version = "0.5.7", default-features = false }
+num_enum = { version = "0.5.11", default-features = false }
 paste = "1"
 idsp = "0.9"
 ad9959 = { path = "ad9959", version = "0.2.0" }
-miniconf = "0.6.1"
+miniconf = "0.6.3"
 smoltcp-nal = { version = "0.2", features = ["shared-stack"] }
 mcp230xx = "0.1"
 mutex-trait = "0.2"
@@ -59,8 +59,7 @@ mono-clock = "0.1"
 spin = { version = "0.9", default-features = false, features = ["spin_mutex"]}
 shared-bus = "0.2"
 lm75 = "0.2"
-smlang = "0.5.1"
-enum-iterator = "1.1.3"
+enum-iterator = "1.3.0"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
 shared-bus-rtic = "0.2.2"
