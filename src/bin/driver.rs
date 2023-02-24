@@ -162,6 +162,8 @@ pub struct Monitor {
     voltage: [f32; 2],
     /// The measured CPU temperature. (°C)
     cpu_temp: f32,
+    /// The themperature on the Driver PCB. (°C)
+    driver_temp: f32,
     /// The measured temperature of the Headboard temperature sensor. (°C)
     header_temp: f32,
 }
@@ -582,9 +584,8 @@ mod app {
 
         telemetry.monitor.cpu_temp =
             c.local.cpu_temp_sensor.get_temperature().unwrap();
-        // Todo: uncomment once we have Hardware
-        // telemetry.monitor.header_temp =
-        //     c.local.lm75.read_temperature().unwrap();
+        telemetry.monitor.driver_temp =
+            c.local.lm75.read_temperature().unwrap();
         telemetry.interlock_tripped =
             c.shared.laser_interlock.lock(|ilock| ilock.reason());
         let telemetry_period = c
