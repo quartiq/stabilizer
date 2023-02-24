@@ -1032,8 +1032,13 @@ pub fn setup(
             ChannelVariant::HighPowerSource,
         );
 
-        let lm75 =
+        // LM75 temperature sensors on Driver and the header board
+        let driver_lm75 =
             lm75::Lm75::new(i2c1.acquire_i2c(), lm75::Address::default());
+        let header_lm75 = lm75::Lm75::new(
+            i2c1.acquire_i2c(),
+            lm75::Address::from((true, false, false)), // see header board schematic
+        );
 
         let mcp = mcp230xx::Mcp230xx::new_default(i2c1.acquire_i2c()).unwrap();
 
@@ -1113,7 +1118,8 @@ pub fn setup(
         let laser_interlock = LaserInterlock::new(laser_interlock_pin);
 
         Mezzanine::Driver(DriverDevices {
-            lm75,
+            driver_lm75,
+            header_lm75,
             ltc2320,
             internal_adc,
             output_sm,
