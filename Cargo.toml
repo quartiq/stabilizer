@@ -59,6 +59,7 @@ mono-clock = "0.1"
 spin = { version = "0.9", default-features = false, features = ["spin_mutex"]}
 shared-bus = "0.2"
 lm75 = "0.2"
+smlang = "0.5.1"
 enum-iterator = "1.3.0"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
