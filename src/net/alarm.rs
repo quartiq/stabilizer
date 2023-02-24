@@ -165,9 +165,10 @@ where
             result
         } else {
             self.mqtt
-                .poll(|_client, _topic, message, _properties| match from_slice(message) {
-                    Ok((true, 4)) => Some(true),
-                    Ok((false, 5)) => Some(false),
+                .poll(|_client, _topic, message, _properties| match from_slice(
+                    message,
+                ) {
+                    Ok((b, _)) => Some(b), // return boolean if a boolean is returned by serde_json_core
                     _ => {
                         log::error!("Invalid alarm message: {:?}", message);
                         None
