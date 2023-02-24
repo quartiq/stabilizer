@@ -1,4 +1,3 @@
-pub mod alarm;
 pub mod dac;
 pub mod internal_adc;
 pub mod ltc2320;

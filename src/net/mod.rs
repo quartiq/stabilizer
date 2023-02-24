@@ -9,6 +9,7 @@ pub use heapless;
 pub use miniconf;
 pub use serde;
 
+pub mod alarm;
 pub mod data_stream;
 pub mod network_processor;
 pub mod telemetry;
@@ -25,6 +26,8 @@ use miniconf::Miniconf;
 use serde::Serialize;
 use smoltcp_nal::embedded_nal::SocketAddr;
 
+use self::alarm::Alarm;
+
 pub type NetworkReference =
     smoltcp_nal::shared::NetworkStackProxy<'static, NetworkStack>;
 
@@ -38,6 +41,7 @@ pub enum UpdateState {
 
 pub enum NetworkState {
     SettingsChanged(String<128>),
+    AlarmChanged(bool),
     Updated,
     NoChange,
 }
@@ -49,6 +53,7 @@ pub struct NetworkUsers<S: Default + Miniconf + Clone, T: Serialize> {
     stream: DataStream,
     generator: Option<FrameGenerator>,
     pub telemetry: TelemetryClient<T>,
+    pub alarm: Alarm<NetworkReference, SystemTimer, 128, 128>,
 }
 
 impl<S, T> NetworkUsers<S, T>
@@ -106,12 +111,22 @@ where
         let (generator, stream) =
             data_stream::setup_streaming(stack_manager.acquire_stack());
 
+        let alarm = Alarm::new(
+            stack_manager.acquire_stack(),
+            &get_client_id(app, "alarm", mac),
+            &prefix,
+            broker,
+            clock,
+        )
+        .unwrap();
+
         NetworkUsers {
             miniconf: settings,
             processor,
             telemetry,
             stream,
             generator: Some(generator),
+            alarm,
         }
     }
 
@@ -157,6 +172,11 @@ where
         let poll_result = match self.processor.update() {
             UpdateState::NoChange => NetworkState::NoChange,
             UpdateState::Updated => NetworkState::Updated,
+        };
+
+        // Poll the alarm interface. Discard any errors in the interface like when we don't have an IP yet.
+        if let Some(alarm) = self.alarm.update().unwrap_or(None) {
+            return NetworkState::AlarmChanged(alarm);
         };
 
         // `settings_path` has to be at least as large as `miniconf::mqtt_client::MAX_TOPIC_LENGTH`.
