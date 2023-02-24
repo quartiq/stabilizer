@@ -162,7 +162,7 @@ pub struct Monitor {
     voltage: [f32; 2],
     /// The measured CPU temperature. (°C)
     cpu_temp: f32,
-    /// The themperature on the Driver PCB. (°C)
+    /// The temperature on the Driver PCB. (°C)
     driver_temp: f32,
     /// The measured temperature of the Headboard temperature sensor. (°C)
     header_temp: f32,
