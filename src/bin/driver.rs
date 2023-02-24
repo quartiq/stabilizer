@@ -229,7 +229,7 @@ mod app {
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
         header_adc_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
         driver_dac: [driver::dac::Dac<driver::Spi1Proxy>; 2],
-        lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
+        lm75: [lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>; 2],
         internal_adc: driver::internal_adc::InternalAdc,
     }
 
@@ -585,7 +585,13 @@ mod app {
         telemetry.monitor.cpu_temp =
             c.local.cpu_temp_sensor.get_temperature().unwrap();
         telemetry.monitor.driver_temp =
-            c.local.lm75.read_temperature().unwrap();
+            c.local.lm75[0].read_temperature().unwrap();
+
+        #[cfg(feature = "ai_artiq_laser_module")]
+        {
+            telemetry.monitor.header_temp =
+                c.local.lm75[1].read_temperature().unwrap();
+        }
         telemetry.interlock_tripped =
             c.shared.laser_interlock.lock(|ilock| ilock.reason());
         let telemetry_period = c

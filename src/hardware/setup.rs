@@ -1032,8 +1032,14 @@ pub fn setup(
             ChannelVariant::HighPowerSource,
         );
 
-        let lm75 =
-            lm75::Lm75::new(i2c1.acquire_i2c(), lm75::Address::default());
+        // LM75 temperature sensors on Driver and the header board
+        let lm75 = [
+            lm75::Lm75::new(i2c1.acquire_i2c(), lm75::Address::default()),
+            lm75::Lm75::new(
+                i2c1.acquire_i2c(),
+                lm75::Address::from((true, false, false)), // see header board schematic
+            ),
+        ];
 
         let mcp = mcp230xx::Mcp230xx::new_default(i2c1.acquire_i2c()).unwrap();
 

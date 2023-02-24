@@ -21,7 +21,7 @@ pub type Spi1Proxy = &'static shared_bus_rtic::CommonBus<
 pub struct DriverDevices {
     pub ltc2320: ltc2320::Ltc2320,
     pub internal_adc: internal_adc::InternalAdc,
-    pub lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
+    pub lm75: [lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>; 2],
     pub output_sm: [output::sm::StateMachine<output::Output<I2c1Proxy>>; 2],
     pub dac: [dac::Dac<Spi1Proxy>; 2],
     pub laser_interlock: LaserInterlock,
