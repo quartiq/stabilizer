@@ -650,8 +650,8 @@ mod app {
         });
         let reads = c.shared.telemetry.lock(|tele| {
             [
-                tele.monitor.current[channel as usize],
                 tele.monitor.voltage[channel as usize],
+                tele.monitor.current[channel as usize],
             ]
         });
         (c.shared.output_state, c.shared.laser_interlock).lock(
