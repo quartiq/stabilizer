@@ -133,7 +133,7 @@ where
     const VALID_CURRENT_SHOTTKY: Range<f32> = 0.009..0.011; // 9 mA to 11 mA
     const VALID_VOLTAGE_ZERO: Range<f32> = -0.05..0.05; // -50 mV to 50 mV
     const VALID_VOLTAGE_SHUNT: Range<f32> = 0.05..0.15; // 50 mV to 150 mV (10 ohm shunt resistor)
-    const VALID_VOLTAGE_SHOTTKY: Range<f32> = 0.12..0.2; // 120 mV to 200 mV (approximalte voltage drop over shottky to GND)
+    const VALID_VOLTAGE_SHOTTKY: Range<f32> = 0.2..0.3; // 200 mV to 300 mV (approximalte voltage drop over shottky to GND)
 
     pub fn new(
         gpio: &'static spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
