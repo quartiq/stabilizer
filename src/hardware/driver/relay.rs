@@ -30,14 +30,14 @@ pub enum RelayPin {
 impl From<RelayPin> for Mcp23008 {
     fn from(pin: RelayPin) -> Self {
         match pin {
-            RelayPin::LN_K1_EN_N => Self::P0,
-            RelayPin::LN_K1_EN => Self::P1,
-            RelayPin::LN_K0_D => Self::P2,
-            RelayPin::LN_K0_CP => Self::P3,
-            RelayPin::HP_K1_EN_N => Self::P4,
-            RelayPin::HP_K1_EN => Self::P5,
-            RelayPin::HP_K0_D => Self::P6,
-            RelayPin::HP_K0_CP => Self::P7,
+            RelayPin::LN_K0_CP => Self::P0,
+            RelayPin::LN_K0_D => Self::P1,
+            RelayPin::LN_K1_EN => Self::P2,
+            RelayPin::LN_K1_EN_N => Self::P3,
+            RelayPin::HP_K0_CP => Self::P4,
+            RelayPin::HP_K0_D => Self::P5,
+            RelayPin::HP_K1_EN => Self::P6,
+            RelayPin::HP_K1_EN_N => Self::P7,
         }
     }
 }
