@@ -589,11 +589,11 @@ mod app {
         telemetry.monitor.driver_temp =
             c.local.driver_temp.read_temperature().unwrap();
 
-        #[cfg(feature = "ai_artiq_laser_module")]
-        {
-            telemetry.monitor.header_temp =
-                c.local.header_temp.read_temperature().unwrap();
-        }
+        // #[cfg(feature = "ai_artiq_laser_module")]
+        // {
+        //     telemetry.monitor.header_temp =
+        //         c.local.header_temp.read_temperature().unwrap();
+        // }
         telemetry.interlock_tripped =
             c.shared.laser_interlock.lock(|ilock| ilock.reason());
         let telemetry_period = c
