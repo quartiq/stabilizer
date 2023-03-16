@@ -1001,6 +1001,59 @@ pub fn setup(
     // Always act is if driver was there for development.
     } else if driver_found | true {
         log::info!("driver init");
+
+        let config = hal::spi::Config::new(hal::spi::Mode {
+            polarity: hal::spi::Polarity::IdleLow,
+            phase: hal::spi::Phase::CaptureOnSecondTransition,
+        });
+
+        let mut dac0_cs = gpiog.pg10.into_push_pull_output().erase();
+        dac0_cs.set_high();
+        let mut dac1_cs = gpioa.pa0.into_push_pull_output().erase();
+        dac1_cs.set_high();
+
+        // Initialize the two DAC input pins that we don't actively make use of to the correct idle states.
+        let mut clr_n = gpioc.pc7.into_push_pull_output().erase();
+        clr_n.set_high();
+        let mut ldac_n = gpioc.pc6.into_push_pull_output().erase();
+        ldac_n.set_low();
+
+        let dac_spi = device.SPI1.spi(
+            (
+                gpiog.pg11.into_alternate(),
+                gpioa.pa6.into_alternate(),
+                gpiod.pd7.into_alternate(),
+            ),
+            config,
+            // ToDo find good clock rate and further debug the following observed errors:
+            // - With blocking DAC writes, a clock rate of 25 MHz (next possible step from 12.5 MHz) somehow seems to lead to
+            //   longer CPU-blocking SPI writes which in turn means the Stabilizer DAC panics (at 97.6 kHz process rate).
+            // - With non-blocking DAC writes I also see spurious SPI Overrun errors after ~30 seconds of program runtime at
+            //   a rate or 25 MHz with an effective DAC update rate of 97.6 kHz (triggered by the DSP process)
+            // - 50 MHz immediately leads to FullDuplex error
+            //   https://github.com/stm32-rs/stm32h7xx-hal/blob/778ecf7a14d713e4387dbd477a2455d2f71a3424/src/spi.rs#L101-L103
+            12500.kHz(),
+            ccdr.peripheral.SPI1,
+            &ccdr.clocks,
+        );
+
+        let dac_bus_manager =
+            shared_bus_rtic::new!(dac_spi, hal::spi::Spi<SPI1,Enabled,u8>);
+        let dac = [
+            driver::dac::Dac::new(
+                dac_bus_manager.acquire(),
+                dac0_cs,
+                driver::ChannelVariant::LowNoiseSource,
+                &mut delay,
+            ),
+            driver::dac::Dac::new(
+                dac_bus_manager.acquire(),
+                dac1_cs,
+                driver::ChannelVariant::HighPowerSource,
+                &mut delay,
+            ),
+        ];
+
         let ltc2320_pins = driver::ltc2320::Ltc2320Pins {
             qspi: (
                 gpiob.pb2.into_alternate(),
@@ -1059,58 +1112,6 @@ pub fn setup(
                 mcp_mutex,
                 driver::Channel::HighPower,
             )),
-        ];
-
-        let config = hal::spi::Config::new(hal::spi::Mode {
-            polarity: hal::spi::Polarity::IdleLow,
-            phase: hal::spi::Phase::CaptureOnSecondTransition,
-        });
-
-        let mut dac0_cs = gpiog.pg10.into_push_pull_output().erase();
-        dac0_cs.set_high();
-        let mut dac1_cs = gpioa.pa0.into_push_pull_output().erase();
-        dac1_cs.set_high();
-
-        // Initialize the two DAC input pins that we don't actively make use of to the correct idle states.
-        let mut clr_n = gpioc.pc7.into_push_pull_output().erase();
-        clr_n.set_high();
-        let mut ldac_n = gpioc.pc6.into_push_pull_output().erase();
-        ldac_n.set_low();
-
-        let dac_spi = device.SPI1.spi(
-            (
-                gpiog.pg11.into_alternate(),
-                gpioa.pa6.into_alternate(),
-                gpiod.pd7.into_alternate(),
-            ),
-            config,
-            // ToDo find good clock rate and further debug the following observed errors:
-            // - With blocking DAC writes, a clock rate of 25 MHz (next possible step from 12.5 MHz) somehow seems to lead to
-            //   longer CPU-blocking SPI writes which in turn means the Stabilizer DAC panics (at 97.6 kHz process rate).
-            // - With non-blocking DAC writes I also see spurious SPI Overrun errors after ~30 seconds of program runtime at
-            //   a rate or 25 MHz with an effective DAC update rate of 97.6 kHz (triggered by the DSP process)
-            // - 50 MHz immediately leads to FullDuplex error
-            //   https://github.com/stm32-rs/stm32h7xx-hal/blob/778ecf7a14d713e4387dbd477a2455d2f71a3424/src/spi.rs#L101-L103
-            12500.kHz(),
-            ccdr.peripheral.SPI1,
-            &ccdr.clocks,
-        );
-
-        let dac_bus_manager =
-            shared_bus_rtic::new!(dac_spi, hal::spi::Spi<SPI1,Enabled,u8>);
-        let dac = [
-            driver::dac::Dac::new(
-                dac_bus_manager.acquire(),
-                dac0_cs,
-                driver::ChannelVariant::LowNoiseSource,
-                &mut delay,
-            ),
-            driver::dac::Dac::new(
-                dac_bus_manager.acquire(),
-                dac1_cs,
-                driver::ChannelVariant::HighPowerSource,
-                &mut delay,
-            ),
         ];
 
         // The Pounder pgood pin was instantiated to check for Pounder. It is the same pin as the interlock on Driver.
