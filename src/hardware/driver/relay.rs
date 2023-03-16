@@ -135,7 +135,7 @@ where
     // set K0 to lower position
     pub fn disengage_k0(&mut self) {
         let mut mcp = self.gpio.try_lock().unwrap();
-        mcp.set_gpio(self.k0_d.into(), Level::High).unwrap();
+        mcp.set_gpio(self.k0_d.into(), Level::Low).unwrap();
         mcp.set_gpio(self.k0_cp.into(), Level::Low).unwrap();
         mcp.set_gpio(self.k0_cp.into(), Level::High).unwrap();
     }
