@@ -101,6 +101,8 @@ where
         // don't perform I2C transactions to MCP23008 on the headboard if it is intentionally not connected
         #[cfg(feature = "ai_artiq_laser_module")]
         {
+            // set all pins to be outputs
+            mcp.write(mcp230xx::Register::IODIR.into(), 0).unwrap();
             // set GPIOs to default position
             mcp.set_gpio(k1_en.into(), Level::Low).unwrap();
             mcp.set_gpio(k1_en_n.into(), Level::High).unwrap();
