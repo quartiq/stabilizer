@@ -159,17 +159,17 @@ pub mod sm {
             SelftestZero + Tick / set_test_current = SelftestShunt,
             SelftestShunt + Tick / engage_k0 = EnableWaitK0,
             EnableWaitK0 + Tick / set_test_current = SelftestShort,
-            SelftestShort + Tick / disengage_k1 = EnableWaitK1,
+            SelftestShort + Tick / engage_k1 = EnableWaitK1,
             EnableWaitK1 + Tick = RampCurrent,
             RampCurrent + Tick / increment_current = RampCurrent,
             RampCurrent + RampDone = Enabled,
 
             // Abort transitions
             EnableWaitK0 | EnableWaitK1 | RampCurrent + Disable = Abort,
-            Abort + Tick / engage_k1_and_hold_iir = DisableWaitK1,
+            Abort + Tick / disengage_k1_and_hold_iir = DisableWaitK1,
 
             // Disable sequence
-            Enabled + Disable / engage_k1_and_hold_iir = DisableWaitK1,
+            Enabled + Disable / disengage_k1_and_hold_iir = DisableWaitK1,
             DisableWaitK1 + Tick / disengage_k0_and_reset_iir = DisableWaitK0,
             DisableWaitK0 + Tick = Disabled,
 
@@ -207,17 +207,17 @@ where
         self.relay.disengage_k0();
     }
 
-    fn disengage_k1(&mut self) {
+    fn engage_k1(&mut self) {
         self.iir.y_offset = 0.;
         #[cfg(feature = "ai_artiq_laser_module")]
-        self.relay.disengage_k1();
+        self.relay.engage_k1();
     }
 
-    fn engage_k1_and_hold_iir(&mut self) {
+    fn disengage_k1_and_hold_iir(&mut self) {
         self.iir.y_offset = 0.;
         self.iir.ba = [0., 0., 0., 1., 0.];
         #[cfg(feature = "ai_artiq_laser_module")]
-        self.relay.engage_k1();
+        self.relay.disengage_k1();
     }
 }
 
