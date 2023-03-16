@@ -46,7 +46,7 @@ impl SelfTest {
                     Output::<I2c1Proxy>::VALID_VOLTAGE_SHOTTKY,
                     Output::<I2c1Proxy>::VALID_CURRENT_SHOTTKY,
                 ],
-                [FailReason::ShortVoltage, FailReason::ShortCurrent],
+                [FailReason::ShottkyVoltage, FailReason::ShottkyCurrent],
             )),
             _ => None,
         }
@@ -94,12 +94,12 @@ pub enum FailReason {
     /// Driver output was shorted to ground.
     /// Current was set to [Output::<I2C>::TESTCURRENT] and measured voltage was out of range.
     /// [Output::<I2C>::VALID_VOLTAGE_SHORT]
-    ShortVoltage,
+    ShottkyVoltage,
 
     /// Driver output was shorted to ground.
     /// Current was set to [Output::<I2C>::TESTCURRENT] and measured current was out of range.
     /// [Output::<I2C>::VALID_CURRENT_SHORT]
-    ShortCurrent,
+    ShottkyCurrent,
 }
 
 /// Driver [Output].
