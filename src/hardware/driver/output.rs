@@ -25,13 +25,8 @@ pub struct SelfTest {
 }
 
 impl SelfTest {
-    fn test(
-        state: &sm::States,
-        channel: &Channel,
-        interlock: &mut LaserInterlock,
-        reads: &[f32; 2], // voltage/current reads
-    ) -> Option<Self> {
-        let tests = match state {
+    fn test(state: &sm::States) -> Option<([Range<f32>; 2], [FailReason; 2])> {
+        match state {
             sm::States::SelftestZero => Some((
                 [
                     Output::<I2c1Proxy>::VALID_VOLTAGE_ZERO,
@@ -54,22 +49,26 @@ impl SelfTest {
                 [FailReason::ShortVoltage, FailReason::ShortCurrent],
             )),
             _ => None,
-        };
+        }
+    }
 
-        if let Some(tests) = tests {
-            for ((range, &read), &reason) in
-                tests.0.iter().zip(reads.iter()).zip(tests.1.iter())
-            {
-                if !range.contains(&read) {
-                    interlock.set(Some(Reason::Selftest(SelfTest {
-                        reason,
-                        read,
-                        channel: *channel,
-                    })));
-                }
+    pub fn run_tests(
+        tests: ([Range<f32>; 2], [FailReason; 2]),
+        reads: &[f32; 2],
+        interlock: &mut LaserInterlock,
+        channel: &Channel,
+    ) {
+        for ((range, &read), &reason) in
+            tests.0.iter().zip(reads.iter()).zip(tests.1.iter())
+        {
+            if !range.contains(&read) {
+                interlock.set(Some(Reason::Selftest(SelfTest {
+                    reason,
+                    read,
+                    channel: *channel,
+                })));
             }
         }
-        None
     }
 }
 
@@ -123,18 +122,18 @@ where
 
     // Delay after setting a current
     pub const SET_DELAY: fugit::MillisDuration<u64> =
-        fugit::MillisDurationU64::millis(10);
+        fugit::MillisDurationU64::millis(5000);
 
     const TESTCURRENT: f32 = 0.01; // 10 mA
 
-    const VALID_CURRENT_ZERO: Range<f32> = 0.0..0.001; // 0 mA to 1 mA
+    // Note that the test voltages and currents are relatively loose right now due to some noise
+    // on the MCU ADC measurement nodes.
+    const VALID_CURRENT_ZERO: Range<f32> = 0.0..0.01; // 0 mA to 10 mA
     const VALID_CURRENT_SHUNT: Range<f32> = 0.009..0.011; // 9 mA to 11 mA
     const VALID_CURRENT_SHORT: Range<f32> = 0.009..0.011; // 9 mA to 11 mA
-
-    // Driver headboard has a 10 ohm shunt resistor.
-    const VALID_VOLTAGE_ZERO: Range<f32> = 0.0..0.01; // 0 mV to 10 mV
-    const VALID_VOLTAGE_SHUNT: Range<f32> = 0.09..0.11; // 90 mV to 110 mV
-    const VALID_VOLTAGE_SHORT: Range<f32> = 0.0..0.01; // 0 mV to 10 mV
+    const VALID_VOLTAGE_ZERO: Range<f32> = -0.05..0.05; // -50 mV to 50 mV
+    const VALID_VOLTAGE_SHUNT: Range<f32> = 0.05..0.15; // 50 mV to 150 mV (10 ohm shunt resistor)
+    const VALID_VOLTAGE_SHORT: Range<f32> = -0.05..0.05; // -50 mV to 50 mV
 
     pub fn new(
         gpio: &'static spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
@@ -247,11 +246,11 @@ where
     pub fn handle_tick(
         &mut self,
         target: &f32,
-        channel: &Channel,
-        interlock: &mut LaserInterlock,
-        reads: &[f32; 2], // voltage/current reads
-    ) -> Option<fugit::MillisDuration<u64>> {
-        SelfTest::test(self.state(), channel, interlock, reads); // execute selftest if necessary in States
+    ) -> (
+        Option<fugit::MillisDuration<u64>>,
+        Option<([Range<f32>; 2], [FailReason; 2])>,
+    ) {
+        let tests = SelfTest::test(self.state()); // check if selftests need to be performed
         match *self.state() {
             sm::States::EnableWaitK0
             | sm::States::DisableWaitK1
@@ -279,14 +278,18 @@ where
             }
         }
         match *self.state() {
-            sm::States::DisableWaitK0 => Some(Relay::<I2C>::K0_DELAY),
-            sm::States::DisableWaitK1 => Some(Relay::<I2C>::K1_DELAY),
-            sm::States::EnableWaitK0 => Some(Relay::<I2C>::K0_DELAY),
-            sm::States::EnableWaitK1 => Some(Relay::<I2C>::K1_DELAY),
-            sm::States::RampCurrent => Some(Output::<I2C>::RAMP_DELAY),
-            sm::States::SelftestShunt => Some(Output::<I2C>::SET_DELAY),
-            sm::States::SelftestShort => Some(Output::<I2C>::SET_DELAY),
-            _ => None,
+            sm::States::DisableWaitK0 => (Some(Relay::<I2C>::K0_DELAY), tests),
+            sm::States::DisableWaitK1 => (Some(Relay::<I2C>::K1_DELAY), tests),
+            sm::States::EnableWaitK0 => (Some(Relay::<I2C>::K0_DELAY), tests),
+            sm::States::EnableWaitK1 => (Some(Relay::<I2C>::K1_DELAY), tests),
+            sm::States::RampCurrent => (Some(Output::<I2C>::RAMP_DELAY), tests),
+            sm::States::SelftestShunt => {
+                (Some(Output::<I2C>::SET_DELAY), tests)
+            }
+            sm::States::SelftestShort => {
+                (Some(Output::<I2C>::SET_DELAY), tests)
+            }
+            _ => (None, tests),
         }
     }
 

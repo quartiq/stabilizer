@@ -194,7 +194,7 @@ pub struct Telemetry {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
-    use stabilizer::net::alarm::Change;
+    use stabilizer::{hardware::driver::output::SelfTest, net::alarm::Change};
 
     use super::*;
 
@@ -654,23 +654,26 @@ mod app {
                 tele.monitor.current[channel as usize],
             ]
         });
-        (c.shared.output_state, c.shared.laser_interlock).lock(
-            |state, ilock| {
-                state[channel as usize]
-                    .handle_tick(&ramp_target, &channel, ilock, &reads)
-                    .map(|del| {
-                        handle_output_tick::spawn_after(del.convert(), channel)
-                            .unwrap()
-                    });
-                if channel == driver::Channel::HighPower {
-                    write_dac_spi::spawn(
-                        channel,
-                        state[channel as usize].iir().y_offset,
-                    )
+        if let Some(tests) = c.shared.output_state.lock(|state| {
+            let (delay, tests) =
+                state[channel as usize].handle_tick(&ramp_target);
+            if let Some(delay) = delay {
+                handle_output_tick::spawn_after(delay.convert(), channel)
                     .unwrap();
-                }
-            },
-        );
+            }
+            if channel == driver::Channel::HighPower {
+                write_dac_spi::spawn(
+                    channel,
+                    state[channel as usize].iir().y_offset,
+                )
+                .unwrap();
+            };
+            tests
+        }) {
+            c.shared.laser_interlock.lock(|ilock| {
+                SelfTest::run_tests(tests, &reads, ilock, &channel);
+            });
+        }
     }
 
     // Driver DAC SPI write task. This effectively makes the slow, blocking SPI writes non-blocking
