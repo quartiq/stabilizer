@@ -178,7 +178,7 @@ pub struct LowNoise {
     current: f32,
 }
 
-#[derive(Serialize, Copy, Clone, Default, Debug)]
+#[derive(Serialize, Clone, Default, Debug)]
 pub struct Telemetry {
     /// Refer to [Monitor]
     monitor: Monitor,
@@ -194,7 +194,7 @@ pub struct Telemetry {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
-    use stabilizer::net::alarm::Change;
+    use stabilizer::{hardware::driver::Condition, net::alarm::Change};
 
     use super::*;
 
@@ -600,7 +600,7 @@ mod app {
     #[task(priority = 1, shared=[network, settings, telemetry, laser_interlock], local=[cpu_temp_sensor, driver_temp, header_temp])]
     fn telemetry(mut c: telemetry::Context) {
         let mut telemetry: Telemetry =
-            c.shared.telemetry.lock(|telemetry| *telemetry);
+            c.shared.telemetry.lock(|telemetry| telemetry.clone());
 
         telemetry.monitor.cpu_temp =
             c.local.cpu_temp_sensor.get_temperature().unwrap();
@@ -770,9 +770,13 @@ mod app {
         {
             if (read > interlock_current) & interlock_asserted & output_en {
                 let ch = Channel::try_from(i).unwrap();
-                c.shared
-                    .laser_interlock
-                    .lock(|ilock| ilock.set(Some(Reason::Overcurrent(ch))));
+                c.shared.laser_interlock.lock(|ilock| {
+                    ilock.set(Some(Reason::Overcurrent(Condition {
+                        channel: ch,
+                        threshold: *interlock_current,
+                        read: *read,
+                    })))
+                });
             }
         }
         for (i, ((interlock_voltage, read), output_en)) in interlock_voltage
@@ -783,9 +787,13 @@ mod app {
         {
             if (read > interlock_voltage) & interlock_asserted & output_en {
                 let ch = Channel::try_from(i).unwrap();
-                c.shared
-                    .laser_interlock
-                    .lock(|ilock| ilock.set(Some(Reason::Overvoltage(ch))));
+                c.shared.laser_interlock.lock(|ilock| {
+                    ilock.set(Some(Reason::Overvoltage(Condition {
+                        channel: ch,
+                        threshold: *interlock_voltage,
+                        read: *read,
+                    })))
+                });
             }
         }
         c.shared.telemetry.lock(|tele| {

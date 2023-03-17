@@ -17,9 +17,10 @@ use crate::hardware::I2c1Proxy;
 use super::{relay::Relay, Channel, LaserInterlock, Reason};
 
 /// Selftest struct that can be reported by telemetry.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SelfTest {
     reason: FailReason,
+    valid_range: Range<f32>,
     read: f32,
     channel: Channel,
 }
@@ -84,6 +85,7 @@ impl SelfTest {
                 if !range.contains(&read) {
                     interlock.set(Some(Reason::Selftest(SelfTest {
                         reason,
+                        valid_range: range.clone(),
                         read,
                         channel: *channel,
                     })));

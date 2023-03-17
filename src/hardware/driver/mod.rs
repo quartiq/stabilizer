@@ -77,8 +77,15 @@ impl ChannelVariant {
     }
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct Condition {
+    pub channel: Channel,
+    pub threshold: f32,
+    pub read: f32,
+}
+
 /// A [Reason] why the interlock has tripped.
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub enum Reason {
     /// Default after device reset.
     #[default]
@@ -91,10 +98,10 @@ pub enum Reason {
     AlarmTimeout,
 
     /// An overcurrent condition on [Channel] while the output was enabled.
-    Overcurrent(Channel),
+    Overcurrent(Condition),
 
     /// An overvoltage condition on [Channel] while the output was enabled.
-    Overvoltage(Channel),
+    Overvoltage(Condition),
 
     /// The device selftest during the channel enabling sequence failed.
     /// See [output::FailReason] for details.
@@ -125,7 +132,7 @@ impl LaserInterlock {
     }
 
     pub fn reason(&self) -> Option<Reason> {
-        self.reason
+        self.reason.clone()
     }
 }
 
