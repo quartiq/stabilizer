@@ -387,9 +387,9 @@ mod app {
                             / settings.afe[driver::Channel::LowNoise as usize]
                                 .as_multiplier(); // get adc sample in volt * AFE gain for equivalent input voltage
                         let iir = if *ln_output_enabled {
-                            settings.low_noise.iir
+                            &settings.low_noise.iir
                         } else {
-                            *ramp_iir
+                            ramp_iir
                         };
                         let y = iir.update(&mut iir_state[0], x, hold);
 
