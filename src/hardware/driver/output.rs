@@ -31,25 +31,46 @@ impl SelfTest {
         interlock: &mut LaserInterlock,
         reads: &[f32; 2], // voltage/current reads
     ) -> Option<Self> {
-        let tests = match state {
-            sm::States::SelftestZero => Some((
+        let tests = match (state, channel) {
+            (sm::States::SelftestZero, Channel::LowNoise) => Some((
                 [
-                    Output::<I2c1Proxy>::VALID_VOLTAGE_ZERO,
-                    Output::<I2c1Proxy>::VALID_CURRENT_ZERO,
+                    Output::<I2c1Proxy>::LN_VALID_VOLTAGE_ZERO,
+                    Output::<I2c1Proxy>::LN_VALID_CURRENT_ZERO,
                 ],
                 [FailReason::ZeroVoltage, FailReason::ZeroCurrent],
             )),
-            sm::States::SelftestShunt => Some((
+            (sm::States::SelftestShunt, Channel::LowNoise) => Some((
                 [
-                    Output::<I2c1Proxy>::VALID_VOLTAGE_SHUNT,
-                    Output::<I2c1Proxy>::VALID_CURRENT_SHUNT,
+                    Output::<I2c1Proxy>::LN_VALID_VOLTAGE_SHUNT,
+                    Output::<I2c1Proxy>::LN_VALID_CURRENT_SHUNT,
                 ],
                 [FailReason::ShuntVoltage, FailReason::ShuntCurrent],
             )),
-            sm::States::SelftestShort => Some((
+            (sm::States::SelftestShort, Channel::LowNoise) => Some((
                 [
-                    Output::<I2c1Proxy>::VALID_VOLTAGE_SHOTTKY,
-                    Output::<I2c1Proxy>::VALID_CURRENT_SHOTTKY,
+                    Output::<I2c1Proxy>::LN_VALID_VOLTAGE_SHOTTKY,
+                    Output::<I2c1Proxy>::LN_VALID_CURRENT_SHOTTKY,
+                ],
+                [FailReason::ShortVoltage, FailReason::ShortCurrent],
+            )),
+            (sm::States::SelftestZero, Channel::HighPower) => Some((
+                [
+                    Output::<I2c1Proxy>::HP_VALID_VOLTAGE_ZERO,
+                    Output::<I2c1Proxy>::HP_VALID_CURRENT_ZERO,
+                ],
+                [FailReason::ZeroVoltage, FailReason::ZeroCurrent],
+            )),
+            (sm::States::SelftestShunt, Channel::HighPower) => Some((
+                [
+                    Output::<I2c1Proxy>::HP_VALID_VOLTAGE_SHUNT,
+                    Output::<I2c1Proxy>::HP_VALID_CURRENT_SHUNT,
+                ],
+                [FailReason::ShuntVoltage, FailReason::ShuntCurrent],
+            )),
+            (sm::States::SelftestShort, Channel::HighPower) => Some((
+                [
+                    Output::<I2c1Proxy>::HP_VALID_VOLTAGE_SHOTTKY,
+                    Output::<I2c1Proxy>::HP_VALID_CURRENT_SHOTTKY,
                 ],
                 [FailReason::ShortVoltage, FailReason::ShortCurrent],
             )),
@@ -129,12 +150,20 @@ where
 
     // Note that the test voltages and currents are relatively loose right now due to some noise
     // on the MCU ADC measurement nodes.
-    const VALID_CURRENT_ZERO: Range<f32> = 0.0..0.01; // 0 mA to 10 mA
-    const VALID_CURRENT_SHUNT: Range<f32> = 0.009..0.011; // 9 mA to 11 mA
-    const VALID_CURRENT_SHOTTKY: Range<f32> = 0.009..0.011; // 9 mA to 11 mA
-    const VALID_VOLTAGE_ZERO: Range<f32> = -0.05..0.05; // -50 mV to 50 mV
-    const VALID_VOLTAGE_SHUNT: Range<f32> = 0.05..0.15; // 50 mV to 150 mV (10 ohm shunt resistor)
-    const VALID_VOLTAGE_SHOTTKY: Range<f32> = 0.2..0.3; // 200 mV to 300 mV (approximalte voltage drop over shottky to GND)
+    const LN_VALID_CURRENT_ZERO: Range<f32> = 0.0..0.01; // 0 mA to 10 mA
+    const LN_VALID_CURRENT_SHUNT: Range<f32> = 0.009..0.011; // 9 mA to 11 mA
+    const LN_VALID_CURRENT_SHOTTKY: Range<f32> = 0.009..0.011; // 9 mA to 11 mA
+    const LN_VALID_VOLTAGE_ZERO: Range<f32> = -0.05..0.05; // -50 mV to 50 mV
+    const LN_VALID_VOLTAGE_SHUNT: Range<f32> = 0.05..0.15; // 50 mV to 150 mV (10 ohm shunt resistor)
+    const LN_VALID_VOLTAGE_SHOTTKY: Range<f32> = 0.2..0.3; // 200 mV to 300 mV (approximalte voltage drop over shottky to GND)
+
+    // The current measurements on the HP side are very inaccurate right now.
+    const HP_VALID_CURRENT_ZERO: Range<f32> = 0.0..1.;
+    const HP_VALID_CURRENT_SHUNT: Range<f32> = 0.009..1.;
+    const HP_VALID_CURRENT_SHOTTKY: Range<f32> = 0.009..1.;
+    const HP_VALID_VOLTAGE_ZERO: Range<f32> = -0.05..0.05; // -50 mV to 50 mV
+    const HP_VALID_VOLTAGE_SHUNT: Range<f32> = -0.05..0.1; // -50 mV to 100 mV (0.1 ohm shunt resistor)
+    const HP_VALID_VOLTAGE_SHOTTKY: Range<f32> = 0.2..0.4; // 200 mV to 400 mV (approximalte voltage drop over shottky to GND)
 
     pub fn new(
         gpio: &'static spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
