@@ -213,6 +213,8 @@ mod app {
         header_adc: driver::ltc2320::Ltc2320,
         header_adc_data: [u16; 8],
         output_state: [output::sm::StateMachine<output::Output<I2c1Proxy>>; 2],
+        ln_output_enabled: bool, // variable to relay output_en info to the process task without having to lock output_state
+        ramp_iir: iir::IIR<f32>, // variable to relay the ramp iir to the process task without having to lock output_state
         alarm_handle: Option<trip_alarm::SpawnHandle>,
         laser_interlock: LaserInterlock,
     }
@@ -273,6 +275,8 @@ mod app {
             header_adc: driver.ltc2320,
             header_adc_data: [0u16; 8],
             output_state: driver.output_sm,
+            ln_output_enabled: false,
+            ramp_iir: iir::IIR::default(),
             alarm_handle: None,
             laser_interlock: driver.laser_interlock,
         };
@@ -334,14 +338,15 @@ mod app {
     ///
     /// Performs an IIR processing step on a sample from Stabilizer ADC0 and generates a new output
     /// sample for the Driver LowNoise channel. The output is also available at Stabilizer DAC0 at 1V/1A.
-    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[settings, telemetry, output_state, header_adc_data], priority=4)]
+    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[settings, telemetry, ln_output_enabled, ramp_iir, header_adc_data], priority=4)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
             settings,
             telemetry,
-            output_state,
             header_adc_data,
+            ln_output_enabled,
+            ramp_iir,
         } = c.shared;
 
         let process::LocalResources {
@@ -352,69 +357,82 @@ mod app {
             generator,
         } = c.local;
 
-        (settings, telemetry, output_state, header_adc_data).lock(
-            |settings, telemetry, output, headboard_adc_data| {
-                let digital_inputs =
-                    [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
+        (
+            settings,
+            telemetry,
+            header_adc_data,
+            ln_output_enabled,
+            ramp_iir,
+        )
+            .lock(
+                |settings,
+                 telemetry,
+                 headboard_adc_data,
+                 ln_output_enabled,
+                 ramp_iir| {
+                    let digital_inputs = [
+                        digital_inputs.0.is_high(),
+                        digital_inputs.1.is_high(),
+                    ];
 
-                let hold = settings.low_noise.force_hold
-                    || (digital_inputs[1] && settings.low_noise.allow_hold);
+                    let hold = settings.low_noise.force_hold
+                        || (digital_inputs[1] && settings.low_noise.allow_hold);
 
-                (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
-                    // Preserve instruction and data ordering w.r.t. DMA flag access.
-                    fence(Ordering::SeqCst);
+                    (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
+                        // Preserve instruction and data ordering w.r.t. DMA flag access.
+                        fence(Ordering::SeqCst);
 
-                    // Perform processing for  ADC channel 0 --> Driver channel 0 (LowNoise)
-                    let x = f32::from(AdcCode(adc0[0]))
-                        / settings.afe[driver::Channel::LowNoise as usize]
-                            .as_multiplier(); // get adc sample in volt * AFE gain for equivalent input voltage
-                    let iir = if output[driver::Channel::LowNoise as usize]
-                        .is_enabled()
-                    {
-                        settings.low_noise.iir
-                    } else {
-                        *output[driver::Channel::LowNoise as usize].iir()
-                    };
-                    let y = iir.update(&mut iir_state[0], x, hold);
+                        // Perform processing for  ADC channel 0 --> Driver channel 0 (LowNoise)
+                        let x = f32::from(AdcCode(adc0[0]))
+                            / settings.afe[driver::Channel::LowNoise as usize]
+                                .as_multiplier(); // get adc sample in volt * AFE gain for equivalent input voltage
+                        let iir = if *ln_output_enabled {
+                            &settings.low_noise.iir
+                        } else {
+                            ramp_iir
+                        };
+                        let y = iir.update(&mut iir_state[0], x, hold);
 
-                    // Convert to DAC code. Output 1V/1A Driver output current. Bounds must be ensured by filter limits!
-                    dac0[0] = DacCode::try_from(y).unwrap().0;
+                        // Convert to DAC code. Output 1V/1A Driver output current. Bounds must be ensured by filter limits!
+                        dac0[0] = DacCode::try_from(y).unwrap().0;
 
-                    // Set Driver current.
-                    write_dac_spi::spawn(driver::Channel::LowNoise, y).unwrap();
+                        // Set Driver current.
+                        write_dac_spi::spawn(driver::Channel::LowNoise, y)
+                            .unwrap();
 
-                    // Stream the data.
-                    let adc_samples = [adc0, adc1];
-                    let dac_samples = [dac0, dac1];
-                    const N: usize = BATCH_SIZE * core::mem::size_of::<i16>()
-                        / core::mem::size_of::<MaybeUninit<u8>>();
-                    generator.add::<_, { N * 4 }>(|buf| {
-                        for (data, buf) in adc_samples
-                            .iter()
-                            .chain(dac_samples.iter())
-                            .zip(buf.chunks_exact_mut(N))
-                        {
-                            let data = unsafe {
-                                core::slice::from_raw_parts(
-                                    data.as_ptr() as *const MaybeUninit<u8>,
-                                    N,
-                                )
-                            };
-                            buf.copy_from_slice(data)
-                        }
+                        // Stream the data.
+                        let adc_samples = [adc0, adc1];
+                        let dac_samples = [dac0, dac1];
+                        const N: usize = BATCH_SIZE
+                            * core::mem::size_of::<i16>()
+                            / core::mem::size_of::<MaybeUninit<u8>>();
+                        generator.add::<_, { N * 4 }>(|buf| {
+                            for (data, buf) in adc_samples
+                                .iter()
+                                .chain(dac_samples.iter())
+                                .zip(buf.chunks_exact_mut(N))
+                            {
+                                let data = unsafe {
+                                    core::slice::from_raw_parts(
+                                        data.as_ptr() as *const MaybeUninit<u8>,
+                                        N,
+                                    )
+                                };
+                                buf.copy_from_slice(data)
+                            }
+                        });
+                        // Update telemetry measurements.
+                        telemetry.low_noise.adc0 = x;
+                        telemetry.low_noise.current = y;
+                        // Todo: The raw photodiode samples should be converted to eqivalent photocurrent(?)
+                        // and incorporated into the signal processing.
+                        telemetry.headboard_adc_data = *headboard_adc_data;
+
+                        // Preserve instruction and data ordering w.r.t. DMA flag access.
+                        fence(Ordering::SeqCst);
                     });
-                    // Update telemetry measurements.
-                    telemetry.low_noise.adc0 = x;
-                    telemetry.low_noise.current = y;
-                    // Todo: The raw photodiode samples should be converted to eqivalent photocurrent(?)
-                    // and incorporated into the signal processing.
-                    telemetry.headboard_adc_data = *headboard_adc_data;
-
-                    // Preserve instruction and data ordering w.r.t. DMA flag access.
-                    fence(Ordering::SeqCst);
-                });
-            },
-        );
+                },
+            );
     }
 
     #[idle(shared=[network])]
@@ -639,7 +657,7 @@ mod app {
     }
 
     // Task for handling the Powerup/-down sequence
-    #[task(priority = 1, capacity = 2, shared=[output_state, settings, laser_interlock, telemetry])]
+    #[task(priority = 1, capacity = 2, shared=[output_state, ln_output_enabled, ramp_iir, settings, laser_interlock, telemetry])]
     fn handle_output_tick(
         mut c: handle_output_tick::Context,
         channel: driver::Channel,
@@ -654,7 +672,7 @@ mod app {
                 tele.monitor.current[channel as usize],
             ]
         });
-        (c.shared.output_state, c.shared.laser_interlock).lock(
+        let (oe, iir) = (c.shared.output_state, c.shared.laser_interlock).lock(
             |state, ilock| {
                 state[channel as usize]
                     .handle_tick(&ramp_target, &channel, ilock, &reads)
@@ -669,8 +687,25 @@ mod app {
                     )
                     .unwrap();
                 }
+                (
+                    state[driver::Channel::LowNoise as usize].is_enabled(),
+                    *state[driver::Channel::LowNoise as usize].iir(),
+                )
             },
         );
+        // Store the output enabled and current ramp iir in separate shared variables. Theses will be used by the
+        // process task to perform the current ramp if the output is beeing ramped up.
+        // We cannot directly use the output state since it contains the output relays and is therefore locked
+        // for a long time during output tick handling, when the relays are toggled.
+        // It is crutial that the information in output_enabled and the ramp_iir is not out of sync with the actual
+        // output_state. This is ensured since the state machine always goes through transitions that make use of
+        // the handle_output_tick() task during enabling and disabling.
+        (c.shared.ln_output_enabled, c.shared.ramp_iir).lock(
+            |ln_output_enabled, ramp_iir| {
+                *ln_output_enabled = oe;
+                *ramp_iir = iir;
+            },
+        )
     }
 
     // Driver DAC SPI write task. This effectively makes the slow, blocking SPI writes non-blocking
