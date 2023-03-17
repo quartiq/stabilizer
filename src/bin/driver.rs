@@ -213,8 +213,8 @@ mod app {
         header_adc: driver::ltc2320::Ltc2320,
         header_adc_data: [u16; 8],
         output_state: [output::sm::StateMachine<output::Output<I2c1Proxy>>; 2],
-        ln_output_enabled: bool,
-        ramp_iir: iir::IIR<f32>,
+        ln_output_enabled: bool, // variable to relay output_en info to the process task without having to lock output_state
+        ramp_iir: iir::IIR<f32>, // variable to relay the ramp iir to the process task without having to lock output_state
         alarm_handle: Option<trip_alarm::SpawnHandle>,
         laser_interlock: LaserInterlock,
     }
@@ -693,6 +693,13 @@ mod app {
                 )
             },
         );
+        // Store the output enabled and current ramp iir in separate shared variables. Theses will be used by the
+        // process task to perform the current ramp if the output is beeing ramped up.
+        // We cannot directly use the output state since it contains the output relays and is therefore locked
+        // for a long time during output tick handling, when the relays are toggled.
+        // It is crutial that the information in output_enabled and the ramp_iir is not out of sync with the actual
+        // output_state. This is ensured since the state machine always goes through transitions that make use of
+        // the handle_output_tick() task during enabling and disabling.
         (c.shared.ln_output_enabled, c.shared.ramp_iir).lock(
             |ln_output_enabled, ramp_iir| {
                 *ln_output_enabled = oe;
