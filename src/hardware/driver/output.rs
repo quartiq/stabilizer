@@ -48,8 +48,8 @@ impl SelfTest {
             )),
             sm::States::SelftestShort => Some((
                 [
-                    Output::<I2c1Proxy>::VALID_VOLTAGE_SHORT,
-                    Output::<I2c1Proxy>::VALID_CURRENT_SHORT,
+                    Output::<I2c1Proxy>::VALID_VOLTAGE_SHOTTKY,
+                    Output::<I2c1Proxy>::VALID_CURRENT_SHOTTKY,
                 ],
                 [FailReason::ShortVoltage, FailReason::ShortCurrent],
             )),
@@ -127,14 +127,14 @@ where
 
     const TESTCURRENT: f32 = 0.01; // 10 mA
 
-    const VALID_CURRENT_ZERO: Range<f32> = 0.0..0.001; // 0 mA to 1 mA
+    // Note that the test voltages and currents are relatively loose right now due to some noise
+    // on the MCU ADC measurement nodes.
+    const VALID_CURRENT_ZERO: Range<f32> = 0.0..0.01; // 0 mA to 10 mA
     const VALID_CURRENT_SHUNT: Range<f32> = 0.009..0.011; // 9 mA to 11 mA
-    const VALID_CURRENT_SHORT: Range<f32> = 0.009..0.011; // 9 mA to 11 mA
-
-    // Driver headboard has a 10 ohm shunt resistor.
-    const VALID_VOLTAGE_ZERO: Range<f32> = 0.0..0.01; // 0 mV to 10 mV
-    const VALID_VOLTAGE_SHUNT: Range<f32> = 0.09..0.11; // 90 mV to 110 mV
-    const VALID_VOLTAGE_SHORT: Range<f32> = 0.0..0.01; // 0 mV to 10 mV
+    const VALID_CURRENT_SHOTTKY: Range<f32> = 0.009..0.011; // 9 mA to 11 mA
+    const VALID_VOLTAGE_ZERO: Range<f32> = -0.05..0.05; // -50 mV to 50 mV
+    const VALID_VOLTAGE_SHUNT: Range<f32> = 0.05..0.15; // 50 mV to 150 mV (10 ohm shunt resistor)
+    const VALID_VOLTAGE_SHOTTKY: Range<f32> = 0.2..0.3; // 200 mV to 300 mV (approximalte voltage drop over shottky to GND)
 
     pub fn new(
         gpio: &'static spin::Mutex<Mcp230xx<I2C, Mcp23008>>,
