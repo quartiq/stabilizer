@@ -7,7 +7,7 @@ name = "ad9959"
 version = "0.2.0"
 dependencies = [
  "bit_field",
- "bitflags",
+ "bitflags 2.0.2",
  "bytemuck",
  "embedded-hal",
 ]
@@ -80,6 +80,12 @@ name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
+
+[[package]]
+name = "bitflags"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "487f1e0fcbe47deb8b0574e646def1c903389d95241dd1bbcc6ce4a715dfc0c1"
 
 [[package]]
 name = "bytemuck"
@@ -793,7 +799,7 @@ version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee34c1e1bfc7e9206cc0fb8030a90129b4e319ab53856249bb27642cab914fb3"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "byteorder",
  "managed",
 ]
@@ -881,7 +887,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c74a1d83bf1e19db5e504c2cb2d98e7ca5f7ff758ca69f44cf6bfddc90af30dc"
 dependencies = [
  "bare-metal 1.0.0",
- "bitflags",
+ "bitflags 1.3.2",
  "cast",
  "cortex-m 0.7.7",
  "embedded-dma",
