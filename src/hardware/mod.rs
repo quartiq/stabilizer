@@ -122,6 +122,10 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     }
     PANICKED.store(true, Ordering::Relaxed);
 
+    // Trip the laser interlock by settign the pin low
+    let gpiob = unsafe { &*hal::stm32::GPIOB::ptr() };
+    gpiob.odr.modify(|_, w| w.odr13().low());
+
     // Turn on both red LEDs, FP_LED_1, FP_LED_3
     let gpiod = unsafe { &*hal::stm32::GPIOD::ptr() };
     gpiod.odr.modify(|_, w| w.odr6().high().odr12().high());
