@@ -194,6 +194,8 @@ pub struct Telemetry {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
+    use core::ops::Range;
+
     use stabilizer::{hardware::driver::Condition, net::alarm::Change};
 
     use super::*;
@@ -231,6 +233,7 @@ mod app {
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
         header_adc_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
         driver_dac: [driver::dac::Dac<driver::Spi1Proxy>; 2],
+        channel_range: [Range<f32>; 2],
         driver_temp: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
         header_temp: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
         internal_adc: driver::internal_adc::InternalAdc,
@@ -291,6 +294,7 @@ mod app {
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
             header_adc_conversion_scheduled: stabilizer.systick.now(),
+            channel_range: [driver.dac[0].range(), driver.dac[1].range()],
             driver_dac: driver.dac,
             driver_temp: driver.driver_lm75,
             header_temp: driver.header_lm75,
@@ -508,7 +512,7 @@ mod app {
         });
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, alarm_handle, output_state, laser_interlock])]
+    #[task(priority = 1, local=[afes, channel_range], shared=[network, settings, alarm_handle, output_state, laser_interlock])]
     fn settings_update(mut c: settings_update::Context) {
         let new_settings =
             c.shared.network.lock(|net| *net.miniconf.settings());
@@ -549,6 +553,9 @@ mod app {
                 });
             }
         }
+
+        // check if the output currents/limits are within the allowed range and clamp them if not
+        log::info!("c.local.channel_range: {:?}", c.local.channel_range);
 
         c.shared.settings.lock(|current| *current = new_settings);
         c.local.afes.0.set_gain(new_settings.afe[0]);

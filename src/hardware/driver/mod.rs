@@ -53,7 +53,7 @@ impl ChannelVariant {
 
     /// Returns the effective scale of the DAC output voltage to the channel output current.
     /// The scale is negative for source channels since a lower DAC voltage leads to more current.
-    fn dac_to_output_current_scale(&self) -> f32 {
+    pub fn dac_to_output_current_scale(&self) -> f32 {
         match self {
             ChannelVariant::LowNoiseSource => -Self::R_SHUNT_LN, // negated
             ChannelVariant::LowNoiseSink => Self::R_SHUNT_LN,
