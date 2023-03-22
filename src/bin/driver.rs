@@ -684,7 +684,11 @@ mod app {
         channel: driver::Channel,
     ) {
         let ramp_target = c.shared.settings.lock(|settings| match channel {
-            driver::Channel::LowNoise => settings.low_noise.iir.y_offset,
+            // clamp the ramp target to the iir limits to prevent ramping to an invalid current
+            driver::Channel::LowNoise => settings.low_noise.iir.y_offset.clamp(
+                settings.low_noise.iir.y_min,
+                settings.low_noise.iir.y_max,
+            ),
             driver::Channel::HighPower => settings.high_power.current,
         });
         let reads = c.shared.telemetry.lock(|tele| {
