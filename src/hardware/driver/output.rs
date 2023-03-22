@@ -195,7 +195,7 @@ pub mod sm {
             RampCurrent + RampDone = Enabled,
 
             // Abort transitions
-            EnableWaitK0 | EnableWaitK1 | RampCurrent + Disable = Abort,
+            EnableWaitK0 | EnableWaitK1 | RampCurrent | SelftestZero | SelftestShunt | SelftestShort + Disable = Abort,
             Abort + Tick / disengage_k1_and_hold_iir = DisableWaitK1,
 
             // Disable sequence

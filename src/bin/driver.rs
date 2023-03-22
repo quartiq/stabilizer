@@ -523,17 +523,23 @@ mod app {
         if !old_settings.reset_laser_interlock
             && new_settings.reset_laser_interlock
         {
-            if c.shared.output_state.lock(|output| {
-                output[driver::Channel::HighPower as usize].is_enabled()
+            if c.shared.output_state.lock(|state| {
+                state[driver::Channel::HighPower as usize].is_enabled()
             }) {
                 log::error!("Cannot reset laser interlock while HighPower channel is enabled. Disable channel first.")
-            } else if c.shared.output_state.lock(|output| {
-                output[driver::Channel::LowNoise as usize].is_enabled()
+            } else if c.shared.output_state.lock(|state| {
+                state[driver::Channel::LowNoise as usize].is_enabled()
             }) {
                 log::error!("Cannot reset laser interlock while LowNoise channel is enabled. Disable channel first.")
             } else {
                 log::info!("Laser interlock reset.");
-                c.shared.laser_interlock.lock(|ilock| ilock.set(None, None));
+                c.shared.laser_interlock.lock(|ilock| {
+                    let _ = c // discard result, nothing to spawn here
+                        .shared
+                        .output_state
+                        .lock(|state| ilock.set(None, state));
+                });
+
                 c.shared.alarm_handle.lock(|handle| {
                     if let Some(millis) =
                         new_settings.alarm.rearm(handle.is_some())
@@ -706,7 +712,17 @@ mod app {
                         .unwrap();
                 };
                 if let Some(result) = result {
-                    ilock.set(Some(Reason::Selftest(result)), Some(state));
+                    let delays =
+                        ilock.set(Some(Reason::Selftest(result)), state);
+                    delays.iter().enumerate().for_each(|(i, delay)| {
+                        if let Some(delay) = delay {
+                            handle_output_tick::spawn_after(
+                                delay.convert(),
+                                Channel::try_from(i).unwrap(),
+                            )
+                            .unwrap();
+                        }
+                    });
                 }
 
                 if channel == driver::Channel::HighPower {
@@ -752,8 +768,20 @@ mod app {
     fn trip_alarm(mut c: trip_alarm::Context, reason: Reason) {
         c.shared.alarm_handle.lock(|handle| *handle = None);
         log::error!("Alarm! {:?} Laser Interlock tripped.", reason);
-        (c.shared.laser_interlock, c.shared.output_state)
-            .lock(|ilock, state| ilock.set(Some(reason), Some(state)));
+        (c.shared.laser_interlock, c.shared.output_state).lock(
+            |ilock, state| {
+                let delays = ilock.set(Some(reason), state);
+                delays.iter().enumerate().for_each(|(i, delay)| {
+                    if let Some(delay) = delay {
+                        handle_output_tick::spawn_after(
+                            delay.convert(),
+                            Channel::try_from(i).unwrap(),
+                        )
+                        .unwrap();
+                    }
+                });
+            },
+        );
     }
 
     #[task(priority = 1, shared=[telemetry, settings, laser_interlock, output_state], local=[internal_adc])]
@@ -800,14 +828,23 @@ mod app {
                 let ch = Channel::try_from(i).unwrap();
                 (c.shared.laser_interlock).lock(|ilock| {
                     c.shared.output_state.lock(|state| {
-                        ilock.set(
+                        let delays = ilock.set(
                             Some(Reason::Overcurrent(Condition {
                                 channel: ch,
                                 threshold: *interlock_current,
                                 read: *read,
                             })),
-                            Some(state),
-                        )
+                            state,
+                        );
+                        delays.iter().enumerate().for_each(|(i, delay)| {
+                            if let Some(delay) = delay {
+                                handle_output_tick::spawn_after(
+                                    delay.convert(),
+                                    Channel::try_from(i).unwrap(),
+                                )
+                                .unwrap();
+                            }
+                        });
                     });
                 });
             }
@@ -822,14 +859,23 @@ mod app {
                 let ch = Channel::try_from(i).unwrap();
                 (c.shared.laser_interlock).lock(|ilock| {
                     c.shared.output_state.lock(|state| {
-                        ilock.set(
-                            Some(Reason::Overvoltage(Condition {
+                        let delays = ilock.set(
+                            Some(Reason::Overcurrent(Condition {
                                 channel: ch,
                                 threshold: *interlock_voltage,
                                 read: *read,
                             })),
-                            Some(state),
-                        )
+                            state,
+                        );
+                        delays.iter().enumerate().for_each(|(i, delay)| {
+                            if let Some(delay) = delay {
+                                handle_output_tick::spawn_after(
+                                    delay.convert(),
+                                    Channel::try_from(i).unwrap(),
+                                )
+                                .unwrap();
+                            }
+                        });
                     });
                 });
             }
