@@ -696,12 +696,19 @@ mod app {
         });
         let (oe, iir) = (c.shared.output_state, c.shared.laser_interlock).lock(
             |state, ilock| {
-                state[channel as usize]
-                    .handle_tick(&ramp_target, &channel, ilock, &reads)
-                    .map(|del| {
-                        handle_output_tick::spawn_after(del.convert(), channel)
-                            .unwrap()
-                    });
+                let (delay, result) = state[channel as usize].handle_tick(
+                    &ramp_target,
+                    &channel,
+                    &reads,
+                );
+                if let Some(delay) = delay {
+                    handle_output_tick::spawn_after(delay.convert(), channel)
+                        .unwrap();
+                };
+                if let Some(result) = result {
+                    ilock.set(Some(Reason::Selftest(result)));
+                }
+
                 if channel == driver::Channel::HighPower {
                     write_dac_spi::spawn(
                         channel,

@@ -123,10 +123,21 @@ impl LaserInterlock {
         }
     }
 
-    pub fn set(&mut self, reason: Option<Reason>) {
+    pub fn set(
+        &mut self,
+        reason: Option<Reason>,
+        // output_state: &mut [output::sm::StateMachine<output::Output<I2c1Proxy>>;
+        //          2],
+    ) {
         // only update if no reason yet or if clearing (remember first reason)
         if self.reason.is_none() || reason.is_none() {
             self.pin.set_state(reason.is_none().into());
+            // disable both outputs if interlock is tripped
+            // output_state.iter().map(|state| {
+            //     if reason.is_some() {
+            //         state.set_enable(false);
+            //     }
+            // });
             self.reason = reason;
         }
     }

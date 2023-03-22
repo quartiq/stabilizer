@@ -14,7 +14,7 @@ use smlang::statemachine;
 
 use crate::hardware::I2c1Proxy;
 
-use super::{relay::Relay, Channel, LaserInterlock, Reason};
+use super::{relay::Relay, Channel};
 
 /// Selftest struct that can be reported by telemetry.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -29,7 +29,6 @@ impl SelfTest {
     fn test(
         state: &sm::States,
         channel: &Channel,
-        interlock: &mut LaserInterlock,
         reads: &[f32; 2], // voltage/current reads
     ) -> Option<Self> {
         let tests = match (state, channel) {
@@ -83,12 +82,12 @@ impl SelfTest {
                 tests.0.iter().zip(reads.iter()).zip(tests.1.iter())
             {
                 if !range.contains(&read) {
-                    interlock.set(Some(Reason::Selftest(SelfTest {
+                    return Some(SelfTest {
                         reason,
                         valid_range: range.clone(),
                         read,
                         channel: *channel,
-                    })));
+                    });
                 }
             }
         }
@@ -279,10 +278,9 @@ where
         &mut self,
         target: &f32,
         channel: &Channel,
-        interlock: &mut LaserInterlock,
         reads: &[f32; 2], // voltage/current reads
-    ) -> Option<fugit::MillisDuration<u64>> {
-        SelfTest::test(self.state(), channel, interlock, reads); // execute selftest if necessary in States
+    ) -> (Option<fugit::MillisDuration<u64>>, Option<SelfTest>) {
+        let result = SelfTest::test(self.state(), channel, reads); // execute selftest if necessary in States
         match *self.state() {
             sm::States::EnableWaitK0
             | sm::States::DisableWaitK1
@@ -310,14 +308,20 @@ where
             }
         }
         match *self.state() {
-            sm::States::DisableWaitK0 => Some(Relay::<I2C>::K0_DELAY),
-            sm::States::DisableWaitK1 => Some(Relay::<I2C>::K1_DELAY),
-            sm::States::EnableWaitK0 => Some(Relay::<I2C>::K0_DELAY),
-            sm::States::EnableWaitK1 => Some(Relay::<I2C>::K1_DELAY),
-            sm::States::RampCurrent => Some(Output::<I2C>::RAMP_DELAY),
-            sm::States::SelftestShunt => Some(Output::<I2C>::SET_DELAY),
-            sm::States::SelftestShort => Some(Output::<I2C>::SET_DELAY),
-            _ => None,
+            sm::States::DisableWaitK0 => (Some(Relay::<I2C>::K0_DELAY), result),
+            sm::States::DisableWaitK1 => (Some(Relay::<I2C>::K1_DELAY), result),
+            sm::States::EnableWaitK0 => (Some(Relay::<I2C>::K0_DELAY), result),
+            sm::States::EnableWaitK1 => (Some(Relay::<I2C>::K1_DELAY), result),
+            sm::States::RampCurrent => {
+                (Some(Output::<I2C>::RAMP_DELAY), result)
+            }
+            sm::States::SelftestShunt => {
+                (Some(Output::<I2C>::SET_DELAY), result)
+            }
+            sm::States::SelftestShort => {
+                (Some(Output::<I2C>::SET_DELAY), result)
+            }
+            _ => (None, result),
         }
     }
 
