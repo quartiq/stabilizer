@@ -134,10 +134,14 @@ impl LaserInterlock {
             self.pin.set_state(reason.is_none().into());
             // disable both outputs if interlock is tripped
             self.reason = reason;
-            [
-                output_state[0].set_enable(false).unwrap(),
-                output_state[1].set_enable(false).unwrap(),
-            ]
+            if self.reason.is_some() {
+                [
+                    output_state[0].set_enable(false).unwrap(),
+                    output_state[1].set_enable(false).unwrap(),
+                ]
+            } else {
+                [None, None]
+            }
         } else {
             [None, None]
         }

@@ -266,7 +266,9 @@ where
             true => sm::Events::Enable,
             false => sm::Events::Disable,
         };
-        if *self.process_event(event)? != sm::States::Abort {
+        if ![sm::States::Abort, sm::States::Disabled]
+            .contains(self.process_event(event)?)
+        {
             Ok(Some(Output::<I2C>::SET_DELAY))
         } else {
             Ok(None)

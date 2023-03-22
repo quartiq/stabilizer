@@ -523,14 +523,17 @@ mod app {
         if !old_settings.reset_laser_interlock
             && new_settings.reset_laser_interlock
         {
-            if c.shared.output_state.lock(|state| {
-                state[driver::Channel::HighPower as usize].is_enabled()
-            }) {
-                log::error!("Cannot reset laser interlock while HighPower channel is enabled. Disable channel first.")
-            } else if c.shared.output_state.lock(|state| {
-                state[driver::Channel::LowNoise as usize].is_enabled()
-            }) {
-                log::error!("Cannot reset laser interlock while LowNoise channel is enabled. Disable channel first.")
+            if c.shared
+                .settings
+                .lock(|settings| settings.high_power.output_enabled)
+            {
+                log::error!("Cannot reset laser interlock while HighPower channel is enabled in settings. Disable channel first.")
+            } else if c
+                .shared
+                .settings
+                .lock(|settings| settings.low_noise.output_enabled)
+            {
+                log::error!("Cannot reset laser interlock while LowNoise channel is enabled in settings. Disable channel first.")
             } else {
                 log::info!("Laser interlock reset.");
                 c.shared.laser_interlock.lock(|ilock| {
