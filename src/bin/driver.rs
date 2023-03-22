@@ -514,7 +514,7 @@ mod app {
 
     #[task(priority = 1, local=[afes, channel_range], shared=[network, settings, alarm_handle, output_state, laser_interlock])]
     fn settings_update(mut c: settings_update::Context) {
-        let new_settings =
+        let mut new_settings =
             c.shared.network.lock(|net| *net.miniconf.settings());
         let old_settings = c.shared.settings.lock(|current| *current);
 
@@ -555,7 +555,21 @@ mod app {
         }
 
         // check if the output currents/limits are within the allowed range and clamp them if not
-        log::info!("c.local.channel_range: {:?}", c.local.channel_range);
+        new_settings.high_power.current =
+            new_settings.high_power.current.clamp(
+                c.local.channel_range[1].start,
+                c.local.channel_range[1].end,
+            );
+        new_settings.low_noise.iir.y_min =
+            new_settings.low_noise.iir.y_min.clamp(
+                c.local.channel_range[0].start,
+                c.local.channel_range[0].end,
+            );
+        new_settings.low_noise.iir.y_max =
+            new_settings.low_noise.iir.y_max.clamp(
+                c.local.channel_range[0].start,
+                c.local.channel_range[0].end,
+            );
 
         c.shared.settings.lock(|current| *current = new_settings);
         c.local.afes.0.set_gain(new_settings.afe[0]);
