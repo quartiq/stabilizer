@@ -43,7 +43,7 @@ use stabilizer::{
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
         design_parameters, driver,
-        driver::{output, Channel},
+        driver::{output, Channel, Condition, Location, Temperature},
         hal,
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, I2c1Proxy, SystemTimer, Systick, AFE0,
@@ -51,6 +51,7 @@ use stabilizer::{
     },
     net::{
         alarm,
+        alarm::Change,
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Miniconf,
         NetworkState, NetworkUsers,
@@ -193,8 +194,6 @@ pub struct Telemetry {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
-    use stabilizer::{hardware::driver::Condition, net::alarm::Change};
-
     use super::*;
 
     /// Period for checking the Driver output interlock voltage/current levels.
@@ -325,6 +324,7 @@ mod app {
         header_adc_start_conversion::spawn().unwrap();
         start::spawn_after(100.millis()).unwrap();
         monitor_output::spawn_after(DRIVER_MONITOR_PERIOD).unwrap();
+        monitor_temperature::spawn().unwrap();
 
         (shared, local, init::Monotonics(stabilizer.systick))
     }
@@ -615,21 +615,14 @@ mod app {
         };
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry, laser_interlock], local=[cpu_temp_sensor, driver_temp, header_temp])]
+    #[task(priority = 1, shared=[network, settings, telemetry, laser_interlock], local=[cpu_temp_sensor])]
     fn telemetry(mut c: telemetry::Context) {
         let mut telemetry: Telemetry =
             c.shared.telemetry.lock(|telemetry| telemetry.clone());
 
         telemetry.monitor.cpu_temp =
             c.local.cpu_temp_sensor.get_temperature().unwrap();
-        telemetry.monitor.driver_temp =
-            c.local.driver_temp.read_temperature().unwrap();
 
-        #[cfg(feature = "ai_artiq_laser_module")]
-        {
-            telemetry.monitor.header_temp =
-                c.local.header_temp.read_temperature().unwrap();
-        }
         telemetry.interlock_tripped =
             c.shared.laser_interlock.lock(|ilock| ilock.reason());
         let telemetry_period = c
@@ -823,6 +816,43 @@ mod app {
             tele.monitor.voltage = voltage_reads;
         });
         monitor_output::spawn_after(DRIVER_MONITOR_PERIOD).unwrap();
+    }
+
+    #[task(priority = 1, shared=[telemetry, laser_interlock, output_state], local=[driver_temp, header_temp])]
+    fn monitor_temperature(mut c: monitor_temperature::Context) {
+        /// Period for checking the Driver and header board temperatures.
+        pub const TEMPERATURE_MONITOR_PERIOD: Duration<u64, 1, 10000> =
+            Duration::<u64, 1, 10000>::millis(1000); // 1 s
+
+        /// Acceptable temperature range for Driver and the header board. This has to be relatively conservative
+        /// so we can react quickly to a runaway heating condition before Driver gets damaged.
+        pub const VALID_TEMP_RANGE: Range<f32> = -10.0..50.0;
+
+        let temps = [
+            c.local.driver_temp.read_temperature().unwrap(),
+            c.local.header_temp.read_temperature().unwrap(),
+        ];
+
+        [Location::Driver, Location::LaserModuleHeadboard]
+            .iter()
+            .zip(temps)
+            .for_each(|(loc, temp)| {
+                if !VALID_TEMP_RANGE.contains(&temp) {
+                    c.shared.laser_interlock.lock(|ilock| {
+                        ilock.set(Some(Reason::Overtemperature(Temperature {
+                            location: *loc,
+                            valid_range: VALID_TEMP_RANGE,
+                            read: temp,
+                        })))
+                    });
+                }
+            });
+
+        c.shared.telemetry.lock(|telemetry| {
+            telemetry.monitor.driver_temp = temps[0];
+            telemetry.monitor.header_temp = temps[1];
+        });
+        monitor_temperature::spawn_after(TEMPERATURE_MONITOR_PERIOD).unwrap();
     }
 
     #[task(binds = ETH, priority = 1)]

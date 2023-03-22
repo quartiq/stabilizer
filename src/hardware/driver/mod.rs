@@ -4,6 +4,8 @@ pub mod ltc2320;
 pub mod output;
 pub mod relay;
 
+use core::ops::Range;
+
 use self::output::SelfTest;
 use super::I2c1Proxy;
 use idsp::iir;
@@ -84,6 +86,19 @@ pub struct Condition {
     pub read: f32,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Temperature {
+    pub location: Location,
+    pub valid_range: Range<f32>,
+    pub read: f32,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum Location {
+    Driver,
+    LaserModuleHeadboard,
+}
+
 /// A [Reason] why the interlock has tripped.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub enum Reason {
@@ -106,6 +121,11 @@ pub enum Reason {
     /// The device selftest during the channel enabling sequence failed.
     /// See [output::FailReason] for details.
     Selftest(SelfTest),
+
+    /// There was an overtemperature condition on Driver or the laser module headboard.
+    /// This is detected using LM75 temperature sensor ICs on the PCB and doesn't reflect the actual
+    /// worst case temperature on eg. the Driver heatsink.
+    Overtemperature(Temperature),
 }
 pub struct LaserInterlock {
     reason: Option<Reason>,

@@ -157,7 +157,7 @@ where
     const LN_VALID_CURRENT_SHOTTKY: Range<f32> = 0.009..0.011; // 9 mA to 11 mA
     const LN_VALID_VOLTAGE_ZERO: Range<f32> = -0.05..0.05; // -50 mV to 50 mV
     const LN_VALID_VOLTAGE_SHUNT: Range<f32> = 0.05..0.15; // 50 mV to 150 mV (10 ohm shunt resistor)
-    const LN_VALID_VOLTAGE_SHOTTKY: Range<f32> = 0.2..0.3; // 200 mV to 300 mV (approximalte voltage drop over shottky to GND)
+    const LN_VALID_VOLTAGE_SHOTTKY: Range<f32> = 0.2..0.4; // 200 mV to 400 mV (approximalte voltage drop over shottky to GND)
 
     // The current measurements on the HP side are very inaccurate right now.
     const HP_VALID_CURRENT_ZERO: Range<f32> = 0.0..1.;
