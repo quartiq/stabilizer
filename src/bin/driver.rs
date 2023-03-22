@@ -28,13 +28,12 @@
 #![no_main]
 
 use core::mem::MaybeUninit;
+use core::ops::Range;
 use core::sync::atomic::{fence, Ordering};
-
 use fugit::{Duration, ExtU64, TimerInstantU64};
 use mutex_trait::prelude::*;
 
 use idsp::iir;
-
 use serde::{Deserialize, Serialize};
 use stabilizer::hardware::driver::{LaserInterlock, Reason};
 use stabilizer::{
@@ -194,8 +193,6 @@ pub struct Telemetry {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
-    use core::ops::Range;
-
     use stabilizer::{hardware::driver::Condition, net::alarm::Change};
 
     use super::*;
