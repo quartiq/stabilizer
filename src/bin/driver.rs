@@ -533,7 +533,7 @@ mod app {
                 log::error!("Cannot reset laser interlock while LowNoise channel is enabled. Disable channel first.")
             } else {
                 log::info!("Laser interlock reset.");
-                c.shared.laser_interlock.lock(|ilock| ilock.set(None));
+                c.shared.laser_interlock.lock(|ilock| ilock.set(None, None));
                 c.shared.alarm_handle.lock(|handle| {
                     if let Some(millis) =
                         new_settings.alarm.rearm(handle.is_some())
@@ -706,7 +706,7 @@ mod app {
                         .unwrap();
                 };
                 if let Some(result) = result {
-                    ilock.set(Some(Reason::Selftest(result)));
+                    ilock.set(Some(Reason::Selftest(result)), Some(state));
                 }
 
                 if channel == driver::Channel::HighPower {
@@ -748,13 +748,12 @@ mod app {
         c.local.driver_dac[channel as usize].set(current).unwrap()
     }
 
-    #[task(priority = 1, shared=[alarm_handle, laser_interlock])]
+    #[task(priority = 1, shared=[alarm_handle, laser_interlock, output_state])]
     fn trip_alarm(mut c: trip_alarm::Context, reason: Reason) {
         c.shared.alarm_handle.lock(|handle| *handle = None);
         log::error!("Alarm! {:?} Laser Interlock tripped.", reason);
-        c.shared
-            .laser_interlock
-            .lock(|ilock| ilock.set(Some(reason)));
+        (c.shared.laser_interlock, c.shared.output_state)
+            .lock(|ilock, state| ilock.set(Some(reason), Some(state)));
     }
 
     #[task(priority = 1, shared=[telemetry, settings, laser_interlock, output_state], local=[internal_adc])]
@@ -799,12 +798,17 @@ mod app {
         {
             if (read > interlock_current) & interlock_asserted & output_en {
                 let ch = Channel::try_from(i).unwrap();
-                c.shared.laser_interlock.lock(|ilock| {
-                    ilock.set(Some(Reason::Overcurrent(Condition {
-                        channel: ch,
-                        threshold: *interlock_current,
-                        read: *read,
-                    })))
+                (c.shared.laser_interlock).lock(|ilock| {
+                    c.shared.output_state.lock(|state| {
+                        ilock.set(
+                            Some(Reason::Overcurrent(Condition {
+                                channel: ch,
+                                threshold: *interlock_current,
+                                read: *read,
+                            })),
+                            Some(state),
+                        )
+                    });
                 });
             }
         }
@@ -816,12 +820,17 @@ mod app {
         {
             if (read > interlock_voltage) & interlock_asserted & output_en {
                 let ch = Channel::try_from(i).unwrap();
-                c.shared.laser_interlock.lock(|ilock| {
-                    ilock.set(Some(Reason::Overvoltage(Condition {
-                        channel: ch,
-                        threshold: *interlock_voltage,
-                        read: *read,
-                    })))
+                (c.shared.laser_interlock).lock(|ilock| {
+                    c.shared.output_state.lock(|state| {
+                        ilock.set(
+                            Some(Reason::Overvoltage(Condition {
+                                channel: ch,
+                                threshold: *interlock_voltage,
+                                read: *read,
+                            })),
+                            Some(state),
+                        )
+                    });
                 });
             }
         }
