@@ -65,7 +65,7 @@ rand_core = "0.6.4"
 
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "ethernet", "xspi"]
-version = "0.13.1"
+version = "0.14.0"
 
 [features]
 nightly = [ ]
