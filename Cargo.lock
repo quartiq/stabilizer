@@ -391,9 +391,9 @@ checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
 
 [[package]]
 name = "mcp230xx"
-version = "0.1.0"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf09e3689e2dcf7e563015ab094f224be2997035ea8e00e83ef97ed2ee4fe729"
+checksum = "0c5a338372c83c3eff68c07a23fe00dff2b2c9195583a2d464292919bc27de04"
 dependencies = [
  "bit_field",
  "embedded-hal",
