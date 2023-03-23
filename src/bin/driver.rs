@@ -536,12 +536,10 @@ mod app {
                 log::error!("Cannot reset laser interlock while LowNoise channel is enabled in settings. Disable channel first.")
             } else {
                 log::info!("Laser interlock reset.");
-                c.shared.laser_interlock.lock(|ilock| {
-                    let _ = c // discard result, nothing to spawn here
-                        .shared
-                        .output_state
-                        .lock(|state| ilock.set(None, state));
-                });
+                (&mut c.shared.laser_interlock, &mut c.shared.output_state)
+                    .lock(|ilock, state| {
+                        let _ = ilock.set(None, state); // discard result, nothing to spawn here
+                    });
 
                 c.shared.alarm_handle.lock(|handle| {
                     if let Some(millis) =
@@ -822,8 +820,8 @@ mod app {
         {
             if (read > interlock_current) & interlock_asserted & output_en {
                 let ch = Channel::try_from(i).unwrap();
-                (c.shared.laser_interlock).lock(|ilock| {
-                    c.shared.output_state.lock(|state| {
+                (&mut c.shared.laser_interlock, &mut c.shared.output_state)
+                    .lock(|ilock, state| {
                         let delays = ilock.set(
                             Some(Reason::Overcurrent(Condition {
                                 channel: ch,
@@ -842,7 +840,6 @@ mod app {
                             }
                         });
                     });
-                });
             }
         }
         for (i, ((interlock_voltage, read), output_en)) in interlock_voltage
@@ -853,8 +850,8 @@ mod app {
         {
             if (read > interlock_voltage) & interlock_asserted & output_en {
                 let ch = Channel::try_from(i).unwrap();
-                (c.shared.laser_interlock).lock(|ilock| {
-                    c.shared.output_state.lock(|state| {
+                (&mut c.shared.laser_interlock, &mut c.shared.output_state)
+                    .lock(|ilock, state| {
                         let delays = ilock.set(
                             Some(Reason::Overvoltage(Condition {
                                 channel: ch,
@@ -873,7 +870,6 @@ mod app {
                             }
                         });
                     });
-                });
             }
         }
         c.shared.telemetry.lock(|tele| {
@@ -903,8 +899,8 @@ mod app {
             .zip(temps)
             .for_each(|(loc, temp)| {
                 if !VALID_TEMP_RANGE.contains(&temp) {
-                    (c.shared.laser_interlock).lock(|ilock| {
-                        c.shared.output_state.lock(|state| {
+                    (&mut c.shared.laser_interlock, &mut c.shared.output_state)
+                        .lock(|ilock, state| {
                             let delays = ilock.set(
                                 Some(Reason::Overtemperature(Temperature {
                                     location: *loc,
@@ -923,7 +919,6 @@ mod app {
                                 }
                             });
                         });
-                    });
                 }
             });
 
