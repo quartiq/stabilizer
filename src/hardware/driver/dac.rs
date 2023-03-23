@@ -1,6 +1,6 @@
 ///! Driver DAC11001 driver
 ///! https://www.ti.com/lit/ds/slasel0b/slasel0b.pdf?ts=1672306760190&ref_url=https%253A%252F%252Fwww.google.com%252F
-use core::fmt::Debug;
+use core::{fmt::Debug, ops::Range};
 use embedded_hal::blocking::spi::{Transfer, Write};
 use stm32h7xx_hal::gpio;
 
@@ -249,5 +249,18 @@ where
         self.spi.transfer(&mut bytes).unwrap();
         self.sync_n.set_high();
         u32::from_be_bytes(bytes)
+    }
+
+    pub fn range(&self) -> Range<f32> {
+        let mut extreme =
+            DacCode::VREF_DAC / self.channel.dac_to_output_current_scale();
+        // If extreme is negative this means the DAC scale is inverted and we can output a positive current.
+        // In DacCode the inversion happens implicit by flipping the sign and overflowing bits.
+        if extreme < 0. {
+            extreme = extreme - (extreme / DacCode::MAX_DAC_WORD as f32); // explicitly subtract the single bit as in DacCode for inverted scales
+            0.0..-extreme
+        } else {
+            -extreme..0.0
+        }
     }
 }

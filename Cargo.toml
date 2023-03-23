@@ -49,7 +49,7 @@ idsp = "0.9"
 ad9959 = { path = "ad9959", version = "0.2.0" }
 miniconf = "0.6.3"
 smoltcp-nal = { version = "0.2", features = ["shared-stack"] }
-mcp230xx = "0.1"
+mcp230xx = "1.0"
 mutex-trait = "0.2"
 minimq = "0.6.0"
 fugit = "0.3"

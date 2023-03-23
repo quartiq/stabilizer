@@ -28,13 +28,12 @@
 #![no_main]
 
 use core::mem::MaybeUninit;
+use core::ops::Range;
 use core::sync::atomic::{fence, Ordering};
-
 use fugit::{Duration, ExtU64, TimerInstantU64};
 use mutex_trait::prelude::*;
 
 use idsp::iir;
-
 use serde::{Deserialize, Serialize};
 use stabilizer::hardware::driver::{LaserInterlock, Reason};
 use stabilizer::{
@@ -231,6 +230,7 @@ mod app {
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
         header_adc_conversion_scheduled: TimerInstantU64<MONOTONIC_FREQUENCY>, // auxillary local variable for exact scheduling
         driver_dac: [driver::dac::Dac<driver::Spi1Proxy>; 2],
+        channel_range: [Range<f32>; 2],
         driver_temp: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
         header_temp: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
         internal_adc: driver::internal_adc::InternalAdc,
@@ -291,6 +291,7 @@ mod app {
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
             header_adc_conversion_scheduled: stabilizer.systick.now(),
+            channel_range: [driver.dac[0].range(), driver.dac[1].range()],
             driver_dac: driver.dac,
             driver_temp: driver.driver_lm75,
             header_temp: driver.header_lm75,
@@ -508,9 +509,9 @@ mod app {
         });
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, alarm_handle, output_state, laser_interlock])]
+    #[task(priority = 1, local=[afes, channel_range], shared=[network, settings, alarm_handle, output_state, laser_interlock])]
     fn settings_update(mut c: settings_update::Context) {
-        let new_settings =
+        let mut new_settings =
             c.shared.network.lock(|net| *net.miniconf.settings());
         let old_settings = c.shared.settings.lock(|current| *current);
 
@@ -549,6 +550,23 @@ mod app {
                 });
             }
         }
+
+        // check if the output currents/limits are within the allowed range and clamp them if not
+        new_settings.high_power.current =
+            new_settings.high_power.current.clamp(
+                c.local.channel_range[1].start,
+                c.local.channel_range[1].end,
+            );
+        new_settings.low_noise.iir.y_min =
+            new_settings.low_noise.iir.y_min.clamp(
+                c.local.channel_range[0].start,
+                c.local.channel_range[0].end,
+            );
+        new_settings.low_noise.iir.y_max =
+            new_settings.low_noise.iir.y_max.clamp(
+                c.local.channel_range[0].start,
+                c.local.channel_range[0].end,
+            );
 
         c.shared.settings.lock(|current| *current = new_settings);
         c.local.afes.0.set_gain(new_settings.afe[0]);
@@ -663,7 +681,11 @@ mod app {
         channel: driver::Channel,
     ) {
         let ramp_target = c.shared.settings.lock(|settings| match channel {
-            driver::Channel::LowNoise => settings.low_noise.iir.y_offset,
+            // clamp the ramp target to the iir limits to prevent ramping to an invalid current
+            driver::Channel::LowNoise => settings.low_noise.iir.y_offset.clamp(
+                settings.low_noise.iir.y_min,
+                settings.low_noise.iir.y_max,
+            ),
             driver::Channel::HighPower => settings.high_power.current,
         });
         let reads = c.shared.telemetry.lock(|tele| {
