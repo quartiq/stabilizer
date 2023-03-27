@@ -8,6 +8,7 @@ use core::ops::Range;
 
 use self::output::SelfTest;
 use super::I2c1Proxy;
+use hal::gpio::PinState;
 use idsp::iir;
 use lm75;
 use miniconf::Miniconf;
@@ -143,28 +144,36 @@ impl LaserInterlock {
         }
     }
 
-    pub fn set(
+    pub fn set_reason<F>(
         &mut self,
+        f: F,
         reason: Option<Reason>,
         output_state: &mut [output::sm::StateMachine<output::Output<I2c1Proxy>>;
                  2],
-    ) -> [Option<fugit::MillisDuration<u64>>; 2] {
+    ) where
+        F: FnMut(
+            (usize, &core::option::Option<fugit::Duration<u64, 1, 1000>>),
+        ) -> (),
+    {
         // only update if no reason yet or if clearing (remember first reason)
-        if self.reason.is_none() || reason.is_none() {
-            self.pin.set_state(reason.is_none().into());
-            // disable both outputs if interlock is tripped
-            self.reason = reason;
-            if self.reason.is_some() {
+        let delays = match (&mut self.reason, &reason) {
+            (Some(_), None) => {
+                self.pin.set_state(PinState::Low);
+                self.reason = reason;
+                [None, None]
+            }
+            (None, Some(_)) => {
+                self.pin.set_state(PinState::High);
+                // disable both outputs if interlock is tripped
+                self.reason = reason;
                 [
                     output_state[0].set_enable(false).unwrap(),
                     output_state[1].set_enable(false).unwrap(),
                 ]
-            } else {
-                [None, None]
             }
-        } else {
-            [None, None]
-        }
+            _ => [None, None],
+        };
+        delays.iter().enumerate().for_each(f);
     }
 
     pub fn reason(&self) -> Option<Reason> {

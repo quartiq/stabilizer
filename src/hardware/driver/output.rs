@@ -309,22 +309,19 @@ where
                 panic!("unexpected state during output tick!")
             }
         }
-        match *self.state() {
-            sm::States::DisableWaitK0 => (Some(Relay::<I2C>::K0_DELAY), result),
-            sm::States::DisableWaitK1 => (Some(Relay::<I2C>::K1_DELAY), result),
-            sm::States::EnableWaitK0 => (Some(Relay::<I2C>::K0_DELAY), result),
-            sm::States::EnableWaitK1 => (Some(Relay::<I2C>::K1_DELAY), result),
-            sm::States::RampCurrent => {
-                (Some(Output::<I2C>::RAMP_DELAY), result)
-            }
-            sm::States::SelftestShunt => {
-                (Some(Output::<I2C>::SET_DELAY), result)
-            }
-            sm::States::SelftestShort => {
-                (Some(Output::<I2C>::SET_DELAY), result)
-            }
-            _ => (None, result),
-        }
+        (
+            match *self.state() {
+                sm::States::DisableWaitK0 => Some(Relay::<I2C>::K0_DELAY),
+                sm::States::DisableWaitK1 => Some(Relay::<I2C>::K1_DELAY),
+                sm::States::EnableWaitK0 => Some(Relay::<I2C>::K0_DELAY),
+                sm::States::EnableWaitK1 => Some(Relay::<I2C>::K1_DELAY),
+                sm::States::RampCurrent => Some(Output::<I2C>::RAMP_DELAY),
+                sm::States::SelftestShunt => Some(Output::<I2C>::SET_DELAY),
+                sm::States::SelftestShort => Some(Output::<I2C>::SET_DELAY),
+                _ => None,
+            },
+            result,
+        )
     }
 
     pub fn iir(&mut self) -> &iir::IIR<f32> {
