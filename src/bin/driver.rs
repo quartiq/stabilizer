@@ -538,7 +538,7 @@ mod app {
                 log::info!("Laser interlock reset.");
                 (&mut c.shared.laser_interlock, &mut c.shared.output_state)
                     .lock(|ilock, state| {
-                        let _ = ilock.set_reason(
+                        ilock.set_reason(
                             |(i, delay)| {
                                 if let Some(delay) = delay {
                                     handle_output_tick::spawn_after(

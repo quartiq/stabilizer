@@ -151,9 +151,7 @@ impl LaserInterlock {
         output_state: &mut [output::sm::StateMachine<output::Output<I2c1Proxy>>;
                  2],
     ) where
-        F: FnMut(
-            (usize, &core::option::Option<fugit::Duration<u64, 1, 1000>>),
-        ) -> (),
+        F: FnMut((usize, &core::option::Option<fugit::Duration<u64, 1, 1000>>)),
     {
         // only update if no reason yet or if clearing (remember first reason)
         let delays = match (&mut self.reason, &reason) {
