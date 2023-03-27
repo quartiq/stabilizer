@@ -550,7 +550,7 @@ mod app {
                             },
                             None,
                             state,
-                        ); // discard result, nothing to spawn here
+                        );
                     });
 
                 c.shared.alarm_handle.lock(|handle| {
