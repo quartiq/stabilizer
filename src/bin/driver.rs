@@ -826,7 +826,7 @@ mod app {
 
         /// Acceptable temperature range for Driver and the header board. This has to be relatively conservative
         /// so we can react quickly to a runaway heating condition before Driver gets damaged.
-        pub const VALID_TEMP_RANGE: Range<f32> = -10.0..50.0;
+        pub const VALID_TEMP_RANGE: Range<f32> = -10.0..80.0;
 
         let temps = [
             c.local.driver_temp.read_temperature().unwrap(),
