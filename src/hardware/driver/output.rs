@@ -148,6 +148,10 @@ where
     pub const SET_DELAY: fugit::MillisDuration<u64> =
         fugit::MillisDurationU64::millis(10);
 
+    // Initial delay before the first selftest. Long due to potential power supply startup delay.
+    pub const INIT_DELAY: fugit::MillisDuration<u64> =
+        fugit::MillisDurationU64::millis(1500);
+
     const TESTCURRENT: f32 = 0.01; // 10 mA
 
     // Note that the test voltages and currents are relatively loose right now due to some noise
@@ -267,10 +271,10 @@ where
             true => sm::Events::Enable,
             false => sm::Events::Disable,
         };
-        if *self.process_event(event)? != sm::States::Abort {
-            Ok(Some(Output::<I2C>::SET_DELAY))
-        } else {
-            Ok(None)
+        match self.process_event(event)? {
+            sm::States::DisableWaitK1 => Ok(Some(Output::<I2C>::SET_DELAY)),
+            sm::States::SelftestZero => Ok(Some(Output::<I2C>::INIT_DELAY)),
+            _ => Ok(None),
         }
     }
 
