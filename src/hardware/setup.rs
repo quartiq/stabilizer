@@ -1115,7 +1115,7 @@ pub fn setup(
         ];
 
         // The Pounder pgood pin was instantiated to check for Pounder. It is the same pin as the interlock on Driver.
-        let laser_interlock_pin = pounder_pgood.into_push_pull_output();
+        let mut laser_interlock_pin = pounder_pgood.into_push_pull_output();
         let laser_interlock = LaserInterlock::new(laser_interlock_pin);
 
         Mezzanine::Driver(DriverDevices {

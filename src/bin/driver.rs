@@ -590,7 +590,7 @@ mod app {
                 if let Ok(Some(delay)) = c.shared.output_state.lock(|output| {
                     output[i].set_enable(new_output_enabled).map_err(|e| {
                         log::error!(
-                            "Cannot enable/disable output {:?}! {:?}",
+                            "Cannot enable/disable output {:?}! {:?}. Enable/disable sequence not completed.",
                             i,
                             e
                         )
@@ -826,7 +826,7 @@ mod app {
 
         /// Acceptable temperature range for Driver and the header board. This has to be relatively conservative
         /// so we can react quickly to a runaway heating condition before Driver gets damaged.
-        pub const VALID_TEMP_RANGE: Range<f32> = -10.0..80.0;
+        pub const VALID_TEMP_RANGE: Range<f32> = -10.0..60.0;
 
         let temps = [
             c.local.driver_temp.read_temperature().unwrap(),

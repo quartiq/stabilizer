@@ -52,7 +52,7 @@ impl SelfTest {
                     Output::<I2c1Proxy>::LN_VALID_VOLTAGE_SHOTTKY,
                     Output::<I2c1Proxy>::LN_VALID_CURRENT_SHOTTKY,
                 ],
-                [FailReason::ShortVoltage, FailReason::ShortCurrent],
+                [FailReason::ShottkyVoltage, FailReason::ShottkyCurrent],
             )),
             (sm::States::SelftestZero, Channel::HighPower) => Some((
                 [
@@ -73,7 +73,7 @@ impl SelfTest {
                     Output::<I2c1Proxy>::HP_VALID_VOLTAGE_SHOTTKY,
                     Output::<I2c1Proxy>::HP_VALID_CURRENT_SHOTTKY,
                 ],
-                [FailReason::ShortVoltage, FailReason::ShortCurrent],
+                [FailReason::ShottkyVoltage, FailReason::ShottkyCurrent],
             )),
             _ => None,
         };
@@ -115,15 +115,15 @@ pub enum FailReason {
     /// [Output::<I2C>::VALID_CURRENT_SHUNT]
     ShuntCurrent,
 
-    /// Driver output was shorted to ground.
+    /// Driver output was shorted to ground via a shottky diode.
     /// Current was set to [Output::<I2C>::TESTCURRENT] and measured voltage was out of range.
     /// [Output::<I2C>::VALID_VOLTAGE_SHORT]
-    ShortVoltage,
+    ShottkyVoltage,
 
-    /// Driver output was shorted to ground.
+    /// Driver output was shorted to ground via a shottky diode.
     /// Current was set to [Output::<I2C>::TESTCURRENT] and measured current was out of range.
     /// [Output::<I2C>::VALID_CURRENT_SHORT]
-    ShortCurrent,
+    ShottkyCurrent,
 }
 
 /// Driver [Output].
@@ -148,9 +148,10 @@ where
     pub const SET_DELAY: fugit::MillisDuration<u64> =
         fugit::MillisDurationU64::millis(10);
 
-    // Initial delay before the first selftest. Long due to potential power supply startup delay.
+    // Initial delay before the first selftest. Long due to power supply startup delay.
+    // This is an empirical guess for the worst case delay of the HP side power brick.
     pub const INIT_DELAY: fugit::MillisDuration<u64> =
-        fugit::MillisDurationU64::millis(1500);
+        fugit::MillisDurationU64::millis(2000);
 
     const TESTCURRENT: f32 = 0.01; // 10 mA
 
