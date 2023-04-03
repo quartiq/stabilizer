@@ -23,7 +23,6 @@
 //!
 //! ## Telemetry
 //! Refer to [Telemetry] for information about telemetry reported by this application.
-#![deny(warnings)]
 #![no_std]
 #![no_main]
 
