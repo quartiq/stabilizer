@@ -828,10 +828,12 @@ mod app {
         /// so we can react quickly to a runaway heating condition before Driver gets damaged.
         pub const VALID_TEMP_RANGE: Range<f32> = -10.0..60.0;
 
-        let temps = [
-            c.local.driver_temp.read_temperature().unwrap(),
-            c.local.header_temp.read_temperature().unwrap(),
-        ];
+        let mut temps = [c.local.driver_temp.read_temperature().unwrap(), 0.0];
+
+        #[cfg(feature = "ai_artiq_laser_module")]
+        {
+            temps[1] = c.local.header_temp.read_temperature().unwrap();
+        }
 
         [Location::Driver, Location::LaserModuleHeadboard]
             .iter()
