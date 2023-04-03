@@ -662,7 +662,6 @@ pub fn setup(
 
         let mut interface = smoltcp::iface::InterfaceBuilder::new(
             eth_dma,
-            &mut store.sockets[..],
         )
         .hardware_addr(smoltcp::wire::HardwareAddress::Ethernet(mac_addr))
         .neighbor_cache(neighbor_cache)
@@ -674,36 +673,37 @@ pub fn setup(
             interface.add_socket(smoltcp::socket::Dhcpv4Socket::new());
         }
 
+        let sockets = smoltcp::iface::SocketSet::new(&mut store.sockets[..]);
         for storage in store.tcp_socket_storage[..].iter_mut() {
             let tcp_socket = {
-                let rx_buffer = smoltcp::socket::TcpSocketBuffer::new(
+                let rx_buffer = smoltcp::socket::tcp::SocketBuffer::new(
                     &mut storage.rx_storage[..],
                 );
-                let tx_buffer = smoltcp::socket::TcpSocketBuffer::new(
+                let tx_buffer = smoltcp::socket::tcp::SocketBuffer::new(
                     &mut storage.tx_storage[..],
                 );
 
-                smoltcp::socket::TcpSocket::new(rx_buffer, tx_buffer)
+                smoltcp::socket::tcp::Socket::new(rx_buffer, tx_buffer)
             };
 
-            interface.add_socket(tcp_socket);
+            sockets.add(tcp_socket);
         }
 
         for storage in store.udp_socket_storage[..].iter_mut() {
             let udp_socket = {
-                let rx_buffer = smoltcp::socket::UdpSocketBuffer::new(
+                let rx_buffer = smoltcp::socket::udp::SocketBuffer::new(
                     &mut storage.rx_metadata[..],
                     &mut storage.rx_storage[..],
                 );
-                let tx_buffer = smoltcp::socket::UdpSocketBuffer::new(
+                let tx_buffer = smoltcp::socket::udp::SocketBuffer::new(
                     &mut storage.tx_metadata[..],
                     &mut storage.tx_storage[..],
                 );
 
-                smoltcp::socket::UdpSocket::new(rx_buffer, tx_buffer)
+                smoltcp::socket::udp::Socket::new(rx_buffer, tx_buffer)
             };
 
-            interface.add_socket(udp_socket);
+            sockets.add(udp_socket);
         }
 
         let random_seed = {
@@ -714,7 +714,7 @@ pub fn setup(
             data
         };
 
-        let mut stack = smoltcp_nal::NetworkStack::new(interface, clock);
+        let mut stack = smoltcp_nal::NetworkStack::new(interface, clock, sockets);
 
         stack.seed_random_port(&random_seed);
 

@@ -63,6 +63,10 @@ enum-iterator = "1.4.0"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
 
+[patch.crates-io.smoltcp-nal]
+git = "https://github.com/quartiq/smoltcp-nal"
+branch = "feature/smoltcp-0.9"
+
 [dependencies.stm32h7xx-hal]
 features = ["stm32h743v", "rt", "ethernet", "xspi"]
 version = "0.14.0"
