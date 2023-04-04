@@ -20,7 +20,7 @@ python3 -m venv --system-site-packages vpy
 # Install Miniconf utilities for configuring stabilizer.
 python3 -m pip install -e py
 
-cargo flash --chip STM32H743ZITx --elf target/thumbv7em-none-eabihf/release/dual-iir
+cargo flash --chip STM32H743ZITx --elf target/thumbv7em-none-eabihf/release/dual-iir --probe 0483:3754:004C003D3137510D33333639
 
 # Sleep to allow flashing, booting, DHCP, MQTT
 sleep 30
