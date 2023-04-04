@@ -2,9 +2,9 @@ name: Continuous Integration
 
 on:
   push:
-    branches: [master, staging, trying]
+    branches: [main, staging, trying]
   pull_request:
-    branches: [master]
+    branches: [main]
   schedule:
     # UTC
     - cron: '48 4 * * *'
