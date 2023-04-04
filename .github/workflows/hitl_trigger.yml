@@ -37,3 +37,4 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           checkName: HITL Run Status
           ref: ${{ github.event.pull_request.head.sha }}
+
