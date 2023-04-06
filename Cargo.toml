@@ -51,7 +51,7 @@ miniconf = "0.6.3"
 smoltcp-nal = { version = "0.2", features = ["shared-stack"] }
 mcp230xx = "1.0"
 mutex-trait = "0.2"
-minimq = "0.6.0"
+minimq = "0.6.2"
 fugit = "0.3"
 rtt-logger = "0.2"
 systick-monotonic = "1.0"
