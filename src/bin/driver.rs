@@ -513,7 +513,7 @@ mod app {
 
     #[task(priority = 1, local=[afes, channel_range], shared=[network, settings, alarm_handle, output_state, laser_interlock])]
     fn settings_update(mut c: settings_update::Context) {
-        let mut new_settings =
+        let new_settings =
             c.shared.network.lock(|net| *net.miniconf.settings());
         let old_settings = c.shared.settings.lock(|current| *current);
 
@@ -622,6 +622,9 @@ mod app {
         }
         if c.shared.output_state.lock(|output| {
             output[driver::Channel::HighPower as usize].is_enabled()
+                && c.shared
+                    .laser_interlock
+                    .lock(|ilock| ilock.reason().is_none())
         }) {
             write_dac_spi::spawn(
                 driver::Channel::HighPower,
