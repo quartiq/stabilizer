@@ -93,6 +93,21 @@ pub struct Temperature {
     pub read: f32,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LimitSetting {
+    pub limit: Limit,
+    pub valid_range: Range<f32>,
+    pub setting: f32,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum Limit {
+    HighPowerMin,
+    HighPowerMax,
+    LowNoiseMin,
+    LowNoiseMax,
+}
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum Location {
     Driver,
@@ -126,6 +141,9 @@ pub enum Reason {
     /// This is detected using LM75 temperature sensor ICs on the PCB and doesn't reflect the actual
     /// worst case temperature on eg. the Driver heatsink.
     Overtemperature(Temperature),
+
+    ///
+    LimitSettings(LimitSetting),
 }
 pub struct LaserInterlock {
     reason: Option<Reason>,
@@ -211,10 +229,21 @@ impl Default for LowNoiseSettings {
 #[derive(Clone, Copy, Debug, Miniconf, Serialize, Deserialize)]
 pub struct HighPowerSettings {
     /// Configure the output current. Only active once channel is enabled.
+    /// Clamped by the current Min/Max settings.
+    pub current: f32,
+
+    /// Configure the output current minimum.
     ///
     /// # Value
-    /// Any positive value up to the maximum current for the high power channel.
-    pub current: f32,
+    /// Any value inside the range of output currents that Driver can output on the High Power channel.
+    pub current_min: f32,
+
+    /// Configure the output current maximum. Note: This trumps the current_min setting.
+    /// Aka if the current_min is higher than current_max, Driver will output the current specified in current_max.
+    ///
+    /// # Value
+    /// Any value inside the range of output currents that Driver can output on the High Power channel.
+    pub current_max: f32,
 
     /// Output enabled. `True` to enable, `False` to disable.
     ///
@@ -239,6 +268,8 @@ impl Default for HighPowerSettings {
     fn default() -> Self {
         Self {
             current: 0.0,
+            current_min: 0.0,
+            current_max: 0.0,
             output_enabled: false,
             interlock_current: 0.,
             interlock_voltage: 0.,

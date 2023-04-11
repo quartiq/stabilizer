@@ -608,7 +608,14 @@ mod app {
         }) {
             write_dac_spi::spawn(
                 driver::Channel::HighPower,
-                new_settings.high_power.current,
+                new_settings.high_power.current.clamp(
+                    // Clamp the actual set current to min/max. Max trumps min to avoid panic if min>max
+                    new_settings
+                        .high_power
+                        .current_min
+                        .min(new_settings.high_power.current_max),
+                    new_settings.high_power.current_max,
+                ),
             )
             .unwrap();
         };
