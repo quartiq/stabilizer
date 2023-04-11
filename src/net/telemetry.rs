@@ -70,11 +70,11 @@ pub struct Telemetry {
 /// overhead.
 #[derive(Copy, Clone, Serialize)]
 pub struct PounderTelemetry {
-    /// The Pounder temperature in degree Celsius
+    /// The Pounder temperature in degrees Celsius
     pub temperature: f32,
 
     /// The detected RF power into IN channels
-    pub input_powers: [f32; 2],
+    pub input_power: [f32; 2],
 }
 
 impl Default for TelemetryBuffer {

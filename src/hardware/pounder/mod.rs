@@ -1,13 +1,15 @@
 use self::attenuators::AttenuatorInterface;
 
 use super::hal;
-use crate::hardware::{shared_adc::AdcChannel, I2c1Proxy};
-use ad9959::{amplitude_to_acr, frequency_to_ftw, phase_to_pow};
+use crate::hardware::{shared_adc::AdcChannel, I2c1Proxy, setup};
+use crate::net::telemetry::PounderTelemetry;
+use ad9959::{amplitude_to_acr, frequency_to_ftw, phase_to_pow, validate_clocking};
 use embedded_hal::blocking::spi::Transfer;
 use enum_iterator::Sequence;
 use miniconf::Miniconf;
 use serde::{Deserialize, Serialize};
 use stm32h7xx_hal::time::MegaHertz;
+use rf_power::PowerMeasurementInterface;
 
 pub mod attenuators;
 pub mod dds_output;
@@ -548,5 +550,84 @@ impl rf_power::PowerMeasurementInterface for PounderDevices {
         // Convert analog percentage to voltage. Note that the ADC uses an external 2.048V analog
         // reference.
         Ok(adc_scale * 2.048)
+    }
+}
+
+impl setup::PounderDevices {
+    pub fn update_dds(
+        &mut self,
+        settings: PounderConfig,
+        clocking: &mut ClockConfig,
+    ) {
+        if *clocking != settings.clock {
+            match validate_clocking(
+                settings.clock.reference_clock,
+                settings.clock.multiplier,
+            ) {
+                Ok(_frequency) => {
+                    self.pounder
+                        .set_ext_clk(settings.clock.external_clock)
+                        .unwrap();
+
+                    self.dds_output
+                        .builder()
+                        .set_system_clock(
+                            settings.clock.reference_clock,
+                            settings.clock.multiplier,
+                        )
+                        .unwrap()
+                        .write();
+
+                    *clocking = settings.clock;
+                }
+                Err(err) => {
+                    log::error!("Invalid AD9959 clocking parameters: {:?}", err)
+                }
+            }
+        }
+
+        for (channel_config, pounder_channel) in settings
+            .in_channel
+            .iter()
+            .chain(settings.out_channel.iter())
+            .zip([
+                Channel::In0,
+                Channel::In1,
+                Channel::Out0,
+                Channel::Out1,
+            ])
+        {
+            match Profile::try_from((*clocking, *channel_config)) {
+                Ok(dds_profile) => {
+                    self.dds_output
+                        .builder()
+                        .update_channels_with_profile(
+                            pounder_channel.into(),
+                            dds_profile,
+                        )
+                        .write();
+
+                    if let Err(err) = self.pounder.set_attenuation(
+                        pounder_channel,
+                        channel_config.attenuation,
+                    ) {
+                        log::error!("Invalid attenuation settings: {:?}", err)
+                    }
+                }
+                Err(err) => {
+                    log::error!("Invalid AD9959 profile settings: {:?}", err)
+                }
+            }
+        }
+    }
+
+    pub fn get_telemetry(&mut self) -> PounderTelemetry {
+        PounderTelemetry {
+            temperature: self.pounder.lm75.read_temperature().unwrap(),
+            input_power: [
+                self.pounder.measure_power(Channel::In0).unwrap(),
+                self.pounder.measure_power(Channel::In1).unwrap(),
+            ],
+        }
     }
 }

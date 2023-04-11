@@ -21,16 +21,6 @@ use super::{
     SystemTimer, Systick, AFE0, AFE1,
 };
 
-use crate::{
-    hardware::pounder::{
-        attenuators::AttenuatorInterface, rf_power::PowerMeasurementInterface,
-        Channel as PounderChannel, ClockConfig, PounderConfig, Profile,
-    },
-    net::telemetry::PounderTelemetry,
-};
-
-use ad9959::validate_clocking;
-
 const NUM_TCP_SOCKETS: usize = 4;
 const NUM_UDP_SOCKETS: usize = 1;
 const NUM_SOCKETS: usize = NUM_UDP_SOCKETS + NUM_TCP_SOCKETS;
@@ -141,85 +131,6 @@ pub struct PounderDevices {
 
     #[cfg(not(feature = "pounder_v1_0"))]
     pub timestamper: pounder::timestamp::Timestamper,
-}
-
-impl PounderDevices {
-    pub fn update_dds(
-        &mut self,
-        settings: PounderConfig,
-        clocking: &mut ClockConfig,
-    ) {
-        if *clocking != settings.clock {
-            match validate_clocking(
-                settings.clock.reference_clock,
-                settings.clock.multiplier,
-            ) {
-                Ok(_frequency) => {
-                    self.pounder
-                        .set_ext_clk(settings.clock.external_clock)
-                        .unwrap();
-
-                    self.dds_output
-                        .builder()
-                        .set_system_clock(
-                            settings.clock.reference_clock,
-                            settings.clock.multiplier,
-                        )
-                        .unwrap()
-                        .write();
-
-                    *clocking = settings.clock;
-                }
-                Err(err) => {
-                    log::error!("Invalid AD9959 clocking parameters: {:?}", err)
-                }
-            }
-        }
-
-        for (channel_config, pounder_channel) in settings
-            .in_channel
-            .iter()
-            .chain(settings.out_channel.iter())
-            .zip([
-                PounderChannel::In0,
-                PounderChannel::In1,
-                PounderChannel::Out0,
-                PounderChannel::Out1,
-            ])
-        {
-            match Profile::try_from((*clocking, *channel_config)) {
-                Ok(dds_profile) => {
-                    self.dds_output
-                        .builder()
-                        .update_channels_with_profile(
-                            pounder_channel.into(),
-                            dds_profile,
-                        )
-                        .write();
-
-                    if let Err(err) = self.pounder.set_attenuation(
-                        pounder_channel,
-                        channel_config.attenuation,
-                    ) {
-                        log::error!("Invalid attenuation settings: {:?}", err)
-                    }
-                }
-                Err(err) => {
-                    log::error!("Invalid AD9959 profile settings: {:?}", err)
-                }
-            }
-        }
-    }
-
-    pub fn get_telemetry(&mut self) -> PounderTelemetry {
-        PounderTelemetry {
-            temperature: self.pounder.lm75.read_temperature().unwrap(),
-            input_powers: [
-                self.pounder.measure_power(PounderChannel::In0).unwrap(),
-                self.pounder.measure_power(PounderChannel::In1).unwrap(),
-            ],
-        }
-    }
 }
 
 #[link_section = ".sram3.eth"]
@@ -729,7 +640,7 @@ pub fn setup(
 
         // Configure IP address according to DHCP socket availability
         let ip_addrs: smoltcp::wire::IpAddress = option_env!("STATIC_IP")
-            .unwrap_or("0.0.0.0")
+            .unwrap_or("192.168.1.131")
             .parse()
             .unwrap();
 

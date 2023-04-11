@@ -457,10 +457,10 @@ mod app {
 
         // Update Pounder configurations
         c.shared.pounder.lock(|pounder| {
-            if let (Some(pounder), Some(pounder_settings), Some(clocking)) =
-                (pounder, settings.pounder.as_ref(), c.local.dds_clock_state)
-            {
-                pounder.update_dds(*pounder_settings, clocking);
+            if let Some(pounder) = pounder {
+                let pounder_settings = settings.pounder.as_ref().unwrap();
+                let mut clocking = c.local.dds_clock_state.unwrap();
+                pounder.update_dds(*pounder_settings, &mut clocking);
             }
         });
 

@@ -3,22 +3,16 @@
 use bit_field::BitField;
 use bitflags::bitflags;
 use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
+use core::ops::Range;
 
-/// An arbitrary frequency that sits between the 160 MHz to 255 MHz zone, where system clock
-/// frequency is not supported by both high frequency and low frequency VCO settings.
-const VCO_MIN_FREQUENCY: f32 = 200e6;
 /// The minimum reference clock input frequency with REFCLK multiplier disabled.
 const MIN_REFCLK_FREQUENCY: f32 = 1e6;
 /// The minimum reference clock input frequency with REFCLK multiplier enabled.
 const MIN_MULTIPLIED_REFCLK_FREQUENCY: f32 = 10e6;
-/// The maximum system clock frequency with high frequency range VCO.
-const MAX_VCO_OUTPUT_FREQUENCY: f32 = 500e6;
-/// The minimum system clock frequency with high frequency range VCO.
-const MIN_VCO_OUTPUT_FREQUENCY: f32 = 255e6;
-/// The maximum system clock frequency with low frequency range VCO.
-const MAX_OUTPUT_FREQUENCY: f32 = 160e6;
-/// The minimum system clock frequency with low frequency range VCO.
-const MIN_OUTPUT_FREQUENCY: f32 = 100e6;
+/// The system clock frequency range with high gain configured for the internal VCO.
+const HIGH_GAIN_VCO_RANGE: Range<f32> = Range { start: 255e6, end: 500e6 };
+/// The system clock frequency range with low gain configured for the internal VCO.
+const LOW_GAIN_VCO_RANGE: Range<f32> = Range { start: 100e6, end: 160e6 };
 
 /// A device driver for the AD9959 direct digital synthesis (DDS) chip.
 ///
@@ -241,7 +235,7 @@ impl<I: Interface> Ad9959<I> {
         self.read(Register::FR1, &mut fr1)?;
         fr1[0].set_bits(2..=6, multiplier);
 
-        let vco_range = frequency > VCO_MIN_FREQUENCY;
+        let vco_range = HIGH_GAIN_VCO_RANGE.contains(&frequency);
         fr1[0].set_bit(7, vco_range);
 
         self.write(Register::FR1, &fr1)?;
@@ -530,6 +524,10 @@ pub fn validate_clocking(
     reference_clock_frequency: f32,
     multiplier: u8,
 ) -> Result<f32, Error> {
+    // The REFCLK frequency must be at least 1 MHz with REFCLK multiplier disabled.
+    if reference_clock_frequency < MIN_REFCLK_FREQUENCY {
+        return Err(Error::Bounds);
+    }
     // If the REFCLK multiplier is enabled, the multiplier (FR1[22:18]) must be between 4 to 20.
     // Alternatively, the clock multiplier can be disabled. The multiplication factor is 1.
     if multiplier != 1 && !(4..=20).contains(&multiplier) {
@@ -541,26 +539,20 @@ pub fn validate_clocking(
     {
         return Err(Error::Bounds);
     }
-    // The REFCLK frequency must be at least 1 MHz with REFCLK multiplier disabled.
-    if multiplier == 1 && reference_clock_frequency < MIN_REFCLK_FREQUENCY {
-        return Err(Error::Bounds);
-    }
-
     let frequency = multiplier as f32 * reference_clock_frequency;
     // SYSCLK frequency between 255 MHz and 500 MHz (inclusive) is valid with high range VCO
-    if (MIN_VCO_OUTPUT_FREQUENCY..=MAX_VCO_OUTPUT_FREQUENCY)
-        .contains(&frequency)
+    if HIGH_GAIN_VCO_RANGE.contains(&frequency)
     {
         return Ok(frequency);
     }
 
     // SYSCLK frequency between 100 MHz and 160 MHz (inclusive) is valid with low range VCO
-    if (MIN_OUTPUT_FREQUENCY..=MAX_OUTPUT_FREQUENCY).contains(&frequency) {
+    if LOW_GAIN_VCO_RANGE.contains(&frequency) {
         return Ok(frequency);
     }
 
     // When the REFCLK multiplier is disabled, SYSCLK frequency can go below 100 MHz
-    if multiplier == 1 && (0.0..MIN_OUTPUT_FREQUENCY).contains(&frequency) {
+    if multiplier == 1 && (0.0..LOW_GAIN_VCO_RANGE.start).contains(&frequency) {
         return Ok(frequency);
     }
 
@@ -591,7 +583,7 @@ pub fn frequency_to_ftw(
 /// Convert phase into phase offset word.
 ///
 /// Arguments:
-/// * `phase_turns` - The phase of a DDS channel.
+/// * `phase_turns` - The normalized number of phase turns of a DDS channel.
 ///
 /// Returns:
 /// The corresponding phase offset word.
@@ -602,7 +594,7 @@ pub fn phase_to_pow(phase_turns: f32) -> Result<u16, Error> {
 /// Convert amplitude into amplitude control register values.
 ///
 /// Arguments:
-/// * `amplitude` - The amplitude scaling factor of a DDS channel.
+/// * `amplitude` - The normalized amplitude of a DDS channel.
 ///
 /// Returns:
 /// The corresponding value in the amplitude control register.
@@ -611,17 +603,7 @@ pub fn amplitude_to_acr(amplitude: f32) -> Result<u32, Error> {
         return Err(Error::Bounds);
     }
 
-    let amplitude_control: u16 = (amplitude * (1 << 10) as f32) as u16;
-
-    // Enable the amplitude multiplier for the channel if required. The amplitude control has
-    // full-scale at 0x3FF (amplitude of 1), so the multiplier should be disabled whenever
-    // full-scale is used.
-    let acr = if amplitude != 1.0 {
-        // Enable the amplitude multiplier
-        (amplitude_control & 0x3FF) | (1 << 12)
-    } else {
-        0
-    };
+    let acr: u32 = *0u32.set_bits(0..=9, (amplitude * (1 << 10) as f32) as u32).set_bit(12, amplitude != 1.0);
 
     Ok(acr as u32)
 }
@@ -707,7 +689,7 @@ impl ProfileSerializer {
         fr1[0].set_bits(2..=6, multiplier);
 
         // Frequencies within the VCO forbidden range (160e6, 255e6) are already rejected.
-        let vco_range = frequency > VCO_MIN_FREQUENCY;
+        let vco_range = HIGH_GAIN_VCO_RANGE.contains(&frequency);
         fr1[0].set_bit(7, vco_range);
 
         self.add_write(Register::FR1, &fr1);
