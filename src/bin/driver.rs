@@ -42,7 +42,10 @@ use stabilizer::{
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
         design_parameters, driver,
-        driver::{output, Channel, Condition, Location, Temperature},
+        driver::{
+            output, Channel, Condition, Limit, LimitSetting, Location,
+            Temperature,
+        },
         hal,
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, I2c1Proxy, SystemTimer, Systick, AFE0,
@@ -510,7 +513,7 @@ mod app {
 
     #[task(priority = 1, local=[afes, channel_range], shared=[network, settings, alarm_handle, output_state, laser_interlock])]
     fn settings_update(mut c: settings_update::Context) {
-        let mut new_settings =
+        let new_settings =
             c.shared.network.lock(|net| *net.miniconf.settings());
         let old_settings = c.shared.settings.lock(|current| *current);
 
@@ -550,22 +553,36 @@ mod app {
             }
         }
 
-        // check if the output currents/limits are within the allowed range and clamp them if not
-        new_settings.high_power.current =
-            new_settings.high_power.current.clamp(
-                c.local.channel_range[1].start,
-                c.local.channel_range[1].end,
-            );
-        new_settings.low_noise.iir.y_min =
-            new_settings.low_noise.iir.y_min.clamp(
-                c.local.channel_range[0].start,
-                c.local.channel_range[0].end,
-            );
-        new_settings.low_noise.iir.y_max =
-            new_settings.low_noise.iir.y_max.clamp(
-                c.local.channel_range[0].start,
-                c.local.channel_range[0].end,
-            );
+        // check if the output limits are within the allowed range and trip the interlock if not
+        for ((range, limit), setting) in [
+            &c.local.channel_range[0],
+            &c.local.channel_range[0],
+            &c.local.channel_range[1],
+            &c.local.channel_range[1],
+        ]
+        .iter()
+        .zip([
+            Limit::LowNoiseMin,
+            Limit::LowNoiseMax,
+            Limit::HighPowerMin,
+            Limit::HighPowerMax,
+        ])
+        .zip([
+            new_settings.low_noise.iir.y_min,
+            new_settings.low_noise.iir.y_max,
+            new_settings.high_power.current_min,
+            new_settings.high_power.current_max,
+        ]) {
+            if !range.contains(&setting) {
+                c.shared.laser_interlock.lock(|ilock| {
+                    ilock.set(Some(Reason::LimitSettings(LimitSetting {
+                        limit,
+                        valid_range: (*range).clone(),
+                        setting,
+                    })))
+                });
+            }
+        }
 
         c.shared.settings.lock(|current| *current = new_settings);
         c.local.afes.0.set_gain(new_settings.afe[0]);
@@ -605,10 +622,18 @@ mod app {
         }
         if c.shared.output_state.lock(|output| {
             output[driver::Channel::HighPower as usize].is_enabled()
+                && c.shared
+                    .laser_interlock
+                    .lock(|ilock| ilock.reason().is_none())
         }) {
             write_dac_spi::spawn(
                 driver::Channel::HighPower,
-                new_settings.high_power.current,
+                // Clamp the actual set current to min/max. Max trumps min.
+                new_settings
+                    .high_power
+                    .current
+                    .max(new_settings.high_power.current_min)
+                    .min(new_settings.high_power.current_max),
             )
             .unwrap();
         };
