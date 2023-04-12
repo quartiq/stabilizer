@@ -573,7 +573,7 @@ mod app {
             new_settings.high_power.current_min,
             new_settings.high_power.current_max,
         ]) {
-            if !(*range).contains(&setting) {
+            if !range.contains(&setting) {
                 c.shared.laser_interlock.lock(|ilock| {
                     ilock.set(Some(Reason::LimitSettings(LimitSetting {
                         limit,
