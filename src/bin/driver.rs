@@ -555,10 +555,10 @@ mod app {
 
         // check if the output limits are within the allowed range and trip the interlock if not
         for ((range, limit), setting) in [
-            c.local.channel_range[0].clone(),
-            c.local.channel_range[0].clone(),
-            c.local.channel_range[1].clone(),
-            c.local.channel_range[1].clone(),
+            &c.local.channel_range[0],
+            &c.local.channel_range[0],
+            &c.local.channel_range[1],
+            &c.local.channel_range[1],
         ]
         .iter()
         .zip([
@@ -573,11 +573,11 @@ mod app {
             new_settings.high_power.current_min,
             new_settings.high_power.current_max,
         ]) {
-            if !range.contains(&setting) {
+            if !(*range).contains(&setting) {
                 c.shared.laser_interlock.lock(|ilock| {
                     ilock.set(Some(Reason::LimitSettings(LimitSetting {
                         limit,
-                        valid_range: range.clone(),
+                        valid_range: (*range).clone(),
                         setting,
                     })))
                 });
@@ -628,14 +628,12 @@ mod app {
         }) {
             write_dac_spi::spawn(
                 driver::Channel::HighPower,
-                new_settings.high_power.current.clamp(
-                    // Clamp the actual set current to min/max. Max trumps min to avoid panic if min>max
-                    new_settings
-                        .high_power
-                        .current_min
-                        .min(new_settings.high_power.current_max),
-                    new_settings.high_power.current_max,
-                ),
+                // Clamp the actual set current to min/max. Max trumps min.
+                new_settings
+                    .high_power
+                    .current
+                    .max(new_settings.high_power.current_min)
+                    .min(new_settings.high_power.current_max),
             )
             .unwrap();
         };
