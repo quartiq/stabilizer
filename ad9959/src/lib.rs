@@ -60,7 +60,7 @@ bitflags! {
         const TWO   = 0b00100000;
         const THREE = 0b01000000;
         const FOUR  = 0b10000000;
-        const ALL   = Self::ONE.bits | Self::TWO.bits | Self::THREE.bits | Self::FOUR.bits;
+        const ALL   = Self::ONE.bits() | Self::TWO.bits() | Self::THREE.bits() | Self::FOUR.bits();
     }
 }
 
