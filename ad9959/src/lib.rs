@@ -2,17 +2,23 @@
 
 use bit_field::BitField;
 use bitflags::bitflags;
-use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
 use core::ops::Range;
+use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
 
 /// The minimum reference clock input frequency with REFCLK multiplier disabled.
 const MIN_REFCLK_FREQUENCY: f32 = 1e6;
 /// The minimum reference clock input frequency with REFCLK multiplier enabled.
 const MIN_MULTIPLIED_REFCLK_FREQUENCY: f32 = 10e6;
 /// The system clock frequency range with high gain configured for the internal VCO.
-const HIGH_GAIN_VCO_RANGE: Range<f32> = Range { start: 255e6, end: 500e6 };
+const HIGH_GAIN_VCO_RANGE: Range<f32> = Range {
+    start: 255e6,
+    end: 500e6,
+};
 /// The system clock frequency range with low gain configured for the internal VCO.
-const LOW_GAIN_VCO_RANGE: Range<f32> = Range { start: 100e6, end: 160e6 };
+const LOW_GAIN_VCO_RANGE: Range<f32> = Range {
+    start: 100e6,
+    end: 160e6,
+};
 
 /// A device driver for the AD9959 direct digital synthesis (DDS) chip.
 ///
@@ -235,7 +241,7 @@ impl<I: Interface> Ad9959<I> {
         self.read(Register::FR1, &mut fr1)?;
         fr1[0].set_bits(2..=6, multiplier);
 
-        let vco_range = HIGH_GAIN_VCO_RANGE.contains(&frequency) 
+        let vco_range = HIGH_GAIN_VCO_RANGE.contains(&frequency)
             || frequency == HIGH_GAIN_VCO_RANGE.end;
         fr1[0].set_bit(7, vco_range);
 
@@ -542,18 +548,22 @@ pub fn validate_clocking(
     }
     let frequency = multiplier as f32 * reference_clock_frequency;
     // SYSCLK frequency between 255 MHz and 500 MHz (inclusive) is valid with high range VCO
-    if HIGH_GAIN_VCO_RANGE.contains(&frequency) || frequency == HIGH_GAIN_VCO_RANGE.end
+    if HIGH_GAIN_VCO_RANGE.contains(&frequency)
+        || frequency == HIGH_GAIN_VCO_RANGE.end
     {
         return Ok(frequency);
     }
 
     // SYSCLK frequency between 100 MHz and 160 MHz (inclusive) is valid with low range VCO
-    if LOW_GAIN_VCO_RANGE.contains(&frequency) || frequency == LOW_GAIN_VCO_RANGE.end {
+    if LOW_GAIN_VCO_RANGE.contains(&frequency)
+        || frequency == LOW_GAIN_VCO_RANGE.end
+    {
         return Ok(frequency);
     }
 
     // When the REFCLK multiplier is disabled, SYSCLK frequency can go below 100 MHz
-    if multiplier == 1 && (0.0..=LOW_GAIN_VCO_RANGE.start).contains(&frequency) {
+    if multiplier == 1 && (0.0..=LOW_GAIN_VCO_RANGE.start).contains(&frequency)
+    {
         return Ok(frequency);
     }
 
@@ -604,7 +614,9 @@ pub fn amplitude_to_acr(amplitude: f32) -> Result<u32, Error> {
         return Err(Error::Bounds);
     }
 
-    let acr: u32 = *0u32.set_bits(0..=9, (amplitude * (1 << 10) as f32) as u32).set_bit(12, amplitude != 1.0);
+    let acr: u32 = *0u32
+        .set_bits(0..=9, (amplitude * (1 << 10) as f32) as u32)
+        .set_bit(12, amplitude != 1.0);
 
     Ok(acr as u32)
 }

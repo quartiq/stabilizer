@@ -1,15 +1,17 @@
 use self::attenuators::AttenuatorInterface;
 
 use super::hal;
-use crate::hardware::{shared_adc::AdcChannel, I2c1Proxy, setup};
+use crate::hardware::{setup, shared_adc::AdcChannel, I2c1Proxy};
 use crate::net::telemetry::PounderTelemetry;
-use ad9959::{amplitude_to_acr, frequency_to_ftw, phase_to_pow, validate_clocking};
+use ad9959::{
+    amplitude_to_acr, frequency_to_ftw, phase_to_pow, validate_clocking,
+};
 use embedded_hal::blocking::spi::Transfer;
 use enum_iterator::Sequence;
 use miniconf::Miniconf;
+use rf_power::PowerMeasurementInterface;
 use serde::{Deserialize, Serialize};
 use stm32h7xx_hal::time::MegaHertz;
-use rf_power::PowerMeasurementInterface;
 
 pub mod attenuators;
 pub mod dds_output;
@@ -590,12 +592,7 @@ impl setup::PounderDevices {
             .in_channel
             .iter()
             .chain(settings.out_channel.iter())
-            .zip([
-                Channel::In0,
-                Channel::In1,
-                Channel::Out0,
-                Channel::Out1,
-            ])
+            .zip([Channel::In0, Channel::In1, Channel::Out0, Channel::Out1])
         {
             match Profile::try_from((*clocking, *channel_config)) {
                 Ok(dds_profile) => {
