@@ -235,7 +235,8 @@ impl<I: Interface> Ad9959<I> {
         self.read(Register::FR1, &mut fr1)?;
         fr1[0].set_bits(2..=6, multiplier);
 
-        let vco_range = HIGH_GAIN_VCO_RANGE.contains(&frequency);
+        let vco_range = HIGH_GAIN_VCO_RANGE.contains(&frequency) 
+            || frequency == HIGH_GAIN_VCO_RANGE.end;
         fr1[0].set_bit(7, vco_range);
 
         self.write(Register::FR1, &fr1)?;
@@ -541,18 +542,18 @@ pub fn validate_clocking(
     }
     let frequency = multiplier as f32 * reference_clock_frequency;
     // SYSCLK frequency between 255 MHz and 500 MHz (inclusive) is valid with high range VCO
-    if HIGH_GAIN_VCO_RANGE.contains(&frequency)
+    if HIGH_GAIN_VCO_RANGE.contains(&frequency) || frequency == HIGH_GAIN_VCO_RANGE.end
     {
         return Ok(frequency);
     }
 
     // SYSCLK frequency between 100 MHz and 160 MHz (inclusive) is valid with low range VCO
-    if LOW_GAIN_VCO_RANGE.contains(&frequency) {
+    if LOW_GAIN_VCO_RANGE.contains(&frequency) || frequency == LOW_GAIN_VCO_RANGE.end {
         return Ok(frequency);
     }
 
     // When the REFCLK multiplier is disabled, SYSCLK frequency can go below 100 MHz
-    if multiplier == 1 && (0.0..LOW_GAIN_VCO_RANGE.start).contains(&frequency) {
+    if multiplier == 1 && (0.0..=LOW_GAIN_VCO_RANGE.start).contains(&frequency) {
         return Ok(frequency);
     }
 
