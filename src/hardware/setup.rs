@@ -640,7 +640,7 @@ pub fn setup(
 
         // Configure IP address according to DHCP socket availability
         let ip_addrs: smoltcp::wire::IpAddress = option_env!("STATIC_IP")
-            .unwrap_or("192.168.1.131")
+            .unwrap_or("0.0.0.0")
             .parse()
             .unwrap();
 

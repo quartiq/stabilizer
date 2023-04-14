@@ -615,7 +615,7 @@ pub fn amplitude_to_acr(amplitude: f32) -> Result<u32, Error> {
     }
 
     let acr: u32 = *0u32
-        .set_bits(0..=9, (amplitude * (1 << 10) as f32) as u32)
+        .set_bits(0..=9, ((amplitude * (1 << 10) as f32) as u32) & 0x3FF)
         .set_bit(12, amplitude != 1.0);
 
     Ok(acr as u32)
