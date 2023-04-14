@@ -177,7 +177,7 @@ where
         channel: Channel,
     ) -> Self {
         Output {
-            iir: iir::IIR::new(0., 0.0, f32::MAX),
+            iir: iir::IIR::new(0., f32::MIN, f32::MAX),
             relay: Relay::new(gpio, channel),
         }
     }
