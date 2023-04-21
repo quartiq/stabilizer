@@ -151,7 +151,7 @@ where
     // Initial delay before the first selftest. Long due to power supply startup delay.
     // This is an empirical guess for the worst case delay of the HP side power brick.
     pub const INIT_DELAY: fugit::MillisDuration<u64> =
-        fugit::MillisDurationU64::millis(2000);
+        fugit::MillisDurationU64::millis(1000);
 
     const TESTCURRENT: f32 = 0.01; // 10 mA
 
