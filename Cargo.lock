@@ -213,8 +213,7 @@ dependencies = [
 [[package]]
 name = "embedded-nal"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db9efecb57ab54fa918730f2874d7d37647169c50fa1357fecb81abee840b113"
+source = "git+https://github.com/quartiq/embedded-nal?branch=feature/tcp-updates#f0f23460f6860bdd1d251c8f76e9e837cb932e79"
 dependencies = [
  "heapless",
  "nb 1.1.0",
@@ -429,14 +428,14 @@ dependencies = [
 
 [[package]]
 name = "minimq"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b76ac76e900c755ca49946b2316d76c13e8af097495cd250acea7d09218b7e5"
+version = "0.6.2"
+source = "git+https://github.com/quartiq/minimq?branch=rs/issue-125/tcp-disconnection#4533c8069d3a447144640b2292512eb982c02d9f"
 dependencies = [
  "bit_field",
  "embedded-nal",
  "embedded-time",
  "heapless",
+ "log",
  "num_enum",
  "serde",
  "smlang",
@@ -481,9 +480,9 @@ checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
 
 [[package]]
 name = "no-std-net"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bcece43b12349917e096cddfa66107277f123e6c96a5aea78711dc601a47152"
+checksum = "43794a0ace135be66a25d3ae77d41b91615fb68ae937f904090203e81f755b65"
 
 [[package]]
 name = "num"
@@ -802,22 +801,11 @@ dependencies = [
 
 [[package]]
 name = "smoltcp"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee34c1e1bfc7e9206cc0fb8030a90129b4e319ab53856249bb27642cab914fb3"
-dependencies = [
- "bitflags 1.3.2",
- "byteorder",
- "managed",
-]
-
-[[package]]
-name = "smoltcp"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e9786ac45091b96f946693e05bfa4d8ca93e2d3341237d97a380107a6b38dea"
 dependencies = [
- "bitflags",
+ "bitflags 1.3.2",
  "byteorder",
  "cfg-if",
  "heapless",
@@ -827,14 +815,14 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.2.1"
-source = "git+https://github.com/quartiq/smoltcp-nal?branch=feature/smoltcp-0.9#e8757f05abc339ee09f98760c98efc3e1fc17377"
+source = "git+https://github.com/quartiq/smoltcp-nal?branch=feature/tcp-updates#3466237d9f291883f49fbdd87a7c6dcab605c4be"
 dependencies = [
  "embedded-nal",
  "embedded-time",
  "heapless",
  "nanorand",
  "shared-bus",
- "smoltcp 0.9.1",
+ "smoltcp",
 ]
 
 [[package]]
@@ -902,8 +890,7 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fe4a709ccbccd9994d2363e27104933561ef170f892c950ffe939546c2ece1d"
+source = "git+https://github.com/stm32-rs/stm32h7xx-hal#4e3210b3bff55fe79c6260901ff27a21feb91a59"
 dependencies = [
  "bare-metal 1.0.0",
  "bitflags 2.0.2",
@@ -915,7 +902,7 @@ dependencies = [
  "fugit",
  "nb 1.1.0",
  "paste",
- "smoltcp 0.8.2",
+ "smoltcp",
  "stm32h7",
  "void",
 ]

@@ -65,11 +65,15 @@ rand_core = "0.6.4"
 
 [patch.crates-io.smoltcp-nal]
 git = "https://github.com/quartiq/smoltcp-nal"
-branch = "feature/smoltcp-0.9"
+branch = "feature/tcp-updates"
+
+[patch.crates-io.minimq]
+git = "https://github.com/quartiq/minimq"
+branch = "rs/issue-125/tcp-disconnection"
 
 [dependencies.stm32h7xx-hal]
+git = "https://github.com/stm32-rs/stm32h7xx-hal"
 features = ["stm32h743v", "rt", "ethernet", "xspi"]
-version = "0.14.0"
 
 [features]
 nightly = [ ]

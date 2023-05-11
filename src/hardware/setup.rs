@@ -32,10 +32,6 @@ pub struct NetStorage {
     pub sockets: [smoltcp::iface::SocketStorage<'static>; NUM_SOCKETS + 1],
     pub tcp_socket_storage: [TcpSocketStorage; NUM_TCP_SOCKETS],
     pub udp_socket_storage: [UdpSocketStorage; NUM_UDP_SOCKETS],
-    pub neighbor_cache:
-        [Option<(smoltcp::wire::IpAddress, smoltcp::iface::Neighbor)>; 8],
-    pub routes_cache:
-        [Option<(smoltcp::wire::IpCidr, smoltcp::iface::Route)>; 8],
 }
 
 #[derive(Copy, Clone)]
@@ -85,8 +81,6 @@ impl Default for NetStorage {
             ip_addrs: [smoltcp::wire::IpCidr::Ipv6(
                 smoltcp::wire::Ipv6Cidr::SOLICITED_NODE_PREFIX,
             )],
-            neighbor_cache: [None; 8],
-            routes_cache: [None; 8],
             sockets: [smoltcp::iface::SocketStorage::EMPTY; NUM_SOCKETS + 1],
             tcp_socket_storage: [TcpSocketStorage::new(); NUM_TCP_SOCKETS],
             udp_socket_storage: [UdpSocketStorage::new(); NUM_UDP_SOCKETS],
@@ -617,7 +611,7 @@ pub fn setup(
         };
 
         // Configure the ethernet controller
-        let (eth_dma, eth_mac) = ethernet::new(
+        let (mut eth_dma, eth_mac) = ethernet::new(
             device.ETHERNET_MAC,
             device.ETHERNET_MTL,
             device.ETHERNET_DMA,
@@ -644,6 +638,14 @@ pub fn setup(
             .parse()
             .unwrap();
 
+        let random_seed = {
+            let mut rng =
+                device.RNG.constrain(ccdr.peripheral.RNG, &ccdr.clocks);
+            let mut data = [0u8; 8];
+            rng.fill(&mut data).unwrap();
+            data
+        };
+
         // Note(unwrap): The hardware configuration function is only allowed to be called once.
         // Unwrapping is intended to panic if called again to prevent re-use of global memory.
         let store =
@@ -651,29 +653,30 @@ pub fn setup(
 
         store.ip_addrs[0] = smoltcp::wire::IpCidr::new(ip_addrs, 24);
 
-        let mut routes =
-            smoltcp::iface::Routes::new(&mut store.routes_cache[..]);
-        routes
+        let mut ethernet_config = smoltcp::iface::Config::default();
+        ethernet_config
+            .hardware_addr
+            .replace(smoltcp::wire::HardwareAddress::Ethernet(mac_addr));
+        ethernet_config.random_seed = u64::from_be_bytes(random_seed);
+
+        let mut interface =
+            smoltcp::iface::Interface::new(ethernet_config, &mut eth_dma);
+
+        interface
+            .routes_mut()
             .add_default_ipv4_route(smoltcp::wire::Ipv4Address::UNSPECIFIED)
             .unwrap();
 
-        let neighbor_cache =
-            smoltcp::iface::NeighborCache::new(&mut store.neighbor_cache[..]);
+        interface.update_ip_addrs(|ref mut addrs| {
+            if !ip_addrs.is_unspecified() {
+                addrs
+                    .push(smoltcp::wire::IpCidr::new(ip_addrs, 24))
+                    .unwrap();
+            }
+        });
 
-        let mut interface = smoltcp::iface::InterfaceBuilder::new(
-            eth_dma,
-        )
-        .hardware_addr(smoltcp::wire::HardwareAddress::Ethernet(mac_addr))
-        .neighbor_cache(neighbor_cache)
-        .ip_addrs(&mut store.ip_addrs[..])
-        .routes(routes)
-        .finalize();
-
-        if ip_addrs.is_unspecified() {
-            interface.add_socket(smoltcp::socket::Dhcpv4Socket::new());
-        }
-
-        let sockets = smoltcp::iface::SocketSet::new(&mut store.sockets[..]);
+        let mut sockets =
+            smoltcp::iface::SocketSet::new(&mut store.sockets[..]);
         for storage in store.tcp_socket_storage[..].iter_mut() {
             let tcp_socket = {
                 let rx_buffer = smoltcp::socket::tcp::SocketBuffer::new(
@@ -689,13 +692,17 @@ pub fn setup(
             sockets.add(tcp_socket);
         }
 
+        if ip_addrs.is_unspecified() {
+            sockets.add(smoltcp::socket::dhcpv4::Socket::new());
+        }
+
         for storage in store.udp_socket_storage[..].iter_mut() {
             let udp_socket = {
-                let rx_buffer = smoltcp::socket::udp::SocketBuffer::new(
+                let rx_buffer = smoltcp::socket::udp::PacketBuffer::new(
                     &mut storage.rx_metadata[..],
                     &mut storage.rx_storage[..],
                 );
-                let tx_buffer = smoltcp::socket::udp::SocketBuffer::new(
+                let tx_buffer = smoltcp::socket::udp::PacketBuffer::new(
                     &mut storage.tx_metadata[..],
                     &mut storage.tx_storage[..],
                 );
@@ -706,15 +713,8 @@ pub fn setup(
             sockets.add(udp_socket);
         }
 
-        let random_seed = {
-            let mut rng =
-                device.RNG.constrain(ccdr.peripheral.RNG, &ccdr.clocks);
-            let mut data = [0u8; 4];
-            rng.fill(&mut data).unwrap();
-            data
-        };
-
-        let mut stack = smoltcp_nal::NetworkStack::new(interface, clock, sockets);
+        let mut stack =
+            smoltcp_nal::NetworkStack::new(interface, eth_dma, sockets, clock);
 
         stack.seed_random_port(&random_seed);
 
