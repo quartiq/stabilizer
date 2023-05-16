@@ -355,6 +355,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "itoa"
+version = "1.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "453ad9f582a441959e5f0d088b02ce04cfe8d51a8eaf077f12ac6d3e94164ca6"
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -421,10 +427,10 @@ checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 [[package]]
 name = "miniconf"
 version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07df30ef660fa32d54836743fbdf8208747a559fc4296ec07dc12b6df65343b2"
+source = "git+https://github.com/quartiq/miniconf#8be449dcd9be7c838720c21223dac0841595dd26"
 dependencies = [
  "heapless",
+ "itoa",
  "log",
  "miniconf_derive",
  "minimq",
@@ -436,8 +442,7 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e142f4961afed7b940e84903e6f886b35d10017f15aafc960556f053f6a8fa35"
+source = "git+https://github.com/quartiq/miniconf#8be449dcd9be7c838720c21223dac0841595dd26"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -446,9 +451,9 @@ dependencies = [
 
 [[package]]
 name = "minimq"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b76ac76e900c755ca49946b2316d76c13e8af097495cd250acea7d09218b7e5"
+checksum = "b222dbc2667cc69a2d9acdf5c24280c49233295eda3a767f6ddfb4040f5cc80c"
 dependencies = [
  "bit_field",
  "embedded-nal",
