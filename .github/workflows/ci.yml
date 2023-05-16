@@ -2,7 +2,7 @@ name: Continuous Integration
 
 on:
   push:
-    branches: [master, staging, driver, trying]
+    branches: [master, staging, driver, trying, nk/driver-miniconf-main]
   pull_request:
     branches: [master, driver]
   schedule:
