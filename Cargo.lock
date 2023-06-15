@@ -29,7 +29,7 @@ checksum = "45403b49e3954a4b8428a0ac21a4b7afadccf92bfd96273f1a58cd4812496ae0"
 dependencies = [
  "generic-array 0.12.4",
  "generic-array 0.13.3",
- "generic-array 0.14.6",
+ "generic-array 0.14.7",
  "stable_deref_trait",
 ]
 
@@ -213,7 +213,6 @@ dependencies = [
 [[package]]
 name = "embedded-nal"
 version = "0.6.0"
-source = "git+https://github.com/quartiq/embedded-nal?branch=feature/tcp-updates#f0f23460f6860bdd1d251c8f76e9e837cb932e79"
 dependencies = [
  "heapless",
  "nb 1.1.0",
@@ -290,9 +289,9 @@ dependencies = [
 
 [[package]]
 name = "generic-array"
-version = "0.14.6"
+version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bff49e947297f3312447abdca79f45f4738097cc82b06e72054d2223f601f1b9"
+checksum = "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a"
 dependencies = [
  "typenum",
  "version_check",
@@ -349,6 +348,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "itoa"
+version = "1.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "453ad9f582a441959e5f0d088b02ce04cfe8d51a8eaf077f12ac6d3e94164ca6"
+
+[[package]]
 name = "libm"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -403,10 +408,9 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07df30ef660fa32d54836743fbdf8208747a559fc4296ec07dc12b6df65343b2"
 dependencies = [
  "heapless",
+ "itoa",
  "log",
  "miniconf_derive",
  "minimq",
@@ -418,8 +422,6 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e142f4961afed7b940e84903e6f886b35d10017f15aafc960556f053f6a8fa35"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -429,12 +431,12 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.6.2"
-source = "git+https://github.com/quartiq/minimq?branch=rs/issue-125/tcp-disconnection#4533c8069d3a447144640b2292512eb982c02d9f"
 dependencies = [
  "bit_field",
  "embedded-nal",
  "embedded-time",
  "heapless",
+ "log",
  "num_enum 0.5.11",
  "serde",
  "smlang",
@@ -834,7 +836,6 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.2.1"
-source = "git+https://github.com/quartiq/smoltcp-nal?branch=feature/tcp-updates#3466237d9f291883f49fbdd87a7c6dcab605c4be"
 dependencies = [
  "embedded-nal",
  "embedded-time",

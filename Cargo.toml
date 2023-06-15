@@ -47,11 +47,8 @@ num_enum = { version = "0.6.1", default-features = false }
 paste = "1"
 idsp = "0.9"
 ad9959 = { path = "ad9959", version = "0.2.0" }
-miniconf = "0.6.3"
-smoltcp-nal = { version = "0.2", features = ["shared-stack"] }
 mcp230xx = "1.0"
 mutex-trait = "0.2"
-minimq = "0.6.2"
 fugit = "0.3"
 rtt-logger = "0.2"
 systick-monotonic = "1.0"
@@ -63,13 +60,16 @@ enum-iterator = "1.4.1"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
 
-[patch.crates-io.smoltcp-nal]
-git = "https://github.com/quartiq/smoltcp-nal"
-branch = "feature/tcp-updates"
+[dependencies.smoltcp-nal]
+path = "../smoltcp-nal"
+features = ["shared-stack"]
 
-[patch.crates-io.minimq]
-git = "https://github.com/quartiq/minimq"
-branch = "rs/issue-125/tcp-disconnection"
+[dependencies.minimq]
+path = "../minimq"
+features = ["log"]
+
+[dependencies.miniconf]
+path = "../miniconf"
 
 [dependencies.stm32h7xx-hal]
 git = "https://github.com/stm32-rs/stm32h7xx-hal"
