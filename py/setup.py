@@ -14,6 +14,6 @@ setup(
         "scipy",
         "matplotlib",
         "gmqtt",
-        "miniconf-mqtt@git+https://github.com/quartiq/miniconf@v0.6.3#subdirectory=py/miniconf-mqtt",
+        "miniconf-mqtt@git+https://github.com/quartiq/miniconf@v0.7.0#subdirectory=py/miniconf-mqtt",
     ],
 )

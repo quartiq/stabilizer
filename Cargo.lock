@@ -212,7 +212,9 @@ dependencies = [
 
 [[package]]
 name = "embedded-nal"
-version = "0.6.0"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "447416d161ba378782c13e82b11b267d6d2104b4913679a7c5640e7e94f96ea7"
 dependencies = [
  "heapless",
  "nb 1.1.0",
@@ -407,7 +409,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf"
-version = "0.6.3"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "910ee04a7c66e0871d4991ab4f7e9f07f156c0614d0b6e8f2fe514eda2c11507"
 dependencies = [
  "heapless",
  "itoa",
@@ -422,6 +426,8 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e142f4961afed7b940e84903e6f886b35d10017f15aafc960556f053f6a8fa35"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -430,13 +436,14 @@ dependencies = [
 
 [[package]]
 name = "minimq"
-version = "0.6.2"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0106439fe4eb2e88c5b6b8fcb505b2f679bd8e105c947aa1f1a77f6b57a38653"
 dependencies = [
  "bit_field",
  "embedded-nal",
  "embedded-time",
  "heapless",
- "log",
  "num_enum 0.5.11",
  "serde",
  "smlang",
@@ -835,7 +842,7 @@ dependencies = [
 
 [[package]]
 name = "smoltcp-nal"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "embedded-nal",
  "embedded-time",
