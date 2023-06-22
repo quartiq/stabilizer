@@ -55,13 +55,13 @@ const RX_DESRING_CNT: usize = 4;
 
 pub type NetworkStack = smoltcp_nal::NetworkStack<
     'static,
-    hal::ethernet::EthernetDMA<'static, TX_DESRING_CNT, RX_DESRING_CNT>,
+    hal::ethernet::EthernetDMA<TX_DESRING_CNT, RX_DESRING_CNT>,
     SystemTimer,
 >;
 
 pub type NetworkManager = smoltcp_nal::shared::NetworkManager<
     'static,
-    hal::ethernet::EthernetDMA<'static, TX_DESRING_CNT, RX_DESRING_CNT>,
+    hal::ethernet::EthernetDMA<TX_DESRING_CNT, RX_DESRING_CNT>,
     SystemTimer,
 >;
 

@@ -157,7 +157,9 @@ impl<T: Serialize> TelemetryClient<T> {
     pub fn update(&mut self) {
         match self.mqtt.poll(|_client, _topic, _message, _properties| {}) {
             Err(minimq::Error::Network(
-                smoltcp_nal::NetworkError::NoIpAddress,
+                smoltcp_nal::NetworkError::TcpConnectionFailure(
+                    smoltcp_nal::smoltcp::socket::tcp::ConnectError::Unaddressable
+                ),
             )) => {}
 
             Err(error) => log::info!("Unexpected error: {:?}", error),

@@ -78,7 +78,7 @@ pub struct Settings {
     /// # Path
     /// `afe/<n>`
     ///
-    /// * <n> specifies which channel to configure. <n> := [0, 1]
+    /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
     ///
     /// # Value
     /// Any of the variants of [Gain] enclosed in double quotes.
@@ -90,8 +90,8 @@ pub struct Settings {
     /// # Path
     /// `iir_ch/<n>/<m>`
     ///
-    /// * <n> specifies which channel to configure. <n> := [0, 1]
-    /// * <m> specifies which cascade to configure. <m> := [0, 1], depending on [IIR_CASCADE_LENGTH]
+    /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
+    /// * `<m>` specifies which cascade to configure. `<m>` := [0, 1], depending on [IIR_CASCADE_LENGTH]
     ///
     /// # Value
     /// See [iir::IIR#miniconf]
@@ -139,7 +139,7 @@ pub struct Settings {
     /// # Path
     /// `signal_generator/<n>`
     ///
-    /// * <n> specifies which channel to configure. <n> := [0, 1]
+    /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
     ///
     /// # Value
     /// See [signal_generator::BasicConfig#miniconf]

@@ -106,6 +106,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
+name = "cfg-if"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
+
+[[package]]
 name = "cortex-m"
 version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -206,9 +212,9 @@ dependencies = [
 
 [[package]]
 name = "embedded-nal"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db9efecb57ab54fa918730f2874d7d37647169c50fa1357fecb81abee840b113"
+checksum = "447416d161ba378782c13e82b11b267d6d2104b4913679a7c5640e7e94f96ea7"
 dependencies = [
  "heapless",
  "nb 1.1.0",
@@ -344,6 +350,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "itoa"
+version = "1.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "453ad9f582a441959e5f0d088b02ce04cfe8d51a8eaf077f12ac6d3e94164ca6"
+
+[[package]]
 name = "libm"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -394,11 +406,12 @@ dependencies = [
 
 [[package]]
 name = "miniconf"
-version = "0.6.3"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07df30ef660fa32d54836743fbdf8208747a559fc4296ec07dc12b6df65343b2"
+checksum = "910ee04a7c66e0871d4991ab4f7e9f07f156c0614d0b6e8f2fe514eda2c11507"
 dependencies = [
  "heapless",
+ "itoa",
  "log",
  "miniconf_derive",
  "minimq",
@@ -420,9 +433,9 @@ dependencies = [
 
 [[package]]
 name = "minimq"
-version = "0.6.2"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b222dbc2667cc69a2d9acdf5c24280c49233295eda3a767f6ddfb4040f5cc80c"
+checksum = "0106439fe4eb2e88c5b6b8fcb505b2f679bd8e105c947aa1f1a77f6b57a38653"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -472,9 +485,9 @@ checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
 
 [[package]]
 name = "no-std-net"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bcece43b12349917e096cddfa66107277f123e6c96a5aea78711dc601a47152"
+checksum = "43794a0ace135be66a25d3ae77d41b91615fb68ae937f904090203e81f755b65"
 
 [[package]]
 name = "num"
@@ -813,20 +826,22 @@ dependencies = [
 
 [[package]]
 name = "smoltcp"
-version = "0.8.2"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee34c1e1bfc7e9206cc0fb8030a90129b4e319ab53856249bb27642cab914fb3"
+checksum = "7e9786ac45091b96f946693e05bfa4d8ca93e2d3341237d97a380107a6b38dea"
 dependencies = [
  "bitflags 1.3.2",
  "byteorder",
+ "cfg-if",
+ "heapless",
  "managed",
 ]
 
 [[package]]
 name = "smoltcp-nal"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a63a94229e438f53c83757c51b346a09409064f6d18723e0393e11d829b09640"
+checksum = "821854501c550f1d347b5ae469d8e273d21371ad2eb270a8ff6f37ca9a23f8bd"
 dependencies = [
  "embedded-nal",
  "embedded-time",
@@ -901,8 +916,7 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fe4a709ccbccd9994d2363e27104933561ef170f892c950ffe939546c2ece1d"
+source = "git+https://github.com/stm32-rs/stm32h7xx-hal#4e3210b3bff55fe79c6260901ff27a21feb91a59"
 dependencies = [
  "bare-metal 1.0.0",
  "bitflags 2.3.2",
