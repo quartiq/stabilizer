@@ -15,8 +15,8 @@ repository = "https://github.com/quartiq/stabilizer"
 readme = "README.md"
 documentation = "https://docs.rs/stabilizer/"
 edition = "2021"
-# keep MSRV in sync in ci.yaml, bors.toml, Cargo.toml, and setup.md
-rust-version = "1.63"
+# keep MSRV in sync in ci.yaml and Cargo.toml
+rust-version = "1.65"
 exclude = [
 	".gitignore",
 	"doc/",

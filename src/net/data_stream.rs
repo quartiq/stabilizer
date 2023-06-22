@@ -12,11 +12,11 @@
 //! ## Frame Header
 //! The header consists of the following, all in little-endian.
 //!
-//! * **Magic word 0x057B** <u16>: a constant to identify Stabilizer streaming data.
-//! * **Format Code** <u8>: a unique ID that indicates the serialization format of each batch of data
+//! * **Magic word 0x057B** (u16): a constant to identify Stabilizer streaming data.
+//! * **Format Code** (u8): a unique ID that indicates the serialization format of each batch of data
 //!   in the frame. Refer to [StreamFormat] for further information.
-//! * **Batch Size** <u8>: the number of samples in each batch of data.
-//! * **Sequence Number** <u32>: an the sequence number of the first batch in the frame.
+//! * **Batch Size** (u8): the number of samples in each batch of data.
+//! * **Sequence Number** (u32): an the sequence number of the first batch in the frame.
 //!   This can be used to determine if and how many stream batches are lost.
 //!
 //! # Example
