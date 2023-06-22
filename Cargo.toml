@@ -63,10 +63,9 @@ minimq = "0.7"
 miniconf = "0.7"
 
 [dependencies.smoltcp-nal]
-path = "../smoltcp-nal"
 features = ["shared-stack"]
-#git = "https://github.com/quartiq/smoltcp-nal"
-#rev = "6d56c4d2188aa20089e3389f806da3d1c49e1f9d"
+git = "https://github.com/quartiq/smoltcp-nal"
+rev = "14cedbd29c3853e9d6a407f290e915568ced5c05"
 
 [dependencies.stm32h7xx-hal]
 git = "https://github.com/stm32-rs/stm32h7xx-hal"
