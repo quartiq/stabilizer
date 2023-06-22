@@ -1,5 +1,4 @@
 name: Continuous Integration
-
 on:
   merge_group:
   push:
