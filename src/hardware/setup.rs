@@ -799,10 +799,12 @@ pub fn setup(
             shared_bus::new_atomic_check!(hal::i2c::I2c<hal::stm32::I2C1> = i2c1).unwrap()
         };
 
-        let io_expander =
+        let mcp23017 =
             mcp230xx::Mcp230xx::new_default(i2c1.acquire_i2c()).unwrap();
 
-        let temp_sensor =
+        let pca9359 = pca9539::expander::PCA9539::new(i2c1.acquire_i2c(), 0x74);
+
+        let lm75 =
             lm75::Lm75::new(i2c1.acquire_i2c(), lm75::Address::default());
 
         let spi = {
@@ -832,13 +834,10 @@ pub fn setup(
         let aux_adc1 = adc3.create_channel(gpiof.pf4.into_analog());
 
         let pounder_devices = pounder::PounderDevices::new(
-            temp_sensor,
-            io_expander,
+            (lm75, mcp23017, pca9359),
             spi,
-            pwr0,
-            pwr1,
-            aux_adc0,
-            aux_adc1,
+            (pwr0, pwr1),
+            (aux_adc0, aux_adc1),
         )
         .unwrap();
 

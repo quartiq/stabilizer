@@ -62,14 +62,15 @@ rand_core = "0.6.4"
 minimq = "0.7"
 miniconf = "0.7"
 smoltcp-nal = { version = "0.3", features = ["shared-stack"]}
+pca9539 = { version = "0.2", default-features = false }
 
 [dependencies.stm32h7xx-hal]
 git = "https://github.com/stm32-rs/stm32h7xx-hal"
 features = ["stm32h743v", "rt", "ethernet", "xspi"]
 
 [features]
-nightly = [ ]
-pounder_v1_0 = [ ]
+nightly = []
+pounder_v1_0 = []
 
 [profile.dev]
 codegen-units = 1
