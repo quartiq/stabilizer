@@ -26,6 +26,7 @@ pub enum GpioPin {
     AttLe1,
     AttLe2,
     AttLe3,
+    DdsReset,
     AttRstN,
     OscEnN,
     ExtClkSel,
@@ -44,6 +45,7 @@ impl From<GpioPin> for mcp230xx::Mcp23017 {
             GpioPin::AttLe1 => Self::B1,
             GpioPin::AttLe2 => Self::B2,
             GpioPin::AttLe3 => Self::B3,
+            GpioPin::DdsReset => Self::B4,
             GpioPin::AttRstN => Self::B5,
             GpioPin::OscEnN => Self::B6,
             GpioPin::ExtClkSel => Self::B7,
@@ -393,6 +395,18 @@ impl PounderDevices {
                 .map_err(|_| Error::I2c)?;
         }
         devices.reset_attenuators().unwrap();
+
+        // DDS reset (Pounder v1.2 or later)
+        devices
+            .mcp23017
+            .set_gpio(GpioPin::DdsReset.into(), mcp230xx::Level::High)
+            .map_err(|_| Error::I2c)?;
+        devices
+            .mcp23017
+            .set_gpio(GpioPin::DdsReset.into(), mcp230xx::Level::Low)
+            .map_err(|_| Error::I2c)?;
+
+
         Ok(devices)
     }
 
