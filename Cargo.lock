@@ -88,12 +88,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dbe3c979c178231552ecba20214a8272df4e09f232a87aef4320cf06539aded"
 
 [[package]]
-name = "bitmaps"
-version = "3.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "703642b98a00b3b90513279a8ede3fcfa479c126c5fb46e78f3051522f021403"
-
-[[package]]
 name = "bytemuck"
 version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -616,16 +610,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f746c4065a8fa3fe23974dd82f15431cc8d40779821001404d10d2e79ca7d79"
 
 [[package]]
-name = "pca9539"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "712a0d1253e4c60748b74cd48766553882c93a741a0293348df58748eb3146b6"
-dependencies = [
- "bitmaps",
- "embedded-hal",
-]
-
-[[package]]
 name = "proc-macro-error"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -881,6 +865,7 @@ name = "stabilizer"
 version = "0.8.1"
 dependencies = [
  "ad9959",
+ "bit_field",
  "cortex-m 0.7.7",
  "cortex-m-rt",
  "cortex-m-rtic",
@@ -899,7 +884,6 @@ dependencies = [
  "nb 1.1.0",
  "num_enum 0.6.1",
  "paste",
- "pca9539",
  "rand_core",
  "rand_xorshift",
  "rtt-logger",

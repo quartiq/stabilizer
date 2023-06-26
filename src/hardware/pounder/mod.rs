@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 pub mod attenuators;
 pub mod dds_output;
 pub mod hrtimer;
+pub mod pca9539;
 pub mod rf_power;
 
 #[cfg(not(feature = "pounder_v1_0"))]
@@ -54,30 +55,6 @@ impl From<GpioPin> for mcp230xx::Mcp23017 {
             GpioPin::OscEnN => Self::B6,
             GpioPin::ExtClkSel => Self::B7,
         }
-    }
-}
-
-impl From<GpioPin> for (pca9539::expander::Bank, pca9539::expander::PinID) {
-    fn from(value: GpioPin) -> Self {
-        let pin: mcp230xx::Mcp23017 = value.into();
-        let pin = pin as u8;
-        let bank = if pin < 8 {
-            pca9539::expander::Bank::Bank0
-        } else {
-            pca9539::expander::Bank::Bank1
-        };
-        let pin = match pin & 7 {
-            0 => pca9539::expander::PinID::Pin0,
-            1 => pca9539::expander::PinID::Pin1,
-            2 => pca9539::expander::PinID::Pin2,
-            3 => pca9539::expander::PinID::Pin3,
-            4 => pca9539::expander::PinID::Pin4,
-            5 => pca9539::expander::PinID::Pin5,
-            6 => pca9539::expander::PinID::Pin6,
-            7 => pca9539::expander::PinID::Pin7,
-            _ => unreachable!(),
-        };
-        (bank, pin)
     }
 }
 
@@ -338,7 +315,7 @@ impl ad9959::Interface for QspiInterface {
 
 enum IoExpander {
     Mcp(mcp230xx::Mcp230xx<I2c1Proxy, mcp230xx::Mcp23017>),
-    Pca(pca9539::expander::PCA9539<I2c1Proxy>),
+    Pca(pca9539::Pca9539<I2c1Proxy>),
 }
 
 /// A structure containing implementation for Pounder hardware.
@@ -376,7 +353,7 @@ impl PounderDevices {
     /// Construct and initialize pounder-specific hardware.
     ///
     /// Args:
-    /// * `i2c` - Tuple of: `lm75` temperature sensor and `mcp23017`/`pca9359` GPIO extenders.
+    /// * `i2c` - Tuple of: `lm75` temperature sensor and `mcp23017`/`pca9539` GPIO extenders.
     /// * `attenuator_spi` - A SPI interface to control digital attenuators.
     /// * `pwr` - The ADC channels to measure the IN0/1 input power.
     /// * `aux_adc` - The ADC channels to measure the ADC0/1 auxiliary input.
@@ -384,7 +361,7 @@ impl PounderDevices {
         i2c: (
             lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
             mcp230xx::Mcp230xx<I2c1Proxy, mcp230xx::Mcp23017>,
-            pca9539::expander::PCA9539<I2c1Proxy>,
+            pca9539::Pca9539<I2c1Proxy>,
         ),
         attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
         pwr: (
@@ -466,16 +443,7 @@ impl PounderDevices {
                 dev.set_direction(pin.into(), dir).map_err(|_| Error::I2c)
             }
             IoExpander::Pca(dev) => {
-                let (bank, pin) = pin.into();
-                let dir = match dir {
-                    mcp230xx::Direction::Output => {
-                        pca9539::expander::Mode::Output
-                    }
-                    mcp230xx::Direction::Input => {
-                        pca9539::expander::Mode::Input
-                    }
-                };
-                dev.set_mode(bank, pin, dir).map_err(|_| Error::I2c)
+                dev.set_direction(pin.into(), dir).map_err(|_| Error::I2c)
             }
         }
     }
@@ -491,9 +459,7 @@ impl PounderDevices {
                 dev.set_gpio(pin.into(), level).map_err(|_| Error::I2c)
             }
             IoExpander::Pca(dev) => {
-                let (bank, pin) = pin.into();
-                dev.set_state(bank, pin, level == mcp230xx::Level::High);
-                dev.write_output_state(bank).map_err(|_| Error::I2c)
+                dev.set_level(pin.into(), level).map_err(|_| Error::I2c)
             }
         }
     }
