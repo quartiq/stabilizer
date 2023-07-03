@@ -916,7 +916,7 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.14.0"
-source = "git+https://github.com/stm32-rs/stm32h7xx-hal#4e3210b3bff55fe79c6260901ff27a21feb91a59"
+source = "git+https://github.com/stm32-rs/stm32h7xx-hal#2d47a4a06c30cb95fa6e1f1fb9c8720c6e426c1a"
 dependencies = [
  "bare-metal 1.0.0",
  "bitflags 2.3.2",
