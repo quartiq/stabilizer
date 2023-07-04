@@ -7,7 +7,7 @@ name = "ad9959"
 version = "0.2.0"
 dependencies = [
  "bit_field",
- "bitflags 2.3.2",
+ "bitflags 2.3.3",
  "bytemuck",
  "embedded-hal",
 ]
@@ -83,9 +83,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitflags"
-version = "2.3.2"
+version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6dbe3c979c178231552ecba20214a8272df4e09f232a87aef4320cf06539aded"
+checksum = "630be753d4e58660abd17930c71b647fe46c27ea6b63cc59e1e3851406972e42"
 
 [[package]]
 name = "bytemuck"
@@ -605,9 +605,9 @@ dependencies = [
 
 [[package]]
 name = "paste"
-version = "1.0.12"
+version = "1.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f746c4065a8fa3fe23974dd82f15431cc8d40779821001404d10d2e79ca7d79"
+checksum = "b4b27ab7be369122c218afc2079489cdcb4b517c0a3fc386ff11e1fedfcc2b35"
 
 [[package]]
 name = "proc-macro-error"
@@ -919,7 +919,7 @@ version = "0.14.0"
 source = "git+https://github.com/stm32-rs/stm32h7xx-hal#4e3210b3bff55fe79c6260901ff27a21feb91a59"
 dependencies = [
  "bare-metal 1.0.0",
- "bitflags 2.3.2",
+ "bitflags 2.3.3",
  "cast",
  "cortex-m 0.7.7",
  "embedded-dma",
