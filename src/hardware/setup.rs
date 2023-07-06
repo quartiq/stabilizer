@@ -17,7 +17,7 @@ use super::{
     cpu_temp_sensor::CpuTempSensor,
     dac, delay, design_parameters, eeprom,
     input_stamper::InputStamper,
-    pounder::{self, dds_output::DdsOutput, pca9539},
+    pounder::{self, dds_output::DdsOutput},
     shared_adc::SharedAdc,
     timers, DigitalInput0, DigitalInput1, EemDigitalInput0, EemDigitalInput1,
     EemDigitalOutput0, EemDigitalOutput1, EthernetPhy, NetworkStack,
@@ -806,7 +806,7 @@ pub fn setup(
             mcp230xx::Mcp230xx::new_default(i2c1.acquire_i2c()).unwrap();
 
         let pca9359 =
-            pca9539::Pca9539::new_default(i2c1.acquire_i2c()).unwrap();
+            tca9539::Pca9539::new_default(i2c1.acquire_i2c()).unwrap();
 
         let lm75 =
             lm75::Lm75::new(i2c1.acquire_i2c(), lm75::Address::default());

@@ -63,6 +63,7 @@ minimq = "0.7"
 miniconf = "0.7"
 smoltcp-nal = { version = "0.3", features = ["shared-stack"]}
 bit_field = "0.10.1"
+tca9539 = "0.1"
 
 [dependencies.stm32h7xx-hal]
 git = "https://github.com/stm32-rs/stm32h7xx-hal"

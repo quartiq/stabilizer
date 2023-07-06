@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 pub mod attenuators;
 pub mod dds_output;
 pub mod hrtimer;
-pub mod pca9539;
 pub mod rf_power;
 
 #[cfg(not(feature = "pounder_v1_0"))]
@@ -54,6 +53,29 @@ impl From<GpioPin> for mcp230xx::Mcp23017 {
             GpioPin::AttRstN => Self::B5,
             GpioPin::OscEnN => Self::B6,
             GpioPin::ExtClkSel => Self::B7,
+        }
+    }
+}
+
+impl From<GpioPin> for tca9539::Pin {
+    fn from(x: GpioPin) -> Self {
+        match x {
+            GpioPin::Led4Green => Self::P00,
+            GpioPin::Led5Red => Self::P01,
+            GpioPin::Led6Green => Self::P02,
+            GpioPin::Led7Red => Self::P03,
+            GpioPin::Led8Green => Self::P04,
+            GpioPin::Led9Red => Self::P05,
+            GpioPin::DetPwrdown0 => Self::P06,
+            GpioPin::DetPwrdown1 => Self::P07,
+            GpioPin::AttLe0 => Self::P10,
+            GpioPin::AttLe1 => Self::P11,
+            GpioPin::AttLe2 => Self::P12,
+            GpioPin::AttLe3 => Self::P13,
+            GpioPin::DdsReset => Self::P14,
+            GpioPin::AttRstN => Self::P15,
+            GpioPin::OscEnN => Self::P16,
+            GpioPin::ExtClkSel => Self::P17,
         }
     }
 }
@@ -315,7 +337,7 @@ impl ad9959::Interface for QspiInterface {
 
 enum IoExpander {
     Mcp(mcp230xx::Mcp230xx<I2c1Proxy, mcp230xx::Mcp23017>),
-    Pca(pca9539::Pca9539<I2c1Proxy>),
+    Pca(tca9539::Pca9539<I2c1Proxy>),
 }
 
 /// A structure containing implementation for Pounder hardware.
@@ -361,7 +383,7 @@ impl PounderDevices {
         i2c: (
             lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
             mcp230xx::Mcp230xx<I2c1Proxy, mcp230xx::Mcp23017>,
-            pca9539::Pca9539<I2c1Proxy>,
+            tca9539::Pca9539<I2c1Proxy>,
         ),
         attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
         pwr: (
@@ -443,6 +465,10 @@ impl PounderDevices {
                 dev.set_direction(pin.into(), dir).map_err(|_| Error::I2c)
             }
             IoExpander::Pca(dev) => {
+                let dir = match dir {
+                    mcp230xx::Direction::Output => tca9539::Direction::Output,
+                    _ => tca9539::Direction::Input,
+                };
                 dev.set_direction(pin.into(), dir).map_err(|_| Error::I2c)
             }
         }
@@ -459,6 +485,10 @@ impl PounderDevices {
                 dev.set_gpio(pin.into(), level).map_err(|_| Error::I2c)
             }
             IoExpander::Pca(dev) => {
+                let level = match level {
+                    mcp230xx::Level::Low => tca9539::Level::Low,
+                    _ => tca9539::Level::High,
+                };
                 dev.set_level(pin.into(), level).map_err(|_| Error::I2c)
             }
         }
