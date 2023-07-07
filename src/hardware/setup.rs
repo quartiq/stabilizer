@@ -879,6 +879,12 @@ pub fn setup(
 
             let mut io_update = gpiog.pg7.into_push_pull_output();
 
+            // Delay to allow the pounder DDS reference clock to fully start up. The exact startup
+            // time is not specified, but bench testing indicates it usually comes up within
+            // 200-300uS. We do a larger delay to ensure that it comes up and is stable before
+            // using it.
+            delay.delay_ms(10u32);
+
             let mut ad9959 = ad9959::Ad9959::new(
                 qspi_interface,
                 reset_pin,
