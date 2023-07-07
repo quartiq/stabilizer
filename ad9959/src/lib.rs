@@ -97,16 +97,10 @@ pub enum Error {
 }
 
 impl<I: Interface> Ad9959<I> {
-    /// Construct and initialize the DDS.
+    /// Constructor.
     ///
     /// Args:
     /// * `interface` - An interface to the DDS.
-    /// * `reset_pin` - A pin connected to the DDS reset input.
-    /// * `io_update` - A pin connected to the DDS io_update input.
-    /// * `delay` - A delay implementation for blocking operation for specific amounts of time.
-    /// * `desired_mode` - The desired communication mode of the interface to the DDS.
-    /// * `clock_frequency` - The clock frequency of the reference clock input.
-    /// * `multiplier` - The desired clock multiplier for the system clock. This multiplies
     ///   `clock_frequency` to generate the system clock.
     pub fn new(interface: I, clock_frequency: f32) -> Self {
         Self {
@@ -117,6 +111,14 @@ impl<I: Interface> Ad9959<I> {
         }
     }
 
+    /// Initialize the DDS
+    ///
+    /// # Args
+    /// * `reset_pin` - A pin connected to the DDS reset input.
+    /// * `io_update` - A pin connected to the DDS io_update input.
+    /// * `delay` - A delay implementation for blocking operation for specific amounts of time.
+    /// * `desired_mode` - The desired communication mode of the interface to the DDS.
+    /// * `multiplier` - The desired clock multiplier for the system clock. This multiplies
     pub fn initialize(
         &mut self,
         reset_pin: &mut impl OutputPin,
