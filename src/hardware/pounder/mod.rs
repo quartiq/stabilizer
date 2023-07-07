@@ -341,8 +341,20 @@ enum IoExpander {
 }
 
 impl IoExpander {
+    fn new(i2c: I2c1Proxy) -> Self {
+        // Population option on Pounder v1.2 and later.
+        let mut mcp23017 =
+            mcp230xx::Mcp230xx::new_default(i2c.clone()).unwrap();
+        if mcp23017.read(0).is_ok() {
+            Self::Mcp(mcp23017)
+        } else {
+            let pca9359 = tca9539::Pca9539::new_default(i2c).unwrap();
+            IoExpander::Pca(pca9359)
+        }
+    }
+
     /// Set the state (its electrical level) of the given GPIO pin on Pounder.
-    pub fn set_gpio_dir(
+    fn set_gpio_dir(
         &mut self,
         pin: GpioPin,
         dir: mcp230xx::Direction,
@@ -362,7 +374,7 @@ impl IoExpander {
     }
 
     /// Set the state (its electrical level) of the given GPIO pin on Pounder.
-    pub fn set_gpio_level(
+    fn set_gpio_level(
         &mut self,
         pin: GpioPin,
         level: mcp230xx::Level,
@@ -385,7 +397,7 @@ impl IoExpander {
 /// A structure containing implementation for Pounder hardware.
 pub struct PounderDevices {
     io: IoExpander,
-    pub lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
+    lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
     attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
     pwr: (
         AdcChannel<
@@ -417,16 +429,12 @@ impl PounderDevices {
     /// Construct and initialize pounder-specific hardware.
     ///
     /// Args:
-    /// * `i2c` - Tuple of: `lm75` temperature sensor and `mcp23017`/`pca9539` GPIO extenders.
+    /// * `i2c` - A Proxy to I2C1.
     /// * `attenuator_spi` - A SPI interface to control digital attenuators.
     /// * `pwr` - The ADC channels to measure the IN0/1 input power.
     /// * `aux_adc` - The ADC channels to measure the ADC0/1 auxiliary input.
     pub fn new(
-        i2c: (
-            lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
-            mcp230xx::Mcp230xx<I2c1Proxy, mcp230xx::Mcp23017>,
-            tca9539::Pca9539<I2c1Proxy>,
-        ),
+        i2c: I2c1Proxy,
         attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
         pwr: (
             AdcChannel<
@@ -453,16 +461,9 @@ impl PounderDevices {
             >,
         ),
     ) -> Result<Self, Error> {
-        let (lm75, mut mcp23017, pca9359) = i2c;
-        let io = if mcp23017.read(0).is_ok() {
-            IoExpander::Mcp(mcp23017)
-        } else {
-            IoExpander::Pca(pca9359)
-        };
-
         let mut devices = Self {
-            lm75,
-            io,
+            lm75: lm75::Lm75::new(i2c.clone(), lm75::Address::default()),
+            io: IoExpander::new(i2c.clone()),
             attenuator_spi,
             pwr,
             aux_adc,
@@ -516,6 +517,11 @@ impl PounderDevices {
         // I2C duration of this transaction is long enough (> 5 µs) to ensure valid reset.
         self.io
             .set_gpio_level(GpioPin::DdsReset, mcp230xx::Level::Low)
+    }
+
+    /// Read the temperature reported by the LM75 temperature sensor on Pounder in deg C.
+    pub fn temperature(&mut self) -> Result<f32, Error> {
+        self.lm75.read_temperature().map_err(|_| Error::I2c)
     }
 }
 
