@@ -870,35 +870,28 @@ pub fn setup(
             };
 
             #[cfg(not(feature = "pounder_v1_0"))]
-            let mut reset_pin = gpiog.pg6.into_push_pull_output();
+            let reset_pin = gpiog.pg6.into_push_pull_output();
             #[cfg(feature = "pounder_v1_0")]
-            let mut reset_pin = gpioa.pa0.into_push_pull_output();
+            let reset_pin = gpioa.pa0.into_push_pull_output();
 
             let mut io_update = gpiog.pg7.into_push_pull_output();
 
+            // Delay to allow the pounder DDS reference clock to fully start up. The exact startup
+            // time is not specified, but bench testing indicates it usually comes up within
+            // 200-300uS. We do a larger delay to ensure that it comes up and is stable before
+            // using it.
+            delay.delay_ms(10u32);
+
             let mut ad9959 = ad9959::Ad9959::new(
                 qspi_interface,
+                reset_pin,
+                &mut io_update,
+                &mut delay,
+                ad9959::Mode::FourBitSerial,
                 design_parameters::DDS_REF_CLK.to_Hz() as f32,
-            );
-
-            // The oscillator to the AD9959 takes some time to turn on after first initialization.
-            // To accomodate this, we retry the initialization process until the configuration
-            // process completes successfully.
-            loop {
-                match ad9959.initialize(
-                    &mut reset_pin,
-                    &mut io_update,
-                    &mut delay,
-                    ad9959::Mode::FourBitSerial,
-                    design_parameters::DDS_MULTIPLIER,
-                ) {
-                    Ok(()) => break,
-                    // If the cross-check readback failed, it's because the oscillator is not up
-                    // yet.
-                    Err(ad9959::Error::Check) => {}
-                    other => other.unwrap(),
-                }
-            }
+                design_parameters::DDS_MULTIPLIER,
+            )
+            .unwrap();
 
             ad9959.self_test().unwrap();
 

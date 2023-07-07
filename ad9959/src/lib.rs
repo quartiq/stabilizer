@@ -97,36 +97,33 @@ pub enum Error {
 }
 
 impl<I: Interface> Ad9959<I> {
-    /// Constructor.
+    /// Construct and initialize the DDS.
     ///
     /// Args:
     /// * `interface` - An interface to the DDS.
-    ///   `clock_frequency` to generate the system clock.
-    pub fn new(interface: I, clock_frequency: f32) -> Self {
-        Self {
-            interface,
-            reference_clock_frequency: clock_frequency,
-            system_clock_multiplier: 1,
-            communication_mode: Mode::SingleBitTwoWire,
-        }
-    }
-
-    /// Initialize the DDS
-    ///
-    /// # Args
     /// * `reset_pin` - A pin connected to the DDS reset input.
     /// * `io_update` - A pin connected to the DDS io_update input.
     /// * `delay` - A delay implementation for blocking operation for specific amounts of time.
     /// * `desired_mode` - The desired communication mode of the interface to the DDS.
+    /// * `clock_frequency` - The clock frequency of the reference clock input.
     /// * `multiplier` - The desired clock multiplier for the system clock. This multiplies
-    pub fn initialize(
-        &mut self,
-        reset_pin: &mut impl OutputPin,
+    ///   `clock_frequency` to generate the system clock.
+    pub fn new(
+        interface: I,
+        mut reset_pin: impl OutputPin,
         io_update: &mut impl OutputPin,
-        delay: &mut impl DelayUs<u16>,
+        delay: &mut impl DelayUs<u8>,
         desired_mode: Mode,
+        clock_frequency: f32,
         multiplier: u8,
-    ) -> Result<(), Error> {
+    ) -> Result<Self, Error> {
+        let mut ad9959 = Ad9959 {
+            interface,
+            reference_clock_frequency: clock_frequency,
+            system_clock_multiplier: 1,
+            communication_mode: desired_mode,
+        };
+
         io_update.set_low().or(Err(Error::Pin))?;
 
         // Reset the AD9959
@@ -139,13 +136,14 @@ impl<I: Interface> Ad9959<I> {
 
         reset_pin.set_low().or(Err(Error::Pin))?;
 
-        self.interface
+        ad9959
+            .interface
             .configure_mode(Mode::SingleBitTwoWire)
             .or(Err(Error::Interface))?;
 
         // Program the interface configuration in the AD9959. Default to all channels enabled.
         let csr = [Channel::ALL.bits() | desired_mode as u8];
-        self.write(Register::CSR, &csr)?;
+        ad9959.write(Register::CSR, &csr)?;
 
         // Latch the new interface configuration.
         io_update.set_high().or(Err(Error::Pin))?;
@@ -157,7 +155,8 @@ impl<I: Interface> Ad9959<I> {
 
         io_update.set_low().or(Err(Error::Pin))?;
 
-        self.interface
+        ad9959
+            .interface
             .configure_mode(desired_mode)
             .or(Err(Error::Interface))?;
 
@@ -171,16 +170,13 @@ impl<I: Interface> Ad9959<I> {
 
         // Read back the CSR to ensure it specifies the mode correctly.
         let mut updated_csr: [u8; 1] = [0];
-        self.read(Register::CSR, &mut updated_csr)?;
+        ad9959.read(Register::CSR, &mut updated_csr)?;
         if updated_csr[0] != csr[0] {
             return Err(Error::Check);
         }
 
         // Set the clock frequency to configure the device as necessary.
-        self.configure_system_clock(
-            self.reference_clock_frequency,
-            multiplier,
-        )?;
+        ad9959.configure_system_clock(clock_frequency, multiplier)?;
 
         // Latch the new clock configuration.
         io_update.set_high().or(Err(Error::Pin))?;
@@ -192,7 +188,7 @@ impl<I: Interface> Ad9959<I> {
 
         io_update.set_low().or(Err(Error::Pin))?;
 
-        Ok(())
+        Ok(ad9959)
     }
 
     fn read(&mut self, reg: Register, data: &mut [u8]) -> Result<(), Error> {
