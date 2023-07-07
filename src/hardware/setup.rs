@@ -802,9 +802,10 @@ pub fn setup(
             shared_bus::new_atomic_check!(hal::i2c::I2c<hal::stm32::I2C1> = i2c1).unwrap()
         };
 
+        // Here we instantiate both possible IO expander even though only one is present.
+        // The detection and dispatch is done in PounderDevices.
         let mcp23017 =
             mcp230xx::Mcp230xx::new_default(i2c1.acquire_i2c()).unwrap();
-
         let pca9359 =
             tca9539::Pca9539::new_default(i2c1.acquire_i2c()).unwrap();
 

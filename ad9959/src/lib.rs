@@ -126,7 +126,9 @@ impl<I: Interface> Ad9959<I> {
 
         io_update.set_low().or(Err(Error::Pin))?;
 
-        // Reset the AD9959
+        // Reset the AD9959 (Pounder v1.1 and earlier)
+        // On Pounder v1.2 and later the reset has been done through the GPIO extender in
+        // PounderDevices before.
         reset_pin.set_high().or(Err(Error::Pin))?;
 
         // Delay for at least 1 SYNC_CLK period for the reset to occur. The SYNC_CLK is guaranteed

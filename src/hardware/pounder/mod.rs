@@ -340,6 +340,48 @@ enum IoExpander {
     Pca(tca9539::Pca9539<I2c1Proxy>),
 }
 
+impl IoExpander {
+    /// Set the state (its electrical level) of the given GPIO pin on Pounder.
+    pub fn set_gpio_dir(
+        &mut self,
+        pin: GpioPin,
+        dir: mcp230xx::Direction,
+    ) -> Result<(), Error> {
+        match self {
+            Self::Mcp(dev) => {
+                dev.set_direction(pin.into(), dir).map_err(|_| Error::I2c)
+            }
+            Self::Pca(dev) => {
+                let dir = match dir {
+                    mcp230xx::Direction::Output => tca9539::Direction::Output,
+                    _ => tca9539::Direction::Input,
+                };
+                dev.set_direction(pin.into(), dir).map_err(|_| Error::I2c)
+            }
+        }
+    }
+
+    /// Set the state (its electrical level) of the given GPIO pin on Pounder.
+    pub fn set_gpio_level(
+        &mut self,
+        pin: GpioPin,
+        level: mcp230xx::Level,
+    ) -> Result<(), Error> {
+        match self {
+            Self::Mcp(dev) => {
+                dev.set_gpio(pin.into(), level).map_err(|_| Error::I2c)
+            }
+            Self::Pca(dev) => {
+                let level = match level {
+                    mcp230xx::Level::Low => tca9539::Level::Low,
+                    _ => tca9539::Level::High,
+                };
+                dev.set_level(pin.into(), level).map_err(|_| Error::I2c)
+            }
+        }
+    }
+}
+
 /// A structure containing implementation for Pounder hardware.
 pub struct PounderDevices {
     io: IoExpander,
@@ -430,8 +472,8 @@ impl PounderDevices {
         // selected and enabled, attenuators out of reset. Note that testing indicates the
         // output state needs to be set first to properly update the output registers.
         for pin in enum_iterator::all::<GpioPin>() {
-            devices.set_gpio_level(pin, mcp230xx::Level::Low)?;
-            devices.set_gpio_dir(pin, mcp230xx::Direction::Output)?;
+            devices.io.set_gpio_level(pin, mcp230xx::Level::Low)?;
+            devices.io.set_gpio_dir(pin, mcp230xx::Direction::Output)?;
         }
 
         devices.reset_attenuators().unwrap();
@@ -454,46 +496,6 @@ impl PounderDevices {
         Ok(adc_scale * 2.048)
     }
 
-    /// Set the state (its electrical level) of the given GPIO pin on Pounder.
-    pub fn set_gpio_dir(
-        &mut self,
-        pin: GpioPin,
-        dir: mcp230xx::Direction,
-    ) -> Result<(), Error> {
-        match &mut self.io {
-            IoExpander::Mcp(dev) => {
-                dev.set_direction(pin.into(), dir).map_err(|_| Error::I2c)
-            }
-            IoExpander::Pca(dev) => {
-                let dir = match dir {
-                    mcp230xx::Direction::Output => tca9539::Direction::Output,
-                    _ => tca9539::Direction::Input,
-                };
-                dev.set_direction(pin.into(), dir).map_err(|_| Error::I2c)
-            }
-        }
-    }
-
-    /// Set the state (its electrical level) of the given GPIO pin on Pounder.
-    pub fn set_gpio_level(
-        &mut self,
-        pin: GpioPin,
-        level: mcp230xx::Level,
-    ) -> Result<(), Error> {
-        match &mut self.io {
-            IoExpander::Mcp(dev) => {
-                dev.set_gpio(pin.into(), level).map_err(|_| Error::I2c)
-            }
-            IoExpander::Pca(dev) => {
-                let level = match level {
-                    mcp230xx::Level::Low => tca9539::Level::Low,
-                    _ => tca9539::Level::High,
-                };
-                dev.set_level(pin.into(), level).map_err(|_| Error::I2c)
-            }
-        }
-    }
-
     /// Select external reference clock input.
     pub fn set_ext_clk(&mut self, enabled: bool) -> Result<(), Error> {
         let level = if enabled {
@@ -502,15 +504,18 @@ impl PounderDevices {
             mcp230xx::Level::Low
         };
         // Active low
-        self.set_gpio_level(GpioPin::OscEnN, level)?;
-        self.set_gpio_level(GpioPin::ExtClkSel, level)
+        self.io.set_gpio_level(GpioPin::OscEnN, level)?;
+        self.io.set_gpio_level(GpioPin::ExtClkSel, level)
     }
 
     /// Reset the DDS via the GPIO extender (Pounder v1.2 and later)
     pub fn reset_dds(&mut self) -> Result<(), Error> {
         // DDS reset (Pounder v1.2 or later)
-        self.set_gpio_level(GpioPin::DdsReset, mcp230xx::Level::High)?;
-        self.set_gpio_level(GpioPin::DdsReset, mcp230xx::Level::Low)
+        self.io
+            .set_gpio_level(GpioPin::DdsReset, mcp230xx::Level::High)?;
+        // I2C duration of this transaction is long enough (> 5 µs) to ensure valid reset.
+        self.io
+            .set_gpio_level(GpioPin::DdsReset, mcp230xx::Level::Low)
     }
 }
 
@@ -518,8 +523,10 @@ impl attenuators::AttenuatorInterface for PounderDevices {
     /// Reset all of the attenuators to a power-on default state.
     fn reset_attenuators(&mut self) -> Result<(), Error> {
         // Active low
-        self.set_gpio_level(GpioPin::AttRstN, mcp230xx::Level::Low)?;
-        self.set_gpio_level(GpioPin::AttRstN, mcp230xx::Level::High)
+        self.io
+            .set_gpio_level(GpioPin::AttRstN, mcp230xx::Level::Low)?;
+        self.io
+            .set_gpio_level(GpioPin::AttRstN, mcp230xx::Level::High)
     }
 
     /// Latch a configuration into a digital attenuator.
@@ -529,8 +536,10 @@ impl attenuators::AttenuatorInterface for PounderDevices {
     fn latch_attenuator(&mut self, channel: Channel) -> Result<(), Error> {
         // Rising edge sensitive
         // Be robust against initial state: drive low, then high (contrary to the datasheet figure).
-        self.set_gpio_level(channel.into(), mcp230xx::Level::Low)?;
-        self.set_gpio_level(channel.into(), mcp230xx::Level::High)
+        self.io
+            .set_gpio_level(channel.into(), mcp230xx::Level::Low)?;
+        self.io
+            .set_gpio_level(channel.into(), mcp230xx::Level::High)
     }
 
     /// Read the raw attenuation codes stored in the attenuator shift registers.
