@@ -199,7 +199,7 @@ impl Default for Settings {
 
             pll_tc: [21, 21], // frequency and phase settling time (log2 counter cycles)
 
-            lockin_k: [0x200000, 0x20000000], // lockin lowpass gains
+            lockin_k: [0x8_0000, -0x400_0000], // lockin lowpass gains
             lockin_harmonic: -1, // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
             lockin_phase: 0,     // Demodulation LO phase offset
 
