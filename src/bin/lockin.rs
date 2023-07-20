@@ -37,7 +37,7 @@ use core::{
 use fugit::ExtU64;
 use mutex_trait::prelude::*;
 
-use idsp::{Accu, Complex, ComplexExt, Lockin, RPLL};
+use idsp::{Accu, Chain, Complex, ComplexExt, Lockin, Lowpass, RPLL};
 
 use stabilizer::{
     hardware::{
@@ -131,14 +131,14 @@ pub struct Settings {
     /// The PLL time constant exponent (1-31).
     pll_tc: [u32; 2],
 
-    /// Specifies the lockin time constant.
+    /// Specifies the lockin lowpass gains.
     ///
     /// # Path
-    /// `lockin_tc`
+    /// `lockin_k`
     ///
     /// # Value
-    /// The lockin low-pass time constant as an unsigned byte (0-255).
-    lockin_tc: u32,
+    /// The lockin low-pass coefficients. See [Lowpass]
+    lockin_k: [i32; 2],
 
     /// Specifies which harmonic to use for the lockin.
     ///
@@ -199,7 +199,7 @@ impl Default for Settings {
 
             pll_tc: [21, 21], // frequency and phase settling time (log2 counter cycles)
 
-            lockin_tc: 6,        // lockin lowpass time constant
+            lockin_k: [0x200000, 0x20000000], // lockin lowpass gains
             lockin_harmonic: -1, // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
             lockin_phase: 0,     // Demodulation LO phase offset
 
@@ -235,7 +235,7 @@ mod app {
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         pll: RPLL,
-        lockin: Lockin<4>,
+        lockin: Lockin<Chain<2, Lowpass<2>>>,
         signal_generator: signal_generator::SignalGenerator,
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
@@ -393,7 +393,7 @@ mod app {
                     // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
                     .map(|(&sample, phase)| {
                         let s = (sample as i16 as i32) << 16;
-                        lockin.update(s, phase, settings.lockin_tc)
+                        lockin.update(s, phase, &settings.lockin_k)
                     })
                     // Decimate
                     .last()
