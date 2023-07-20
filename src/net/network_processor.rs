@@ -1,8 +1,8 @@
-///! Task to process network hardware.
-///!
-///! # Design
-///! The network processir is a small taks to regularly process incoming data over ethernet, handle
-///! the ethernet PHY state, and reset the network as appropriate.
+//! Task to process network hardware.
+//!
+//! # Design
+//! The network processir is a small taks to regularly process incoming data over ethernet, handle
+//! the ethernet PHY state, and reset the network as appropriate.
 use super::{NetworkReference, UpdateState};
 use crate::hardware::EthernetPhy;
 

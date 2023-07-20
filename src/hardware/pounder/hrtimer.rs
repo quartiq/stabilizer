@@ -1,4 +1,4 @@
-///! The HRTimer (High Resolution Timer) is used to generate IO_Update pulses to the Pounder DDS.
+//! The HRTimer (High Resolution Timer) is used to generate IO_Update pulses to the Pounder DDS.
 use stm32h7xx_hal::{
     self as hal,
     rcc::{rec, CoreClocks, ResetEnable},
