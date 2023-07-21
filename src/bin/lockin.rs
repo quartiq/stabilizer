@@ -37,7 +37,7 @@ use core::{
 use fugit::ExtU64;
 use mutex_trait::prelude::*;
 
-use idsp::{Accu, Chain, Complex, ComplexExt, Lockin, Lowpass, RPLL};
+use idsp::{Accu, Chain, Complex, ComplexExt, Lockin, Lowpass, RPLL, Filter};
 
 use stabilizer::{
     hardware::{
@@ -137,8 +137,8 @@ pub struct Settings {
     /// `lockin_k`
     ///
     /// # Value
-    /// The lockin low-pass coefficients. See [Lowpass]
-    lockin_k: [i32; 2],
+    /// The lockin low-pass coefficients. See [`idsp::Lowpass`] for determining them.
+    lockin_k: <Lowpass<2> as Filter>::Config,
 
     /// Specifies which harmonic to use for the lockin.
     ///
