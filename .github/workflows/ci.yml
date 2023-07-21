@@ -55,6 +55,7 @@ jobs:
         # keep MSRV in sync in ci.yaml and Cargo.toml
         toolchain: [stable, '1.65.0']
         features: ['']
+        continue-on-error: [false]
         include:
           - toolchain: beta
             features: ''
