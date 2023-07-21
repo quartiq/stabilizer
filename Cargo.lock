@@ -826,9 +826,9 @@ dependencies = [
 
 [[package]]
 name = "smoltcp"
-version = "0.9.1"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e9786ac45091b96f946693e05bfa4d8ca93e2d3341237d97a380107a6b38dea"
+checksum = "8d2e3a36ac8fea7b94e666dfa3871063d6e0a5c9d5d4fec9a1a6b7b6760f0229"
 dependencies = [
  "bitflags 1.3.2",
  "byteorder",
@@ -839,9 +839,9 @@ dependencies = [
 
 [[package]]
 name = "smoltcp-nal"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "821854501c550f1d347b5ae469d8e273d21371ad2eb270a8ff6f37ca9a23f8bd"
+checksum = "75077a28569d93c2eed77164fd36dd224a9efcf6ecf0e574f293ed638783b000"
 dependencies = [
  "embedded-nal",
  "embedded-time",
@@ -916,7 +916,7 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.14.0"
-source = "git+https://github.com/stm32-rs/stm32h7xx-hal#2d47a4a06c30cb95fa6e1f1fb9c8720c6e426c1a"
+source = "git+https://github.com/stm32-rs/stm32h7xx-hal#11c5eba9fd2f0b66dd534d23c6c1365a710e456e"
 dependencies = [
  "bare-metal 1.0.0",
  "bitflags 2.3.3",

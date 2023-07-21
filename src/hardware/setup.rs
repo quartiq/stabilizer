@@ -38,10 +38,12 @@ pub struct NetStorage {
 pub struct UdpSocketStorage {
     rx_storage: [u8; 1024],
     tx_storage: [u8; 2048],
-    tx_metadata:
-        [smoltcp::storage::PacketMetadata<smoltcp::wire::IpEndpoint>; 10],
-    rx_metadata:
-        [smoltcp::storage::PacketMetadata<smoltcp::wire::IpEndpoint>; 10],
+    tx_metadata: [smoltcp::storage::PacketMetadata<
+        smoltcp::socket::udp::UdpMetadata,
+    >; 10],
+    rx_metadata: [smoltcp::storage::PacketMetadata<
+        smoltcp::socket::udp::UdpMetadata,
+    >; 10],
 }
 
 impl UdpSocketStorage {
@@ -49,12 +51,8 @@ impl UdpSocketStorage {
         Self {
             rx_storage: [0; 1024],
             tx_storage: [0; 2048],
-            tx_metadata: [smoltcp::storage::PacketMetadata::<
-                smoltcp::wire::IpEndpoint,
-            >::EMPTY; 10],
-            rx_metadata: [smoltcp::storage::PacketMetadata::<
-                smoltcp::wire::IpEndpoint,
-            >::EMPTY; 10],
+            tx_metadata: [smoltcp::storage::PacketMetadata::EMPTY; 10],
+            rx_metadata: [smoltcp::storage::PacketMetadata::EMPTY; 10],
         }
     }
 }
@@ -653,14 +651,16 @@ pub fn setup(
 
         store.ip_addrs[0] = smoltcp::wire::IpCidr::new(ip_addrs, 24);
 
-        let mut ethernet_config = smoltcp::iface::Config::default();
-        ethernet_config
-            .hardware_addr
-            .replace(smoltcp::wire::HardwareAddress::Ethernet(mac_addr));
+        let mut ethernet_config = smoltcp::iface::Config::new(
+            smoltcp::wire::HardwareAddress::Ethernet(mac_addr),
+        );
         ethernet_config.random_seed = u64::from_be_bytes(random_seed);
 
-        let mut interface =
-            smoltcp::iface::Interface::new(ethernet_config, &mut eth_dma);
+        let mut interface = smoltcp::iface::Interface::new(
+            ethernet_config,
+            &mut eth_dma,
+            smoltcp::time::Instant::ZERO,
+        );
 
         interface
             .routes_mut()
