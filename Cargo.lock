@@ -826,19 +826,6 @@ dependencies = [
 
 [[package]]
 name = "smoltcp"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e9786ac45091b96f946693e05bfa4d8ca93e2d3341237d97a380107a6b38dea"
-dependencies = [
- "bitflags 1.3.2",
- "byteorder",
- "cfg-if",
- "heapless",
- "managed",
-]
-
-[[package]]
-name = "smoltcp"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d2e3a36ac8fea7b94e666dfa3871063d6e0a5c9d5d4fec9a1a6b7b6760f0229"
@@ -853,15 +840,13 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "821854501c550f1d347b5ae469d8e273d21371ad2eb270a8ff6f37ca9a23f8bd"
 dependencies = [
  "embedded-nal",
  "embedded-time",
  "heapless",
  "nanorand",
  "shared-bus",
- "smoltcp 0.9.1",
+ "smoltcp",
 ]
 
 [[package]]
@@ -941,7 +926,7 @@ dependencies = [
  "fugit",
  "nb 1.1.0",
  "paste",
- "smoltcp 0.10.0",
+ "smoltcp",
  "stm32h7",
  "void",
 ]

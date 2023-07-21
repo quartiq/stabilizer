@@ -61,7 +61,7 @@ rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
 minimq = "0.7"
 miniconf = "0.7"
-smoltcp-nal = { version = "0.3", features = ["shared-stack"]}
+smoltcp-nal = { path = "../smoltcp-nal", features = ["shared-stack"]}
 
 [dependencies.stm32h7xx-hal]
 git = "https://github.com/stm32-rs/stm32h7xx-hal"
