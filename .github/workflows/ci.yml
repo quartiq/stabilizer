@@ -49,17 +49,20 @@ jobs:
 
   compile:
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.toolchain == 'nightly' }}
+    continue-on-error: ${{ matrix.continue-on-error }}
     strategy:
       matrix:
         # keep MSRV in sync in ci.yaml and Cargo.toml
         toolchain: [stable, '1.65.0']
         features: ['']
+        continue-on-error: [false]
         include:
           - toolchain: beta
             features: ''
+            continue-on-error: true
           - toolchain: nightly
             features: nightly
+            continue-on-error: true
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -126,8 +129,11 @@ jobs:
   hitl-trigger:
     runs-on: ubuntu-latest
     environment: hitl
+    # This crucially marks the job as "skipped" when not in the merge queue thus
+    # counting as passing the required check when adding it to the merge queue.
+    # See
+    # https://docs.github.com/en/actions/using-jobs/using-conditions-to-control-job-execution#overview
     if: ${{ github.event_name == 'merge_group' }}
-
     steps:
       - uses: LouisBrunner/checks-action@v1.1.1
         id: hitl-check
