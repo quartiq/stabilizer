@@ -61,7 +61,7 @@ rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
 minimq = "0.7"
 miniconf = "0.7"
-smoltcp-nal = { git = "https://github.com/quartiq/smoltcp-nal.git", branch = "rj/smoltcp-0.10", features = ["shared-stack"]}
+smoltcp-nal = { version = "0.4", features = ["shared-stack"]}
 bit_field = "0.10.1"
 tca9539 = "0.1"
 

@@ -839,8 +839,9 @@ dependencies = [
 
 [[package]]
 name = "smoltcp-nal"
-version = "0.3.0"
-source = "git+https://github.com/quartiq/smoltcp-nal.git?branch=rj/smoltcp-0.10#2204af582c95fb410da6ff03b7f6af6a44fba579"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75077a28569d93c2eed77164fd36dd224a9efcf6ecf0e574f293ed638783b000"
 dependencies = [
  "embedded-nal",
  "embedded-time",
