@@ -37,7 +37,7 @@ use core::{
 use fugit::ExtU64;
 use mutex_trait::prelude::*;
 
-use idsp::{Accu, Chain, Complex, ComplexExt, Lockin, Lowpass, RPLL, Filter};
+use idsp::{Accu, Chain, Complex, ComplexExt, Filter, Lockin, Lowpass, RPLL};
 
 use stabilizer::{
     hardware::{
