@@ -1,15 +1,15 @@
-///! Stabilizer Telemetry Capabilities
-///!
-///! # Design
-///! Telemetry is reported regularly using an MQTT client. All telemetry is reported in SI units
-///! using standard JSON format.
-///!
-///! In order to report ADC/DAC codes generated during the DSP routines, a telemetry buffer is
-///! employed to track the latest codes. Converting these codes to SI units would result in
-///! repetitive and unnecessary calculations within the DSP routine, slowing it down and limiting
-///! sampling frequency. Instead, the raw codes are stored and the telemetry is generated as
-///! required immediately before transmission. This ensures that any slower computation required
-///! for unit conversion can be off-loaded to lower priority tasks.
+//! Stabilizer Telemetry Capabilities
+//!
+//! # Design
+//! Telemetry is reported regularly using an MQTT client. All telemetry is reported in SI units
+//! using standard JSON format.
+//!
+//! In order to report ADC/DAC codes generated during the DSP routines, a telemetry buffer is
+//! employed to track the latest codes. Converting these codes to SI units would result in
+//! repetitive and unnecessary calculations within the DSP routine, slowing it down and limiting
+//! sampling frequency. Instead, the raw codes are stored and the telemetry is generated as
+//! required immediately before transmission. This ensures that any slower computation required
+//! for unit conversion can be off-loaded to lower priority tasks.
 use heapless::{String, Vec};
 use serde::Serialize;
 
@@ -121,7 +121,7 @@ impl<T: Serialize> TelemetryClient<T> {
         Self {
             mqtt,
             telemetry_topic,
-            _telemetry: core::marker::PhantomData::default(),
+            _telemetry: core::marker::PhantomData,
         }
     }
 

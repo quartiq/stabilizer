@@ -1,4 +1,4 @@
-///! The sampling timer is used for managing ADC sampling and external reference timestamping.
+//! The sampling timer is used for managing ADC sampling and external reference timestamping.
 use super::hal;
 use num_enum::TryFromPrimitive;
 
