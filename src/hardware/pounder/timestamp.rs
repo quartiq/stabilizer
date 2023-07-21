@@ -1,21 +1,21 @@
-///! ADC sample timestamper using external Pounder reference clock.
-///!
-///! # Design
-///!
-///! The pounder timestamper utilizes the pounder SYNC_CLK output as a fast external reference clock
-///! for recording a timestamp for each of the ADC samples.
-///!
-///! To accomplish this, a timer peripheral is configured to be driven by an external clock input.
-///! Due to the limitations of clock frequencies allowed by the timer peripheral, the SYNC_CLK input
-///! is divided by 4. This clock then clocks the timer peripheral in a free-running mode with an ARR
-///! (max count register value) configured to overflow once per ADC sample batch.
-///!
-///! Once the timer is configured, an input capture is configured to record the timer count
-///! register. The input capture is configured to utilize an internal trigger for the input capture.
-///! The internal trigger is selected such that when a sample is generated on ADC0, the input
-///! capture is simultaneously triggered. That trigger is prescaled (its rate is divided) by the
-///! batch size. This results in the input capture triggering identically to when the ADC samples
-///! the last sample of the batch. That sample is then available for processing by the user.
+//! ADC sample timestamper using external Pounder reference clock.
+//!
+//! # Design
+//!
+//! The pounder timestamper utilizes the pounder SYNC_CLK output as a fast external reference clock
+//! for recording a timestamp for each of the ADC samples.
+//!
+//! To accomplish this, a timer peripheral is configured to be driven by an external clock input.
+//! Due to the limitations of clock frequencies allowed by the timer peripheral, the SYNC_CLK input
+//! is divided by 4. This clock then clocks the timer peripheral in a free-running mode with an ARR
+//! (max count register value) configured to overflow once per ADC sample batch.
+//!
+//! Once the timer is configured, an input capture is configured to record the timer count
+//! register. The input capture is configured to utilize an internal trigger for the input capture.
+//! The internal trigger is selected such that when a sample is generated on ADC0, the input
+//! capture is simultaneously triggered. That trigger is prescaled (its rate is divided) by the
+//! batch size. This results in the input capture triggering identically to when the ADC samples
+//! the last sample of the batch. That sample is then available for processing by the user.
 use crate::hardware::timers;
 use stm32h7xx_hal as hal;
 

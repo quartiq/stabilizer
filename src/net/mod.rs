@@ -1,10 +1,10 @@
-///! Stabilizer network management module
-///!
-///! # Design
-///! The stabilizer network architecture supports numerous layers to permit transmission of
-///! telemetry (via MQTT), configuration of run-time settings (via MQTT + Miniconf), and live data
-///! streaming over raw UDP/TCP sockets. This module encompasses the main processing routines
-///! related to Stabilizer networking operations.
+//! Stabilizer network management module
+//!
+//! # Design
+//! The stabilizer network architecture supports numerous layers to permit transmission of
+//! telemetry (via MQTT), configuration of run-time settings (via MQTT + Miniconf), and live data
+//! streaming over raw UDP/TCP sockets. This module encompasses the main processing routines
+//! related to Stabilizer networking operations.
 pub use heapless;
 pub use miniconf;
 pub use serde;
