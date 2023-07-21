@@ -1,6 +1,6 @@
-///! Stabilizer hardware configuration
-///!
-///! This file contains all of the hardware-specific configuration of Stabilizer.
+//! Stabilizer hardware configuration
+//!
+//! This file contains all of the hardware-specific configuration of Stabilizer.
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{ptr, slice};
 use stm32h7xx_hal::{

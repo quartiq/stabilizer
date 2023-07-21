@@ -1,5 +1,6 @@
+//! Module for all hardware-specific setup of Stabilizer
+
 pub use embedded_hal;
-///! Module for all hardware-specific setup of Stabilizer
 pub use stm32h7xx_hal as hal;
 
 pub mod adc;

@@ -364,7 +364,7 @@ impl DataStream {
                     let data = unsafe {
                         core::slice::from_raw_parts(
                             buf.as_ptr() as *const u8,
-                            buf.len() * core::mem::size_of::<MaybeUninit<u8>>(),
+                            core::mem::size_of_val(buf),
                         )
                     };
                     self.stack.send(handle, data).ok();

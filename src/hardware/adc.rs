@@ -1,70 +1,70 @@
-///! Stabilizer ADC management interface
-///!
-///! # Design
-///!
-///! Stabilizer ADCs are connected to the MCU via a simplex, SPI-compatible interface. The ADCs
-///! require a setup conversion time after asserting the CSn (convert) signal to generate the ADC
-///! code from the sampled level. Once the setup time has elapsed, the ADC data is clocked out of
-///! MISO. The internal setup time is managed by the SPI peripheral via a CSn setup time parameter
-///! during SPI configuration, which allows offloading the management of the setup time to hardware.
-///!
-///! Because of the SPI-compatibility of the ADCs, a single SPI peripheral + DMA is used to automate
-///! the collection of multiple ADC samples without requiring processing by the CPU, which reduces
-///! overhead and provides the CPU with more time for processing-intensive tasks, like DSP.
-///!
-///! The automation of sample collection utilizes three DMA streams, the SPI peripheral, and two
-///! timer compare channel for each ADC. One timer comparison channel is configured to generate a
-///! comparison event every time the timer is equal to a specific value. Each comparison then
-///! generates a DMA transfer event to write into the SPI CR1 register to initiate the transfer.
-///! This allows the SPI interface to periodically read a single sample. The other timer comparison
-///! channel is configured to generate a comparison event slightly before the first (~10 timer
-///! cycles). This channel triggers a separate DMA stream to clear the EOT flag within the SPI
-///! peripheral. The EOT flag must be cleared after each transfer or the SPI peripheral will not
-///! properly complete the single conversion. Thus, by using two DMA streams and timer comparison
-///! channels, the SPI can regularly acquire ADC samples.
-///!
-///! In order to collect the acquired ADC samples into a RAM buffer, a final DMA transfer is
-///! configured to read from the SPI RX FIFO into RAM. The request for this transfer is connected to
-///! the SPI RX data signal, so the SPI peripheral will request to move data into RAM whenever it is
-///! available. When enough samples have been collected, a transfer-complete interrupt is generated
-///! and the ADC samples are available for processing.
-///!
-///! After a complete transfer of a batch of samples, the inactive buffer is available to the
-///! user for processing. The processing must complete before the DMA transfer of the next batch
-///! completes.
-///!
-///! ## Starting Data Collection
-///!
-///! Because the DMA data collection is automated via timer count comparisons and DMA transfers, the
-///! ADCs can be initialized and configured, but will not begin sampling the external ADCs until the
-///! sampling timer is enabled. As such, the sampling timer should be enabled after all
-///! initialization has completed and immediately before the embedded processing loop begins.
-///!
-///!
-///! ## Batch Sizing
-///!
-///! The ADCs collect a group of N samples, which is referred to as a batch. The size of the batch
-///! is configured by the user at compile-time to allow for a custom-tailored implementation. Larger
-///! batch sizes generally provide for lower overhead and more processing time per sample, but come
-///! at the expense of increased input -> output latency.
-///!
-///!
-///! # Note
-///!
-///! While there are two ADCs, only a single ADC is configured to generate transfer-complete
-///! interrupts. This is done because it is assumed that the ADCs will always be sampled
-///! simultaneously. If only a single ADC is used, it must always be ADC0, as ADC1 will not generate
-///! transfer-complete interrupts.
-///!
-///! There is a very small amount of latency between sampling of ADCs due to bus matrix priority. As
-///! such, one of the ADCs will be sampled marginally earlier before the other because the DMA
-///! requests are generated simultaneously. This can be avoided by providing a known offset to the
-///! sample DMA requests, which can be completed by setting e.g. ADC0's comparison to a counter
-///! value of 0 and ADC1's comparison to a counter value of 1.
-///!
-///! In this implementation, double buffer mode DMA transfers are used because the SPI RX FIFOs
-///! have finite depth, FIFO access is slower than AXISRAM access, and because the single
-///! buffer mode DMA disable/enable and buffer update sequence is slow.
+//! Stabilizer ADC management interface
+//!
+//! # Design
+//!
+//! Stabilizer ADCs are connected to the MCU via a simplex, SPI-compatible interface. The ADCs
+//! require a setup conversion time after asserting the CSn (convert) signal to generate the ADC
+//! code from the sampled level. Once the setup time has elapsed, the ADC data is clocked out of
+//! MISO. The internal setup time is managed by the SPI peripheral via a CSn setup time parameter
+//! during SPI configuration, which allows offloading the management of the setup time to hardware.
+//!
+//! Because of the SPI-compatibility of the ADCs, a single SPI peripheral + DMA is used to automate
+//! the collection of multiple ADC samples without requiring processing by the CPU, which reduces
+//! overhead and provides the CPU with more time for processing-intensive tasks, like DSP.
+//!
+//! The automation of sample collection utilizes three DMA streams, the SPI peripheral, and two
+//! timer compare channel for each ADC. One timer comparison channel is configured to generate a
+//! comparison event every time the timer is equal to a specific value. Each comparison then
+//! generates a DMA transfer event to write into the SPI CR1 register to initiate the transfer.
+//! This allows the SPI interface to periodically read a single sample. The other timer comparison
+//! channel is configured to generate a comparison event slightly before the first (~10 timer
+//! cycles). This channel triggers a separate DMA stream to clear the EOT flag within the SPI
+//! peripheral. The EOT flag must be cleared after each transfer or the SPI peripheral will not
+//! properly complete the single conversion. Thus, by using two DMA streams and timer comparison
+//! channels, the SPI can regularly acquire ADC samples.
+//!
+//! In order to collect the acquired ADC samples into a RAM buffer, a final DMA transfer is
+//! configured to read from the SPI RX FIFO into RAM. The request for this transfer is connected to
+//! the SPI RX data signal, so the SPI peripheral will request to move data into RAM whenever it is
+//! available. When enough samples have been collected, a transfer-complete interrupt is generated
+//! and the ADC samples are available for processing.
+//!
+//! After a complete transfer of a batch of samples, the inactive buffer is available to the
+//! user for processing. The processing must complete before the DMA transfer of the next batch
+//! completes.
+//!
+//! ## Starting Data Collection
+//!
+//! Because the DMA data collection is automated via timer count comparisons and DMA transfers, the
+//! ADCs can be initialized and configured, but will not begin sampling the external ADCs until the
+//! sampling timer is enabled. As such, the sampling timer should be enabled after all
+//! initialization has completed and immediately before the embedded processing loop begins.
+//!
+//!
+//! ## Batch Sizing
+//!
+//! The ADCs collect a group of N samples, which is referred to as a batch. The size of the batch
+//! is configured by the user at compile-time to allow for a custom-tailored implementation. Larger
+//! batch sizes generally provide for lower overhead and more processing time per sample, but come
+//! at the expense of increased input -> output latency.
+//!
+//!
+//! # Note
+//!
+//! While there are two ADCs, only a single ADC is configured to generate transfer-complete
+//! interrupts. This is done because it is assumed that the ADCs will always be sampled
+//! simultaneously. If only a single ADC is used, it must always be ADC0, as ADC1 will not generate
+//! transfer-complete interrupts.
+//!
+//! There is a very small amount of latency between sampling of ADCs due to bus matrix priority. As
+//! such, one of the ADCs will be sampled marginally earlier before the other because the DMA
+//! requests are generated simultaneously. This can be avoided by providing a known offset to the
+//! sample DMA requests, which can be completed by setting e.g. ADC0's comparison to a counter
+//! value of 0 and ADC1's comparison to a counter value of 1.
+//!
+//! In this implementation, double buffer mode DMA transfers are used because the SPI RX FIFOs
+//! have finite depth, FIFO access is slower than AXISRAM access, and because the single
+//! buffer mode DMA disable/enable and buffer update sequence is slow.
 use stm32h7xx_hal as hal;
 
 use mutex_trait::Mutex;
