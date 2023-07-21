@@ -122,35 +122,3 @@ jobs:
           # Install depedencies at our cache location
           mv ../target/thumbv7em-none-eabihf/doc src/firmware
           mdbook build
-
-  hitl-trigger:
-    runs-on: ubuntu-latest
-    environment: hitl
-    if: ${{ github.event_name == 'merge_group' }}
-
-    steps:
-      - uses: LouisBrunner/checks-action@v1.1.1
-        id: hitl-check
-        with:
-          repo: ${{ github.repository }}
-          sha: ${{ github.event.head_commit.id }}
-          token: ${{ github.token }}
-          name: HITL Run Status
-          status: in_progress
-          details_url: "https://github.com/${{github.repository}}/actions/runs/${{github.run_id}}"
-          output: |
-            {"summary": "Starting..."}
-
-      - uses: peter-evans/repository-dispatch@v1
-        with:
-          token: ${{ secrets.DISPATCH_PAT }}
-          event-type: stabilizer
-          repository: quartiq/hitl
-          client-payload: |
-            {"github": ${{ toJson(github) }}, "check_id": ${{steps.hitl-check.outputs.check_id}}}
-
-      - uses: fountainhead/action-wait-for-check@v1.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: HITL Run Status
-          ref: ${{ github.event.pull_request.head.sha }}
