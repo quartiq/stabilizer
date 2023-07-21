@@ -128,6 +128,8 @@ jobs:
     environment: hitl
     # This crucially marks the job as "skipped" when not in the merge queue thus
     # counting as passing the required check when adding it to the merge queue.
+    # See
+    # https://docs.github.com/en/actions/using-jobs/using-conditions-to-control-job-execution#overview
     if: ${{ github.event_name == 'merge_group' }}
 
     steps:
