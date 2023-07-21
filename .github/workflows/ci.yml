@@ -49,7 +49,7 @@ jobs:
 
   compile:
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.toolchain == 'nightly' }}
+    continue-on-error: ${{ matrix.optional }}
     strategy:
       matrix:
         # keep MSRV in sync in ci.yaml and Cargo.toml
@@ -58,8 +58,10 @@ jobs:
         include:
           - toolchain: beta
             features: ''
+            optional: true
           - toolchain: nightly
             features: nightly
+            optional: true
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
