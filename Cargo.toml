@@ -39,10 +39,10 @@ cortex-m-rt = { version = "0.7", features = ["device"] }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
 rtt-target = { version = "0.3", features = ["cortex-m"] }
 serde = { version = "1.0", features = ["derive"], default-features = false }
+serde-json-core = "0.5"
 heapless = { version = "0.7.16", features = ["serde"] }
 cortex-m-rtic = "1.0"
 embedded-hal = "0.2.7"
-nb = "1.1.0"
 num_enum = { version = "0.6.1", default-features = false }
 paste = "1"
 idsp = "0.10"
@@ -60,7 +60,7 @@ enum-iterator = "1.4.1"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
 minimq = "0.7"
-miniconf = "0.7"
+miniconf = {git ="https://github.com/quartiq/miniconf.git", branch="deps"} # "0.7"
 smoltcp-nal = { version = "0.4", features = ["shared-stack"]}
 
 [dependencies.stm32h7xx-hal]
