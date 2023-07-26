@@ -407,7 +407,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.7.1"
-source = "git+https://github.com/quartiq/miniconf.git?branch=deps#6df10be80d9b3b3f81cd7352486fe85ffd592176"
+source = "git+https://github.com/quartiq/miniconf.git#4f0a6aa90eb8290f0fc004e4ed1708573b5c3ff1"
 dependencies = [
  "heapless",
  "itoa",
@@ -422,7 +422,7 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.6.2"
-source = "git+https://github.com/quartiq/miniconf.git?branch=deps#6df10be80d9b3b3f81cd7352486fe85ffd592176"
+source = "git+https://github.com/quartiq/miniconf.git#4f0a6aa90eb8290f0fc004e4ed1708573b5c3ff1"
 dependencies = [
  "proc-macro2",
  "quote",
