@@ -415,7 +415,7 @@ dependencies = [
  "miniconf_derive",
  "minimq",
  "serde",
- "serde-json-core 0.5.0 (git+https://github.com/rust-embedded-community/serde-json-core.git)",
+ "serde-json-core 0.5.0",
  "smlang",
 ]
 
@@ -771,8 +771,7 @@ dependencies = [
 [[package]]
 name = "serde-json-core"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58ec3c8fe427f45ee3aaa0ebb9f0d9ab8ae9ad05d12047fe7249ae5ea9374ff0"
+source = "git+https://github.com/rust-embedded-community/serde-json-core.git#9deb2b91ea737df79f33f7536587b59ed5f141ee"
 dependencies = [
  "heapless",
  "ryu",
@@ -781,8 +780,9 @@ dependencies = [
 
 [[package]]
 name = "serde-json-core"
-version = "0.5.0"
-source = "git+https://github.com/rust-embedded-community/serde-json-core.git#9deb2b91ea737df79f33f7536587b59ed5f141ee"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c9e1ab533c0bc414c34920ec7e5f097101d126ed5eac1a1aac711222e0bbb33"
 dependencies = [
  "heapless",
  "ryu",
@@ -895,7 +895,7 @@ dependencies = [
  "rtt-logger",
  "rtt-target",
  "serde",
- "serde-json-core 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde-json-core 0.5.1",
  "shared-bus",
  "smoltcp-nal",
  "spin",
