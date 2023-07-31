@@ -407,7 +407,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.7.1"
-source = "git+https://github.com/quartiq/miniconf.git#4f0a6aa90eb8290f0fc004e4ed1708573b5c3ff1"
+source = "git+https://github.com/quartiq/miniconf.git?branch=path#a9243d8abcf14a236d9e9db2d34970b1bafffb18"
 dependencies = [
  "heapless",
  "itoa",
@@ -415,14 +415,14 @@ dependencies = [
  "miniconf_derive",
  "minimq",
  "serde",
- "serde-json-core 0.5.0",
+ "serde-json-core",
  "smlang",
 ]
 
 [[package]]
 name = "miniconf_derive"
 version = "0.6.2"
-source = "git+https://github.com/quartiq/miniconf.git#4f0a6aa90eb8290f0fc004e4ed1708573b5c3ff1"
+source = "git+https://github.com/quartiq/miniconf.git?branch=path#a9243d8abcf14a236d9e9db2d34970b1bafffb18"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -770,16 +770,6 @@ dependencies = [
 
 [[package]]
 name = "serde-json-core"
-version = "0.5.0"
-source = "git+https://github.com/rust-embedded-community/serde-json-core.git#9deb2b91ea737df79f33f7536587b59ed5f141ee"
-dependencies = [
- "heapless",
- "ryu",
- "serde",
-]
-
-[[package]]
-name = "serde-json-core"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c9e1ab533c0bc414c34920ec7e5f097101d126ed5eac1a1aac711222e0bbb33"
@@ -896,7 +886,7 @@ dependencies = [
  "rtt-logger",
  "rtt-target",
  "serde",
- "serde-json-core 0.5.1",
+ "serde-json-core",
  "shared-bus",
  "smoltcp-nal",
  "spin",
