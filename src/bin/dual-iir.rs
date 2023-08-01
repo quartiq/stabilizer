@@ -95,8 +95,8 @@ pub struct Settings {
     ///
     /// # Value
     /// See [iir::IIR#miniconf]
-    #[miniconf(defer)]
-    iir_ch: miniconf::Array<[iir::IIR<f32>; IIR_CASCADE_LENGTH], 2>,
+    #[miniconf(defer(2))]
+    iir_ch: [[iir::IIR<f32>; IIR_CASCADE_LENGTH]; 2],
 
     /// Specified true if DI1 should be used as a "hold" input.
     ///
@@ -143,8 +143,8 @@ pub struct Settings {
     ///
     /// # Value
     /// See [signal_generator::BasicConfig#miniconf]
-    #[miniconf(defer)]
-    signal_generator: miniconf::Array<signal_generator::BasicConfig, 2>,
+    #[miniconf(defer(2))]
+    signal_generator: [signal_generator::BasicConfig; 2],
 }
 
 impl Default for Settings {
@@ -157,8 +157,7 @@ impl Default for Settings {
             // The array is `iir_state[channel-index][cascade-index][coeff-index]`.
             // The IIR coefficients can be mapped to other transfer function
             // representations, for example as described in https://arxiv.org/abs/1508.06319
-            iir_ch: [[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2]
-                .into(),
+            iir_ch: [[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2],
 
             // Permit the DI1 digital input to suppress filter output updates.
             allow_hold: false,
@@ -167,8 +166,7 @@ impl Default for Settings {
             // The default telemetry period in seconds.
             telemetry_period: 10,
 
-            signal_generator: [signal_generator::BasicConfig::default(); 2]
-                .into(),
+            signal_generator: [signal_generator::BasicConfig::default(); 2],
 
             stream_target: StreamTarget::default(),
         }
@@ -184,7 +182,7 @@ mod app {
 
     #[shared]
     struct Shared {
-        network: NetworkUsers<Settings, Telemetry>,
+        network: NetworkUsers<Settings, Telemetry, 3>,
 
         settings: Settings,
         telemetry: TelemetryBuffer,
