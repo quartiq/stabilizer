@@ -156,7 +156,12 @@ jobs:
             {"github": ${{ toJson(github) }}, "check_id": ${{steps.hitl-check.outputs.check_id}}}
 
       - uses: fountainhead/action-wait-for-check@v1.0.0
+        id: status
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           checkName: HITL Run Status
           ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: "Check HITL Status"
+        if: steps.status.outputs.conclusion != 'success'
+        run: exit -1
