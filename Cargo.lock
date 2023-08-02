@@ -914,10 +914,9 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.14.0"
-source = "git+https://github.com/stm32-rs/stm32h7xx-hal#4864cde00ba9918c8b5bb49ebf378637e8a2e7a3"
+source = "git+https://github.com/stm32-rs/stm32h7xx-hal#a91052c09cfff6882bdbb1313b1c3c84cbf77fa2"
 dependencies = [
  "bare-metal 1.0.0",
- "bitflags 2.3.3",
  "cast",
  "cortex-m 0.7.7",
  "embedded-dma",
