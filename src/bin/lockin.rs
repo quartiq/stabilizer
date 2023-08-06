@@ -221,7 +221,7 @@ mod app {
 
     #[shared]
     struct Shared {
-        network: NetworkUsers<Settings, Telemetry>,
+        network: NetworkUsers<Settings, Telemetry, 2>,
         settings: Settings,
         telemetry: TelemetryBuffer,
     }
