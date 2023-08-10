@@ -21,7 +21,7 @@ use telemetry::TelemetryClient;
 
 use core::fmt::Write;
 use heapless::String;
-use miniconf::Miniconf;
+use miniconf::{TreeDeserialize, TreeSerialize};
 use serde::Serialize;
 use smoltcp_nal::embedded_nal::SocketAddr;
 
@@ -44,7 +44,7 @@ pub enum NetworkState {
 
 /// A structure of Stabilizer's default network users.
 pub struct NetworkUsers<
-    S: Default + Miniconf<Y> + Clone,
+    S: Default + TreeSerialize<Y> + TreeDeserialize<Y> + Clone,
     T: Serialize,
     const Y: usize,
 > {
@@ -58,7 +58,7 @@ pub struct NetworkUsers<
 
 impl<S, T, const Y: usize> NetworkUsers<S, T, Y>
 where
-    S: Default + Miniconf<Y> + Clone,
+    S: Default + TreeSerialize<Y> + TreeDeserialize<Y> + Clone,
     T: Serialize,
 {
     /// Construct Stabilizer's default network users.
