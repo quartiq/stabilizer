@@ -53,7 +53,7 @@ use stabilizer::{
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
-        miniconf::Miniconf,
+        miniconf::Tree,
         serde::{Deserialize, Serialize},
         telemetry::{Telemetry, TelemetryBuffer},
         NetworkState, NetworkUsers,
@@ -97,7 +97,7 @@ enum LockinMode {
     External,
 }
 
-#[derive(Copy, Clone, Debug, Miniconf)]
+#[derive(Copy, Clone, Debug, Tree)]
 pub struct Settings {
     /// Configure the Analog Front End (AFE) gain.
     ///
@@ -108,7 +108,7 @@ pub struct Settings {
     ///
     /// # Value
     /// Any of the variants of [Gain] enclosed in double quotes.
-    #[miniconf(defer)]
+    #[tree()]
     afe: [Gain; 2],
 
     /// Specifies the operational mode of the lockin.
@@ -168,7 +168,7 @@ pub struct Settings {
     ///
     /// # Value
     /// One of the variants of [Conf] enclosed in double quotes.
-    #[miniconf(defer)]
+    #[tree()]
     output_conf: [Conf; 2],
 
     /// Specifies the telemetry output period in seconds.

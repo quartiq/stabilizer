@@ -416,8 +416,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e34fb3249ad071debda2ceb8d29e271d0fd283039f7bf04d9d7921dec4e6b4e"
+source = "git+https://github.com/quartiq/miniconf.git?branch=trait-split#61d4d09c88c7fab852b527960889ceb4d8975960"
 dependencies = [
  "heapless",
  "itoa",
@@ -432,8 +431,7 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2327f540b14c86184b066abe25daca988c15c60f0d9a215d2a37f3032805d47"
+source = "git+https://github.com/quartiq/miniconf.git?branch=trait-split#61d4d09c88c7fab852b527960889ceb4d8975960"
 dependencies = [
  "proc-macro2",
  "quote",
