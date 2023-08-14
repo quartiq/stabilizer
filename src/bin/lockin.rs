@@ -108,7 +108,7 @@ pub struct Settings {
     ///
     /// # Value
     /// Any of the variants of [Gain] enclosed in double quotes.
-    #[tree()]
+    #[tree]
     afe: [Gain; 2],
 
     /// Specifies the operational mode of the lockin.
@@ -168,7 +168,7 @@ pub struct Settings {
     ///
     /// # Value
     /// One of the variants of [Conf] enclosed in double quotes.
-    #[tree()]
+    #[tree]
     output_conf: [Conf; 2],
 
     /// Specifies the telemetry output period in seconds.

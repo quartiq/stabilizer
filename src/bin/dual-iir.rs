@@ -82,7 +82,7 @@ pub struct Settings {
     ///
     /// # Value
     /// Any of the variants of [Gain] enclosed in double quotes.
-    #[tree()]
+    #[tree]
     afe: [Gain; 2],
 
     /// Configure the IIR filter parameters.
