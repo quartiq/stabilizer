@@ -266,8 +266,10 @@ mod app {
                 .unwrap(),
         );
 
-        let generator = network
-            .configure_streaming(StreamFormat::AdcDacData, BATCH_SIZE as _);
+        let generator = network.configure_streaming(
+            StreamFormat::AdcDacData,
+            (BATCH_SIZE * core::mem::size_of::<i16>() * 4) as _,
+        );
 
         let shared = Shared {
             network,
@@ -425,7 +427,7 @@ mod app {
                 // Stream the data.
                 const N: usize = BATCH_SIZE * core::mem::size_of::<i16>()
                     / core::mem::size_of::<MaybeUninit<u8>>();
-                generator.add::<_, { N * 4 }>(|buf| {
+                generator.add(|buf| {
                     for (data, buf) in adc_samples
                         .iter()
                         .chain(dac_samples.iter())
