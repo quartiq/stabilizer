@@ -181,6 +181,7 @@ impl StreamFrame {
     {
         f(&mut self.buffer
             [self.offset..self.offset + self.batch_size as usize]);
+        self.offset += self.batch_size as usize;
     }
 
     pub fn is_full(&self) -> bool {
