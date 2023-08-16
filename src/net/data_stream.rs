@@ -15,7 +15,7 @@
 //! * **Magic word 0x057B** (u16): a constant to identify Stabilizer streaming data.
 //! * **Format Code** (u8): a unique ID that indicates the serialization format of each batch of data
 //!   in the frame. Refer to [StreamFormat] for further information.
-//! * **Batch Size** (u8): the number of samples in each batch of data.
+//! * **Batch Size** (u8): the number of bytes in each batch of data.
 //! * **Sequence Number** (u32): an the sequence number of the first batch in the frame.
 //!   This can be used to determine if and how many stream batches are lost.
 //!
@@ -171,7 +171,7 @@ impl StreamFrame {
         Self {
             buffer,
             offset: HEADER_SIZE,
-            batch_size: batch_size,
+            batch_size,
         }
     }
 
@@ -258,7 +258,7 @@ impl FrameGenerator {
         // Note(unwrap): We ensure the frame is present above.
         let current_frame = self.current_frame.as_mut().unwrap();
 
-        current_frame.add_batch::<_>(f);
+        current_frame.add_batch(f);
 
         if current_frame.is_full() {
             // Note(unwrap): The queue is designed to be at least as large as the frame buffer
