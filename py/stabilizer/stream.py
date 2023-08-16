@@ -45,7 +45,7 @@ class AdcDac:
 
     def batch_count(self):
         """Return the number of batches in the frame"""
-        return self.size() // (4 * 2 * self.header.batch_size)
+        return self.size() // self.header.batch_size
 
     def size(self):
         """Return the data size of the frame in bytes"""
@@ -54,7 +54,8 @@ class AdcDac:
     def to_mu(self):
         """Return the raw data in machine units"""
         data = np.frombuffer(self.body, "<i2")
-        data = data.reshape(-1, 4, self.header.batch_size)
+        # batch, channel, sample
+        data = data.reshape(-1, 4, self.header.batch_size // (4 * 2))
         data = data.swapaxes(0, 1).reshape(4, -1)
         # convert DAC offset binary to two's complement
         data[2:] ^= np.int16(0x8000)
