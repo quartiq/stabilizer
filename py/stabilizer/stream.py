@@ -43,10 +43,6 @@ class AdcDac:
         self.header = header
         self.body = body
 
-    def batch_count(self):
-        """Return the number of batches in the frame"""
-        return self.size() // self.header.batch_size
-
     def size(self):
         """Return the data size of the frame in bytes"""
         return len(self.body)
@@ -55,7 +51,7 @@ class AdcDac:
         """Return the raw data in machine units"""
         data = np.frombuffer(self.body, "<i2")
         # batch, channel, sample
-        data = data.reshape(-1, 4, self.header.batch_size // (4 * 2))
+        data = data.reshape(self.header.batches, 4, -1)
         data = data.swapaxes(0, 1).reshape(4, -1)
         # convert DAC offset binary to two's complement
         data[2:] ^= np.int16(0x8000)
@@ -85,7 +81,7 @@ class StabilizerStream(asyncio.DatagramProtocol):
     # The magic header half-word at the start of each packet.
     magic = 0x057B
     header_fmt = struct.Struct("<HBBI")
-    header = namedtuple("Header", "magic format_id batch_size sequence")
+    header = namedtuple("Header", "magic format_id batches sequence")
     parsers = {
         AdcDac.format_id: AdcDac,
     }
@@ -147,9 +143,8 @@ async def measure(stream, duration):
             frame = await stream.queue.get()
             if stat.expect is not None:
                 stat.lost += wrap(frame.header.sequence - stat.expect)
-            batch_count = frame.batch_count()
-            stat.received += batch_count
-            stat.expect = wrap(frame.header.sequence + batch_count)
+            stat.received += frame.header.batches
+            stat.expect = wrap(frame.header.sequence + frame.header.batches)
             stat.bytes += frame.size()
             # test conversion
             # frame.to_si()

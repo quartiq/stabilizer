@@ -226,10 +226,7 @@ mod app {
                 .unwrap(),
         );
 
-        let generator = network.configure_streaming(
-            StreamFormat::AdcDacData,
-            (BATCH_SIZE * core::mem::size_of::<i16>() * 4) as _,
-        );
+        let generator = network.configure_streaming(StreamFormat::AdcDacData);
 
         let settings = Settings::default();
 
@@ -359,8 +356,7 @@ mod app {
                     }
 
                     // Stream the data.
-                    const N: usize = BATCH_SIZE * core::mem::size_of::<i16>()
-                        / core::mem::size_of::<MaybeUninit<u8>>();
+                    const N: usize = BATCH_SIZE * core::mem::size_of::<i16>();
                     generator.add(|buf| {
                         for (data, buf) in adc_samples
                             .iter()
@@ -375,6 +371,7 @@ mod app {
                             };
                             buf.copy_from_slice(data)
                         }
+                        N * 4
                     });
                     // Update telemetry measurements.
                     telemetry.adcs = [
