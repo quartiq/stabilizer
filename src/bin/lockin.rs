@@ -266,10 +266,7 @@ mod app {
                 .unwrap(),
         );
 
-        let generator = network.configure_streaming(
-            StreamFormat::AdcDacData,
-            (BATCH_SIZE * core::mem::size_of::<i16>() * 4) as _,
-        );
+        let generator = network.configure_streaming(StreamFormat::AdcDacData);
 
         let shared = Shared {
             network,
@@ -441,6 +438,7 @@ mod app {
                         };
                         buf.copy_from_slice(data)
                     }
+                    N * 4
                 });
 
                 // Update telemetry measurements.

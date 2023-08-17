@@ -15,7 +15,7 @@
 //! * **Magic word 0x057B** (u16): a constant to identify Stabilizer streaming data.
 //! * **Format Code** (u8): a unique ID that indicates the serialization format of each batch of data
 //!   in the frame. Refer to [StreamFormat] for further information.
-//! * **Batch Size** (u8): the number of bytes in each batch of data.
+//! * **Batch Count** (u8): the number of batches of data.
 //! * **Sequence Number** (u32): an the sequence number of the first batch in the frame.
 //!   This can be used to determine if and how many stream batches are lost.
 //!
@@ -146,49 +146,50 @@ pub fn setup_streaming(
 struct StreamFrame {
     buffer: Box<Frame, Init>,
     offset: usize,
-    batch_size: u8,
+    batches: u8,
 }
 
 impl StreamFrame {
     pub fn new(
         buffer: Box<Frame, Uninit>,
         format_id: u8,
-        batch_size: u8,
         sequence_number: u32,
     ) -> Self {
         let mut buffer = buffer.init([MaybeUninit::uninit(); FRAME_SIZE]);
 
-        for (offset, byte) in MAGIC
+        for (byte, buf) in MAGIC
             .to_le_bytes()
             .iter()
-            .chain(&[format_id, batch_size])
+            .chain(&[format_id, 0])
             .chain(sequence_number.to_le_bytes().iter())
-            .enumerate()
+            .zip(buffer.iter_mut())
         {
-            buffer[offset].write(*byte);
+            buf.write(*byte);
         }
 
         Self {
             buffer,
             offset: HEADER_SIZE,
-            batch_size,
+            batches: 0,
         }
     }
 
-    pub fn add_batch<F>(&mut self, mut f: F)
+    pub fn add_batch<F>(&mut self, mut f: F) -> usize
     where
-        F: FnMut(&mut [MaybeUninit<u8>]),
+        F: FnMut(&mut [MaybeUninit<u8>]) -> usize,
     {
-        f(&mut self.buffer
-            [self.offset..self.offset + self.batch_size as usize]);
-        self.offset += self.batch_size as usize;
+        let len = f(&mut self.buffer[self.offset..]);
+        self.offset += len;
+        self.batches += 1;
+        len
     }
 
-    pub fn is_full(&self) -> bool {
-        self.offset + self.batch_size as usize > self.buffer.len()
+    pub fn is_full(&self, len: usize) -> bool {
+        self.offset + len > self.buffer.len()
     }
 
-    pub fn finish(&self) -> &[MaybeUninit<u8>] {
+    pub fn finish(&mut self) -> &[MaybeUninit<u8>] {
+        self.buffer[3].write(self.batches);
         &self.buffer[..self.offset]
     }
 }
@@ -200,7 +201,6 @@ pub struct FrameGenerator {
     current_frame: Option<StreamFrame>,
     sequence_number: u32,
     format: u8,
-    batch_size: u8,
 }
 
 impl FrameGenerator {
@@ -211,7 +211,6 @@ impl FrameGenerator {
         Self {
             queue,
             pool,
-            batch_size: 0,
             format: StreamFormat::Unknown.into(),
             current_frame: None,
             sequence_number: 0,
@@ -225,20 +224,19 @@ impl FrameGenerator {
     ///
     /// # Args
     /// * `format` - The desired format of the stream.
-    /// * `batch_size` - The number of bytes in each data batch.
     #[doc(hidden)]
-    pub(crate) fn configure(&mut self, format: impl Into<u8>, batch_size: u8) {
+    pub(crate) fn configure(&mut self, format: impl Into<u8>) {
         self.format = format.into();
-        self.batch_size = batch_size;
     }
 
     /// Add a batch to the current stream frame.
     ///
     /// # Args
     /// * `f` - A closure that will be provided the buffer to write batch data into.
+    ///         Returns the number of bytes written.
     pub fn add<F>(&mut self, f: F)
     where
-        F: FnMut(&mut [MaybeUninit<u8>]),
+        F: FnMut(&mut [MaybeUninit<u8>]) -> usize,
     {
         let sequence_number = self.sequence_number;
         self.sequence_number = self.sequence_number.wrapping_add(1);
@@ -248,7 +246,6 @@ impl FrameGenerator {
                 self.current_frame.replace(StreamFrame::new(
                     buffer,
                     self.format,
-                    self.batch_size,
                     sequence_number,
                 ));
             } else {
@@ -259,9 +256,9 @@ impl FrameGenerator {
         // Note(unwrap): We ensure the frame is present above.
         let current_frame = self.current_frame.as_mut().unwrap();
 
-        current_frame.add_batch(f);
+        let len = current_frame.add_batch(f);
 
-        if current_frame.is_full() {
+        if current_frame.is_full(len) {
             // Note(unwrap): The queue is designed to be at least as large as the frame buffer
             // count, so this enqueue should always succeed.
             self.queue
@@ -358,7 +355,7 @@ impl DataStream {
                 }
             }
             Some(handle) => {
-                if let Some(frame) = self.queue.dequeue() {
+                if let Some(mut frame) = self.queue.dequeue() {
                     // Transmit the frame and return it to the pool.
                     let buf = frame.finish();
                     let data = unsafe {
