@@ -15,7 +15,7 @@
 //! * **Magic word 0x057B** (u16): a constant to identify Stabilizer streaming data.
 //! * **Format Code** (u8): a unique ID that indicates the serialization format of each batch of data
 //!   in the frame. Refer to [StreamFormat] for further information.
-//! * **Batch Size** (u8): the number of bytes in each batch of data.
+//! * **Batch Count** (u8): the number of batches of data.
 //! * **Sequence Number** (u32): an the sequence number of the first batch in the frame.
 //!   This can be used to determine if and how many stream batches are lost.
 //!
@@ -157,14 +157,14 @@ impl StreamFrame {
     ) -> Self {
         let mut buffer = buffer.init([MaybeUninit::uninit(); FRAME_SIZE]);
 
-        for (offset, byte) in MAGIC
+        for (byte, buf) in MAGIC
             .to_le_bytes()
             .iter()
             .chain(&[format_id, 0])
             .chain(sequence_number.to_le_bytes().iter())
-            .enumerate()
+            .zip(buffer.iter_mut())
         {
-            buffer[offset].write(*byte);
+            buf.write(*byte);
         }
 
         Self {
@@ -233,6 +233,7 @@ impl FrameGenerator {
     ///
     /// # Args
     /// * `f` - A closure that will be provided the buffer to write batch data into.
+    ///         Returns the number of bytes written.
     pub fn add<F>(&mut self, f: F)
     where
         F: FnMut(&mut [MaybeUninit<u8>]) -> usize,
