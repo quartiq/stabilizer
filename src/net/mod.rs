@@ -127,10 +127,9 @@ where
     pub fn configure_streaming(
         &mut self,
         format: impl Into<u8>,
-        batch_size: u8,
     ) -> FrameGenerator {
         let mut generator = self.generator.take().unwrap();
-        generator.configure(format, batch_size);
+        generator.configure(format);
         generator
     }
 
