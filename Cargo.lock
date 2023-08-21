@@ -805,6 +805,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared-bus"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8bb5650c146f3186332c5da30ff542f7d1ff0c2410346cd861f34fa836dc0d84"
+dependencies = [
+ "embedded-hal",
+ "nb 1.1.0",
+]
+
+[[package]]
 name = "smlang"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -847,7 +857,7 @@ dependencies = [
  "embedded-time",
  "heapless",
  "nanorand",
- "shared-bus",
+ "shared-bus 0.2.5",
  "smoltcp",
 ]
 
@@ -888,7 +898,7 @@ dependencies = [
  "rtt-target",
  "serde",
  "serde-json-core",
- "shared-bus",
+ "shared-bus 0.3.0",
  "smoltcp-nal",
  "spin",
  "stm32h7xx-hal",

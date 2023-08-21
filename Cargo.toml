@@ -54,7 +54,7 @@ rtt-logger = "0.2"
 systick-monotonic = "1.0"
 mono-clock = "0.1"
 spin = { version = "0.9", default-features = false, features = ["spin_mutex"]}
-shared-bus = "0.2"
+shared-bus = "0.3"
 lm75 = "0.2"
 enum-iterator = "1.4.1"
 rand_xorshift = "0.3.0"
