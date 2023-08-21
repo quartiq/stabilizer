@@ -60,7 +60,8 @@ enum-iterator = "1.4.1"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
 minimq = "0.7"
-miniconf = { git = "https://github.com/quartiq/miniconf.git", branch = "trait-split"} # "0.8"
+# Keep this synced with the miniconf version in py/setup.py
+miniconf = { git = "https://github.com/quartiq/miniconf.git" } # "0.9"
 smoltcp-nal = { version = "0.4", features = ["shared-stack"]}
 
 [dependencies.stm32h7xx-hal]

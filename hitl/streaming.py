@@ -33,8 +33,8 @@ async def _main():
     local_ip = get_local_ip(args.broker)
 
     logger.info("Starting stream")
-    await conf.command(
-        "stream_target", {"ip": local_ip, "port": args.port}, retain=False)
+    await conf.set(
+        "/stream_target", {"ip": local_ip, "port": args.port}, retain=False)
 
     try:
         logger.info("Testing stream reception")
@@ -44,8 +44,8 @@ async def _main():
             raise RuntimeError("High frame loss", loss)
     finally:
         logger.info("Stopping stream")
-        await conf.command(
-            "stream_target", {"ip": [0, 0, 0, 0], "port": 0}, retain=False)
+        await conf.set(
+            "/stream_target", {"ip": [0, 0, 0, 0], "port": 0}, retain=False)
 
     logger.info("Draining queue")
     await asyncio.sleep(.1)
