@@ -423,7 +423,7 @@ dependencies = [
  "itoa",
  "log",
  "miniconf_derive",
- "minimq",
+ "minimq 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde-json-core",
  "smlang",
@@ -444,6 +444,21 @@ dependencies = [
 name = "minimq"
 version = "0.7.0"
 source = "git+https://github.com/quartiq/minimq?branch=feature/dns-brokers#93aa7cc2f29ca7d1239ffa7716055a333fad7c75"
+dependencies = [
+ "bit_field",
+ "embedded-nal",
+ "embedded-time",
+ "heapless",
+ "num_enum 0.5.11",
+ "serde",
+ "smlang",
+ "varint-rs",
+]
+
+[[package]]
+name = "minimq"
+version = "0.7.0"
+source = "git+https://github.com/quartiq/minimq#8e7e2b8c6faf72b87a630b0c2a0571a8d117f187"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -896,7 +911,7 @@ dependencies = [
  "log",
  "mcp230xx",
  "miniconf",
- "minimq",
+ "minimq 0.7.0 (git+https://github.com/quartiq/minimq)",
  "mono-clock",
  "mutex-trait",
  "num_enum 0.7.0",
