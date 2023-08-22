@@ -31,6 +31,22 @@ pub type NetworkReference =
 /// The default MQTT broker IP address if unspecified.
 pub const DEFAULT_MQTT_BROKER: [u8; 4] = [10, 34, 16, 10];
 
+pub struct MqttStorage {
+    rx_storage: [u8; 1024],
+    tx_storage: [u8; 1024],
+    session_state: [u8; 1024],
+}
+
+impl Default for MqttStorage {
+    fn default() -> Self {
+        Self {
+            rx_storage: [0u8; 1024],
+            tx_storage: [0u8; 1024],
+            session_state: [0u8; 1024],
+        }
+    }
+}
+
 pub enum UpdateState {
     NoChange,
     Updated,
@@ -100,13 +116,22 @@ where
         )
         .unwrap();
 
-        let telemetry = TelemetryClient::new(
+        let store =
+            cortex_m::singleton!(: MqttStorage = MqttStorage::default())
+                .unwrap();
+
+        let mqtt = minimq::Minimq::new(
+            broker,
+            &get_client_id(app, "tlm", mac),
             stack_manager.acquire_stack(),
             clock,
-            &get_client_id(app, "tlm", mac),
-            &prefix,
-            broker,
-        );
+            &mut store.rx_storage,
+            &mut store.tx_storage,
+            &mut store.session_state,
+        )
+        .unwrap();
+
+        let telemetry = TelemetryClient::new(mqtt, &prefix);
 
         let (generator, stream) =
             data_stream::setup_streaming(stack_manager.acquire_stack());
