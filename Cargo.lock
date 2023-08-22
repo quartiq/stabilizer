@@ -443,8 +443,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0106439fe4eb2e88c5b6b8fcb505b2f679bd8e105c947aa1f1a77f6b57a38653"
+source = "git+https://github.com/quartiq/minimq?branch=feature/dns-brokers#93aa7cc2f29ca7d1239ffa7716055a333fad7c75"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -861,8 +860,7 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75077a28569d93c2eed77164fd36dd224a9efcf6ecf0e574f293ed638783b000"
+source = "git+https://github.com/quartiq/smoltcp-nal?branch=feature/dns-support#ef39367621826ed4a32257b174ced5bdcb4a12e6"
 dependencies = [
  "embedded-nal",
  "embedded-time",

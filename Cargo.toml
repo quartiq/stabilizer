@@ -67,6 +67,14 @@ smoltcp-nal = { version = "0.4", features = ["shared-stack"]}
 git = "https://github.com/stm32-rs/stm32h7xx-hal"
 features = ["stm32h743v", "rt", "ethernet", "xspi"]
 
+[patch.crates-io.smoltcp-nal]
+git = "https://github.com/quartiq/smoltcp-nal"
+branch = "feature/dns-support"
+
+[patch.crates-io.minimq]
+git = "https://github.com/quartiq/minimq"
+branch = "feature/dns-brokers"
+
 [features]
 nightly = [ ]
 pounder_v1_0 = [ ]
