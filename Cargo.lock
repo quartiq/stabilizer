@@ -416,7 +416,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.8.0"
-source = "git+https://github.com/quartiq/miniconf.git?branch=trait-split#28b8c4cf7380d2172dc538f14b439076408b6a2a"
+source = "git+https://github.com/quartiq/miniconf.git#16ddbbc5f469ba226428c1e1440270762f24f424"
 dependencies = [
  "heapless",
  "itoa",
@@ -431,7 +431,7 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.8.0"
-source = "git+https://github.com/quartiq/miniconf.git?branch=trait-split#28b8c4cf7380d2172dc538f14b439076408b6a2a"
+source = "git+https://github.com/quartiq/miniconf.git#16ddbbc5f469ba226428c1e1440270762f24f424"
 dependencies = [
  "proc-macro2",
  "quote",
