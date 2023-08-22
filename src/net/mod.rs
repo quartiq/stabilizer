@@ -43,11 +43,11 @@ pub enum NetworkState {
 }
 
 /// A structure of Stabilizer's default network users.
-pub struct NetworkUsers<
-    S: Default + JsonCoreSlash<Y> + Clone,
+pub struct NetworkUsers<S, T, const Y: usize>
+where
+    for<'de> S: Default + JsonCoreSlash<'de, Y> + Clone,
     T: Serialize,
-    const Y: usize,
-> {
+{
     pub miniconf:
         miniconf::MqttClient<S, NetworkReference, SystemTimer, 512, Y>,
     pub processor: NetworkProcessor,
@@ -58,7 +58,7 @@ pub struct NetworkUsers<
 
 impl<S, T, const Y: usize> NetworkUsers<S, T, Y>
 where
-    S: Default + JsonCoreSlash<Y> + Clone,
+    for<'de> S: Default + JsonCoreSlash<'de, Y> + Clone,
     T: Serialize,
 {
     /// Construct Stabilizer's default network users.
