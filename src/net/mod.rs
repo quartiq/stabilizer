@@ -110,7 +110,7 @@ where
             stack_manager.acquire_stack(),
             &get_client_id(app, "settings", mac),
             &prefix,
-            broker,
+            "10.35.20.1".parse().unwrap(),
             clock,
             S::default(),
         )
@@ -121,7 +121,7 @@ where
                 .unwrap();
 
         let mqtt = minimq::Minimq::new(
-            broker,
+            minimq::broker::NamedBroker::new("mqtt", stack_manager.acquire_stack()),
             &get_client_id(app, "tlm", mac),
             stack_manager.acquire_stack(),
             clock,

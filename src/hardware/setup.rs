@@ -699,7 +699,7 @@ pub fn setup(
             sockets.add(smoltcp::socket::dhcpv4::Socket::new());
         }
 
-        sockets.add(smoltcp::socket::dns::Socket::new(&[], &mut store.dns_storage));
+        sockets.add(smoltcp::socket::dns::Socket::new(&[], &mut store.dns_storage[..]));
 
         for storage in store.udp_socket_storage[..].iter_mut() {
             let udp_socket = {

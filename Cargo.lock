@@ -443,7 +443,8 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.7.0"
-source = "git+https://github.com/quartiq/minimq?branch=feature/dns-brokers#93aa7cc2f29ca7d1239ffa7716055a333fad7c75"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0106439fe4eb2e88c5b6b8fcb505b2f679bd8e105c947aa1f1a77f6b57a38653"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -458,7 +459,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.7.0"
-source = "git+https://github.com/quartiq/minimq#8e7e2b8c6faf72b87a630b0c2a0571a8d117f187"
+source = "git+https://github.com/quartiq/minimq?branch=feature/dns-brokers#93aa7cc2f29ca7d1239ffa7716055a333fad7c75"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -875,7 +876,7 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.4.0"
-source = "git+https://github.com/quartiq/smoltcp-nal?branch=feature/dns-support#ef39367621826ed4a32257b174ced5bdcb4a12e6"
+source = "git+https://github.com/quartiq/smoltcp-nal?branch=feature/dns-support#8092b7b7757474bf66e9dcb0fd6168a06ab8d1a7"
 dependencies = [
  "embedded-nal",
  "embedded-time",
@@ -911,7 +912,7 @@ dependencies = [
  "log",
  "mcp230xx",
  "miniconf",
- "minimq 0.7.0 (git+https://github.com/quartiq/minimq)",
+ "minimq 0.7.0 (git+https://github.com/quartiq/minimq?branch=feature/dns-brokers)",
  "mono-clock",
  "mutex-trait",
  "num_enum 0.7.0",
