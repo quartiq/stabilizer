@@ -416,14 +416,13 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e34fb3249ad071debda2ceb8d29e271d0fd283039f7bf04d9d7921dec4e6b4e"
+source = "git+https://github.com/quartiq/miniconf?branch=feature/minimq-update#e0d4d4b4c38fdd1c79cbfc2044e3800dd16c53ce"
 dependencies = [
  "heapless",
  "itoa",
  "log",
  "miniconf_derive",
- "minimq 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "minimq 0.7.0 (git+https://github.com/quartiq/minimq)",
  "serde",
  "serde-json-core",
  "smlang",
@@ -432,8 +431,7 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2327f540b14c86184b066abe25daca988c15c60f0d9a215d2a37f3032805d47"
+source = "git+https://github.com/quartiq/miniconf?branch=feature/minimq-update#e0d4d4b4c38fdd1c79cbfc2044e3800dd16c53ce"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -443,8 +441,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0106439fe4eb2e88c5b6b8fcb505b2f679bd8e105c947aa1f1a77f6b57a38653"
+source = "git+https://github.com/quartiq/minimq?branch=master#2b466aa1bd7377d59ba58f76172bdd3422d5570c"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -459,7 +456,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.7.0"
-source = "git+https://github.com/quartiq/minimq?branch=feature/dns-brokers#93aa7cc2f29ca7d1239ffa7716055a333fad7c75"
+source = "git+https://github.com/quartiq/minimq#2b466aa1bd7377d59ba58f76172bdd3422d5570c"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -875,8 +872,9 @@ dependencies = [
 
 [[package]]
 name = "smoltcp-nal"
-version = "0.4.0"
-source = "git+https://github.com/quartiq/smoltcp-nal?branch=feature/dns-support#8092b7b7757474bf66e9dcb0fd6168a06ab8d1a7"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6dd2ed2f8e7643a170506863ed0f52ad1dc5762abdcff27de825dde14fc8025f"
 dependencies = [
  "embedded-nal",
  "embedded-time",
@@ -912,7 +910,7 @@ dependencies = [
  "log",
  "mcp230xx",
  "miniconf",
- "minimq 0.7.0 (git+https://github.com/quartiq/minimq?branch=feature/dns-brokers)",
+ "minimq 0.7.0 (git+https://github.com/quartiq/minimq?branch=master)",
  "mono-clock",
  "mutex-trait",
  "num_enum 0.7.0",

@@ -129,7 +129,7 @@ impl<T: Serialize> TelemetryClient<T> {
         self.mqtt
             .client()
             .publish(
-                minimq::Publication::new(&telemetry)
+                minimq::Publication::<&[u8]>::new(&telemetry)
                     .topic(&self.telemetry_topic)
                     .finish()
                     .unwrap(),

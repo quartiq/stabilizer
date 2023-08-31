@@ -15,13 +15,12 @@ pub mod telemetry;
 
 use crate::hardware::{EthernetPhy, NetworkManager, NetworkStack, SystemTimer};
 use data_stream::{DataStream, FrameGenerator};
-use minimq::embedded_nal::IpAddr;
 use network_processor::NetworkProcessor;
 use telemetry::TelemetryClient;
 
 use core::fmt::Write;
 use heapless::String;
-use miniconf::Miniconf;
+use miniconf::TreeKey;
 use serde::Serialize;
 use smoltcp_nal::embedded_nal::SocketAddr;
 
@@ -32,17 +31,15 @@ pub type NetworkReference =
 pub const DEFAULT_MQTT_BROKER: [u8; 4] = [10, 34, 16, 10];
 
 pub struct MqttStorage {
-    rx_storage: [u8; 1024],
-    tx_storage: [u8; 1024],
-    session_state: [u8; 1024],
+    telemetry: [u8; 1024],
+    settings: [u8; 1024],
 }
 
 impl Default for MqttStorage {
     fn default() -> Self {
         Self {
-            rx_storage: [0u8; 1024],
-            tx_storage: [0u8; 1024],
-            session_state: [0u8; 1024],
+            telemetry: [0u8; 1024],
+            settings: [0u8; 1024],
         }
     }
 }
@@ -60,12 +57,12 @@ pub enum NetworkState {
 
 /// A structure of Stabilizer's default network users.
 pub struct NetworkUsers<
-    S: Default + Miniconf<Y> + Clone,
+    S: Default + TreeKey<Y> + Clone,
     T: Serialize,
     const Y: usize,
 > {
     pub miniconf:
-        miniconf::MqttClient<S, NetworkReference, SystemTimer, 512, Y>,
+        miniconf::MqttClient<'static, S, NetworkReference, SystemTimer, miniconf::minimq::broker::NamedBroker<NetworkReference>, Y>,
     pub processor: NetworkProcessor,
     stream: DataStream,
     generator: Option<FrameGenerator>,
@@ -74,7 +71,7 @@ pub struct NetworkUsers<
 
 impl<S, T, const Y: usize> NetworkUsers<S, T, Y>
 where
-    S: Default + Miniconf<Y> + Clone,
+    for<'de> S: Default + miniconf::JsonCoreSlash<'de, Y> + Clone,
     T: Serialize,
 {
     /// Construct Stabilizer's default network users.
@@ -85,7 +82,6 @@ where
     /// * `clock` - A `SystemTimer` implementing `Clock`.
     /// * `app` - The name of the application.
     /// * `mac` - The MAC address of the network.
-    /// * `broker` - The IP address of the MQTT broker to use.
     ///
     /// # Returns
     /// A new struct of network users.
@@ -95,7 +91,6 @@ where
         clock: SystemTimer,
         app: &str,
         mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
-        broker: IpAddr,
     ) -> Self {
         let stack_manager =
             cortex_m::singleton!(: NetworkManager = NetworkManager::new(stack))
@@ -106,30 +101,28 @@ where
 
         let prefix = get_device_prefix(app, mac);
 
-        let settings = miniconf::MqttClient::new(
-            stack_manager.acquire_stack(),
-            &get_client_id(app, "settings", mac),
-            &prefix,
-            "10.35.20.1".parse().unwrap(),
-            clock,
-            S::default(),
-        )
-        .unwrap();
-
         let store =
             cortex_m::singleton!(: MqttStorage = MqttStorage::default())
                 .unwrap();
 
-        let mqtt = minimq::Minimq::new(
-            minimq::broker::NamedBroker::new("mqtt", stack_manager.acquire_stack()),
-            &get_client_id(app, "tlm", mac),
+        let broker_domain_name = option_env!("BROKER").unwrap_or("fake");
+        let broker = miniconf::minimq::broker::NamedBroker::new(broker_domain_name, stack_manager.acquire_stack()).unwrap();
+        let settings = miniconf::MqttClient::new(
             stack_manager.acquire_stack(),
+            &prefix,
             clock,
-            &mut store.rx_storage,
-            &mut store.tx_storage,
-            &mut store.session_state,
+            S::default(),
+            miniconf::minimq::ConfigBuilder::new(broker, &mut store.settings)
+                .client_id(&get_client_id(app, "settings", mac)).unwrap()
         )
         .unwrap();
+
+        let broker = minimq::broker::NamedBroker::new(broker_domain_name, stack_manager.acquire_stack()).unwrap();
+        let mqtt = minimq::Minimq::new(
+            stack_manager.acquire_stack(),
+            clock,
+            minimq::ConfigBuilder::new(broker, &mut store.telemetry).client_id(&get_client_id(app, "tlm", mac)).unwrap()
+        );
 
         let telemetry = TelemetryClient::new(mqtt, &prefix);
 
