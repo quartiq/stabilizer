@@ -416,13 +416,13 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.8.0"
-source = "git+https://github.com/quartiq/miniconf?branch=feature/minimq-update#e0d4d4b4c38fdd1c79cbfc2044e3800dd16c53ce"
+source = "git+https://github.com/quartiq/miniconf#61946c1a739abb79870fedcb096c5cd697eee361"
 dependencies = [
  "heapless",
  "itoa",
  "log",
  "miniconf_derive",
- "minimq 0.7.0 (git+https://github.com/quartiq/minimq)",
+ "minimq",
  "serde",
  "serde-json-core",
  "smlang",
@@ -431,7 +431,7 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.8.0"
-source = "git+https://github.com/quartiq/miniconf?branch=feature/minimq-update#e0d4d4b4c38fdd1c79cbfc2044e3800dd16c53ce"
+source = "git+https://github.com/quartiq/miniconf#61946c1a739abb79870fedcb096c5cd697eee361"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -441,22 +441,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.7.0"
-source = "git+https://github.com/quartiq/minimq?branch=master#2b466aa1bd7377d59ba58f76172bdd3422d5570c"
-dependencies = [
- "bit_field",
- "embedded-nal",
- "embedded-time",
- "heapless",
- "num_enum 0.5.11",
- "serde",
- "smlang",
- "varint-rs",
-]
-
-[[package]]
-name = "minimq"
-version = "0.7.0"
-source = "git+https://github.com/quartiq/minimq#2b466aa1bd7377d59ba58f76172bdd3422d5570c"
+source = "git+https://github.com/quartiq/minimq#f4cb420186fb6f294ffdaa612bb8401c3261fd63"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -910,7 +895,7 @@ dependencies = [
  "log",
  "mcp230xx",
  "miniconf",
- "minimq 0.7.0 (git+https://github.com/quartiq/minimq?branch=master)",
+ "minimq",
  "mono-clock",
  "mutex-trait",
  "num_enum 0.7.0",

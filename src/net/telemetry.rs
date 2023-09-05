@@ -18,7 +18,12 @@ use crate::hardware::{adc::AdcCode, afe::Gain, dac::DacCode, SystemTimer};
 
 /// The telemetry client for reporting telemetry data over MQTT.
 pub struct TelemetryClient<T: Serialize> {
-    mqtt: minimq::Minimq<'static, NetworkReference, SystemTimer, minimq::broker::NamedBroker<NetworkReference>>,
+    mqtt: minimq::Minimq<
+        'static,
+        NetworkReference,
+        SystemTimer,
+        minimq::broker::NamedBroker<NetworkReference>,
+    >,
     telemetry_topic: String<128>,
     _telemetry: core::marker::PhantomData<T>,
 }
@@ -102,7 +107,12 @@ impl<T: Serialize> TelemetryClient<T> {
     /// # Returns
     /// A new telemetry client.
     pub fn new(
-        mqtt: minimq::Minimq<'static, NetworkReference, SystemTimer, minimq::broker::NamedBroker<NetworkReference>>,
+        mqtt: minimq::Minimq<
+            'static,
+            NetworkReference,
+            SystemTimer,
+            minimq::broker::NamedBroker<NetworkReference>,
+        >,
         prefix: &str,
     ) -> Self {
         let mut telemetry_topic: String<128> = String::from(prefix);

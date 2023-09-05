@@ -27,9 +27,6 @@ use smoltcp_nal::embedded_nal::SocketAddr;
 pub type NetworkReference =
     smoltcp_nal::shared::NetworkStackProxy<'static, NetworkStack>;
 
-/// The default MQTT broker IP address if unspecified.
-pub const DEFAULT_MQTT_BROKER: [u8; 4] = [10, 34, 16, 10];
-
 pub struct MqttStorage {
     telemetry: [u8; 1024],
     settings: [u8; 1024],
@@ -61,8 +58,14 @@ pub struct NetworkUsers<
     T: Serialize,
     const Y: usize,
 > {
-    pub miniconf:
-        miniconf::MqttClient<'static, S, NetworkReference, SystemTimer, miniconf::minimq::broker::NamedBroker<NetworkReference>, Y>,
+    pub miniconf: miniconf::MqttClient<
+        'static,
+        S,
+        NetworkReference,
+        SystemTimer,
+        miniconf::minimq::broker::NamedBroker<NetworkReference>,
+        Y,
+    >,
     pub processor: NetworkProcessor,
     stream: DataStream,
     generator: Option<FrameGenerator>,
@@ -82,6 +85,7 @@ where
     /// * `clock` - A `SystemTimer` implementing `Clock`.
     /// * `app` - The name of the application.
     /// * `mac` - The MAC address of the network.
+    /// * `broker` - The domain name of the MQTT broker to use.
     ///
     /// # Returns
     /// A new struct of network users.
@@ -91,6 +95,7 @@ where
         clock: SystemTimer,
         app: &str,
         mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
+        broker: &str,
     ) -> Self {
         let stack_manager =
             cortex_m::singleton!(: NetworkManager = NetworkManager::new(stack))
@@ -105,23 +110,36 @@ where
             cortex_m::singleton!(: MqttStorage = MqttStorage::default())
                 .unwrap();
 
-        let broker_domain_name = option_env!("BROKER").unwrap_or("fake");
-        let broker = miniconf::minimq::broker::NamedBroker::new(broker_domain_name, stack_manager.acquire_stack()).unwrap();
+        let named_broker = miniconf::minimq::broker::NamedBroker::new(
+            broker,
+            stack_manager.acquire_stack(),
+        )
+        .unwrap();
         let settings = miniconf::MqttClient::new(
             stack_manager.acquire_stack(),
             &prefix,
             clock,
             S::default(),
-            miniconf::minimq::ConfigBuilder::new(broker, &mut store.settings)
-                .client_id(&get_client_id(app, "settings", mac)).unwrap()
+            miniconf::minimq::ConfigBuilder::new(
+                named_broker,
+                &mut store.settings,
+            )
+            .client_id(&get_client_id(app, "settings", mac))
+            .unwrap(),
         )
         .unwrap();
 
-        let broker = minimq::broker::NamedBroker::new(broker_domain_name, stack_manager.acquire_stack()).unwrap();
+        let named_broker = minimq::broker::NamedBroker::new(
+            broker,
+            stack_manager.acquire_stack(),
+        )
+        .unwrap();
         let mqtt = minimq::Minimq::new(
             stack_manager.acquire_stack(),
             clock,
-            minimq::ConfigBuilder::new(broker, &mut store.telemetry).client_id(&get_client_id(app, "tlm", mac)).unwrap()
+            minimq::ConfigBuilder::new(named_broker, &mut store.telemetry)
+                .client_id(&get_client_id(app, "tlm", mac))
+                .unwrap(),
         );
 
         let telemetry = TelemetryClient::new(mqtt, &prefix);

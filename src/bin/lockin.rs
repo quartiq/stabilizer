@@ -260,6 +260,7 @@ mod app {
             clock,
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
+            option_env!("BROKER").unwrap_or("10.34.16.10"),
         );
 
         let generator = network.configure_streaming(StreamFormat::AdcDacData);

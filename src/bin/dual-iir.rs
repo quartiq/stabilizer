@@ -95,7 +95,7 @@ pub struct Settings {
     ///
     /// # Value
     /// See [iir::IIR#miniconf]
-    #[tree]
+    #[tree(depth(2))]
     iir_ch: [[iir::IIR<f32>; IIR_CASCADE_LENGTH]; 2],
 
     /// Specified true if DI1 should be used as a "hold" input.
@@ -143,7 +143,7 @@ pub struct Settings {
     ///
     /// # Value
     /// See [signal_generator::BasicConfig#miniconf]
-    #[tree]
+    #[tree(depth(2))]
     signal_generator: [signal_generator::BasicConfig; 2],
 }
 
@@ -182,7 +182,7 @@ mod app {
 
     #[shared]
     struct Shared {
-        network: NetworkUsers<Settings, Telemetry, 2>,
+        network: NetworkUsers<Settings, Telemetry, 3>,
 
         settings: Settings,
         telemetry: TelemetryBuffer,
@@ -220,6 +220,7 @@ mod app {
             clock,
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
+            option_env!("BROKER").unwrap_or("10.34.16.10"),
         );
 
         let generator = network.configure_streaming(StreamFormat::AdcDacData);

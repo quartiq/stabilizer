@@ -59,8 +59,8 @@ lm75 = "0.2"
 enum-iterator = "1.4.1"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
-minimq = {git = "https://github.com/quartiq/minimq", branch = "master"}
-miniconf = {git="https://github.com/quartiq/miniconf", branch = "feature/minimq-update"}
+minimq = {git = "https://github.com/quartiq/minimq"}
+miniconf = {git="https://github.com/quartiq/miniconf"}
 smoltcp-nal = { version = "0.4.1", features = ["shared-stack"]}
 
 [dependencies.stm32h7xx-hal]
