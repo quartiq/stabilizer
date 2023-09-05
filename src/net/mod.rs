@@ -20,7 +20,7 @@ use telemetry::TelemetryClient;
 
 use core::fmt::Write;
 use heapless::String;
-use miniconf::TreeKey;
+use miniconf::JsonCoreSlash;
 use serde::Serialize;
 use smoltcp_nal::embedded_nal::SocketAddr;
 
@@ -53,11 +53,11 @@ pub enum NetworkState {
 }
 
 /// A structure of Stabilizer's default network users.
-pub struct NetworkUsers<
-    S: Default + TreeKey<Y> + Clone,
+pub struct NetworkUsers<S, T, const Y: usize>
+where
+    for<'de> S: Default + JsonCoreSlash<'de, Y> + Clone,
     T: Serialize,
-    const Y: usize,
-> {
+{
     pub miniconf: miniconf::MqttClient<
         'static,
         S,
@@ -74,7 +74,7 @@ pub struct NetworkUsers<
 
 impl<S, T, const Y: usize> NetworkUsers<S, T, Y>
 where
-    for<'de> S: Default + miniconf::JsonCoreSlash<'de, Y> + Clone,
+    for<'de> S: Default + JsonCoreSlash<'de, Y> + Clone,
     T: Serialize,
 {
     /// Construct Stabilizer's default network users.

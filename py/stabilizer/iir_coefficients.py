@@ -298,7 +298,7 @@ def _main():
 
         # Set the filter coefficients.
         # Note: In the future, we will need to Handle higher-order cascades.
-        await interface.command(f"iir_ch/{args.channel}/0", {
+        await interface.set(f"/iir_ch/{args.channel}/0", {
             "ba": coefficients,
             "y_min": stabilizer.voltage_to_machine_units(args.y_min),
             "y_max": stabilizer.voltage_to_machine_units(args.y_max),
