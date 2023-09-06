@@ -50,7 +50,7 @@ use stabilizer::{
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
-        miniconf::Miniconf,
+        miniconf::Tree,
         telemetry::{Telemetry, TelemetryBuffer},
         NetworkState, NetworkUsers,
     },
@@ -71,7 +71,7 @@ const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 const SAMPLE_PERIOD: f32 =
     SAMPLE_TICKS as f32 * hardware::design_parameters::TIMER_PERIOD;
 
-#[derive(Clone, Copy, Debug, Miniconf)]
+#[derive(Clone, Copy, Debug, Tree)]
 pub struct Settings {
     /// Configure the Analog Front End (AFE) gain.
     ///
@@ -82,7 +82,7 @@ pub struct Settings {
     ///
     /// # Value
     /// Any of the variants of [Gain] enclosed in double quotes.
-    #[miniconf(defer)]
+    #[tree]
     afe: [Gain; 2],
 
     /// Configure the IIR filter parameters.
@@ -95,7 +95,7 @@ pub struct Settings {
     ///
     /// # Value
     /// See [iir::IIR#miniconf]
-    #[miniconf(defer(2))]
+    #[tree(depth(2))]
     iir_ch: [[iir::IIR<f32>; IIR_CASCADE_LENGTH]; 2],
 
     /// Specified true if DI1 should be used as a "hold" input.
@@ -143,7 +143,7 @@ pub struct Settings {
     ///
     /// # Value
     /// See [signal_generator::BasicConfig#miniconf]
-    #[miniconf(defer(2))]
+    #[tree(depth(2))]
     signal_generator: [signal_generator::BasicConfig; 2],
 }
 
@@ -220,10 +220,7 @@ mod app {
             clock,
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
-            option_env!("BROKER")
-                .unwrap_or("10.34.16.1")
-                .parse()
-                .unwrap(),
+            option_env!("BROKER").unwrap_or("mqtt"),
         );
 
         let generator = network.configure_streaming(StreamFormat::AdcDacData);

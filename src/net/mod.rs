@@ -15,21 +15,31 @@ pub mod telemetry;
 
 use crate::hardware::{EthernetPhy, NetworkManager, NetworkStack, SystemTimer};
 use data_stream::{DataStream, FrameGenerator};
-use minimq::embedded_nal::IpAddr;
 use network_processor::NetworkProcessor;
 use telemetry::TelemetryClient;
 
 use core::fmt::Write;
 use heapless::String;
-use miniconf::Miniconf;
+use miniconf::JsonCoreSlash;
 use serde::Serialize;
 use smoltcp_nal::embedded_nal::SocketAddr;
 
 pub type NetworkReference =
     smoltcp_nal::shared::NetworkStackProxy<'static, NetworkStack>;
 
-/// The default MQTT broker IP address if unspecified.
-pub const DEFAULT_MQTT_BROKER: [u8; 4] = [10, 34, 16, 10];
+pub struct MqttStorage {
+    telemetry: [u8; 1024],
+    settings: [u8; 1024],
+}
+
+impl Default for MqttStorage {
+    fn default() -> Self {
+        Self {
+            telemetry: [0u8; 1024],
+            settings: [0u8; 1024],
+        }
+    }
+}
 
 pub enum UpdateState {
     NoChange,
@@ -43,13 +53,19 @@ pub enum NetworkState {
 }
 
 /// A structure of Stabilizer's default network users.
-pub struct NetworkUsers<
-    S: Default + Miniconf<Y> + Clone,
+pub struct NetworkUsers<S, T, const Y: usize>
+where
+    for<'de> S: Default + JsonCoreSlash<'de, Y> + Clone,
     T: Serialize,
-    const Y: usize,
-> {
-    pub miniconf:
-        miniconf::MqttClient<S, NetworkReference, SystemTimer, 512, Y>,
+{
+    pub miniconf: miniconf::MqttClient<
+        'static,
+        S,
+        NetworkReference,
+        SystemTimer,
+        miniconf::minimq::broker::NamedBroker<NetworkReference>,
+        Y,
+    >,
     pub processor: NetworkProcessor,
     stream: DataStream,
     generator: Option<FrameGenerator>,
@@ -58,7 +74,7 @@ pub struct NetworkUsers<
 
 impl<S, T, const Y: usize> NetworkUsers<S, T, Y>
 where
-    S: Default + Miniconf<Y> + Clone,
+    for<'de> S: Default + JsonCoreSlash<'de, Y> + Clone,
     T: Serialize,
 {
     /// Construct Stabilizer's default network users.
@@ -69,7 +85,7 @@ where
     /// * `clock` - A `SystemTimer` implementing `Clock`.
     /// * `app` - The name of the application.
     /// * `mac` - The MAC address of the network.
-    /// * `broker` - The IP address of the MQTT broker to use.
+    /// * `broker` - The domain name of the MQTT broker to use.
     ///
     /// # Returns
     /// A new struct of network users.
@@ -79,7 +95,7 @@ where
         clock: SystemTimer,
         app: &str,
         mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
-        broker: IpAddr,
+        broker: &str,
     ) -> Self {
         let stack_manager =
             cortex_m::singleton!(: NetworkManager = NetworkManager::new(stack))
@@ -90,23 +106,43 @@ where
 
         let prefix = get_device_prefix(app, mac);
 
+        let store =
+            cortex_m::singleton!(: MqttStorage = MqttStorage::default())
+                .unwrap();
+
+        let named_broker = miniconf::minimq::broker::NamedBroker::new(
+            broker,
+            stack_manager.acquire_stack(),
+        )
+        .unwrap();
         let settings = miniconf::MqttClient::new(
             stack_manager.acquire_stack(),
-            &get_client_id(app, "settings", mac),
             &prefix,
-            broker,
             clock,
             S::default(),
+            miniconf::minimq::ConfigBuilder::new(
+                named_broker,
+                &mut store.settings,
+            )
+            .client_id(&get_client_id(app, "settings", mac))
+            .unwrap(),
         )
         .unwrap();
 
-        let telemetry = TelemetryClient::new(
+        let named_broker = minimq::broker::NamedBroker::new(
+            broker,
+            stack_manager.acquire_stack(),
+        )
+        .unwrap();
+        let mqtt = minimq::Minimq::new(
             stack_manager.acquire_stack(),
             clock,
-            &get_client_id(app, "tlm", mac),
-            &prefix,
-            broker,
+            minimq::ConfigBuilder::new(named_broker, &mut store.telemetry)
+                .client_id(&get_client_id(app, "tlm", mac))
+                .unwrap(),
         );
+
+        let telemetry = TelemetryClient::new(mqtt, &prefix);
 
         let (generator, stream) =
             data_stream::setup_streaming(stack_manager.acquire_stack());

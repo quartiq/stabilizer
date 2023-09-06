@@ -28,10 +28,12 @@ const NUM_SOCKETS: usize = NUM_UDP_SOCKETS + NUM_TCP_SOCKETS;
 pub struct NetStorage {
     pub ip_addrs: [smoltcp::wire::IpCidr; 1],
 
-    // Note: There is an additional socket set item required for the DHCP socket.
-    pub sockets: [smoltcp::iface::SocketStorage<'static>; NUM_SOCKETS + 1],
+    // Note: There is an additional socket set item required for the DHCP and DNS sockets
+    // respectively.
+    pub sockets: [smoltcp::iface::SocketStorage<'static>; NUM_SOCKETS + 2],
     pub tcp_socket_storage: [TcpSocketStorage; NUM_TCP_SOCKETS],
     pub udp_socket_storage: [UdpSocketStorage; NUM_UDP_SOCKETS],
+    pub dns_storage: [Option<smoltcp::socket::dns::DnsQuery>; 1],
 }
 
 #[derive(Copy, Clone)]
@@ -79,9 +81,10 @@ impl Default for NetStorage {
             ip_addrs: [smoltcp::wire::IpCidr::Ipv6(
                 smoltcp::wire::Ipv6Cidr::SOLICITED_NODE_PREFIX,
             )],
-            sockets: [smoltcp::iface::SocketStorage::EMPTY; NUM_SOCKETS + 1],
+            sockets: [smoltcp::iface::SocketStorage::EMPTY; NUM_SOCKETS + 2],
             tcp_socket_storage: [TcpSocketStorage::new(); NUM_TCP_SOCKETS],
             udp_socket_storage: [UdpSocketStorage::new(); NUM_UDP_SOCKETS],
+            dns_storage: [None; 1],
         }
     }
 }
@@ -695,6 +698,11 @@ pub fn setup(
         if ip_addrs.is_unspecified() {
             sockets.add(smoltcp::socket::dhcpv4::Socket::new());
         }
+
+        sockets.add(smoltcp::socket::dns::Socket::new(
+            &[],
+            &mut store.dns_storage[..],
+        ));
 
         for storage in store.udp_socket_storage[..].iter_mut() {
             let udp_socket = {

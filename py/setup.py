@@ -14,6 +14,7 @@ setup(
         "scipy",
         "matplotlib",
         "gmqtt",
-        "miniconf-mqtt@git+https://github.com/quartiq/miniconf@v0.7.0#subdirectory=py/miniconf-mqtt",
+        # Keep this synced with the miniconf version in Cargo.toml
+        "miniconf-mqtt@git+https://github.com/quartiq/miniconf@main#subdirectory=py/miniconf-mqtt",
     ],
 )

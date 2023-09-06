@@ -53,11 +53,11 @@ async def test_loopback(miniconf, telemetry_queue, set_point, gain=1, channel=0)
     print(f'Testing loopback for Vout = {set_point:.2f}, Gain = x{gain}')
     print('---------------------------------')
     # Configure the AFE and IIRs to output at the set point
-    await miniconf.command(f'afe/{channel}', f'G{gain}', retain=False)
-    await miniconf.command(f'iir_ch/{channel}/0', static_iir_output(set_point), retain=False)
+    await miniconf.set(f'/afe/{channel}', f'G{gain}', retain=False)
+    await miniconf.set(f'/iir_ch/{channel}/0', static_iir_output(set_point), retain=False)
 
     # Configure signal generators to not affect the test.
-    await miniconf.command('signal_generator/0/amplitude', 0, retain=False)
+    await miniconf.set('/signal_generator/0/amplitude', 0, retain=False)
 
     # Wait for telemetry to update.
     await asyncio.sleep(5.0)
@@ -86,21 +86,21 @@ def main():
         """ The actual testing being completed. """
         tele = await Telemetry.create(args.prefix, args.broker)
 
-        interface = await Miniconf.create(args.prefix, args.broker)
+        miniconf = await Miniconf.create(args.prefix, args.broker)
 
         # Disable IIR holds and configure the telemetry rate.
-        await interface.command('allow_hold', False, retain=False)
-        await interface.command('force_hold', False, retain=False)
-        await interface.command('telemetry_period', 1, retain=False)
+        await miniconf.set('/allow_hold', False, retain=False)
+        await miniconf.set('/force_hold', False, retain=False)
+        await miniconf.set('/telemetry_period', 1, retain=False)
 
         # Test loopback with a static 1V output of the DACs.
-        await test_loopback(interface, tele.queue, 1.0)
+        await test_loopback(miniconf, tele.queue, 1.0)
 
         # Repeat test with AFE = 2x
-        await test_loopback(interface, tele.queue, 1.0, gain=2)
+        await test_loopback(miniconf, tele.queue, 1.0, gain=2)
 
         # Test with 0V output
-        await test_loopback(interface, tele.queue, 0.0)
+        await test_loopback(miniconf, tele.queue, 0.0)
 
     sys.exit(asyncio.run(test()))
 
