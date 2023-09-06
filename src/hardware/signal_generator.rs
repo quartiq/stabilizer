@@ -14,7 +14,7 @@ pub enum Signal {
 
 /// Basic configuration for a generated signal.
 ///
-/// # Miniconf
+/// # Miniconf Tree
 /// `{"signal": <signal>, "frequency", 1000.0, "symmetry": 0.5, "amplitude": 1.0}`
 ///
 /// Where `<signal>` may be any of [Signal] variants, `frequency` specifies the signal frequency

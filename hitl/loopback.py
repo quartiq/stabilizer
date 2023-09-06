@@ -89,9 +89,9 @@ def main():
         miniconf = await Miniconf.create(args.prefix, args.broker)
 
         # Disable IIR holds and configure the telemetry rate.
-        await miniconf.set('allow_hold', False, retain=False)
-        await miniconf.set('force_hold', False, retain=False)
-        await miniconf.set('telemetry_period', 1, retain=False)
+        await miniconf.set('/allow_hold', False, retain=False)
+        await miniconf.set('/force_hold', False, retain=False)
+        await miniconf.set('/telemetry_period', 1, retain=False)
 
         # Test loopback with a static 1V output of the DACs.
         await test_loopback(miniconf, tele.queue, 1.0)

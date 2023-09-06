@@ -416,7 +416,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.8.0"
-source = "git+https://github.com/quartiq/miniconf.git#16ddbbc5f469ba226428c1e1440270762f24f424"
+source = "git+https://github.com/quartiq/miniconf.git#61946c1a739abb79870fedcb096c5cd697eee361"
 dependencies = [
  "heapless",
  "itoa",
@@ -431,7 +431,7 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.8.0"
-source = "git+https://github.com/quartiq/miniconf.git#16ddbbc5f469ba226428c1e1440270762f24f424"
+source = "git+https://github.com/quartiq/miniconf.git#61946c1a739abb79870fedcb096c5cd697eee361"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -441,8 +441,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0106439fe4eb2e88c5b6b8fcb505b2f679bd8e105c947aa1f1a77f6b57a38653"
+source = "git+https://github.com/quartiq/minimq#008fe6305b263046cabe296a64518cd99e597e35"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -770,9 +769,9 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "serde"
-version = "1.0.184"
+version = "1.0.188"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c911f4b04d7385c9035407a4eff5903bf4fe270fa046fda448b69e797f4fff0"
+checksum = "cf9e0fcba69a370eed61bcf2b728575f726b50b55cba78064753d708ddc7549e"
 dependencies = [
  "serde_derive",
 ]
@@ -790,9 +789,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.184"
+version = "1.0.188"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1df27f5b29406ada06609b2e2f77fb34f6dbb104a457a671cc31dbed237e09e"
+checksum = "4eca7ac642d82aa35b60049a6eccb4be6be75e599bd2e9adb5f875a737654af2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -858,9 +857,9 @@ dependencies = [
 
 [[package]]
 name = "smoltcp-nal"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75077a28569d93c2eed77164fd36dd224a9efcf6ecf0e574f293ed638783b000"
+checksum = "6dd2ed2f8e7643a170506863ed0f52ad1dc5762abdcff27de825dde14fc8025f"
 dependencies = [
  "embedded-nal",
  "embedded-time",
