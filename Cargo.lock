@@ -441,7 +441,7 @@ dependencies = [
 [[package]]
 name = "minimq"
 version = "0.7.0"
-source = "git+https://github.com/quartiq/minimq#008fe6305b263046cabe296a64518cd99e597e35"
+source = "git+https://github.com/quartiq/minimq#09326553b6ec260307e6279fff8281b5af9fa2f0"
 dependencies = [
  "bit_field",
  "embedded-nal",
