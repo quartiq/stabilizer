@@ -6,10 +6,9 @@ Description: Loop-back integration tests for Stabilizer hardware
 """
 import argparse
 import asyncio
-import json
 import sys
 
-from miniconf import Miniconf
+import miniconf
 from stabilizer import voltage_to_machine_units
 from stabilizer.telemetry import Telemetry
 
@@ -35,7 +34,7 @@ def static_iir_output(output_voltage):
     }
 
 
-async def test_loopback(miniconf, telemetry_queue, set_point, gain=1, channel=0):
+async def test_loopback(stabilizer, telemetry_queue, set_point, gain=1, channel=0):
     """ Test loopback operation of Stabilizer.
 
     Note:
@@ -44,7 +43,7 @@ async def test_loopback(miniconf, telemetry_queue, set_point, gain=1, channel=0)
         to INx on the device.
 
     Args:
-        miniconf: The miniconf configuration interface.
+        stabilizer: The miniconf configuration interface.
         telemetry: a helper utility to read inbound telemetry.
         set_point: The desired output voltage to test.
         channel: The loopback channel to test on. Either 0 or 1.
@@ -53,11 +52,11 @@ async def test_loopback(miniconf, telemetry_queue, set_point, gain=1, channel=0)
     print(f'Testing loopback for Vout = {set_point:.2f}, Gain = x{gain}')
     print('---------------------------------')
     # Configure the AFE and IIRs to output at the set point
-    await miniconf.set(f'/afe/{channel}', f'G{gain}', retain=False)
-    await miniconf.set(f'/iir_ch/{channel}/0', static_iir_output(set_point), retain=False)
+    await stabilizer.set(f'/afe/{channel}', f'G{gain}')
+    await stabilizer.set(f'/iir_ch/{channel}/0', static_iir_output(set_point))
 
     # Configure signal generators to not affect the test.
-    await miniconf.set('/signal_generator/0/amplitude', 0, retain=False)
+    await stabilizer.set('/signal_generator/0/amplitude', 0)
 
     # Wait for telemetry to update.
     await asyncio.sleep(5.0)
@@ -75,7 +74,7 @@ async def test_loopback(miniconf, telemetry_queue, set_point, gain=1, channel=0)
 def main():
     """ Main program entry point. """
     parser = argparse.ArgumentParser(description='Loopback tests for Stabilizer HITL testing',)
-    parser.add_argument('prefix', type=str,
+    parser.add_argument('prefix', type=str, nargs='?',
                         help='The MQTT topic prefix of the target')
     parser.add_argument('--broker', '-b', default='mqtt', type=str,
                         help='The MQTT broker address')
@@ -84,23 +83,33 @@ def main():
 
     async def test():
         """ The actual testing being completed. """
-        tele = await Telemetry.create(args.prefix, args.broker)
+        prefix = args.prefix
+        if not args.prefix:
+            devices = await miniconf.discover(args.broker, 'dt/sinara/dual-iir/+', 1)
+            if not devices:
+                raise Exception('No Stabilizer (Dual-iir) devices found')
+            assert len(devices) == 1, \
+                f'Multiple Stabilizers found: {devices}. Please specify one with --prefix'
 
-        miniconf = await Miniconf.create(args.prefix, args.broker)
+            prefix = devices.pop()
+
+        tele = await Telemetry.create(prefix, args.broker)
+
+        stabilizer = await miniconf.Miniconf.create(prefix, args.broker)
 
         # Disable IIR holds and configure the telemetry rate.
-        await miniconf.set('/allow_hold', False, retain=False)
-        await miniconf.set('/force_hold', False, retain=False)
-        await miniconf.set('/telemetry_period', 1, retain=False)
+        await stabilizer.set('/allow_hold', False)
+        await stabilizer.set('/force_hold', False)
+        await stabilizer.set('/telemetry_period', 1)
 
         # Test loopback with a static 1V output of the DACs.
-        await test_loopback(miniconf, tele.queue, 1.0)
+        await test_loopback(stabilizer, tele.queue, 1.0)
 
         # Repeat test with AFE = 2x
-        await test_loopback(miniconf, tele.queue, 1.0, gain=2)
+        await test_loopback(stabilizer, tele.queue, 1.0, gain=2)
 
         # Test with 0V output
-        await test_loopback(miniconf, tele.queue, 0.0)
+        await test_loopback(stabilizer, tele.queue, 0.0)
 
     sys.exit(asyncio.run(test()))
 
