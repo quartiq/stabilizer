@@ -28,14 +28,14 @@ pub type NetworkReference =
     smoltcp_nal::shared::NetworkStackProxy<'static, NetworkStack>;
 
 pub struct MqttStorage {
-    telemetry: [u8; 1024],
+    telemetry: [u8; 2048],
     settings: [u8; 1024],
 }
 
 impl Default for MqttStorage {
     fn default() -> Self {
         Self {
-            telemetry: [0u8; 1024],
+            telemetry: [0u8; 2048],
             settings: [0u8; 1024],
         }
     }
@@ -138,6 +138,9 @@ where
             stack_manager.acquire_stack(),
             clock,
             minimq::ConfigBuilder::new(named_broker, &mut store.telemetry)
+                // The telemetry client doesn't receive any messages except MQTT control packets.
+                // As such, we don't need much of the buffer for RX.
+                .rx_buffer(minimq::config::BufferConfig::Maximum(100))
                 .client_id(&get_client_id(app, "tlm", mac))
                 .unwrap(),
         );
