@@ -45,7 +45,7 @@ cortex-m-rtic = "1.0"
 embedded-hal = "0.2.7"
 num_enum = { version = "0.7.0", default-features = false }
 paste = "1"
-idsp = "0.10"
+idsp = "0.11"
 ad9959 = { path = "ad9959", version = "0.2.0" }
 mcp230xx = "1.0"
 mutex-trait = "0.2"
