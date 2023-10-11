@@ -19,7 +19,7 @@ async def _main():
     parser.add_argument("--broker", "-b", default="mqtt", type=str,
                         help="The MQTT broker address")
     parser.add_argument("--ip", default="0.0.0.0",
-                        help="The address to use for streaming")
+                        help="The IP address to listen on")
     parser.add_argument("--port", type=int, default=9293,
                         help="Local port to listen on")
     parser.add_argument("--duration", type=float, default=10.,
