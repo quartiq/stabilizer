@@ -195,7 +195,7 @@ async def main():
 
     logging.basicConfig(level=logging.INFO)
     _transport, stream = await StabilizerStream.open(
-        (args.host, args.port), args.broker, args.maxsize)
+        args.host, args.port, args.broker, args.maxsize)
     await measure(stream, args.duration)
 
 
