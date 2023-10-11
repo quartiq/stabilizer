@@ -17,8 +17,8 @@ async def _main():
                         help="The MQTT topic prefix of the target")
     parser.add_argument("--broker", "-b", default="mqtt", type=str,
                         help="The MQTT broker address")
-    parser.add_argument("--host", default="0.0.0.0",
-                        help="Local address to listen on")
+    parser.add_argument("--multicast", "-m", default="239.192.1.100", type=str,
+                        help="The multicast address to use for streaming")
     parser.add_argument("--port", type=int, default=9293,
                         help="Local port to listen on")
     parser.add_argument("--duration", type=float, default=10.,
@@ -34,11 +34,16 @@ async def _main():
 
     logger.info("Starting stream")
     await conf.set(
-        "/stream_target", {"ip": local_ip, "port": args.port}, retain=False)
+        "/stream_target", {
+            "ip": [int(x) for x in args.multicast.split('.')],
+            "port": args.port
+        }, retain=False)
 
     try:
         logger.info("Testing stream reception")
-        _transport, stream = await StabilizerStream.open((args.host, args.port))
+        _transport, stream = await StabilizerStream.open(args.multicast,
+                                                         args.port,
+                                                         args.broker)
         loss = await measure(stream, args.duration)
         if loss > args.max_loss:
             raise RuntimeError("High frame loss", loss)
