@@ -3,6 +3,7 @@
 
 import asyncio
 import logging
+import ipaddress
 import argparse
 
 from miniconf import Miniconf
@@ -17,8 +18,8 @@ async def _main():
                         help="The MQTT topic prefix of the target")
     parser.add_argument("--broker", "-b", default="mqtt", type=str,
                         help="The MQTT broker address")
-    parser.add_argument("--multicast", "-m", default="239.192.1.100", type=str,
-                        help="The multicast address to use for streaming")
+    parser.add_argument("--ip", default="0.0.0.0",
+                        help="The address to use for streaming")
     parser.add_argument("--port", type=int, default=9293,
                         help="Local port to listen on")
     parser.add_argument("--duration", type=float, default=10.,
@@ -30,18 +31,21 @@ async def _main():
     logging.basicConfig(level=logging.INFO)
 
     conf = await Miniconf.create(args.prefix, args.broker)
-    local_ip = get_local_ip(args.broker)
+
+    stream_target = [int(x) for x in args.ip.split('.')]
+    if ipaddress.ip_address(args.ip).is_unspecified:
+        stream_target = get_local_ip(args.broker)
 
     logger.info("Starting stream")
     await conf.set(
         "/stream_target", {
-            "ip": [int(x) for x in args.multicast.split('.')],
+            "ip": stream_target,
             "port": args.port
         }, retain=False)
 
     try:
         logger.info("Testing stream reception")
-        _transport, stream = await StabilizerStream.open(args.multicast,
+        _transport, stream = await StabilizerStream.open(args.ip,
                                                          args.port,
                                                          args.broker)
         loss = await measure(stream, args.duration)

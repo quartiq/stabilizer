@@ -6,6 +6,7 @@ import asyncio
 import logging
 import struct
 import socket
+import ipaddress
 from collections import namedtuple
 from dataclasses import dataclass
 
@@ -87,21 +88,21 @@ class StabilizerStream(asyncio.DatagramProtocol):
     }
 
     @classmethod
-    async def open(cls, multicast_addr, multicast_port, broker, maxsize=1):
+    async def open(cls, addr, port, broker, maxsize=1):
         """Open a UDP multicast socket and start receiving frames"""
         loop = asyncio.get_running_loop()
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 20)
 
         # We need to specify which interface to receive broadcasts from, or Windows may choose the
         # wrong one. Thus, use the broker address to figure out our local address for the interface
         # of interest.
-        group = socket.inet_aton(multicast_addr)
-        iface = socket.inet_aton('.'.join([str(x) for x in get_local_ip(broker)]))
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, group + iface)
+        if ipaddress.ip_address(addr).is_multicast:
+            print('Subscribing to multicast')
+            group = socket.inet_aton(addr)
+            iface = socket.inet_aton('.'.join([str(x) for x in get_local_ip(broker)]))
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, group + iface)
 
-        sock.bind(('', multicast_port))
+        sock.bind(('', port))
 
         transport, protocol = await loop.create_datagram_endpoint(lambda: cls(maxsize), sock=sock)
         # Increase the OS UDP receive buffer size to 4 MiB so that latency
