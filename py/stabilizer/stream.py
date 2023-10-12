@@ -109,8 +109,9 @@ class StabilizerStream(asyncio.DatagramProtocol):
             group = socket.inet_aton(addr)
             iface = socket.inet_aton('.'.join([str(x) for x in get_local_ip(broker)]))
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, group + iface)
-
-        sock.bind(('', port))
+            sock.bind(('', port))
+        else:
+            sock.bind((addr, port))
 
         transport, protocol = await loop.create_datagram_endpoint(lambda: cls(maxsize), sock=sock)
         return transport, protocol
