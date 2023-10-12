@@ -6,6 +6,7 @@ import asyncio
 import logging
 import struct
 import socket
+import ipaddress
 from collections import namedtuple
 from dataclasses import dataclass
 
@@ -87,19 +88,32 @@ class StabilizerStream(asyncio.DatagramProtocol):
     }
 
     @classmethod
-    async def open(cls, local_addr, maxsize=1):
+    async def open(cls, addr, port, broker, maxsize=1):
         """Open a UDP socket and start receiving frames"""
         loop = asyncio.get_running_loop()
-        transport, protocol = await loop.create_datagram_endpoint(
-            lambda: cls(maxsize), local_addr=local_addr)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
         # Increase the OS UDP receive buffer size to 4 MiB so that latency
         # spikes don't impact much. Achieving 4 MiB may require increasing
         # the max allowed buffer size, e.g. via
         # `sudo sysctl net.core.rmem_max=26214400` but nowadays the default
         # max appears to be ~ 50 MiB already.
-        sock = transport.get_extra_info("socket")
-        if sock is not None:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 << 20)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 << 20)
+
+        # We need to specify which interface to receive broadcasts from, or Windows may choose the
+        # wrong one. Thus, use the broker address to figure out our local address for the interface
+        # of interest.
+        if ipaddress.ip_address(addr).is_multicast:
+            print('Subscribing to multicast')
+            group = socket.inet_aton(addr)
+            iface = socket.inet_aton('.'.join([str(x) for x in get_local_ip(broker)]))
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, group + iface)
+            sock.bind(('', port))
+        else:
+            sock.bind((addr, port))
+
+        transport, protocol = await loop.create_datagram_endpoint(lambda: cls(maxsize), sock=sock)
         return transport, protocol
 
     def __init__(self, maxsize):
@@ -155,7 +169,7 @@ async def measure(stream, duration):
         pass
 
     logger.info("Received %g MB, %g MB/s", stat.bytes/1e6,
-            stat.bytes/1e6/duration)
+                stat.bytes/1e6/duration)
 
     sent = stat.received + stat.lost
     if sent:
@@ -173,6 +187,8 @@ async def main():
                         help="Local port to listen on")
     parser.add_argument("--host", default="0.0.0.0",
                         help="Local address to listen on")
+    parser.add_argument("--broker", default="mqtt",
+                        help="The MQTT broker address")
     parser.add_argument("--maxsize", type=int, default=1,
                         help="Frame queue size")
     parser.add_argument("--duration", type=float, default=1.,
@@ -181,7 +197,7 @@ async def main():
 
     logging.basicConfig(level=logging.INFO)
     _transport, stream = await StabilizerStream.open(
-        (args.host, args.port), args.maxsize)
+        args.host, args.port, args.broker, args.maxsize)
     await measure(stream, args.duration)
 
 
