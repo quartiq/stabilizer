@@ -89,9 +89,17 @@ class StabilizerStream(asyncio.DatagramProtocol):
 
     @classmethod
     async def open(cls, addr, port, broker, maxsize=1):
-        """Open a UDP multicast socket and start receiving frames"""
+        """Open a UDP socket and start receiving frames"""
         loop = asyncio.get_running_loop()
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        # Increase the OS UDP receive buffer size to 4 MiB so that latency
+        # spikes don't impact much. Achieving 4 MiB may require increasing
+        # the max allowed buffer size, e.g. via
+        # `sudo sysctl net.core.rmem_max=26214400` but nowadays the default
+        # max appears to be ~ 50 MiB already.
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 << 20)
 
         # We need to specify which interface to receive broadcasts from, or Windows may choose the
         # wrong one. Thus, use the broker address to figure out our local address for the interface
@@ -105,14 +113,6 @@ class StabilizerStream(asyncio.DatagramProtocol):
         sock.bind(('', port))
 
         transport, protocol = await loop.create_datagram_endpoint(lambda: cls(maxsize), sock=sock)
-        # Increase the OS UDP receive buffer size to 4 MiB so that latency
-        # spikes don't impact much. Achieving 4 MiB may require increasing
-        # the max allowed buffer size, e.g. via
-        # `sudo sysctl net.core.rmem_max=26214400` but nowadays the default
-        # max appears to be ~ 50 MiB already.
-        sock = transport.get_extra_info("socket")
-        if sock is not None:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 << 20)
         return transport, protocol
 
     def __init__(self, maxsize):
