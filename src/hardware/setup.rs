@@ -15,10 +15,10 @@ use smoltcp_nal::smoltcp;
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
     eeprom, input_stamper::InputStamper, pounder,
-    pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
-    DigitalInput0, DigitalInput1, EemDigitalInput0, EemDigitalInput1,
-    EemDigitalOutput0, EemDigitalOutput1, EthernetPhy, NetworkStack,
-    SystemTimer, Systick, UsbBus, AFE0, AFE1, serial_terminal::SerialTerminal,
+    pounder::dds_output::DdsOutput, serial_terminal::SerialTerminal,
+    shared_adc::SharedAdc, timers, DigitalInput0, DigitalInput1,
+    EemDigitalInput0, EemDigitalInput1, EemDigitalOutput0, EemDigitalOutput1,
+    EthernetPhy, NetworkStack, SystemTimer, Systick, UsbBus, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -1033,7 +1033,8 @@ pub fn setup(
             cortex_m::singleton!(: Option<heapless::String<64>> = None)
                 .unwrap();
         {
-            let mut serial_string: heapless::String<64> = heapless::String::new();
+            let mut serial_string: heapless::String<64> =
+                heapless::String::new();
             let octets = mac_addr.0;
 
             write!(

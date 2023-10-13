@@ -39,6 +39,10 @@ impl SerialTerminal {
         }
     }
 
+    pub fn usb_is_suspended(&self) -> bool {
+        self.usb_device.state() == usb_device::device::UsbDeviceState::Suspend
+    }
+
     pub fn process(&mut self) {
         self.flush();
 
@@ -51,7 +55,9 @@ impl SerialTerminal {
             Ok(count) => {
                 for &value in &buffer[..count] {
                     // Currently, just echo it back.
+                    self.usb_serial.write(b"echo: ").ok();
                     self.usb_serial.write(&[value]).ok();
+                    self.usb_serial.write(b"\n\r").ok();
                 }
             }
 
