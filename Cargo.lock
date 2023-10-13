@@ -73,6 +73,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fe8f5a8a398345e52358e18ff07cc17a568fbca5c6f73873d3a62056309603"
 
 [[package]]
+name = "bbqueue"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd3baa8859d1a4c7411039a75c0599a4640ef1c9a8fc811e4325b00e6cfe0a55"
+
+[[package]]
 name = "bit_field"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -890,6 +896,7 @@ name = "stabilizer"
 version = "0.8.1"
 dependencies = [
  "ad9959",
+ "bbqueue",
  "cortex-m 0.7.7",
  "cortex-m-rt",
  "cortex-m-rtic",
@@ -918,6 +925,8 @@ dependencies = [
  "spin",
  "stm32h7xx-hal",
  "systick-monotonic",
+ "usb-device",
+ "usbd-serial",
 ]
 
 [[package]]
@@ -954,6 +963,7 @@ dependencies = [
  "paste",
  "smoltcp",
  "stm32h7",
+ "synopsys-usb-otg",
  "void",
 ]
 
@@ -977,6 +987,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "synopsys-usb-otg"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "678f3707a7b1fd4863023292c42f73c6bab0e9b0096f41ae612d1af0ff221b45"
+dependencies = [
+ "cortex-m 0.7.7",
+ "embedded-hal",
+ "usb-device",
+ "vcell",
 ]
 
 [[package]]
@@ -1007,6 +1029,23 @@ name = "unicode-ident"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "301abaae475aa91687eb82514b328ab47a211a533026cb25fc3e519b86adfc3c"
+
+[[package]]
+name = "usb-device"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f6cc3adc849b5292b4075fc0d5fdcf2f24866e88e336dd27a8943090a520508"
+
+[[package]]
+name = "usbd-serial"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db75519b86287f12dcf0d171c7cf4ecc839149fe9f3b720ac4cfce52959e1dfe"
+dependencies = [
+ "embedded-hal",
+ "nb 0.1.3",
+ "usb-device",
+]
 
 [[package]]
 name = "varint-rs"

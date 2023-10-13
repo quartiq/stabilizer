@@ -40,6 +40,7 @@ use idsp::iir;
 use stabilizer::{
     hardware::{
         self,
+        serial_terminal::SerialTerminal,
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
@@ -191,6 +192,7 @@ mod app {
 
     #[local]
     struct Local {
+        usb_terminal: SerialTerminal,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         afes: (AFE0, AFE1),
@@ -246,6 +248,7 @@ mod app {
         };
 
         let mut local = Local {
+            usb_terminal: stabilizer.usb_serial,
             sampling_timer: stabilizer.adc_dac_timer,
             digital_inputs: stabilizer.digital_inputs,
             afes: stabilizer.afes,
@@ -266,6 +269,7 @@ mod app {
         settings_update::spawn().unwrap();
         telemetry::spawn().unwrap();
         ethernet_link::spawn().unwrap();
+        usb::spawn().unwrap();
         start::spawn_after(100.millis()).unwrap();
 
         (shared, local, init::Monotonics(stabilizer.systick))
@@ -450,6 +454,15 @@ mod app {
         // Schedule the telemetry task in the future.
         telemetry::Monotonic::spawn_after((telemetry_period as u64).secs())
             .unwrap();
+    }
+
+    #[task(priority = 1, local=[usb_terminal])]
+    fn usb(c: usb::Context) {
+        // Handle the USB serial terminal.
+        c.local.usb_terminal.process();
+
+        // Schedule to run this task every 10ms.
+        usb::spawn_after(10u64.millis()).unwrap();
     }
 
     #[task(priority = 1, shared=[network])]

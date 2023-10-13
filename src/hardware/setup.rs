@@ -2,7 +2,7 @@
 //!
 //! This file contains all of the hardware-specific configuration of Stabilizer.
 use core::sync::atomic::{self, AtomicBool, Ordering};
-use core::{ptr, slice};
+use core::{fmt::Write, ptr, slice};
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
@@ -18,7 +18,7 @@ use super::{
     pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
     DigitalInput0, DigitalInput1, EemDigitalInput0, EemDigitalInput1,
     EemDigitalOutput0, EemDigitalOutput1, EthernetPhy, NetworkStack,
-    SystemTimer, Systick, AFE0, AFE1,
+    SystemTimer, Systick, UsbBus, AFE0, AFE1, serial_terminal::SerialTerminal,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -117,6 +117,7 @@ pub struct StabilizerDevices {
     pub net: NetworkDevices,
     pub digital_inputs: (DigitalInput0, DigitalInput1),
     pub eem_gpio: EemGpioDevices,
+    pub usb_serial: SerialTerminal,
 }
 
 /// The available Pounder-specific hardware interfaces.
@@ -266,7 +267,7 @@ pub fn setup(
     device.RCC.d3ccipr.modify(|_, w| w.adcsel().per());
 
     let rcc = device.RCC.constrain();
-    let ccdr = rcc
+    let mut ccdr = rcc
         .use_hse(8.MHz())
         .sysclk(design_parameters::SYSCLK.convert())
         .hclk(200.MHz())
@@ -274,6 +275,11 @@ pub fn setup(
         .pll2_p_ck(100.MHz())
         .pll2_q_ck(100.MHz())
         .freeze(vos, &device.SYSCFG);
+
+    // Set up USB clocks.
+    ccdr.clocks.hsi48_ck().unwrap();
+    ccdr.peripheral
+        .kernel_usb_clk_mux(stm32h7xx_hal::rcc::rec::UsbClkSel::Hsi48);
 
     // Before being able to call any code in ITCM, load that code from flash.
     load_itcm();
@@ -1003,6 +1009,66 @@ pub fn setup(
         lvds7: gpiod.pd4.into_push_pull_output(),
     };
 
+    let (usb_device, usb_serial) = {
+        let usb_bus = cortex_m::singleton!(: Option<usb_device::bus::UsbBusAllocator<UsbBus>> = None).unwrap();
+        let endpoint_memory =
+            cortex_m::singleton!(: [u32; 1024] = [0; 1024]).unwrap();
+
+        //let usb_id = gpioa.pa10.into_alternate::<8>();
+        let usb_n = gpioa.pa11.into_alternate();
+        let usb_p = gpioa.pa12.into_alternate();
+
+        let usb = stm32h7xx_hal::usb_hs::USB2::new(
+            device.OTG2_HS_GLOBAL,
+            device.OTG2_HS_DEVICE,
+            device.OTG2_HS_PWRCLK,
+            usb_n,
+            usb_p,
+            ccdr.peripheral.USB2OTG,
+            &ccdr.clocks,
+        );
+
+        // Generate a device serial number from the MAC address.
+        let serial_number =
+            cortex_m::singleton!(: Option<heapless::String<64>> = None)
+                .unwrap();
+        {
+            let mut serial_string: heapless::String<64> = heapless::String::new();
+            let octets = mac_addr.0;
+
+            write!(
+                serial_string,
+                "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
+                octets[0],
+                octets[1],
+                octets[2],
+                octets[3],
+                octets[4],
+                octets[5]
+            )
+            .unwrap();
+            serial_number.replace(serial_string);
+        }
+
+        usb_bus.replace(stm32h7xx_hal::usb_hs::UsbBus::new(
+            usb,
+            &mut endpoint_memory[..],
+        ));
+
+        let serial = usbd_serial::SerialPort::new(usb_bus.as_ref().unwrap());
+        let usb_device = usb_device::device::UsbDeviceBuilder::new(
+            usb_bus.as_ref().unwrap(),
+            usb_device::device::UsbVidPid(0x1209, 0x392F),
+        )
+        .manufacturer("ARTIQ/Sinara")
+        .product("Stabilizer")
+        .serial_number(serial_number.as_ref().unwrap())
+        .device_class(usbd_serial::USB_CLASS_CDC)
+        .build();
+
+        (usb_device, serial)
+    };
+
     let stabilizer = StabilizerDevices {
         systick,
         afes,
@@ -1017,6 +1083,7 @@ pub fn setup(
         timestamp_timer,
         digital_inputs,
         eem_gpio,
+        usb_serial: SerialTerminal::new(usb_device, usb_serial),
     };
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
