@@ -7,7 +7,7 @@ name = "ad9959"
 version = "0.2.0"
 dependencies = [
  "bit_field",
- "bitflags 2.4.0",
+ "bitflags 2.4.1",
  "bytemuck",
  "embedded-hal",
 ]
@@ -98,9 +98,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitflags"
-version = "2.4.0"
+version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4682ae6287fcf752ecaabbfcc7b6f9b72aa33933dc23a554d853aea8eea8635"
+checksum = "327762f6e5a765692301e5bb513e0d9fef63be86bbc14528052b1cd3e6f03e07"
 
 [[package]]
 name = "bytemuck"
@@ -351,9 +351,9 @@ dependencies = [
 
 [[package]]
 name = "idsp"
-version = "0.11.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43632fb78a5a307efb78ae8c3c11961ec1528de34bc034d94801b1ec3465e9e5"
+checksum = "2013b1ad00c5b617d4fe0277fa41af6e0173a7dea648f7f84d71b9529fd12d0d"
 dependencies = [
  "num-complex 0.4.3",
  "num-traits",
@@ -428,7 +428,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.8.0"
-source = "git+https://github.com/quartiq/miniconf.git#db9c0c9470ba29622981cf68109378bedef52201"
+source = "git+https://github.com/quartiq/miniconf.git#587a5bf6f498a9bd05d4e6fb76e7b108dd0f9a1d"
 dependencies = [
  "embedded-io",
  "heapless",
@@ -444,7 +444,7 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.8.0"
-source = "git+https://github.com/quartiq/miniconf.git#db9c0c9470ba29622981cf68109378bedef52201"
+source = "git+https://github.com/quartiq/miniconf.git#587a5bf6f498a9bd05d4e6fb76e7b108dd0f9a1d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -782,9 +782,9 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "serde"
-version = "1.0.188"
+version = "1.0.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf9e0fcba69a370eed61bcf2b728575f726b50b55cba78064753d708ddc7549e"
+checksum = "8e422a44e74ad4001bdc8eede9a4570ab52f71190e9c076d14369f38b9200537"
 dependencies = [
  "serde_derive",
 ]
@@ -802,9 +802,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.188"
+version = "1.0.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4eca7ac642d82aa35b60049a6eccb4be6be75e599bd2e9adb5f875a737654af2"
+checksum = "1e48d1f918009ce3145511378cf68d613e3b3d9137d67272562080d68a2b32d5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -949,8 +949,8 @@ dependencies = [
 
 [[package]]
 name = "stm32h7xx-hal"
-version = "0.14.0"
-source = "git+https://github.com/stm32-rs/stm32h7xx-hal#a15c64fd2a544095bb53f2603c203dda9cf40b0e"
+version = "0.15.0"
+source = "git+https://github.com/stm32-rs/stm32h7xx-hal#9c596cd424eac954158b907510b7c2e6fbb1110f"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",
