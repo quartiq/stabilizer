@@ -1,11 +1,34 @@
 use super::UsbBus;
+use core::fmt::Write;
 
-static OUTPUT_BUFFER: bbqueue::BBBuffer<1024> = bbqueue::BBBuffer::new();
+static OUTPUT_BUFFER: bbqueue::BBBuffer<512> = bbqueue::BBBuffer::new();
+
+pub struct OutputBuffer {
+    producer: bbqueue::Producer<'static, 512>,
+}
+
+impl Write for OutputBuffer {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        let data = s.as_bytes();
+
+        // Write as much data as possible to the output buffer.
+        let Ok(mut grant) = self.producer.grant_max_remaining(data.len()) else {
+            // Output buffer is full, silently drop the data.
+            return Ok(());
+        };
+
+        let len = grant.buf().len();
+        grant.buf().copy_from_slice(&data[..len]);
+        grant.commit(len);
+        Ok(())
+    }
+}
 
 pub struct SerialTerminal {
     usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
     usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
-    output: bbqueue::Consumer<'static, 1024>,
+    output: bbqueue::Consumer<'static, 512>,
+    buffer: OutputBuffer,
 }
 
 impl SerialTerminal {
@@ -13,9 +36,10 @@ impl SerialTerminal {
         usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
         usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
     ) -> Self {
-        let (_producer, consumer) = OUTPUT_BUFFER.try_split().unwrap();
+        let (producer, consumer) = OUTPUT_BUFFER.try_split().unwrap();
 
         Self {
+            buffer: OutputBuffer { producer },
             usb_device,
             usb_serial,
             output: consumer,
@@ -54,23 +78,17 @@ impl SerialTerminal {
         match self.usb_serial.read(&mut buffer) {
             Ok(count) => {
                 for &value in &buffer[..count] {
-                    // Currently, just echo it back.
-                    self.usb_serial.write(b"echo: ").ok();
-                    self.usb_serial.write(&[value]).ok();
-                    self.usb_serial.write(b"\n\r").ok();
+                    writeln!(self.buffer, "echo: {}", value as char).unwrap();
                 }
             }
 
             Err(usbd_serial::UsbError::WouldBlock) => {}
             Err(_) => {
-                // Flush the output buffer if USB is not connected.
-                self.output
-                    .read()
-                    .map(|grant| {
-                        let len = grant.buf().len();
-                        grant.release(len);
-                    })
-                    .ok();
+                // Clear the output buffer if USB is not connected.
+                while let Ok(grant) = self.output.read() {
+                    let len = grant.buf().len();
+                    grant.release(len);
+                }
             }
         }
     }

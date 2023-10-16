@@ -1030,10 +1030,10 @@ pub fn setup(
 
         // Generate a device serial number from the MAC address.
         let serial_number =
-            cortex_m::singleton!(: Option<heapless::String<64>> = None)
+            cortex_m::singleton!(: Option<heapless::String<17>> = None)
                 .unwrap();
         {
-            let mut serial_string: heapless::String<64> =
+            let mut serial_string: heapless::String<17> =
                 heapless::String::new();
             let octets = mac_addr.0;
 
