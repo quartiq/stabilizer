@@ -12,7 +12,8 @@ impl Write for OutputBuffer {
         let data = s.as_bytes();
 
         // Write as much data as possible to the output buffer.
-        let Ok(mut grant) = self.producer.grant_max_remaining(data.len()) else {
+        let Ok(mut grant) = self.producer.grant_max_remaining(data.len())
+        else {
             // Output buffer is full, silently drop the data.
             return Ok(());
         };
