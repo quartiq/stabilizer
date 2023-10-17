@@ -1,3 +1,0 @@
-[default.general]
-chip = "STM32H743ZITx"
-connect_under_reset = true
