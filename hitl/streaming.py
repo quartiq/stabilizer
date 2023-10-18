@@ -3,9 +3,10 @@
 
 import asyncio
 import logging
+import ipaddress
 import argparse
 
-from miniconf import Miniconf
+import miniconf
 from stabilizer.stream import measure, StabilizerStream, get_local_ip
 
 logger = logging.getLogger(__name__)
@@ -13,12 +14,12 @@ logger = logging.getLogger(__name__)
 
 async def _main():
     parser = argparse.ArgumentParser(description="Stabilizer Stream HITL test")
-    parser.add_argument("prefix", type=str,
+    parser.add_argument("prefix", type=str, nargs='?',
                         help="The MQTT topic prefix of the target")
     parser.add_argument("--broker", "-b", default="mqtt", type=str,
                         help="The MQTT broker address")
-    parser.add_argument("--host", default="0.0.0.0",
-                        help="Local address to listen on")
+    parser.add_argument("--ip", default="0.0.0.0",
+                        help="The IP address to listen on")
     parser.add_argument("--port", type=int, default=9293,
                         help="Local port to listen on")
     parser.add_argument("--duration", type=float, default=10.,
@@ -27,18 +28,36 @@ async def _main():
                         help="Maximum loss for success")
     args = parser.parse_args()
 
+    prefix = args.prefix
+    if not args.prefix:
+        devices = await miniconf.discover(args.broker, 'dt/sinara/dual-iir/+', 1)
+        if not devices:
+            raise Exception('No Stabilizer (Dual-iir) devices found')
+        assert len(devices) == 1, \
+            f'Multiple Stabilizers found: {devices}. Please specify one with --prefix'
+
+        prefix = devices.pop()
+
     logging.basicConfig(level=logging.INFO)
 
-    conf = await Miniconf.create(args.prefix, args.broker)
-    local_ip = get_local_ip(args.broker)
+    conf = await miniconf.Miniconf.create(prefix, args.broker)
+
+    stream_target = [int(x) for x in args.ip.split('.')]
+    if ipaddress.ip_address(args.ip).is_unspecified:
+        stream_target = get_local_ip(args.broker)
 
     logger.info("Starting stream")
     await conf.set(
-        "/stream_target", {"ip": local_ip, "port": args.port}, retain=False)
+        "/stream_target", {
+            "ip": stream_target,
+            "port": args.port
+        }, retain=False)
 
     try:
         logger.info("Testing stream reception")
-        _transport, stream = await StabilizerStream.open((args.host, args.port))
+        _transport, stream = await StabilizerStream.open(args.ip,
+                                                         args.port,
+                                                         args.broker)
         loss = await measure(stream, args.duration)
         if loss > args.max_loss:
             raise RuntimeError("High frame loss", loss)

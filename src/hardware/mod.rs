@@ -11,6 +11,7 @@ pub mod delay;
 pub mod design_parameters;
 pub mod input_stamper;
 pub mod pounder;
+pub mod serial_terminal;
 pub mod setup;
 pub mod shared_adc;
 pub mod signal_generator;
@@ -29,6 +30,8 @@ pub type AFE1 = afe::ProgrammableGainAmplifier<
     hal::gpio::gpiod::PD14<hal::gpio::Output<hal::gpio::PushPull>>,
     hal::gpio::gpiod::PD15<hal::gpio::Output<hal::gpio::PushPull>>,
 >;
+
+pub type UsbBus = stm32h7xx_hal::usb_hs::UsbBus<stm32h7xx_hal::usb_hs::USB2>;
 
 // Type alias for digital input 0 (DI0).
 pub type DigitalInput0 = hal::gpio::gpiog::PG9<hal::gpio::Input>;

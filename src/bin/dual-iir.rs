@@ -44,6 +44,7 @@ use stabilizer::{
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
         hal,
+        serial_terminal::SerialTerminal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
@@ -182,6 +183,7 @@ mod app {
 
     #[shared]
     struct Shared {
+        usb_terminal: SerialTerminal,
         network: NetworkUsers<Settings, Telemetry, 3>,
 
         settings: Settings,
@@ -228,6 +230,7 @@ mod app {
         let settings = Settings::default();
 
         let shared = Shared {
+            usb_terminal: stabilizer.usb_serial,
             network,
             settings,
             telemetry: TelemetryBuffer::default(),
@@ -266,6 +269,7 @@ mod app {
         settings_update::spawn().unwrap();
         telemetry::spawn().unwrap();
         ethernet_link::spawn().unwrap();
+        usb::spawn().unwrap();
         start::spawn_after(100.millis()).unwrap();
 
         (shared, local, init::Monotonics(stabilizer.systick))
@@ -388,7 +392,7 @@ mod app {
         );
     }
 
-    #[idle(shared=[network])]
+    #[idle(shared=[network, usb_terminal])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
             match c.shared.network.lock(|net| net.update()) {
@@ -396,7 +400,15 @@ mod app {
                     settings_update::spawn().unwrap()
                 }
                 NetworkState::Updated => {}
-                NetworkState::NoChange => cortex_m::asm::wfi(),
+                NetworkState::NoChange => {
+                    // We can't sleep if USB is not in suspend.
+                    if c.shared
+                        .usb_terminal
+                        .lock(|terminal| terminal.usb_is_suspended())
+                    {
+                        cortex_m::asm::wfi();
+                    }
+                }
             }
         }
     }
@@ -450,6 +462,15 @@ mod app {
         // Schedule the telemetry task in the future.
         telemetry::Monotonic::spawn_after((telemetry_period as u64).secs())
             .unwrap();
+    }
+
+    #[task(priority = 1, shared=[usb_terminal])]
+    fn usb(mut c: usb::Context) {
+        // Handle the USB serial terminal.
+        c.shared.usb_terminal.lock(|usb| usb.process());
+
+        // Schedule to run this task every 10 milliseconds.
+        usb::spawn_after(10u64.millis()).unwrap();
     }
 
     #[task(priority = 1, shared=[network])]

@@ -45,7 +45,7 @@ cortex-m-rtic = "1.0"
 embedded-hal = "0.2.7"
 num_enum = { version = "0.7.0", default-features = false }
 paste = "1"
-idsp = "0.10"
+idsp = "0.12"
 ad9959 = { path = "ad9959", version = "0.2.0" }
 mcp230xx = "1.0"
 mutex-trait = "0.2"
@@ -60,15 +60,22 @@ enum-iterator = "1.4.1"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
 minimq = { git = "https://github.com/quartiq/minimq" } # "0.8"
+usb-device = "0.2.9"
+usbd-serial = "0.1.1"
 # Keep this synced with the miniconf version in py/setup.py
 miniconf = { git = "https://github.com/quartiq/miniconf.git" } # "0.9"
 bit_field = "0.10.1"
 tca9539 = "0.1"
 smoltcp-nal = { version = "0.4.1", features = ["shared-stack"]}
+bbqueue = "0.5"
 
 [dependencies.stm32h7xx-hal]
-git = "https://github.com/stm32-rs/stm32h7xx-hal"
-features = ["stm32h743v", "rt", "ethernet", "xspi"]
+version = "0.15.0"
+features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
+
+[patch.crates-io.usb-device]
+git = "https://github.com/ryan-summers/usb-device"
+branch = "rs/issue-128-v0.2.9"
 
 [features]
 nightly = []
