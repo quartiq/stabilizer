@@ -34,10 +34,10 @@ default-target = "thumbv7em-none-eabihf"
 members = ["ad9959"]
 
 [dependencies]
-cortex-m = { version = "0.7.7", features = ["inline-asm"] }
+cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }
 cortex-m-rt = { version = "0.7", features = ["device"] }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
-rtt-target = { version = "0.3", features = ["cortex-m"] }
+rtt-target = "0.3"
 serde = { version = "1.0", features = ["derive"], default-features = false }
 serde-json-core = "0.5"
 heapless = { version = "0.7.16", features = ["serde"] }
@@ -50,7 +50,7 @@ ad9959 = { path = "ad9959", version = "0.2.0" }
 mcp230xx = "1.0"
 mutex-trait = "0.2"
 fugit = "0.3"
-rtt-logger = "0.2"
+rtt-logger = "0.3"
 systick-monotonic = "1.0"
 mono-clock = "0.1"
 spin = { version = "0.9", default-features = false, features = ["spin_mutex"]}
@@ -59,11 +59,12 @@ lm75 = "0.2"
 enum-iterator = "1.4.1"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
-minimq = { git = "https://github.com/quartiq/minimq" } # "0.8"
+minimq = { git = "https://github.com/quartiq/minimq", branch = "rj/std-embedded-nal-0.2" } # "0.8"
+# patch with https://github.com/rust-embedded-community/usb-device/pull/129
 usb-device = "0.2.9"
 usbd-serial = "0.1.1"
 # Keep this synced with the miniconf version in py/setup.py
-miniconf = { git = "https://github.com/quartiq/miniconf.git" } # "0.9"
+miniconf = { git = "https://github.com/quartiq/miniconf.git", branch = "rj/bump-deps" } # "0.9"
 bit_field = "0.10.1"
 tca9539 = "0.1"
 smoltcp-nal = { version = "0.4.1", features = ["shared-stack"]}
@@ -72,10 +73,6 @@ bbqueue = "0.5"
 [dependencies.stm32h7xx-hal]
 version = "0.15.0"
 features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
-
-[patch.crates-io.usb-device]
-git = "https://github.com/ryan-summers/usb-device"
-branch = "rs/issue-128-v0.2.9"
 
 [features]
 nightly = []
