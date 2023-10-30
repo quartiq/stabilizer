@@ -711,12 +711,12 @@ dependencies = [
 
 [[package]]
 name = "rtt-logger"
-version = "0.3.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7352ea2ea8c477bc6286674554dbb3487ec70472188f0939f0868f6e84921fd7"
+checksum = "b2f42c228caf6eab0fe8374ef3988b9db07dbe0b12b65b4a02aaacb48b03354e"
 dependencies = [
  "log",
- "rtt-target 0.4.0",
+ "rtt-target",
 ]
 
 [[package]]
@@ -725,16 +725,7 @@ version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "065d6058bb1204f51a562a67209e1817cf714759d5cf845aa45c75fa7b0b9d9b"
 dependencies = [
- "ufmt-write",
-]
-
-[[package]]
-name = "rtt-target"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3afa12c77ba1b9bf560e4039a9b9a08bb9cde0e9e6923955eeb917dd8d5cf303"
-dependencies = [
- "critical-section",
+ "cortex-m 0.7.7",
  "ufmt-write",
 ]
 
@@ -926,7 +917,7 @@ dependencies = [
  "rand_core",
  "rand_xorshift",
  "rtt-logger",
- "rtt-target 0.3.1",
+ "rtt-target",
  "serde",
  "serde-json-core",
  "shared-bus 0.3.0",
