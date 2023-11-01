@@ -43,7 +43,7 @@ serde-json-core = "0.5"
 heapless = { version = "0.7.16", features = ["serde"] }
 cortex-m-rtic = "1.0"
 embedded-hal = "0.2.7"
-num_enum = { version = "0.7.0", default-features = false }
+num_enum = { version = "0.7.1", default-features = false }
 paste = "1"
 idsp = "0.12"
 ad9959 = { path = "ad9959", version = "0.2.1" }
