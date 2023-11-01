@@ -1,7 +1,7 @@
 [package]
 name = "stabilizer"
 # Keep versions in Cargo.toml and py/setup.py synchronized.
-version = "0.8.1"
+version = "0.9.0"
 resolver = "2"
 authors = [
 	"Robert Jördens <rj@quartiq.de>",
@@ -59,12 +59,12 @@ lm75 = "0.2"
 enum-iterator = "1.4.1"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
-minimq = { git = "https://github.com/quartiq/minimq", branch = "rj/std-embedded-nal-0.2" } # "0.8"
+minimq = { git = "https://github.com/quartiq/minimq", branch = "release-0.8.0", version = "0.8.0" } # "0.8"
 # patch with https://github.com/rust-embedded-community/usb-device/pull/129
 usb-device = "0.2.9"
 usbd-serial = "0.1.1"
 # Keep this synced with the miniconf version in py/setup.py
-miniconf = { git = "https://github.com/quartiq/miniconf.git", branch = "rj/bump-deps" } # "0.9"
+miniconf = { git = "https://github.com/quartiq/miniconf.git", branch = "rj/bump-deps", version = "0.9.0" } # "0.9"
 smoltcp-nal = { version = "0.4.1", features = ["shared-stack"]}
 bbqueue = "0.5"
 
