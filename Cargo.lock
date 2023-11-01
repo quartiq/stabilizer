@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "ad9959"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "bit_field",
  "bitflags 2.4.1",
@@ -427,8 +427,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf"
-version = "0.8.0"
-source = "git+https://github.com/quartiq/miniconf.git?branch=rj/bump-deps#0755211c60ec2da6b349e65ec6572ca6ef6058a1"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9df2d7bdba3acb28460c347b21e1e88d869f2716ebe060eb6a79f7b76b57de72"
 dependencies = [
  "embedded-io",
  "heapless",
@@ -443,8 +444,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_derive"
-version = "0.8.0"
-source = "git+https://github.com/quartiq/miniconf.git?branch=rj/bump-deps#0755211c60ec2da6b349e65ec6572ca6ef6058a1"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89f46d25f40e41f552d76b8eb9e225fe493ebf978a5c3f42b7599e45cfe6b4e3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -453,8 +455,9 @@ dependencies = [
 
 [[package]]
 name = "minimq"
-version = "0.7.0"
-source = "git+https://github.com/quartiq/minimq?branch=rj/std-embedded-nal-0.2#07ebfc1d36ccd7662fc405f805cc18d2625e8c41"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b561c2c86a3509f7c514f546fb24755753a30fdcf67cce8d5f2f38688483cd31"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -825,9 +828,9 @@ dependencies = [
 
 [[package]]
 name = "shared-bus"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bb5650c146f3186332c5da30ff542f7d1ff0c2410346cd861f34fa836dc0d84"
+checksum = "c6b8d3f0e34309c22ca4a9a27d24fa493e31573485f3493802b75b9d706756a6"
 dependencies = [
  "atomic-polyfill 1.0.3",
  "cortex-m 0.7.7",
@@ -893,7 +896,7 @@ dependencies = [
 
 [[package]]
 name = "stabilizer"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "ad9959",
  "bbqueue",
@@ -921,7 +924,7 @@ dependencies = [
  "rtt-target",
  "serde",
  "serde-json-core",
- "shared-bus 0.3.0",
+ "shared-bus 0.3.1",
  "smoltcp-nal",
  "spin",
  "stm32h7xx-hal",
