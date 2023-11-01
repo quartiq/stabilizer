@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "ad9959"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "bit_field",
  "bitflags 2.4.1",
@@ -227,9 +227,9 @@ dependencies = [
 
 [[package]]
 name = "embedded-io"
-version = "0.5.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "658bbadc628dc286b9ae02f0cb0f5411c056eb7487b72f0083203f115de94060"
+checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "embedded-nal"
@@ -393,9 +393,9 @@ dependencies = [
 
 [[package]]
 name = "lock_api"
-version = "0.4.10"
+version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1cc9717a20b1bb222f333e6a92fd32f7d8a18ddc5a3191a11af45dcbf4dcd16"
+checksum = "3c168f8615b12bc01f9c17e2eb0cc07dcae1940121185446edc3744920e8ef45"
 dependencies = [
  "autocfg",
  "scopeguard",
@@ -427,8 +427,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf"
-version = "0.8.0"
-source = "git+https://github.com/quartiq/miniconf.git#587a5bf6f498a9bd05d4e6fb76e7b108dd0f9a1d"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9df2d7bdba3acb28460c347b21e1e88d869f2716ebe060eb6a79f7b76b57de72"
 dependencies = [
  "embedded-io",
  "heapless",
@@ -443,8 +444,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_derive"
-version = "0.8.0"
-source = "git+https://github.com/quartiq/miniconf.git#587a5bf6f498a9bd05d4e6fb76e7b108dd0f9a1d"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89f46d25f40e41f552d76b8eb9e225fe493ebf978a5c3f42b7599e45cfe6b4e3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -453,14 +455,15 @@ dependencies = [
 
 [[package]]
 name = "minimq"
-version = "0.7.0"
-source = "git+https://github.com/quartiq/minimq#cec9ce70a9091b4e20d3b09c0efe8341dc762f41"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b561c2c86a3509f7c514f546fb24755753a30fdcf67cce8d5f2f38688483cd31"
 dependencies = [
  "bit_field",
  "embedded-nal",
  "embedded-time",
  "heapless",
- "num_enum 0.5.11",
+ "num_enum 0.7.1",
  "serde",
  "smlang",
  "varint-rs",
@@ -825,9 +828,9 @@ dependencies = [
 
 [[package]]
 name = "shared-bus"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bb5650c146f3186332c5da30ff542f7d1ff0c2410346cd861f34fa836dc0d84"
+checksum = "c6b8d3f0e34309c22ca4a9a27d24fa493e31573485f3493802b75b9d706756a6"
 dependencies = [
  "atomic-polyfill 1.0.3",
  "cortex-m 0.7.7",
@@ -893,7 +896,7 @@ dependencies = [
 
 [[package]]
 name = "stabilizer"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "ad9959",
  "bbqueue",
@@ -920,7 +923,7 @@ dependencies = [
  "rtt-target",
  "serde",
  "serde-json-core",
- "shared-bus 0.3.0",
+ "shared-bus 0.3.1",
  "smoltcp-nal",
  "spin",
  "stm32h7xx-hal",
@@ -1034,7 +1037,8 @@ checksum = "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b"
 [[package]]
 name = "usb-device"
 version = "0.2.9"
-source = "git+https://github.com/ryan-summers/usb-device?branch=rs/issue-128-v0.2.9#59a02aaedd385d29d896f07fe977bff1f8963eb2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f6cc3adc849b5292b4075fc0d5fdcf2f24866e88e336dd27a8943090a520508"
 
 [[package]]
 name = "usbd-serial"
@@ -1073,9 +1077,9 @@ checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 
 [[package]]
 name = "volatile-register"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ee8f19f9d74293faf70901bc20ad067dc1ad390d2cbf1e3f75f721ffee908b6"
+checksum = "de437e2a6208b014ab52972a27e59b33fa2920d3e00fe05026167a1c509d19cc"
 dependencies = [
  "vcell",
 ]

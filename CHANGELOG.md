@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased](https://github.com/quartiq/stabilizer/compare/v0.8.1...main)
+## [0.9.0](https://github.com/quartiq/stabilizer/compare/v0.8.1...v0.9.0)
 
 ### Fixed
 
