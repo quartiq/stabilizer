@@ -828,9 +828,9 @@ dependencies = [
 
 [[package]]
 name = "shared-bus"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bb5650c146f3186332c5da30ff542f7d1ff0c2410346cd861f34fa836dc0d84"
+checksum = "c6b8d3f0e34309c22ca4a9a27d24fa493e31573485f3493802b75b9d706756a6"
 dependencies = [
  "atomic-polyfill 1.0.3",
  "cortex-m 0.7.7",
@@ -923,7 +923,7 @@ dependencies = [
  "rtt-target",
  "serde",
  "serde-json-core",
- "shared-bus 0.3.0",
+ "shared-bus 0.3.1",
  "smoltcp-nal",
  "spin",
  "stm32h7xx-hal",
