@@ -15,6 +15,6 @@ setup(
         "matplotlib",
         "gmqtt",
         # Keep this synced with the miniconf version in Cargo.toml
-        "miniconf-mqtt@git+https://github.com/quartiq/miniconf@0.8.0#subdirectory=py/miniconf-mqtt",
+        "miniconf-mqtt@git+https://github.com/quartiq/miniconf@v0.9.0#subdirectory=py/miniconf-mqtt",
     ],
 )
