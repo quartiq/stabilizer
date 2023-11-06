@@ -37,7 +37,7 @@ members = ["ad9959"]
 cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }
 cortex-m-rt = { version = "0.7", features = ["device"] }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
-rtt-target = "0.3"
+rtt-target = "0.4"
 serde = { version = "1.0", features = ["derive"], default-features = false }
 serde-json-core = "0.5"
 heapless = { version = "0.7.16", features = ["serde"] }
