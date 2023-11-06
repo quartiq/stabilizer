@@ -69,7 +69,7 @@ smoltcp-nal = { version = "0.4.1", features = ["shared-stack"]}
 bbqueue = "0.5"
 
 [dependencies.stm32h7xx-hal]
-version = "0.15.0"
+version = "0.15.1"
 features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
 
 [features]
