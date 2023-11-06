@@ -50,7 +50,7 @@ ad9959 = { path = "ad9959", version = "0.2.1" }
 mcp230xx = "1.0"
 mutex-trait = "0.2"
 fugit = "0.3"
-rtt-logger = "0.2"
+rtt-logger = "0.3"
 systick-monotonic = "1.0"
 mono-clock = "0.1"
 spin = { version = "0.9", default-features = false, features = ["spin_mutex"]}
