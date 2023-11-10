@@ -13,7 +13,10 @@ pub mod data_stream;
 pub mod network_processor;
 pub mod telemetry;
 
-use crate::hardware::{EthernetPhy, NetworkManager, NetworkStack, SystemTimer};
+use crate::hardware::{
+    flash::{BrokerAddress, MqttIdentifier},
+    EthernetPhy, NetworkManager, NetworkStack, SystemTimer,
+};
 use data_stream::{DataStream, FrameGenerator};
 use network_processor::NetworkProcessor;
 use telemetry::TelemetryClient;
@@ -95,23 +98,34 @@ where
         clock: SystemTimer,
         app: &str,
         mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
-        broker: &str,
+        broker: Option<BrokerAddress>,
+        id: Option<MqttIdentifier>,
     ) -> Self {
         let stack_manager =
             cortex_m::singleton!(: NetworkManager = NetworkManager::new(stack))
                 .unwrap();
 
+        let id = if let Some(id) = id {
+            id.0
+        } else {
+            let mut id: String<23> = String::new();
+            write!(&mut id, "{mac}").unwrap();
+            id
+        };
+
+        let broker = broker.map(|b| b.0).unwrap_or_else(|| "mqtt".into());
+
         let processor =
             NetworkProcessor::new(stack_manager.acquire_stack(), phy);
 
-        let prefix = get_device_prefix(app, mac);
+        let prefix = get_device_prefix(app, &id);
 
         let store =
             cortex_m::singleton!(: MqttStorage = MqttStorage::default())
                 .unwrap();
 
         let named_broker = miniconf::minimq::broker::NamedBroker::new(
-            broker,
+            &broker,
             stack_manager.acquire_stack(),
         )
         .unwrap();
@@ -124,13 +138,13 @@ where
                 named_broker,
                 &mut store.settings,
             )
-            .client_id(&get_client_id(app, "settings", mac))
+            .client_id(&id)
             .unwrap(),
         )
         .unwrap();
 
         let named_broker = minimq::broker::NamedBroker::new(
-            broker,
+            &broker,
             stack_manager.acquire_stack(),
         )
         .unwrap();
@@ -141,7 +155,7 @@ where
                 // The telemetry client doesn't receive any messages except MQTT control packets.
                 // As such, we don't need much of the buffer for RX.
                 .rx_buffer(minimq::config::BufferConfig::Maximum(100))
-                .client_id(&get_client_id(app, "tlm", mac))
+                .client_id(&id)
                 .unwrap(),
         );
 
@@ -215,41 +229,19 @@ where
     }
 }
 
-/// Get an MQTT client ID for a client.
-///
-/// # Args
-/// * `app` - The name of the application
-/// * `client` - The unique tag of the client
-/// * `mac` - The MAC address of the device.
-///
-/// # Returns
-/// A client ID that may be used for MQTT client identification.
-fn get_client_id(
-    app: &str,
-    client: &str,
-    mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
-) -> String<64> {
-    let mut identifier = String::new();
-    write!(&mut identifier, "{app}-{mac}-{client}").unwrap();
-    identifier
-}
-
 /// Get the MQTT prefix of a device.
 ///
 /// # Args
 /// * `app` - The name of the application that is executing.
-/// * `mac` - The ethernet MAC address of the device.
+/// * `id` - The MQTT ID of the device.
 ///
 /// # Returns
 /// The MQTT prefix used for this device.
-pub fn get_device_prefix(
-    app: &str,
-    mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
-) -> String<128> {
+pub fn get_device_prefix(app: &str, id: &str) -> String<128> {
     // Note(unwrap): The mac address + binary name must be short enough to fit into this string. If
     // they are defined too long, this will panic and the device will fail to boot.
     let mut prefix: String<128> = String::new();
-    write!(&mut prefix, "dt/sinara/{app}/{mac}").unwrap();
+    write!(&mut prefix, "dt/sinara/{app}/{id}").unwrap();
 
     prefix
 }

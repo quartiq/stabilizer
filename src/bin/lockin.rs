@@ -262,7 +262,8 @@ mod app {
             clock,
             env!("CARGO_BIN_NAME"),
             stabilizer.net.mac_address,
-            option_env!("BROKER").unwrap_or("mqtt"),
+            stabilizer.usb_serial.flash().fetch_item("broker"),
+            stabilizer.usb_serial.flash().fetch_item("id"),
         );
 
         let generator = network.configure_streaming(StreamFormat::AdcDacData);

@@ -1,6 +1,6 @@
 use super::UsbBus;
+use crate::hardware::flash::{BrokerAddress, FlashSettings, MqttIdentifier};
 use core::fmt::Write;
-use crate::hardware::flash::{MqttIdentifier, BrokerAddress, FlashSettings};
 
 struct Context {
     output: OutputBuffer,
@@ -91,7 +91,9 @@ fn handle_property_read(
     args: &[&str],
     context: &mut Context,
 ) {
-    let props: heapless::Vec<&'_ str, 2> = if let Some(prop) = menu::argument_finder(item, args, "property").unwrap() {
+    let props: heapless::Vec<&'_ str, 2> = if let Some(prop) =
+        menu::argument_finder(item, args, "property").unwrap()
+    {
         heapless::Vec::from_slice(&[prop]).unwrap()
     } else {
         heapless::Vec::from_slice(&["id", "broker"]).unwrap()
@@ -101,12 +103,20 @@ fn handle_property_read(
         write!(&mut context.output, "{prop}: ").unwrap();
         match prop {
             "id" => {
-                let value = context.flash.fetch_item::<MqttIdentifier>("mqtt-id").unwrap().0;
+                let value = context
+                    .flash
+                    .fetch_item::<MqttIdentifier>("mqtt-id")
+                    .map(|inner| inner.0)
+                    .unwrap_or_else(|| "<unset>".into());
                 writeln!(&mut context.output, "{value}").unwrap();
             }
 
             "broker" => {
-                let value = context.flash.fetch_item::<BrokerAddress>("broker").unwrap().0;
+                let value = context
+                    .flash
+                    .fetch_item::<BrokerAddress>("broker")
+                    .map(|inner| inner.0)
+                    .unwrap_or_else(|| "mqtt".into());
                 writeln!(&mut context.output, "{value}").unwrap();
             }
 
@@ -132,8 +142,12 @@ fn handle_property_write(
     // Now, write the new value into memory.
     // TODO: Validate it first?
     match property {
-        "id" => context.flash.store_item(MqttIdentifier(heapless::String::from(value))),
-        "broker" => context.flash.store_item(BrokerAddress(heapless::String::from(value))),
+        "id" => context
+            .flash
+            .store_item(MqttIdentifier(heapless::String::from(value))),
+        "broker" => context
+            .flash
+            .store_item(BrokerAddress(heapless::String::from(value))),
         other => {
             writeln!(&mut context.output, "Unknown property: {other}").unwrap();
             return;
@@ -163,7 +177,8 @@ impl SerialTerminal {
     ) -> Self {
         let (producer, consumer) = OUTPUT_BUFFER.try_split().unwrap();
 
-        let input_buffer = cortex_m::singleton!(: [u8; 255] = [0; 255]).unwrap();
+        let input_buffer =
+            cortex_m::singleton!(: [u8; 255] = [0; 255]).unwrap();
         let context = Context {
             output: OutputBuffer { producer },
             flash,
@@ -174,6 +189,10 @@ impl SerialTerminal {
             usb_serial,
             output: consumer,
         }
+    }
+
+    pub fn flash(&mut self) -> &mut FlashSettings {
+        &mut self.menu.context.flash
     }
 
     fn flush(&mut self) {
@@ -215,10 +234,13 @@ impl SerialTerminal {
             Err(usbd_serial::UsbError::WouldBlock) => {}
             Err(_) => {
                 self.menu.prompt(true);
-                self.output.read().map(|grant| {
-                    let len = grant.buf().len();
-                    grant.release(len);
-                }).ok();
+                self.output
+                    .read()
+                    .map(|grant| {
+                        let len = grant.buf().len();
+                        grant.release(len);
+                    })
+                    .ok();
             }
         }
     }

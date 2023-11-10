@@ -14,12 +14,11 @@ use smoltcp_nal::smoltcp;
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
-    eeprom, input_stamper::InputStamper, pounder,
+    eeprom, flash::FlashSettings, input_stamper::InputStamper, pounder,
     pounder::dds_output::DdsOutput, serial_terminal::SerialTerminal,
     shared_adc::SharedAdc, timers, DigitalInput0, DigitalInput1,
     EemDigitalInput0, EemDigitalInput1, EemDigitalOutput0, EemDigitalOutput1,
     EthernetPhy, NetworkStack, SystemTimer, Systick, UsbBus, AFE0, AFE1,
-    flash::FlashSettings,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -1062,7 +1061,11 @@ pub fn setup(
             usb_bus.as_ref().unwrap(),
             usb_device::device::UsbVidPid(0x1209, 0x392F),
         )
-        .strings(&[usb_device::device::StringDescriptors::default().manufacturer("ARTIQ/Sinara").product("Stabilizer").serial_number(serial_number.as_ref().unwrap())]).unwrap()
+        .strings(&[usb_device::device::StringDescriptors::default()
+            .manufacturer("ARTIQ/Sinara")
+            .product("Stabilizer")
+            .serial_number(serial_number.as_ref().unwrap())])
+        .unwrap()
         .device_class(usbd_serial::USB_CLASS_CDC)
         .build();
 
