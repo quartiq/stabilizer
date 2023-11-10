@@ -16,6 +16,7 @@ pub mod setup;
 pub mod shared_adc;
 pub mod signal_generator;
 pub mod timers;
+pub mod flash;
 
 mod eeprom;
 

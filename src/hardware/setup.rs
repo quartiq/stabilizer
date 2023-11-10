@@ -19,6 +19,7 @@ use super::{
     shared_adc::SharedAdc, timers, DigitalInput0, DigitalInput1,
     EemDigitalInput0, EemDigitalInput1, EemDigitalOutput0, EemDigitalOutput1,
     EthernetPhy, NetworkStack, SystemTimer, Systick, UsbBus, AFE0, AFE1,
+    flash::FlashSettings,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -1061,14 +1062,16 @@ pub fn setup(
             usb_bus.as_ref().unwrap(),
             usb_device::device::UsbVidPid(0x1209, 0x392F),
         )
-        .manufacturer("ARTIQ/Sinara")
-        .product("Stabilizer")
-        .serial_number(serial_number.as_ref().unwrap())
+        .strings(&[usb_device::device::StringDescriptors::default().manufacturer("ARTIQ/Sinara").product("Stabilizer").serial_number(serial_number.as_ref().unwrap())]).unwrap()
         .device_class(usbd_serial::USB_CLASS_CDC)
         .build();
 
         (usb_device, serial)
     };
+
+    let (_, flash_bank2) = device.FLASH.split();
+
+    let settings = FlashSettings::new(flash_bank2.unwrap());
 
     let stabilizer = StabilizerDevices {
         systick,
@@ -1084,7 +1087,7 @@ pub fn setup(
         timestamp_timer,
         digital_inputs,
         eem_gpio,
-        usb_serial: SerialTerminal::new(usb_device, usb_serial),
+        usb_serial: SerialTerminal::new(usb_device, usb_serial, settings),
     };
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());

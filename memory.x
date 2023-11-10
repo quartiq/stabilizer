@@ -44,3 +44,9 @@ BUG(cortex-m-rt): .itcm is not 8-byte aligned");
 
 ASSERT(__siitcm % 4 == 0, "
 BUG(cortex-m-rt): the LMA of .itcm is not 4-byte aligned");
+
+/* Place the stack in AXISRAM.
+ * Note: This is done because the sequential-storage crate needs to buffer flash sectors on
+ * the stack, each of which are 128KB. This can cause for excessive stack sizes.
+ */
+_stack_start = ORIGIN(AXISRAM) + LENGTH(AXISRAM);
