@@ -31,18 +31,17 @@ impl FlashSettings {
         mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
     ) -> Self {
         let mut settings = Settings::new(mac);
-        let mut buffer = [0u8; 256];
-        let mut offset: usize = 0;
+        let mut buffer = [0u8; 512];
+        flash.read(0, &mut buffer[..]).unwrap();
+
+        let mut data = &buffer[..];
 
         // We iteratively read the settings from flash to allow for easy expansion of the settings
         // without losing data in the future when new fields are added.
-        flash.read(offset as u32, &mut buffer[..]).unwrap();
-        let len =
-            buffer.iter().skip(1).position(|x| x == &b'"').unwrap_or(0) + 2;
         settings.broker = {
-            match serde_json_core::from_slice(&buffer[..len]) {
-                Ok((item, size)) => {
-                    offset += size;
+            match postcard::take_from_bytes(data) {
+                Ok((item, remainder)) => {
+                    data = remainder;
                     item
                 }
                 Err(e) => {
@@ -52,14 +51,9 @@ impl FlashSettings {
             }
         };
 
-        flash.read(offset as u32, &mut buffer[..]).unwrap();
-        let len =
-            buffer.iter().skip(1).position(|x| x == &b'"').unwrap_or(0) + 2;
         settings.id = {
-            match serde_json_core::from_slice(&buffer[..len]) {
-                Ok((item, size)) => {
-                    item
-                }
+            match postcard::from_bytes(data) {
+                Ok(item) => item,
                 Err(e) => {
                     log::warn!("Failed to MQTT ID from flash settings memory - using default: {e:?}");
                     settings.id
@@ -72,16 +66,16 @@ impl FlashSettings {
 
     pub fn save(&mut self) {
         let mut bank = self.flash.unlocked();
+
         let mut data = [0; 512];
         let mut offset: usize = 0;
-        offset += serde_json_core::to_slice(
-            &self.settings.broker,
-            &mut data[offset..],
-        )
-        .unwrap();
         offset +=
-            serde_json_core::to_slice(&self.settings.id, &mut data[offset..])
-                .unwrap();
+            postcard::to_slice(&self.settings.broker, &mut data[offset..])
+                .unwrap()
+                .len();
+        offset += postcard::to_slice(&self.settings.id, &mut data[offset..])
+            .unwrap()
+            .len();
 
         bank.erase(0, UnlockedFlashBank::ERASE_SIZE as u32).unwrap();
         bank.write(0, &data[..offset]).unwrap();

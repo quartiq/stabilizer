@@ -69,6 +69,7 @@ usbd-serial = "0.1.1"
 miniconf = "0.9.0"
 smoltcp-nal = { version = "0.4.1", features = ["shared-stack"]}
 bbqueue = "0.5"
+postcard = "1"
 
 [dependencies.stm32h7xx-hal]
 version = "0.15.0"
