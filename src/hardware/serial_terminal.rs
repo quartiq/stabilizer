@@ -102,9 +102,9 @@ fn handle_property_read(
 
     let mut buf = [0u8; 256];
     for path in props {
-        let len = context.flash.settings.get_json(&path, &mut buf).unwrap();
+        let len = context.flash.settings.get_json(path, &mut buf).unwrap();
         let stringified = core::str::from_utf8(&buf[..len]).unwrap();
-        write!(&mut context.output, "{path}: {stringified}").unwrap();
+        writeln!(&mut context.output, "{path}: {stringified}").unwrap();
     }
 }
 
@@ -123,6 +123,7 @@ fn handle_property_write(
     // TODO: Validate it first?
     match context.flash.settings.set_json(property, value.as_bytes()) {
         Ok(_) => {
+            context.flash.save();
             writeln!(
                 &mut context.output,
                 "Settings in memory may differ from currently operating settings. \

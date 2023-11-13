@@ -34,26 +34,30 @@ impl FlashSettings {
         // We iteratively read the settings from flash to allow for easy expansion of the settings
         // without losing data in the future when new fields are added.
         flash.read(offset as u32, &mut buffer[..]).unwrap();
+        let len = buffer.iter().skip(1).position(|x| x == &b'"').unwrap_or(0) + 2;
         settings.broker = {
-            match serde_json_core::from_slice(&buffer[..]) {
+            match serde_json_core::from_slice(&buffer[..len]) {
                 Ok((item, size)) => {
                     offset += size;
                     item
                 }
-                Err(_) => {
+                Err(e) => {
+                    log::warn!("Failed to decode broker from flash settings memory - using default: {e:?}");
                     settings.broker
                 }
             }
         };
 
         flash.read(offset as u32, &mut buffer[..]).unwrap();
+        let len = buffer.iter().skip(1).position(|x| x == &b'"').unwrap_or(0) + 2;
         settings.id = {
-            match serde_json_core::from_slice(&buffer[..]) {
+            match serde_json_core::from_slice(&buffer[..len]) {
                 Ok((item, size)) => {
                     offset += size;
                     item
                 }
-                Err(_) => {
+                Err(e) => {
+                    log::warn!("Failed to MQTT ID from flash settings memory - using default: {e:?}");
                     settings.id
                 }
             }
