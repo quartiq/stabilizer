@@ -119,7 +119,15 @@ fn handle_property_read(
 
     let mut buf = [0u8; 256];
     for path in props {
-        let len = context.flash.settings.get_json(path, &mut buf).unwrap();
+        let len = match context.flash.settings.get_json(path, &mut buf) {
+            Err(e) => {
+                writeln!(&mut context.output, "Failed to read {path}: {e}")
+                    .unwrap();
+                return;
+            }
+            Ok(len) => len,
+        };
+
         let stringified = core::str::from_utf8(&buf[..len]).unwrap();
         writeln!(&mut context.output, "{path}: {stringified}").unwrap();
     }
@@ -149,7 +157,8 @@ fn handle_property_write(
     .unwrap();
         }
         Err(e) => {
-            writeln!(&mut context.output, "Failed to update {property}: {e:?}").unwrap();
+            writeln!(&mut context.output, "Failed to update {property}: {e:?}")
+                .unwrap();
         }
     }
 }

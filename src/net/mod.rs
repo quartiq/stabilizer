@@ -13,9 +13,7 @@ pub mod data_stream;
 pub mod network_processor;
 pub mod telemetry;
 
-use crate::hardware::{
-    EthernetPhy, NetworkManager, NetworkStack, SystemTimer,
-};
+use crate::hardware::{EthernetPhy, NetworkManager, NetworkStack, SystemTimer};
 use data_stream::{DataStream, FrameGenerator};
 use network_processor::NetworkProcessor;
 use telemetry::TelemetryClient;
@@ -224,10 +222,7 @@ where
 ///
 /// # Returns
 /// A client ID that may be used for MQTT client identification.
-fn get_client_id(
-    id: &str,
-    mode: &str,
-) -> String<64> {
+fn get_client_id(id: &str, mode: &str) -> String<64> {
     let mut identifier = String::new();
     write!(&mut identifier, "{id}-{mode}").unwrap();
     identifier

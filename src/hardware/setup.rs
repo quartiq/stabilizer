@@ -1072,7 +1072,8 @@ pub fn setup(
 
     let (_, flash_bank2) = device.FLASH.split();
 
-    let settings = FlashSettings::new(flash_bank2.unwrap(), network_devices.mac_address.clone());
+    let settings =
+        FlashSettings::new(flash_bank2.unwrap(), network_devices.mac_address);
 
     let stabilizer = StabilizerDevices {
         systick,
