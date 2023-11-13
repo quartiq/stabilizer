@@ -24,7 +24,8 @@
 //! of livestreamed data.
 use core::mem::MaybeUninit;
 use heapless::{
-    pool::{Box, Init, Pool, Uninit},
+    box_pool,
+    pool::boxed::{Box, BoxBlock},
     spsc::{Consumer, Producer, Queue},
 };
 use num_enum::IntoPrimitive;
@@ -53,12 +54,13 @@ const FRAME_SIZE: usize = 1500 - 40 - 8;
 // allocated frame buffer should fit in the queue.
 const FRAME_QUEUE_SIZE: usize = FRAME_COUNT * 2;
 
-// Static storage used for a heapless::Pool of frame buffers.
-static mut FRAME_DATA: [u8; core::mem::size_of::<u8>()
-    * FRAME_SIZE
-    * FRAME_COUNT] = [0; core::mem::size_of::<u8>() * FRAME_SIZE * FRAME_COUNT];
-
 type Frame = [MaybeUninit<u8>; FRAME_SIZE];
+
+box_pool!(FRAME_POOL: Frame);
+
+// Static storage used for a heapless::Pool of frame buffers.
+const BLOCK: BoxBlock<Frame> = BoxBlock::new();
+static mut FRAME_DATA: [BoxBlock<Frame>; FRAME_COUNT] = [BLOCK; FRAME_COUNT];
 
 /// Represents the destination for the UDP stream to send data to.
 ///
@@ -129,34 +131,32 @@ pub fn setup_streaming(
             .unwrap();
     let (producer, consumer) = queue.split();
 
-    let frame_pool = cortex_m::singleton!(: Pool<Frame> = Pool::new()).unwrap();
-
     // Note(unsafe): We guarantee that FRAME_DATA is only accessed once in this function.
-    let memory = unsafe { &mut FRAME_DATA };
-    frame_pool.grow(memory);
+    let blocks = unsafe { &mut FRAME_DATA };
+    for block in blocks {
+        FRAME_POOL.manage(block);
+    }
 
-    let generator = FrameGenerator::new(producer, frame_pool);
+    let generator = FrameGenerator::new(producer);
 
-    let stream = DataStream::new(stack, consumer, frame_pool);
+    let stream = DataStream::new(stack, consumer);
 
     (generator, stream)
 }
 
 #[derive(Debug)]
 struct StreamFrame {
-    buffer: Box<Frame, Init>,
+    buffer: Box<FRAME_POOL>,
     offset: usize,
     batches: u8,
 }
 
 impl StreamFrame {
     pub fn new(
-        buffer: Box<Frame, Uninit>,
+        mut buffer: Box<FRAME_POOL>,
         format_id: u8,
         sequence_number: u32,
     ) -> Self {
-        let mut buffer = buffer.init([MaybeUninit::uninit(); FRAME_SIZE]);
-
         for (byte, buf) in MAGIC
             .to_le_bytes()
             .iter()
@@ -197,20 +197,15 @@ impl StreamFrame {
 /// The data generator for a stream.
 pub struct FrameGenerator {
     queue: Producer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
-    pool: &'static Pool<Frame>,
     current_frame: Option<StreamFrame>,
     sequence_number: u32,
     format: u8,
 }
 
 impl FrameGenerator {
-    fn new(
-        queue: Producer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
-        pool: &'static Pool<Frame>,
-    ) -> Self {
+    fn new(queue: Producer<'static, StreamFrame, FRAME_QUEUE_SIZE>) -> Self {
         Self {
             queue,
-            pool,
             format: StreamFormat::Unknown.into(),
             current_frame: None,
             sequence_number: 0,
@@ -242,7 +237,9 @@ impl FrameGenerator {
         self.sequence_number = self.sequence_number.wrapping_add(1);
 
         if self.current_frame.is_none() {
-            if let Some(buffer) = self.pool.alloc() {
+            if let Ok(buffer) =
+                FRAME_POOL.alloc([MaybeUninit::uninit(); FRAME_SIZE])
+            {
                 self.current_frame.replace(StreamFrame::new(
                     buffer,
                     self.format,
@@ -276,7 +273,6 @@ pub struct DataStream {
     stack: NetworkReference,
     socket: Option<<NetworkReference as UdpClientStack>::UdpSocket>,
     queue: Consumer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
-    frame_pool: &'static Pool<Frame>,
     remote: SocketAddr,
 }
 
@@ -290,14 +286,12 @@ impl DataStream {
     fn new(
         stack: NetworkReference,
         consumer: Consumer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
-        frame_pool: &'static Pool<Frame>,
     ) -> Self {
         Self {
             stack,
             socket: None,
             remote: StreamTarget::default().into(),
             queue: consumer,
-            frame_pool,
         }
     }
 
@@ -350,7 +344,7 @@ impl DataStream {
                 if self.open().is_ok() {
                     // If we just successfully opened the socket, flush old data from queue.
                     while let Some(frame) = self.queue.dequeue() {
-                        self.frame_pool.free(frame.buffer);
+                        drop(frame.buffer);
                     }
                 }
             }
@@ -365,7 +359,7 @@ impl DataStream {
                         )
                     };
                     self.stack.send(handle, data).ok();
-                    self.frame_pool.free(frame.buffer)
+                    drop(frame.buffer);
                 }
             }
         }

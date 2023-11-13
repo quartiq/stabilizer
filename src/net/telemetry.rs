@@ -10,7 +10,7 @@
 //! sampling frequency. Instead, the raw codes are stored and the telemetry is generated as
 //! required immediately before transmission. This ensures that any slower computation required
 //! for unit conversion can be off-loaded to lower priority tasks.
-use heapless::{String, Vec};
+use heapless::String;
 use serde::Serialize;
 
 use super::NetworkReference;
@@ -115,7 +115,8 @@ impl<T: Serialize> TelemetryClient<T> {
         >,
         prefix: &str,
     ) -> Self {
-        let mut telemetry_topic: String<128> = String::from(prefix);
+        let mut telemetry_topic: String<128> =
+            String::try_from(prefix).unwrap();
         telemetry_topic.push_str("/telemetry").unwrap();
 
         Self {
@@ -134,7 +135,7 @@ impl<T: Serialize> TelemetryClient<T> {
     /// # Args
     /// * `telemetry` - The telemetry to report
     pub fn publish(&mut self, telemetry: &T) {
-        let telemetry: Vec<u8, 512> =
+        let telemetry: serde_json_core::heapless::Vec<u8, 512> =
             serde_json_core::to_vec(telemetry).unwrap();
         self.mqtt
             .client()
