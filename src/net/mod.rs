@@ -125,7 +125,7 @@ where
                 named_broker,
                 &mut store.settings,
             )
-            .client_id(id)
+            .client_id(&get_client_id(id, "settings"))
             .unwrap(),
         )
         .unwrap();
@@ -142,7 +142,7 @@ where
                 // The telemetry client doesn't receive any messages except MQTT control packets.
                 // As such, we don't need much of the buffer for RX.
                 .rx_buffer(minimq::config::BufferConfig::Maximum(100))
-                .client_id(id)
+                .client_id(&get_client_id(id, "tlm"))
                 .unwrap(),
         );
 
@@ -214,6 +214,23 @@ where
             _ => poll_result,
         }
     }
+}
+
+/// Get an MQTT client ID for a client.
+///
+/// # Args
+/// * `id` - The base client ID
+/// * `mode` - The operating mode of this client. (i.e. tlm, settings)
+///
+/// # Returns
+/// A client ID that may be used for MQTT client identification.
+fn get_client_id(
+    id: &str,
+    mode: &str,
+) -> String<64> {
+    let mut identifier = String::new();
+    write!(&mut identifier, "{id}-{mode}").unwrap();
+    identifier
 }
 
 /// Get the MQTT prefix of a device.
