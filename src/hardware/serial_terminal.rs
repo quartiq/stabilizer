@@ -1,7 +1,8 @@
 use super::UsbBus;
 use crate::hardware::flash::FlashSettings;
+use crate::hardware::flash::Settings;
 use core::fmt::Write;
-use miniconf::JsonCoreSlash;
+use miniconf::{JsonCoreSlash, TreeKey};
 
 struct Context {
     output: OutputBuffer,
@@ -20,33 +21,33 @@ const ROOT_MENU: menu::Menu<Context> = menu::Menu {
             },
         },
         &menu::Item {
+            command: "list",
+            help: Some("List all available properties."),
+            item_type: menu::ItemType::Callback {
+                function: handle_list,
+                parameters: &[],
+            },
+        },
+        &menu::Item {
             command: "read",
-            help: Some("Read a property from the device:
-
-Available Properties:
-* /id: The MQTT ID of the device
-* /broker: The MQTT broker address"),
+            help: Some("Read a property from the device."),
             item_type: menu::ItemType::Callback {
                 function: handle_property_read,
-                parameters: &[menu::Parameter::Optional {
+                parameters: &[menu::Parameter::Mandatory {
                     parameter_name: "property",
-                    help: Some("The name of the property to read. If not specified, all properties are read"),
+                    help: Some("The name of the property to read."),
                 }]
             },
         },
         &menu::Item {
             command: "write",
-            help: Some("Write a property to the device:
-
-Available Properties:
-* /id: The MQTT ID of the device
-* /broker: The MQTT broker address"),
+            help: Some("Read a property to the device."),
             item_type: menu::ItemType::Callback {
                 function: handle_property_write,
                 parameters: &[
                     menu::Parameter::Mandatory {
                         parameter_name: "property",
-                        help: Some("The name of the property to write: [id, broker]"),
+                        help: Some("The name of the property to write."),
                     },
                     menu::Parameter::Mandatory {
                         parameter_name: "value",
@@ -94,6 +95,19 @@ impl core::fmt::Write for Context {
     }
 }
 
+fn handle_list(
+    _menu: &menu::Menu<Context>,
+    _item: &menu::Item<Context>,
+    _args: &[&str],
+    context: &mut Context,
+) {
+    writeln!(context, "Available properties:").unwrap();
+    for path in Settings::iter_paths::<heapless::String<32>>("/") {
+        let path = path.unwrap();
+        writeln!(context, "* {path}").unwrap();
+    }
+}
+
 fn handle_reset(
     _menu: &menu::Menu<Context>,
     _item: &menu::Item<Context>,
@@ -109,28 +123,21 @@ fn handle_property_read(
     args: &[&str],
     context: &mut Context,
 ) {
-    let props: heapless::Vec<&'_ str, 2> = if let Some(prop) =
-        menu::argument_finder(item, args, "property").unwrap()
-    {
-        heapless::Vec::from_slice(&[prop]).unwrap()
-    } else {
-        heapless::Vec::from_slice(&["/id", "/broker"]).unwrap()
-    };
+    let path = menu::argument_finder(item, args, "property")
+        .unwrap()
+        .unwrap();
 
     let mut buf = [0u8; 256];
-    for path in props {
-        let len = match context.flash.settings.get_json(path, &mut buf) {
-            Err(e) => {
-                writeln!(&mut context.output, "Failed to read {path}: {e}")
-                    .unwrap();
-                return;
-            }
-            Ok(len) => len,
-        };
+    let len = match context.flash.settings.get_json(path, &mut buf) {
+        Err(e) => {
+            writeln!(context, "Failed to read {path}: {e}").unwrap();
+            return;
+        }
+        Ok(len) => len,
+    };
 
-        let stringified = core::str::from_utf8(&buf[..len]).unwrap();
-        writeln!(&mut context.output, "{path}: {stringified}").unwrap();
-    }
+    let stringified = core::str::from_utf8(&buf[..len]).unwrap();
+    writeln!(context, "{path}: {stringified}").unwrap();
 }
 
 fn handle_property_write(
@@ -150,15 +157,14 @@ fn handle_property_write(
         Ok(_) => {
             context.flash.save();
             writeln!(
-                &mut context.output,
+                context,
                 "Settings in memory may differ from currently operating settings. \
         Reset device to apply settings."
             )
     .unwrap();
         }
         Err(e) => {
-            writeln!(&mut context.output, "Failed to update {property}: {e:?}")
-                .unwrap();
+            writeln!(context, "Failed to update {property}: {e:?}").unwrap();
         }
     }
 }
