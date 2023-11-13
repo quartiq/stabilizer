@@ -33,9 +33,9 @@ const ROOT_MENU: menu::Menu<Context> = menu::Menu {
             help: Some("Read a property from the device."),
             item_type: menu::ItemType::Callback {
                 function: handle_property_read,
-                parameters: &[menu::Parameter::Mandatory {
+                parameters: &[menu::Parameter::Optional {
                     parameter_name: "property",
-                    help: Some("The name of the property to read."),
+                    help: Some("The name of the property to read. If not specified, all properties are read."),
                 }]
             },
         },
@@ -123,21 +123,26 @@ fn handle_property_read(
     args: &[&str],
     context: &mut Context,
 ) {
-    let path = menu::argument_finder(item, args, "property")
-        .unwrap()
-        .unwrap();
-
     let mut buf = [0u8; 256];
-    let len = match context.flash.settings.get_json(path, &mut buf) {
-        Err(e) => {
-            writeln!(context, "Failed to read {path}: {e}").unwrap();
-            return;
-        }
-        Ok(len) => len,
+    if let Some(path) = menu::argument_finder(item, args, "property").unwrap() {
+        let len = match context.flash.settings.get_json(path, &mut buf) {
+            Err(e) => {
+                writeln!(context, "Failed to read {path}: {e}").unwrap();
+                return;
+            }
+            Ok(len) => len,
+        };
+
+        let stringified = core::str::from_utf8(&buf[..len]).unwrap();
+        writeln!(context, "{path}: {stringified}").unwrap();
     };
 
-    let stringified = core::str::from_utf8(&buf[..len]).unwrap();
-    writeln!(context, "{path}: {stringified}").unwrap();
+    for path in Settings::iter_paths::<heapless::String<32>>("/") {
+        let path = path.unwrap();
+        let len = context.flash.settings.get_json(&path, &mut buf).unwrap();
+        let stringified = core::str::from_utf8(&buf[..len]).unwrap();
+        writeln!(context, "{path}: {stringified}").unwrap();
+    }
 }
 
 fn handle_property_write(
