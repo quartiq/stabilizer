@@ -14,7 +14,6 @@ pub mod network_processor;
 pub mod telemetry;
 
 use crate::hardware::{
-    flash::{BrokerAddress, MqttIdentifier},
     EthernetPhy, NetworkManager, NetworkStack, SystemTimer,
 };
 use data_stream::{DataStream, FrameGenerator};
@@ -87,7 +86,6 @@ where
     /// * `phy` - The ethernet PHY connecting the network.
     /// * `clock` - A `SystemTimer` implementing `Clock`.
     /// * `app` - The name of the application.
-    /// * `mac` - The MAC address of the network.
     /// * `broker` - The domain name of the MQTT broker to use.
     ///
     /// # Returns
@@ -97,35 +95,24 @@ where
         phy: EthernetPhy,
         clock: SystemTimer,
         app: &str,
-        mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
-        broker: Option<BrokerAddress>,
-        id: Option<MqttIdentifier>,
+        broker: &str,
+        id: &str,
     ) -> Self {
         let stack_manager =
             cortex_m::singleton!(: NetworkManager = NetworkManager::new(stack))
                 .unwrap();
 
-        let id = if let Some(id) = id {
-            id.0
-        } else {
-            let mut id: String<23> = String::new();
-            write!(&mut id, "{mac}").unwrap();
-            id
-        };
-
-        let broker = broker.map(|b| b.0).unwrap_or_else(|| "mqtt".into());
-
         let processor =
             NetworkProcessor::new(stack_manager.acquire_stack(), phy);
 
-        let prefix = get_device_prefix(app, &id);
+        let prefix = get_device_prefix(app, id);
 
         let store =
             cortex_m::singleton!(: MqttStorage = MqttStorage::default())
                 .unwrap();
 
         let named_broker = miniconf::minimq::broker::NamedBroker::new(
-            &broker,
+            broker,
             stack_manager.acquire_stack(),
         )
         .unwrap();
@@ -138,13 +125,13 @@ where
                 named_broker,
                 &mut store.settings,
             )
-            .client_id(&id)
+            .client_id(id)
             .unwrap(),
         )
         .unwrap();
 
         let named_broker = minimq::broker::NamedBroker::new(
-            &broker,
+            broker,
             stack_manager.acquire_stack(),
         )
         .unwrap();
@@ -155,7 +142,7 @@ where
                 // The telemetry client doesn't receive any messages except MQTT control packets.
                 // As such, we don't need much of the buffer for RX.
                 .rx_buffer(minimq::config::BufferConfig::Maximum(100))
-                .client_id(&id)
+                .client_id(id)
                 .unwrap(),
         );
 

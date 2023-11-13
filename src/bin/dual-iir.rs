@@ -216,14 +216,14 @@ mod app {
             SAMPLE_TICKS,
         );
 
+        let flash = stabilizer.usb_serial.flash();
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
             clock,
             env!("CARGO_BIN_NAME"),
-            stabilizer.net.mac_address,
-            stabilizer.usb_serial.flash().fetch_item("broker"),
-            stabilizer.usb_serial.flash().fetch_item("id"),
+            &flash.settings.broker,
+            &flash.settings.id,
         );
 
         let generator = network.configure_streaming(StreamFormat::AdcDacData);

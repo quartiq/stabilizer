@@ -22,12 +22,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arrayvec"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96d30a06541fbafbc7f82ed10c06164cfbd2c401138f6addd8404629c4b16711"
-
-[[package]]
 name = "as-slice"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -822,16 +816,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
-name = "sequential-storage"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f108ff563239c0bbfcd6e72a82404d0d4682e18bbaf5a90fea1e2893318f7f9"
-dependencies = [
- "arrayvec",
- "embedded-storage",
-]
-
-[[package]]
 name = "serde"
 version = "1.0.190"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -971,7 +955,6 @@ dependencies = [
  "rand_xorshift",
  "rtt-logger",
  "rtt-target",
- "sequential-storage",
  "serde",
  "serde-json-core",
  "shared-bus 0.3.1",
@@ -1083,7 +1066,7 @@ checksum = "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b"
 
 [[package]]
 name = "usb-device"
-version = "0.2.9"
+version = "0.3.0"
 dependencies = [
  "heapless",
  "num_enum 0.6.1",

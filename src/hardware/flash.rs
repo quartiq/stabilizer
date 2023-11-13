@@ -1,112 +1,75 @@
-use embedded_storage::nor_flash::NorFlash;
+use embedded_storage::nor_flash::{ReadNorFlash, NorFlash};
 use stm32h7xx_hal::flash::{LockedFlashBank, UnlockedFlashBank};
-#[derive(Debug)]
-pub enum StorageError {
-    JsonDe(serde_json_core::de::Error),
-    JsonSer(serde_json_core::ser::Error),
+use core::fmt::Write;
+
+#[derive(miniconf::Tree)]
+pub struct Settings {
+    pub broker: heapless::String<255>,
+    pub id: heapless::String<23>,
 }
 
-impl From<serde_json_core::de::Error> for StorageError {
-    fn from(e: serde_json_core::de::Error) -> Self {
-        Self::JsonDe(e)
-    }
-}
+impl Settings {
+    fn new(mac: smoltcp_nal::smoltcp::wire::EthernetAddress) -> Self {
+        let mut id = heapless::String::new();
+        write!(&mut id, "{mac}").unwrap();
 
-impl From<serde_json_core::ser::Error> for StorageError {
-    fn from(e: serde_json_core::ser::Error) -> Self {
-        Self::JsonSer(e)
-    }
-}
-
-impl sequential_storage::map::StorageItemError for StorageError {
-    fn is_buffer_too_small(&self) -> bool {
-        match self {
-            Self::JsonSer(serde_json_core::ser::Error::BufferFull) => true,
-            Self::JsonDe(serde_json_core::de::Error::EofWhileParsingString) => {
-                true
-            }
-            Self::JsonDe(serde_json_core::de::Error::EofWhileParsingList) => {
-                true
-            }
-            Self::JsonDe(serde_json_core::de::Error::EofWhileParsingObject) => {
-                true
-            }
-            Self::JsonDe(serde_json_core::de::Error::EofWhileParsingNumber) => {
-                true
-            }
-            Self::JsonDe(serde_json_core::de::Error::EofWhileParsingValue) => {
-                true
-            }
-            _ => false,
+        Self {
+            broker: "mqtt".into(),
+            id,
         }
     }
 }
-
-macro_rules! storage_item {
-    ($len:literal, $key:literal, $name:ident) => {
-        pub struct $name(pub heapless::String<$len>);
-
-        impl sequential_storage::map::StorageItem for $name {
-            type Key = &'static str;
-            type Error = StorageError;
-
-            fn serialize_into(
-                &self,
-                buffer: &mut [u8],
-            ) -> Result<usize, Self::Error> {
-                Ok(serde_json_core::to_slice(&self.0, buffer)?)
-            }
-
-            fn deserialize_from(
-                buffer: &[u8],
-            ) -> Result<(Self, usize), Self::Error> {
-                Ok(serde_json_core::from_slice(buffer)
-                    .map(|(item, size)| (Self(item), size))?)
-            }
-
-            fn key(&self) -> Self::Key {
-                $key
-            }
-        }
-    };
-}
-
-storage_item!(23, "id", MqttIdentifier);
-storage_item!(255, "broker", BrokerAddress);
 
 pub struct FlashSettings {
     flash: LockedFlashBank,
+    pub settings: Settings,
 }
 
 impl FlashSettings {
-    pub fn new(flash: LockedFlashBank) -> Self {
-        Self { flash }
+    pub fn new(mut flash: LockedFlashBank, mac: smoltcp_nal::smoltcp::wire::EthernetAddress) -> Self {
+        let mut settings = Settings::new(mac);
+        let mut buffer = [0u8; 256];
+        let mut offset: usize = 0;
+
+        // We iteratively read the settings from flash to allow for easy expansion of the settings
+        // without losing data in the future when new fields are added.
+        flash.read(offset as u32, &mut buffer[..]).unwrap();
+        settings.broker = {
+            match serde_json_core::from_slice(&buffer[..]) {
+                Ok((item, size)) => {
+                    offset += size;
+                    item
+                }
+                Err(_) => {
+                    settings.broker
+                }
+            }
+        };
+
+        flash.read(offset as u32, &mut buffer[..]).unwrap();
+        settings.id = {
+            match serde_json_core::from_slice(&buffer[..]) {
+                Ok((item, size)) => {
+                    offset += size;
+                    item
+                }
+                Err(_) => {
+                    settings.id
+                }
+            }
+        };
+
+        Self { flash, settings }
     }
 
-    pub fn store_item(
-        &mut self,
-        item: impl sequential_storage::map::StorageItem,
-    ) {
+    pub fn save(&mut self) {
         let mut bank = self.flash.unlocked();
-        let range =
-            (bank.address() as u32)..((bank.address() + bank.len()) as u32);
-        sequential_storage::map::store_item::<
-            _,
-            _,
-            { <UnlockedFlashBank as NorFlash>::ERASE_SIZE },
-        >(&mut bank, range, item)
-        .unwrap();
-    }
+        let mut data = [0; 512];
+        let mut offset: usize = 0;
+        offset += serde_json_core::to_slice(&self.settings.broker, &mut data[offset..]).unwrap();
+        offset += serde_json_core::to_slice(&self.settings.id, &mut data[offset..]).unwrap();
 
-    pub fn fetch_item<
-        I: sequential_storage::map::StorageItem<Key = &'static str>,
-    >(
-        &mut self,
-        key: &'static str,
-    ) -> Option<I> {
-        let mut bank = self.flash.unlocked();
-        let range =
-            (bank.address() as u32)..((bank.address() + bank.len()) as u32);
-        sequential_storage::map::fetch_item(&mut bank, range, key).unwrap()
+        bank.erase(0, UnlockedFlashBank::ERASE_SIZE as u32).unwrap();
+        bank.write(0, &data[..offset]).unwrap();
     }
 }

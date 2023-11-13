@@ -1,6 +1,7 @@
 use super::UsbBus;
-use crate::hardware::flash::{BrokerAddress, FlashSettings, MqttIdentifier};
+use crate::hardware::flash::FlashSettings;
 use core::fmt::Write;
+use miniconf::JsonCoreSlash;
 
 struct Context {
     output: OutputBuffer,
@@ -15,8 +16,8 @@ const ROOT_MENU: menu::Menu<Context> = menu::Menu {
             help: Some("Read a property from the device:
 
 Available Properties:
-* id: The MQTT ID of the device
-* broker: The MQTT broker address"),
+* /id: The MQTT ID of the device
+* /broker: The MQTT broker address"),
             item_type: menu::ItemType::Callback {
                 function: handle_property_read,
                 parameters: &[menu::Parameter::Optional {
@@ -30,8 +31,8 @@ Available Properties:
             help: Some("Write a property to the device:
 
 Available Properties:
-* id: The MQTT ID of the device
-* broker: The MQTT broker address"),
+* /id: The MQTT ID of the device
+* /broker: The MQTT broker address"),
             item_type: menu::ItemType::Callback {
                 function: handle_property_write,
                 parameters: &[
@@ -96,35 +97,14 @@ fn handle_property_read(
     {
         heapless::Vec::from_slice(&[prop]).unwrap()
     } else {
-        heapless::Vec::from_slice(&["id", "broker"]).unwrap()
+        heapless::Vec::from_slice(&["/id", "/broker"]).unwrap()
     };
 
-    for prop in props {
-        write!(&mut context.output, "{prop}: ").unwrap();
-        match prop {
-            "id" => {
-                let value = context
-                    .flash
-                    .fetch_item::<MqttIdentifier>("mqtt-id")
-                    .map(|inner| inner.0)
-                    .unwrap_or_else(|| "<unset>".into());
-                writeln!(&mut context.output, "{value}").unwrap();
-            }
-
-            "broker" => {
-                let value = context
-                    .flash
-                    .fetch_item::<BrokerAddress>("broker")
-                    .map(|inner| inner.0)
-                    .unwrap_or_else(|| "mqtt".into());
-                writeln!(&mut context.output, "{value}").unwrap();
-            }
-
-            _ => {
-                writeln!(&mut context.output, "Unknown property").unwrap();
-                return;
-            }
-        }
+    let mut buf = [0u8; 256];
+    for path in props {
+        let len = context.flash.settings.get_json(&path, &mut buf).unwrap();
+        let stringified = core::str::from_utf8(&buf[..len]).unwrap();
+        write!(&mut context.output, "{path}: {stringified}").unwrap();
     }
 }
 
@@ -141,25 +121,19 @@ fn handle_property_write(
 
     // Now, write the new value into memory.
     // TODO: Validate it first?
-    match property {
-        "id" => context
-            .flash
-            .store_item(MqttIdentifier(heapless::String::from(value))),
-        "broker" => context
-            .flash
-            .store_item(BrokerAddress(heapless::String::from(value))),
-        other => {
-            writeln!(&mut context.output, "Unknown property: {other}").unwrap();
-            return;
+    match context.flash.settings.set_json(property, value.as_bytes()) {
+        Ok(_) => {
+            writeln!(
+                &mut context.output,
+                "Settings in memory may differ from currently operating settings. \
+        Reset device to apply settings."
+            )
+    .unwrap();
+        }
+        Err(e) => {
+            writeln!(&mut context.output, "Failed to update {property}: {e:?}").unwrap();
         }
     }
-
-    writeln!(
-        &mut context.output,
-        "Settings in memory may differ from currently operating settings. \
-Reset device to apply settings."
-    )
-    .unwrap();
 }
 
 pub struct SerialTerminal {
