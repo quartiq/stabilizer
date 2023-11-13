@@ -1061,11 +1061,9 @@ pub fn setup(
             usb_bus.as_ref().unwrap(),
             usb_device::device::UsbVidPid(0x1209, 0x392F),
         )
-        .strings(&[usb_device::device::StringDescriptors::default()
-            .manufacturer("ARTIQ/Sinara")
-            .product("Stabilizer")
-            .serial_number(serial_number.as_ref().unwrap())])
-        .unwrap()
+        .manufacturer("ARTIQ/Sinara")
+        .product("Stabilizer")
+        .serial_number(serial_number.as_ref().unwrap())
         .device_class(usbd_serial::USB_CLASS_CDC)
         .build();
 

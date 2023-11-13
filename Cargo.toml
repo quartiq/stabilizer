@@ -63,16 +63,15 @@ rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
 minimq = "0.8.0"
 # patch with https://github.com/rust-embedded-community/usb-device/pull/129
-usbd-serial = {path = "../../rust-embedded-community/usbd-serial"}
+usb-device = "0.2.9"
+usbd-serial = "0.1.1"
 # Keep this synced with the miniconf version in py/setup.py
 miniconf = "0.9.0"
 smoltcp-nal = { version = "0.4.1", features = ["shared-stack"]}
 bbqueue = "0.5"
-usb-device = { path = "../../rust-embedded-community/usb-device" }
 
 [dependencies.stm32h7xx-hal]
-path = "../stm32h7xx-hal"
-#version = "0.15.0"
+version = "0.15.0"
 features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
 
 [features]
