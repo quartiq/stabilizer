@@ -12,6 +12,14 @@ const ROOT_MENU: menu::Menu<Context> = menu::Menu {
     label: "root",
     items: &[
         &menu::Item {
+            command: "reset",
+            help: Some("Reset Stabilizer to force new settings to take effect."),
+            item_type: menu::ItemType::Callback {
+                function: handle_reset,
+                parameters: &[]
+            },
+        },
+        &menu::Item {
             command: "read",
             help: Some("Read a property from the device:
 
@@ -84,6 +92,15 @@ impl core::fmt::Write for Context {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         self.output.write_str(s)
     }
+}
+
+fn handle_reset(
+    _menu: &menu::Menu<Context>,
+    _item: &menu::Item<Context>,
+    _args: &[&str],
+    _context: &mut Context,
+) {
+    cortex_m::peripheral::SCB::sys_reset();
 }
 
 fn handle_property_read(

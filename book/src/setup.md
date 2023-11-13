@@ -180,7 +180,7 @@ python -m serial <port>
 
 Once you have opened the port, you can use the provided menu to update the MQTT broker address. The
 address can be an IP address or a domain name. Once the broker has been updated, power cycle
-stabilizer to have the new broker address take affect.
+stabilizer to have the new broker address take effect.
 
 ## Verify MQTT connection
 
