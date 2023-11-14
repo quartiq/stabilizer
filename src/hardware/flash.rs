@@ -41,8 +41,11 @@ impl FlashSettings {
         let mut buffer = [0u8; 512];
         flash.read(0, &mut buffer[..]).unwrap();
 
-        let settings = match postcard::from_bytes(&buffer) {
-            Ok(settings) => settings,
+        let settings = match postcard::from_bytes::<Settings>(&buffer) {
+            Ok(mut settings) => {
+                settings.mac = mac;
+                settings
+            }
             Err(_) => {
                 log::warn!(
                     "Failed to load settings from flash. Using defaults"
