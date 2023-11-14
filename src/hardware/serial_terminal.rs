@@ -109,7 +109,7 @@ fn handle_list(
     _args: &[&str],
     context: &mut Context,
 ) {
-    writeln!(context, "Available properties:").unwrap();
+    writeln!(context, "Available items:").unwrap();
 
     let mut defaults = context.flash.settings.clone();
     defaults.reset();
