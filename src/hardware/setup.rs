@@ -14,7 +14,7 @@ use smoltcp_nal::smoltcp;
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
-    eeprom, input_stamper::InputStamper, pounder,
+    eeprom, flash::FlashSettings, input_stamper::InputStamper, pounder,
     pounder::dds_output::DdsOutput, serial_terminal::SerialTerminal,
     shared_adc::SharedAdc, timers, DigitalInput0, DigitalInput1,
     EemDigitalInput0, EemDigitalInput1, EemDigitalOutput0, EemDigitalOutput1,
@@ -1070,6 +1070,11 @@ pub fn setup(
         (usb_device, serial)
     };
 
+    let (_, flash_bank2) = device.FLASH.split();
+
+    let settings =
+        FlashSettings::new(flash_bank2.unwrap(), network_devices.mac_address);
+
     let stabilizer = StabilizerDevices {
         systick,
         afes,
@@ -1084,7 +1089,7 @@ pub fn setup(
         timestamp_timer,
         digital_inputs,
         eem_gpio,
-        usb_serial: SerialTerminal::new(usb_device, usb_serial),
+        usb_serial: SerialTerminal::new(usb_device, usb_serial, settings),
     };
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());

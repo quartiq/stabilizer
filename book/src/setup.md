@@ -40,10 +40,8 @@ Stabilizer requires an MQTT broker that supports MQTTv5.
 The MQTT broker is used to distribute and exchange elemetry data and to view/change application settings.
 The broker must be reachable by both the host-side applications used to
 interact with the application on Stabilizer and by the application running on Stabilizer.
-Determine the IPv4 address of the broker as seen from the network Stabilizer is
-connected to. The broker IP address must be stable. It will be used later
-during firmware build.
-The broker must be reachable on port 1883 on that IP address.
+The broker must be reachable on port 1883 on that IP address - it may either be an IP address or a
+fully qualified domain name.
 Firewalls between Stabilizer and the broker may need to be configured to
 allow connections from Stabilizer to that port and IP address.
 
@@ -83,23 +81,21 @@ docker run -p 1883:1883 --name mosquitto -v ${pwd}/mosquitto.conf:/mosquitto/con
     git clone https://github.com/quartiq/stabilizer
     cd stabilizer
     ```
-5. Build firmware specifying the MQTT broker IP. Replace `10.34.16.1` by the
-    stable and reachable broker IPv4 address determined above.
+5. Build firmware
     ```bash
     # Bash
-    BROKER="10.34.16.1" cargo build --release
+    cargo build --release
 
     # Powershell
-    # Note: This sets the broker for all future builds as well.
-    $env:BROKER='10.34.16.1'; cargo build --release
+    cargo build --release
     ```
 6. Extract the application binary (substitute `dual-iir` below with the desired application name)
     ```bash
     # Bash
-    BROKER="10.34.16.1" cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin
+    cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin
 
     # Powershell
-    $env:BROKER='10.34.16.1'; cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin
+    cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin
     ```
 
 ## Flashing
@@ -163,15 +159,28 @@ described [above](#st-link-virtual-mass-storage).
 2. Build and run firmware on the device
     ```bash
     # Bash
-    BROKER="10.34.16.1" cargo run --release --bin dual-iir
+    cargo run --release --bin dual-iir
 
     # Powershell
-    $Env:BROKER='10.34.16.1'; cargo run --release --bin dual-iir
+    cargo run --release --bin dual-iir
     ```
 
 When using debug (non `--release`) mode, decrease the sampling frequency significantly.
 The added error checking code and missing optimizations may lead to the application
 missing timer deadlines and panicing.
+
+## Set the MQTT broker
+
+The MQTT broker can be configured via the USB port on Stabilizer's front. Connect a USB cable and
+open up the serial port in a serial terminal of your choice. `pyserial` provides a simple,
+easy-to-use terminal emulator:
+```sh
+python -m serial <port>
+```
+
+Once you have opened the port, you can use the provided menu to update the MQTT broker address. The
+address can be an IP address or a domain name. Once the broker has been updated, power cycle
+stabilizer to have the new broker address take effect.
 
 ## Verify MQTT connection
 
@@ -190,7 +199,8 @@ Broker.
 
 ![MQTT Explorer Configuration](assets/mqtt-explorer.png)
 
-> **Note:** In MQTT explorer, use the same broker address that you used when building the firmware.
+> **Note:** In MQTT explorer, use the same broker address that you set in the Stabilizer serial
+> terminal.
 
 In addition to the `alive` status, telemetry messages are published at regular intervals
 when Stabilizer has connected to the broker. Once you observe incoming telemetry,

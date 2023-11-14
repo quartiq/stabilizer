@@ -84,7 +84,6 @@ where
     /// * `phy` - The ethernet PHY connecting the network.
     /// * `clock` - A `SystemTimer` implementing `Clock`.
     /// * `app` - The name of the application.
-    /// * `mac` - The MAC address of the network.
     /// * `broker` - The domain name of the MQTT broker to use.
     ///
     /// # Returns
@@ -94,8 +93,8 @@ where
         phy: EthernetPhy,
         clock: SystemTimer,
         app: &str,
-        mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
         broker: &str,
+        id: &str,
     ) -> Self {
         let stack_manager =
             cortex_m::singleton!(: NetworkManager = NetworkManager::new(stack))
@@ -104,7 +103,7 @@ where
         let processor =
             NetworkProcessor::new(stack_manager.acquire_stack(), phy);
 
-        let prefix = get_device_prefix(app, mac);
+        let prefix = get_device_prefix(app, id);
 
         let store =
             cortex_m::singleton!(: MqttStorage = MqttStorage::default())
@@ -124,7 +123,7 @@ where
                 named_broker,
                 &mut store.settings,
             )
-            .client_id(&get_client_id(app, "settings", mac))
+            .client_id(&get_client_id(id, "settings"))
             .unwrap(),
         )
         .unwrap();
@@ -141,7 +140,7 @@ where
                 // The telemetry client doesn't receive any messages except MQTT control packets.
                 // As such, we don't need much of the buffer for RX.
                 .rx_buffer(minimq::config::BufferConfig::Maximum(100))
-                .client_id(&get_client_id(app, "tlm", mac))
+                .client_id(&get_client_id(id, "tlm"))
                 .unwrap(),
         );
 
@@ -218,19 +217,14 @@ where
 /// Get an MQTT client ID for a client.
 ///
 /// # Args
-/// * `app` - The name of the application
-/// * `client` - The unique tag of the client
-/// * `mac` - The MAC address of the device.
+/// * `id` - The base client ID
+/// * `mode` - The operating mode of this client. (i.e. tlm, settings)
 ///
 /// # Returns
 /// A client ID that may be used for MQTT client identification.
-fn get_client_id(
-    app: &str,
-    client: &str,
-    mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
-) -> String<64> {
+fn get_client_id(id: &str, mode: &str) -> String<64> {
     let mut identifier = String::new();
-    write!(&mut identifier, "{app}-{mac}-{client}").unwrap();
+    write!(&mut identifier, "{id}-{mode}").unwrap();
     identifier
 }
 
@@ -238,18 +232,15 @@ fn get_client_id(
 ///
 /// # Args
 /// * `app` - The name of the application that is executing.
-/// * `mac` - The ethernet MAC address of the device.
+/// * `id` - The MQTT ID of the device.
 ///
 /// # Returns
 /// The MQTT prefix used for this device.
-pub fn get_device_prefix(
-    app: &str,
-    mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
-) -> String<128> {
+pub fn get_device_prefix(app: &str, id: &str) -> String<128> {
     // Note(unwrap): The mac address + binary name must be short enough to fit into this string. If
     // they are defined too long, this will panic and the device will fail to boot.
     let mut prefix: String<128> = String::new();
-    write!(&mut prefix, "dt/sinara/{app}/{mac}").unwrap();
+    write!(&mut prefix, "dt/sinara/{app}/{id}").unwrap();
 
     prefix
 }
