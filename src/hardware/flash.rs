@@ -45,7 +45,7 @@ impl FlashSettings {
             Ok(mut settings) => {
                 settings.mac = mac;
                 settings
-            },
+            }
             Err(_) => {
                 log::warn!(
                     "Failed to load settings from flash. Using defaults"
