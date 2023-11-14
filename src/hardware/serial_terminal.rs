@@ -13,16 +13,24 @@ const ROOT_MENU: menu::Menu<Context> = menu::Menu {
     label: "root",
     items: &[
         &menu::Item {
-            command: "reset",
-            help: Some("Reset Stabilizer to force new settings to take effect."),
+            command: "reboot",
+            help: Some("Reboot the device to force new settings to take effect."),
             item_type: menu::ItemType::Callback {
-                function: handle_reset,
+                function: handle_device_reboot,
+                parameters: &[]
+            },
+        },
+        &menu::Item {
+            command: "factory-reset",
+            help: Some("Reset the device settings to default values."),
+            item_type: menu::ItemType::Callback {
+                function: handle_settings_reset,
                 parameters: &[]
             },
         },
         &menu::Item {
             command: "list",
-            help: Some("List all available properties."),
+            help: Some("List all available settings and their current values."),
             item_type: menu::ItemType::Callback {
                 function: handle_list,
                 parameters: &[],
@@ -30,28 +38,28 @@ const ROOT_MENU: menu::Menu<Context> = menu::Menu {
         },
         &menu::Item {
             command: "read",
-            help: Some("Read a property from the device."),
+            help: Some("Read a setting_from the device."),
             item_type: menu::ItemType::Callback {
-                function: handle_property_read,
-                parameters: &[menu::Parameter::Optional {
-                    parameter_name: "property",
-                    help: Some("The name of the property to read. If not specified, all properties are read."),
+                function: handle_setting_read,
+                parameters: &[menu::Parameter::Mandatory {
+                    parameter_name: "item",
+                    help: Some("The name of the setting to read."),
                 }]
             },
         },
         &menu::Item {
             command: "write",
-            help: Some("Read a property to the device."),
+            help: Some("Update a a setting in the device."),
             item_type: menu::ItemType::Callback {
-                function: handle_property_write,
+                function: handle_setting_write,
                 parameters: &[
                     menu::Parameter::Mandatory {
-                        parameter_name: "property",
-                        help: Some("The name of the property to write."),
+                        parameter_name: "item",
+                        help: Some("The name of the setting to write."),
                     },
                     menu::Parameter::Mandatory {
                         parameter_name: "value",
-                        help: Some("Specifies the value to be written to the property."),
+                        help: Some("Specifies the value to be written. Values must be JSON-encoded"),
                     },
                 ]
             },
@@ -102,41 +110,8 @@ fn handle_list(
     context: &mut Context,
 ) {
     writeln!(context, "Available properties:").unwrap();
-    for path in Settings::iter_paths::<heapless::String<32>>("/") {
-        let path = path.unwrap();
-        writeln!(context, "* {path}").unwrap();
-    }
-}
 
-fn handle_reset(
-    _menu: &menu::Menu<Context>,
-    _item: &menu::Item<Context>,
-    _args: &[&str],
-    _context: &mut Context,
-) {
-    cortex_m::peripheral::SCB::sys_reset();
-}
-
-fn handle_property_read(
-    _menu: &menu::Menu<Context>,
-    item: &menu::Item<Context>,
-    args: &[&str],
-    context: &mut Context,
-) {
-    let mut buf = [0u8; 256];
-    if let Some(path) = menu::argument_finder(item, args, "property").unwrap() {
-        let len = match context.flash.settings.get_json(path, &mut buf) {
-            Err(e) => {
-                writeln!(context, "Failed to read {path}: {e}").unwrap();
-                return;
-            }
-            Ok(len) => len,
-        };
-
-        let stringified = core::str::from_utf8(&buf[..len]).unwrap();
-        writeln!(context, "{path}: {stringified}").unwrap();
-    };
-
+    let mut buf = [0; 256];
     for path in Settings::iter_paths::<heapless::String<32>>("/") {
         let path = path.unwrap();
         let len = context.flash.settings.get_json(&path, &mut buf).unwrap();
@@ -145,20 +120,59 @@ fn handle_property_read(
     }
 }
 
-fn handle_property_write(
+fn handle_device_reboot(
+    _menu: &menu::Menu<Context>,
+    _item: &menu::Item<Context>,
+    _args: &[&str],
+    _context: &mut Context,
+) {
+    cortex_m::peripheral::SCB::sys_reset();
+}
+
+fn handle_settings_reset(
+    _menu: &menu::Menu<Context>,
+    _item: &menu::Item<Context>,
+    _args: &[&str],
+    context: &mut Context,
+) {
+    context.flash.settings.reset();
+    context.flash.save();
+}
+
+fn handle_setting_read(
     _menu: &menu::Menu<Context>,
     item: &menu::Item<Context>,
     args: &[&str],
     context: &mut Context,
 ) {
-    let property = menu::argument_finder(item, args, "property")
+    let mut buf = [0u8; 256];
+    let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
+    let len = match context.flash.settings.get_json(key, &mut buf) {
+        Err(e) => {
+            writeln!(context, "Failed to read {key}: {e}").unwrap();
+            return;
+        }
+        Ok(len) => len,
+    };
+
+    let stringified = core::str::from_utf8(&buf[..len]).unwrap();
+    writeln!(context, "{key}: {stringified}").unwrap();
+}
+
+fn handle_setting_write(
+    _menu: &menu::Menu<Context>,
+    item: &menu::Item<Context>,
+    args: &[&str],
+    context: &mut Context,
+) {
+    let key = menu::argument_finder(item, args, "item")
         .unwrap()
         .unwrap();
     let value = menu::argument_finder(item, args, "value").unwrap().unwrap();
 
     // Now, write the new value into memory.
     // TODO: Validate it first?
-    match context.flash.settings.set_json(property, value.as_bytes()) {
+    match context.flash.settings.set_json(key, value.as_bytes()) {
         Ok(_) => {
             context.flash.save();
             writeln!(
@@ -169,7 +183,7 @@ fn handle_property_write(
     .unwrap();
         }
         Err(e) => {
-            writeln!(context, "Failed to update {property}: {e:?}").unwrap();
+            writeln!(context, "Failed to update {key}: {e:?}").unwrap();
         }
     }
 }

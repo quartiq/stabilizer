@@ -6,6 +6,9 @@ use stm32h7xx_hal::flash::{LockedFlashBank, UnlockedFlashBank};
 pub struct Settings {
     pub broker: heapless::String<255>,
     pub id: heapless::String<23>,
+    #[serde(skip)]
+    #[tree(skip)]
+    pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
 }
 
 impl Settings {
@@ -16,7 +19,12 @@ impl Settings {
         Self {
             broker: "mqtt".into(),
             id,
+            mac,
         }
+    }
+
+    pub fn reset(&mut self) {
+        *self = Self::new(self.mac)
     }
 }
 
