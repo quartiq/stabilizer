@@ -2,7 +2,7 @@ use core::fmt::Write;
 use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 use stm32h7xx_hal::flash::{LockedFlashBank, UnlockedFlashBank};
 
-#[derive(serde::Serialize, serde::Deserialize, miniconf::Tree)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, miniconf::Tree)]
 pub struct Settings {
     pub broker: heapless::String<255>,
     pub id: heapless::String<23>,

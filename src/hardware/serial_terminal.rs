@@ -111,12 +111,26 @@ fn handle_list(
 ) {
     writeln!(context, "Available properties:").unwrap();
 
+    let mut defaults = context.flash.settings.clone();
+    defaults.reset();
+
     let mut buf = [0; 256];
+    let mut default_buf = [0; 256];
     for path in Settings::iter_paths::<heapless::String<32>>("/") {
         let path = path.unwrap();
-        let len = context.flash.settings.get_json(&path, &mut buf).unwrap();
-        let stringified = core::str::from_utf8(&buf[..len]).unwrap();
-        writeln!(context, "{path}: {stringified}").unwrap();
+        let current_value = {
+            let len = context.flash.settings.get_json(&path, &mut buf).unwrap();
+            core::str::from_utf8(&buf[..len]).unwrap()
+        };
+        let default_value = {
+            let len = defaults.get_json(&path, &mut default_buf).unwrap();
+            core::str::from_utf8(&default_buf[..len]).unwrap()
+        };
+        writeln!(
+            context,
+            "{path}: {current_value} [default: {default_value}]"
+        )
+        .unwrap();
     }
 }
 
@@ -165,9 +179,7 @@ fn handle_setting_write(
     args: &[&str],
     context: &mut Context,
 ) {
-    let key = menu::argument_finder(item, args, "item")
-        .unwrap()
-        .unwrap();
+    let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
     let value = menu::argument_finder(item, args, "value").unwrap().unwrap();
 
     // Now, write the new value into memory.
@@ -204,7 +216,7 @@ impl SerialTerminal {
         let (producer, consumer) = OUTPUT_BUFFER.try_split().unwrap();
 
         let input_buffer =
-            cortex_m::singleton!(: [u8; 255] = [0; 255]).unwrap();
+            cortex_m::singleton!(: [u8; 256] = [0; 256]).unwrap();
         let context = Context {
             output: OutputBuffer { producer },
             flash,
