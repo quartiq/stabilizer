@@ -16,7 +16,7 @@ const ROOT_MENU: menu::Menu<Context> = menu::Menu {
             command: "reboot",
             help: Some("Reboot the device to force new settings to take effect."),
             item_type: menu::ItemType::Callback {
-                function: handle_device_reboot,
+                function: handle_reboot,
                 parameters: &[]
             },
         },
@@ -24,7 +24,7 @@ const ROOT_MENU: menu::Menu<Context> = menu::Menu {
             command: "factory-reset",
             help: Some("Reset the device settings to default values."),
             item_type: menu::ItemType::Callback {
-                function: handle_settings_reset,
+                function: handle_reset,
                 parameters: &[]
             },
         },
@@ -37,10 +37,10 @@ const ROOT_MENU: menu::Menu<Context> = menu::Menu {
             },
         },
         &menu::Item {
-            command: "read",
+            command: "get",
             help: Some("Read a setting_from the device."),
             item_type: menu::ItemType::Callback {
-                function: handle_setting_read,
+                function: handle_get,
                 parameters: &[menu::Parameter::Mandatory {
                     parameter_name: "item",
                     help: Some("The name of the setting to read."),
@@ -48,10 +48,10 @@ const ROOT_MENU: menu::Menu<Context> = menu::Menu {
             },
         },
         &menu::Item {
-            command: "write",
+            command: "set",
             help: Some("Update a a setting in the device."),
             item_type: menu::ItemType::Callback {
-                function: handle_setting_write,
+                function: handle_set,
                 parameters: &[
                     menu::Parameter::Mandatory {
                         parameter_name: "item",
@@ -134,7 +134,7 @@ fn handle_list(
     }
 }
 
-fn handle_device_reboot(
+fn handle_reboot(
     _menu: &menu::Menu<Context>,
     _item: &menu::Item<Context>,
     _args: &[&str],
@@ -143,7 +143,7 @@ fn handle_device_reboot(
     cortex_m::peripheral::SCB::sys_reset();
 }
 
-fn handle_settings_reset(
+fn handle_reset(
     _menu: &menu::Menu<Context>,
     _item: &menu::Item<Context>,
     _args: &[&str],
@@ -153,7 +153,7 @@ fn handle_settings_reset(
     context.flash.save();
 }
 
-fn handle_setting_read(
+fn handle_get(
     _menu: &menu::Menu<Context>,
     item: &menu::Item<Context>,
     args: &[&str],
@@ -173,7 +173,7 @@ fn handle_setting_read(
     writeln!(context, "{key}: {stringified}").unwrap();
 }
 
-fn handle_setting_write(
+fn handle_set(
     _menu: &menu::Menu<Context>,
     item: &menu::Item<Context>,
     args: &[&str],
