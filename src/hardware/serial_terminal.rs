@@ -64,8 +64,6 @@ impl SerialInterface {
     }
 
     pub fn process(&mut self) {
-        if !self.usb_device.poll(&mut [&mut self.usb_serial]) {
-            return;
-        }
+        self.usb_device.poll(&mut [&mut self.usb_serial]);
     }
 }

@@ -520,7 +520,10 @@ mod app {
         // Handle the USB serial terminal.
         c.shared
             .usb_terminal
-            .lock(|usb| usb.interface_mut().process());
+            .lock(|usb| {
+                usb.interface_mut().process();
+                usb.process().ok();
+            });
 
         // Schedule to run this task every 10 milliseconds.
         usb::spawn_after(10u64.millis()).unwrap();

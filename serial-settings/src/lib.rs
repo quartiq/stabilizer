@@ -275,13 +275,15 @@ impl<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>
         &self.menu.context.interface
     }
 
-    pub fn process(&mut self) {
+    pub fn process(&mut self) -> Result<(), I::Error>{
         while self.menu.context.interface.read_ready().unwrap() {
             let mut buffer = [0u8; 64];
-            let count = self.menu.context.interface.read(&mut buffer).unwrap();
+            let count = self.menu.context.interface.read(&mut buffer)?;
             for &value in &buffer[..count] {
                 self.menu.input_byte(value);
             }
         }
+
+        Ok(())
     }
 }
