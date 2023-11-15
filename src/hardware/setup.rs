@@ -14,8 +14,8 @@ use smoltcp_nal::smoltcp;
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
-    eeprom, flash::FlashSettings, input_stamper::InputStamper, pounder,
-    pounder::dds_output::DdsOutput, serial_terminal::SerialTerminal,
+    eeprom, input_stamper::InputStamper, pounder,
+    pounder::dds_output::DdsOutput,
     shared_adc::SharedAdc, timers, DigitalInput0, DigitalInput1,
     EemDigitalInput0, EemDigitalInput1, EemDigitalOutput0, EemDigitalOutput1,
     EthernetPhy, NetworkStack, SystemTimer, Systick, UsbBus, AFE0, AFE1,
@@ -117,7 +117,7 @@ pub struct StabilizerDevices {
     pub net: NetworkDevices,
     pub digital_inputs: (DigitalInput0, DigitalInput1),
     pub eem_gpio: EemGpioDevices,
-    pub usb_serial: SerialTerminal,
+    pub usb_serial: super::SerialTerminal,
 }
 
 /// The available Pounder-specific hardware interfaces.
@@ -1070,10 +1070,14 @@ pub fn setup(
         (usb_device, serial)
     };
 
-    let (_, flash_bank2) = device.FLASH.split();
+    let usb_serial = {
+        let (_, flash_bank2) = device.FLASH.split();
+        let settings = super::flash::Settings::new(network_devices.mac_address);
 
-    let settings =
-        FlashSettings::new(flash_bank2.unwrap(), network_devices.mac_address);
+        let input_buffer = cortex_m::singleton!(: [u8; 256] = [0u8; 256]).unwrap();
+
+        serial_settings::SerialTerminal::new(usb_device, usb_serial, input_buffer, settings, super::flash::Flash(flash_bank2.unwrap()))
+    };
 
     let stabilizer = StabilizerDevices {
         systick,
@@ -1089,7 +1093,7 @@ pub fn setup(
         timestamp_timer,
         digital_inputs,
         eem_gpio,
-        usb_serial: SerialTerminal::new(usb_device, usb_serial, settings),
+        usb_serial,
     };
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());

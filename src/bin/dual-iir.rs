@@ -44,7 +44,7 @@ use stabilizer::{
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
         hal,
-        serial_terminal::SerialTerminal,
+        SerialTerminal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
@@ -208,7 +208,7 @@ mod app {
         let clock = SystemTimer::new(|| monotonics::now().ticks() as u32);
 
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) = hardware::setup::setup(
+        let (stabilizer, _pounder) = hardware::setup::setup(
             c.core,
             c.device,
             clock,
@@ -216,14 +216,14 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let flash = stabilizer.usb_serial.flash();
+        let settings = stabilizer.usb_serial.settings();
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
             clock,
             env!("CARGO_BIN_NAME"),
-            &flash.settings.broker,
-            &flash.settings.id,
+            &settings.broker,
+            &settings.id,
         );
 
         let generator = network.configure_streaming(StreamFormat::AdcDacData);

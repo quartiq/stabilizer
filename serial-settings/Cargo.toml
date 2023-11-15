@@ -1,0 +1,18 @@
+[package]
+name = "serial-settings"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+embedded-storage = "0.3"
+usbd-serial = "0.1.1"
+bbqueue = "0.5"
+usb-device = "0.2.9"
+miniconf = "0.9"
+menu = {path = "../../../rust-embedded-community/menu"}
+cortex-m = "0.7"
+heapless = "0.8"
+postcard = "1"
+serde = {version = "1", default-features=false}
