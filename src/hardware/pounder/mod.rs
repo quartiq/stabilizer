@@ -9,7 +9,11 @@ use serde::{Deserialize, Serialize};
 pub mod attenuators;
 pub mod dds_output;
 pub mod hrtimer;
+pub mod io_expander;
 pub mod rf_power;
+
+pub use io_expander::IoExpander;
+use io_expander::{Direction, Level};
 
 #[cfg(not(feature = "pounder_v1_0"))]
 pub mod timestamp;
@@ -29,26 +33,6 @@ pub enum GpioPin {
     AttRstN,
     OscEnN,
     ExtClkSel,
-}
-
-impl From<GpioPin> for mcp230xx::Mcp23017 {
-    fn from(x: GpioPin) -> Self {
-        match x {
-            GpioPin::Led4Green => Self::A0,
-            GpioPin::Led5Red => Self::A1,
-            GpioPin::Led6Green => Self::A2,
-            GpioPin::Led7Red => Self::A3,
-            GpioPin::Led8Green => Self::A4,
-            GpioPin::Led9Red => Self::A5,
-            GpioPin::AttLe0 => Self::B0,
-            GpioPin::AttLe1 => Self::B1,
-            GpioPin::AttLe2 => Self::B2,
-            GpioPin::AttLe3 => Self::B3,
-            GpioPin::AttRstN => Self::B5,
-            GpioPin::OscEnN => Self::B6,
-            GpioPin::ExtClkSel => Self::B7,
-        }
-    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -308,7 +292,7 @@ impl ad9959::Interface for QspiInterface {
 
 /// A structure containing implementation for Pounder hardware.
 pub struct PounderDevices {
-    mcp23017: mcp230xx::Mcp230xx<I2c1Proxy, mcp230xx::Mcp23017>,
+    io_expander: IoExpander,
     pub lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
     attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
     pwr0: AdcChannel<
@@ -346,7 +330,7 @@ impl PounderDevices {
     /// * `aux_adc1` - The ADC channel to measure the ADC1 auxiliary input.
     pub fn new(
         lm75: lm75::Lm75<I2c1Proxy, lm75::ic::Lm75>,
-        mcp23017: mcp230xx::Mcp230xx<I2c1Proxy, mcp230xx::Mcp23017>,
+        io_expander: IoExpander,
         attenuator_spi: hal::spi::Spi<hal::stm32::SPI1, hal::spi::Enabled, u8>,
         pwr0: AdcChannel<
             'static,
@@ -371,7 +355,7 @@ impl PounderDevices {
     ) -> Result<Self, Error> {
         let mut devices = Self {
             lm75,
-            mcp23017,
+            io_expander,
             attenuator_spi,
             pwr0,
             pwr1,
@@ -384,12 +368,12 @@ impl PounderDevices {
         // output state needs to be set first to properly update the output registers.
         for pin in enum_iterator::all::<GpioPin>() {
             devices
-                .mcp23017
-                .set_gpio(pin.into(), mcp230xx::Level::Low)
+                .io_expander
+                .set_level(pin, Level::Low)
                 .map_err(|_| Error::I2c)?;
             devices
-                .mcp23017
-                .set_direction(pin.into(), mcp230xx::Direction::Output)
+                .io_expander
+                .set_direction(pin, Direction::Output)
                 .map_err(|_| Error::I2c)?;
         }
         devices.reset_attenuators().unwrap();
@@ -413,20 +397,16 @@ impl PounderDevices {
     pub fn set_gpio_pin(
         &mut self,
         pin: GpioPin,
-        level: mcp230xx::Level,
+        level: Level,
     ) -> Result<(), Error> {
-        self.mcp23017
-            .set_gpio(pin.into(), level)
+        self.io_expander
+            .set_level(pin, level)
             .map_err(|_| Error::I2c)
     }
 
     /// Select external reference clock input.
     pub fn set_ext_clk(&mut self, enabled: bool) -> Result<(), Error> {
-        let level = if enabled {
-            mcp230xx::Level::High
-        } else {
-            mcp230xx::Level::Low
-        };
+        let level = if enabled { Level::High } else { Level::Low };
         // Active low
         self.set_gpio_pin(GpioPin::OscEnN, level)?;
         self.set_gpio_pin(GpioPin::ExtClkSel, level)
@@ -437,8 +417,8 @@ impl attenuators::AttenuatorInterface for PounderDevices {
     /// Reset all of the attenuators to a power-on default state.
     fn reset_attenuators(&mut self) -> Result<(), Error> {
         // Active low
-        self.set_gpio_pin(GpioPin::AttRstN, mcp230xx::Level::Low)?;
-        self.set_gpio_pin(GpioPin::AttRstN, mcp230xx::Level::High)
+        self.set_gpio_pin(GpioPin::AttRstN, Level::Low)?;
+        self.set_gpio_pin(GpioPin::AttRstN, Level::High)
     }
 
     /// Latch a configuration into a digital attenuator.
@@ -448,8 +428,8 @@ impl attenuators::AttenuatorInterface for PounderDevices {
     fn latch_attenuator(&mut self, channel: Channel) -> Result<(), Error> {
         // Rising edge sensitive
         // Be robust against initial state: drive low, then high (contrary to the datasheet figure).
-        self.set_gpio_pin(channel.into(), mcp230xx::Level::Low)?;
-        self.set_gpio_pin(channel.into(), mcp230xx::Level::High)
+        self.set_gpio_pin(channel.into(), Level::Low)?;
+        self.set_gpio_pin(channel.into(), Level::High)
     }
 
     /// Read the raw attenuation codes stored in the attenuator shift registers.

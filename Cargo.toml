@@ -35,6 +35,7 @@ members = ["ad9959"]
 
 [dependencies]
 embedded-storage = "0.3"
+tca9539 = "0.2"
 menu = "0.3"
 cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }
 cortex-m-rt = { version = "0.7", features = ["device"] }
