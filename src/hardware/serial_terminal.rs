@@ -1,5 +1,73 @@
 use super::UsbBus;
+use crate::hardware::flash::FlashSettings;
+use crate::hardware::flash::Settings;
 use core::fmt::Write;
+use miniconf::{JsonCoreSlash, TreeKey};
+
+struct Context {
+    output: OutputBuffer,
+    flash: FlashSettings,
+}
+
+const ROOT_MENU: menu::Menu<Context> = menu::Menu {
+    label: "root",
+    items: &[
+        &menu::Item {
+            command: "reboot",
+            help: Some("Reboot the device to force new settings to take effect."),
+            item_type: menu::ItemType::Callback {
+                function: handle_reboot,
+                parameters: &[]
+            },
+        },
+        &menu::Item {
+            command: "factory-reset",
+            help: Some("Reset the device settings to default values."),
+            item_type: menu::ItemType::Callback {
+                function: handle_reset,
+                parameters: &[]
+            },
+        },
+        &menu::Item {
+            command: "list",
+            help: Some("List all available settings and their current values."),
+            item_type: menu::ItemType::Callback {
+                function: handle_list,
+                parameters: &[],
+            },
+        },
+        &menu::Item {
+            command: "get",
+            help: Some("Read a setting_from the device."),
+            item_type: menu::ItemType::Callback {
+                function: handle_get,
+                parameters: &[menu::Parameter::Mandatory {
+                    parameter_name: "item",
+                    help: Some("The name of the setting to read."),
+                }]
+            },
+        },
+        &menu::Item {
+            command: "set",
+            help: Some("Update a a setting in the device."),
+            item_type: menu::ItemType::Callback {
+                function: handle_set,
+                parameters: &[
+                    menu::Parameter::Mandatory {
+                        parameter_name: "item",
+                        help: Some("The name of the setting to write."),
+                    },
+                    menu::Parameter::Mandatory {
+                        parameter_name: "value",
+                        help: Some("Specifies the value to be written. Values must be JSON-encoded"),
+                    },
+                ]
+            },
+        },
+    ],
+    entry: None,
+    exit: None,
+};
 
 static OUTPUT_BUFFER: bbqueue::BBBuffer<512> = bbqueue::BBBuffer::new();
 
@@ -25,26 +93,144 @@ impl Write for OutputBuffer {
     }
 }
 
+impl core::fmt::Write for Context {
+    /// Write data to the serial terminal.
+    ///
+    /// # Note
+    /// The terminal uses an internal buffer. Overflows of the output buffer are silently ignored.
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        self.output.write_str(s)
+    }
+}
+
+fn handle_list(
+    _menu: &menu::Menu<Context>,
+    _item: &menu::Item<Context>,
+    _args: &[&str],
+    context: &mut Context,
+) {
+    writeln!(context, "Available items:").unwrap();
+
+    let mut defaults = context.flash.settings.clone();
+    defaults.reset();
+
+    let mut buf = [0; 256];
+    let mut default_buf = [0; 256];
+    for path in Settings::iter_paths::<heapless::String<32>>("/") {
+        let path = path.unwrap();
+        let current_value = {
+            let len = context.flash.settings.get_json(&path, &mut buf).unwrap();
+            core::str::from_utf8(&buf[..len]).unwrap()
+        };
+        let default_value = {
+            let len = defaults.get_json(&path, &mut default_buf).unwrap();
+            core::str::from_utf8(&default_buf[..len]).unwrap()
+        };
+        writeln!(
+            context,
+            "{path}: {current_value} [default: {default_value}]"
+        )
+        .unwrap();
+    }
+}
+
+fn handle_reboot(
+    _menu: &menu::Menu<Context>,
+    _item: &menu::Item<Context>,
+    _args: &[&str],
+    _context: &mut Context,
+) {
+    cortex_m::peripheral::SCB::sys_reset();
+}
+
+fn handle_reset(
+    _menu: &menu::Menu<Context>,
+    _item: &menu::Item<Context>,
+    _args: &[&str],
+    context: &mut Context,
+) {
+    context.flash.settings.reset();
+    context.flash.save();
+}
+
+fn handle_get(
+    _menu: &menu::Menu<Context>,
+    item: &menu::Item<Context>,
+    args: &[&str],
+    context: &mut Context,
+) {
+    let mut buf = [0u8; 256];
+    let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
+    let len = match context.flash.settings.get_json(key, &mut buf) {
+        Err(e) => {
+            writeln!(context, "Failed to read {key}: {e}").unwrap();
+            return;
+        }
+        Ok(len) => len,
+    };
+
+    let stringified = core::str::from_utf8(&buf[..len]).unwrap();
+    writeln!(context, "{key}: {stringified}").unwrap();
+}
+
+fn handle_set(
+    _menu: &menu::Menu<Context>,
+    item: &menu::Item<Context>,
+    args: &[&str],
+    context: &mut Context,
+) {
+    let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
+    let value = menu::argument_finder(item, args, "value").unwrap().unwrap();
+
+    // Now, write the new value into memory.
+    // TODO: Validate it first?
+    match context.flash.settings.set_json(key, value.as_bytes()) {
+        Ok(_) => {
+            context.flash.save();
+            writeln!(
+                context,
+                "Settings in memory may differ from currently operating settings. \
+        Reset device to apply settings."
+            )
+    .unwrap();
+        }
+        Err(e) => {
+            writeln!(context, "Failed to update {key}: {e:?}").unwrap();
+        }
+    }
+}
+
 pub struct SerialTerminal {
     usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
     usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
+    menu: menu::Runner<'static, Context>,
     output: bbqueue::Consumer<'static, 512>,
-    buffer: OutputBuffer,
 }
 
 impl SerialTerminal {
     pub fn new(
         usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
         usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
+        flash: FlashSettings,
     ) -> Self {
         let (producer, consumer) = OUTPUT_BUFFER.try_split().unwrap();
 
+        let input_buffer =
+            cortex_m::singleton!(: [u8; 256] = [0; 256]).unwrap();
+        let context = Context {
+            output: OutputBuffer { producer },
+            flash,
+        };
         Self {
-            buffer: OutputBuffer { producer },
+            menu: menu::Runner::new(&ROOT_MENU, input_buffer, context),
             usb_device,
             usb_serial,
             output: consumer,
         }
+    }
+
+    pub fn flash(&mut self) -> &mut FlashSettings {
+        &mut self.menu.context.flash
     }
 
     fn flush(&mut self) {
@@ -79,17 +265,20 @@ impl SerialTerminal {
         match self.usb_serial.read(&mut buffer) {
             Ok(count) => {
                 for &value in &buffer[..count] {
-                    writeln!(self.buffer, "echo: {}", value as char).unwrap();
+                    self.menu.input_byte(value);
                 }
             }
 
             Err(usbd_serial::UsbError::WouldBlock) => {}
             Err(_) => {
-                // Clear the output buffer if USB is not connected.
-                while let Ok(grant) = self.output.read() {
-                    let len = grant.buf().len();
-                    grant.release(len);
-                }
+                self.menu.prompt(true);
+                self.output
+                    .read()
+                    .map(|grant| {
+                        let len = grant.buf().len();
+                        grant.release(len);
+                    })
+                    .ok();
             }
         }
     }

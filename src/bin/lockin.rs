@@ -37,7 +37,7 @@ use core::{
 use fugit::ExtU64;
 use mutex_trait::prelude::*;
 
-use idsp::{Accu, Chain, Complex, ComplexExt, Filter, Lockin, Lowpass, RPLL};
+use idsp::{Accu, Complex, ComplexExt, Filter, Lockin, Lowpass, Repeat, RPLL};
 
 use stabilizer::{
     hardware::{
@@ -237,7 +237,7 @@ mod app {
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         pll: RPLL,
-        lockin: Lockin<Chain<2, Lowpass<2>>>,
+        lockin: Lockin<Repeat<2, Lowpass<2>>>,
         signal_generator: signal_generator::SignalGenerator,
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
@@ -256,13 +256,14 @@ mod app {
             SAMPLE_TICKS,
         );
 
+        let flash = stabilizer.usb_serial.flash();
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
             clock,
             env!("CARGO_BIN_NAME"),
-            stabilizer.net.mac_address,
-            option_env!("BROKER").unwrap_or("mqtt"),
+            &flash.settings.broker,
+            &flash.settings.id,
         );
 
         let generator = network.configure_streaming(StreamFormat::AdcDacData);

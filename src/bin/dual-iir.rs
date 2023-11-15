@@ -208,7 +208,7 @@ mod app {
         let clock = SystemTimer::new(|| monotonics::now().ticks() as u32);
 
         // Configure the microcontroller
-        let (stabilizer, _pounder) = hardware::setup::setup(
+        let (mut stabilizer, _pounder) = hardware::setup::setup(
             c.core,
             c.device,
             clock,
@@ -216,13 +216,14 @@ mod app {
             SAMPLE_TICKS,
         );
 
+        let flash = stabilizer.usb_serial.flash();
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
             clock,
             env!("CARGO_BIN_NAME"),
-            stabilizer.net.mac_address,
-            option_env!("BROKER").unwrap_or("mqtt"),
+            &flash.settings.broker,
+            &flash.settings.id,
         );
 
         let generator = network.configure_streaming(StreamFormat::AdcDacData);

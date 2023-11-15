@@ -34,6 +34,8 @@ default-target = "thumbv7em-none-eabihf"
 members = ["ad9959"]
 
 [dependencies]
+embedded-storage = "0.3"
+menu = "0.3"
 cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }
 cortex-m-rt = { version = "0.7", features = ["device"] }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
@@ -45,7 +47,7 @@ cortex-m-rtic = "1.0"
 embedded-hal = "0.2.7"
 num_enum = { version = "0.7.1", default-features = false }
 paste = "1"
-idsp = "0.12"
+idsp = "0.13"
 ad9959 = { path = "ad9959", version = "0.2.1" }
 mcp230xx = "1.0"
 mutex-trait = "0.2"
@@ -69,9 +71,10 @@ bit_field = "0.10.1"
 tca9539 = "0.1"
 smoltcp-nal = { version = "0.4.1", features = ["shared-stack"]}
 bbqueue = "0.5"
+postcard = "1"
 
 [dependencies.stm32h7xx-hal]
-version = "0.15.0"
+version = "0.15.1"
 features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
 
 [features]

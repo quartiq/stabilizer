@@ -127,6 +127,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "cobs"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67ba02a97a2bd10f4b59b25c7973101c79642302776489e030cd13cdab09ed15"
+
+[[package]]
 name = "cortex-m"
 version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -351,9 +357,9 @@ dependencies = [
 
 [[package]]
 name = "idsp"
-version = "0.12.1"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2013b1ad00c5b617d4fe0277fa41af6e0173a7dea648f7f84d71b9529fd12d0d"
+checksum = "454770ee82223cd2580e0cef04b4e5dbe5b60f11600e3cb7e910aaf0d62c99ce"
 dependencies = [
  "num-complex 0.4.4",
  "num-traits",
@@ -424,6 +430,12 @@ dependencies = [
  "num_enum 0.5.11",
  "paste",
 ]
+
+[[package]]
+name = "menu"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b03d7f798bfe97329ad6df937951142eec93886b37d87010502dd25e8cc75fd5"
 
 [[package]]
 name = "miniconf"
@@ -632,6 +644,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de3145af08024dea9fa9914f381a17b8fc6034dfb00f3a84013f7ff43f29ed4c"
 
 [[package]]
+name = "postcard"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a55c51ee6c0db07e68448e336cf8ea4131a620edefebf9893e759b2d793420f8"
+dependencies = [
+ "cobs",
+ "heapless",
+ "serde",
+]
+
+[[package]]
 name = "proc-macro-error"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -785,9 +808,9 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "serde"
-version = "1.0.190"
+version = "1.0.192"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91d3c334ca1ee894a2c6f6ad698fe8c435b76d504b13d436f0685d648d6d96f7"
+checksum = "bca2a08484b285dcb282d0f67b26cadc0df8b19f8c12502c13d966bf9482f001"
 dependencies = [
  "serde_derive",
 ]
@@ -805,9 +828,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.190"
+version = "1.0.192"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67c5609f394e5c2bd7fc51efda478004ea80ef42fee983d5c67a65e34f32c0e3"
+checksum = "d6c7207fbec9faa48073f3e3074cbe553af6ea512d7c21ba46e434e70ea9fbc1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -905,6 +928,7 @@ dependencies = [
  "cortex-m-rt",
  "cortex-m-rtic",
  "embedded-hal",
+ "embedded-storage",
  "enum-iterator",
  "fugit",
  "heapless",
@@ -912,12 +936,14 @@ dependencies = [
  "lm75",
  "log",
  "mcp230xx",
+ "menu",
  "miniconf",
  "minimq",
  "mono-clock",
  "mutex-trait",
  "num_enum 0.7.1",
  "paste",
+ "postcard",
  "rand_core",
  "rand_xorshift",
  "rtt-logger",
@@ -954,9 +980,9 @@ dependencies = [
 
 [[package]]
 name = "stm32h7xx-hal"
-version = "0.15.0"
+version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42323c63e7ee7b6979d9370ef7f381860bbd16653bd24a30cf26e78877dbf3fb"
+checksum = "e08bcfbdbe4458133f2fd55994a5c4f1b4bf28084f0218e93cdbc19d7c70219f"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",
