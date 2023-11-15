@@ -15,7 +15,7 @@ use smoltcp_nal::smoltcp;
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
     eeprom, input_stamper::InputStamper, pounder,
-    pounder::dds_output::DdsOutput,
+    pounder::dds_output::DdsOutput, serial_terminal::SerialInterface,
     shared_adc::SharedAdc, timers, DigitalInput0, DigitalInput1,
     EemDigitalInput0, EemDigitalInput1, EemDigitalOutput0, EemDigitalOutput1,
     EthernetPhy, NetworkStack, SystemTimer, Systick, UsbBus, AFE0, AFE1,
@@ -1074,9 +1074,20 @@ pub fn setup(
         let (_, flash_bank2) = device.FLASH.split();
         let settings = super::flash::Settings::new(network_devices.mac_address);
 
-        let input_buffer = cortex_m::singleton!(: [u8; 256] = [0u8; 256]).unwrap();
+        let input_buffer =
+            cortex_m::singleton!(: [u8; 256] = [0u8; 256]).unwrap();
+        let serialize_buffer =
+            cortex_m::singleton!(: [u8; 512] = [0u8; 512]).unwrap();
 
-        serial_settings::SerialTerminal::new(usb_device, usb_serial, input_buffer, settings, super::flash::Flash(flash_bank2.unwrap()))
+        let usb_interface = SerialInterface::new(usb_device, usb_serial);
+
+        serial_settings::SerialSettings::new(
+            usb_interface,
+            settings,
+            super::flash::Flash(flash_bank2.unwrap()),
+            input_buffer,
+            serialize_buffer,
+        )
     };
 
     let stabilizer = StabilizerDevices {

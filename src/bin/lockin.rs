@@ -47,10 +47,10 @@ use stabilizer::{
         dac::{Dac0Output, Dac1Output, DacCode},
         hal,
         input_stamper::InputStamper,
-        SerialTerminal,
         signal_generator,
         timers::SamplingTimer,
-        DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
+        DigitalInput0, DigitalInput1, SerialTerminal, SystemTimer, Systick,
+        AFE0, AFE1,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -465,10 +465,9 @@ mod app {
                 NetworkState::Updated => {}
                 NetworkState::NoChange => {
                     // We can't sleep if USB is not in suspend.
-                    if c.shared
-                        .usb_terminal
-                        .lock(|terminal| terminal.usb_is_suspended())
-                    {
+                    if c.shared.usb_terminal.lock(|terminal| {
+                        terminal.interface().usb_is_suspended()
+                    }) {
                         cortex_m::asm::wfi();
                     }
                 }
@@ -519,7 +518,9 @@ mod app {
     #[task(priority = 1, shared=[usb_terminal])]
     fn usb(mut c: usb::Context) {
         // Handle the USB serial terminal.
-        c.shared.usb_terminal.lock(|usb| usb.process());
+        c.shared
+            .usb_terminal
+            .lock(|usb| usb.interface_mut().process());
 
         // Schedule to run this task every 10 milliseconds.
         usb::spawn_after(10u64.millis()).unwrap();

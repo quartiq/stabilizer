@@ -34,6 +34,7 @@ default-target = "thumbv7em-none-eabihf"
 members = ["ad9959", "serial-settings"]
 
 [dependencies]
+embedded-io = "0.5"
 embedded-storage = "0.3"
 menu = "0.3"
 cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }

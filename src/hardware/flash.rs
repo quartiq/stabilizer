@@ -11,7 +11,7 @@ pub struct Settings {
     pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
 }
 
-impl serial_settings::SerialSettings for Settings {
+impl serial_settings::Settings for Settings {
     fn reset(&mut self) {
         *self = Self::new(self.mac)
     }
@@ -33,13 +33,18 @@ impl Settings {
 pub struct Flash(pub LockedFlashBank);
 
 impl embedded_storage::nor_flash::ErrorType for Flash {
-    type Error = <LockedFlashBank as embedded_storage::nor_flash::ErrorType>::Error;
+    type Error =
+        <LockedFlashBank as embedded_storage::nor_flash::ErrorType>::Error;
 }
 
 impl embedded_storage::nor_flash::ReadNorFlash for Flash {
     const READ_SIZE: usize = LockedFlashBank::READ_SIZE;
 
-    fn read(&mut self, offset: u32, bytes: &mut [u8]) -> Result<(), Self::Error> {
+    fn read(
+        &mut self,
+        offset: u32,
+        bytes: &mut [u8],
+    ) -> Result<(), Self::Error> {
         self.0.read(offset, bytes)
     }
 
@@ -49,8 +54,10 @@ impl embedded_storage::nor_flash::ReadNorFlash for Flash {
 }
 
 impl embedded_storage::nor_flash::NorFlash for Flash {
-    const WRITE_SIZE: usize = stm32h7xx_hal::flash::UnlockedFlashBank::WRITE_SIZE;
-    const ERASE_SIZE: usize = stm32h7xx_hal::flash::UnlockedFlashBank::ERASE_SIZE;
+    const WRITE_SIZE: usize =
+        stm32h7xx_hal::flash::UnlockedFlashBank::WRITE_SIZE;
+    const ERASE_SIZE: usize =
+        stm32h7xx_hal::flash::UnlockedFlashBank::ERASE_SIZE;
 
     fn erase(&mut self, from: u32, to: u32) -> Result<(), Self::Error> {
         let mut bank = self.0.unlocked();

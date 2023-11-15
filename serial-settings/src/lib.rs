@@ -1,33 +1,55 @@
 #![no_std]
 
 use core::fmt::Write;
-use miniconf::JsonCoreSlash;
 use embedded_storage::nor_flash::NorFlash;
+use miniconf::JsonCoreSlash;
 use serde::Serialize;
 
-static OUTPUT_BUFFER: bbqueue::BBBuffer<512> = bbqueue::BBBuffer::new();
-
-struct Context<Settings: SerialSettings, Flash: NorFlash + 'static> {
-    output: OutputBuffer,
-    flash: Flash,
-    settings: Settings,
-}
-
-impl<Settings: SerialSettings, Flash: NorFlash + 'static> Context<Settings, Flash> {
-    fn save(&mut self) {
-        self.flash.erase(0, self.flash.capacity() as u32).unwrap();
-        // TODO: Use a user provided buffer.
-        let mut buf = [0; 512];
-        let serialized = postcard::to_slice(&self.settings, &mut buf).unwrap();
-        self.flash.write(0, serialized).unwrap();
-    }
-}
-
-pub trait SerialSettings: for<'a> JsonCoreSlash<'a> + Serialize + Clone + 'static {
+pub trait Settings:
+    for<'a> JsonCoreSlash<'a> + Serialize + Clone + 'static
+{
     fn reset(&mut self);
 }
 
-fn make_menu<Settings: SerialSettings, Flash: NorFlash + 'static>() -> menu::Menu<'static, Context<Settings, Flash>> {
+pub trait Interface:
+    embedded_io::Read + embedded_io::ReadReady + embedded_io::Write
+{
+}
+
+struct Context<'a, I: Interface, S: Settings, Flash: NorFlash + 'static> {
+    flash: Flash,
+    settings: S,
+    interface: I,
+    buffer: &'a mut [u8],
+}
+
+#[derive(Debug)]
+enum Error<F> {
+    Postcard(postcard::Error),
+    Flash(F),
+}
+
+impl<F> From<postcard::Error> for Error<F> {
+    fn from(e: postcard::Error) -> Self {
+        Self::Postcard(e)
+    }
+}
+
+impl<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>
+    Context<'a, I, S, Flash>
+{
+    fn save(&mut self) -> Result<(), Error<Flash::Error>> {
+        let serialized = postcard::to_slice(&self.settings, &mut self.buffer)?;
+        self.flash
+            .erase(0, serialized.len() as u32)
+            .map_err(Error::Flash)?;
+        self.flash.write(0, serialized).map_err(Error::Flash)?;
+        Ok(())
+    }
+}
+
+fn make_menu<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
+) -> menu::Menu<'a, Context<'a, I, S, Flash>> {
     menu::Menu {
         label: "root",
         items: &[
@@ -89,43 +111,24 @@ fn make_menu<Settings: SerialSettings, Flash: NorFlash + 'static>() -> menu::Men
     }
 }
 
-pub struct OutputBuffer {
-    producer: bbqueue::Producer<'static, 512>,
-}
-
-impl Write for OutputBuffer {
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        let data = s.as_bytes();
-
-        // Write as much data as possible to the output buffer.
-        let Ok(mut grant) = self.producer.grant_max_remaining(data.len())
-        else {
-            // Output buffer is full, silently drop the data.
-            return Ok(());
-        };
-
-        let len = grant.buf().len();
-        grant.buf().copy_from_slice(&data[..len]);
-        grant.commit(len);
-        Ok(())
-    }
-}
-
-impl<Settings: SerialSettings, Flash: NorFlash + 'static> core::fmt::Write for Context<Settings, Flash> {
+impl<'a, I: Interface, S: Settings, Flash: NorFlash + 'static> core::fmt::Write
+    for Context<'a, I, S, Flash>
+{
     /// Write data to the serial terminal.
     ///
     /// # Note
     /// The terminal uses an internal buffer. Overflows of the output buffer are silently ignored.
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        self.output.write_str(s)
+        self.interface.write_all(s.as_bytes()).ok();
+        Ok(())
     }
 }
 
-fn handle_list<Settings: SerialSettings, Flash: NorFlash + 'static>(
-    _menu: &menu::Menu<Context<Settings, Flash>>,
-    _item: &menu::Item<Context<Settings, Flash>>,
+fn handle_list<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
+    _menu: &menu::Menu<Context<'a, I, S, Flash>>,
+    _item: &menu::Item<Context<'a, I, S, Flash>>,
     _args: &[&str],
-    context: &mut Context<Settings, Flash>,
+    context: &mut Context<'a, I, S, Flash>,
 ) {
     writeln!(context, "Available items:").unwrap();
 
@@ -134,7 +137,7 @@ fn handle_list<Settings: SerialSettings, Flash: NorFlash + 'static>(
 
     let mut buf = [0; 256];
     let mut default_buf = [0; 256];
-    for path in Settings::iter_paths::<heapless::String<32>>("/") {
+    for path in S::iter_paths::<heapless::String<32>>("/") {
         let path = path.unwrap();
         let current_value = {
             let len = context.settings.get_json(&path, &mut buf).unwrap();
@@ -152,30 +155,37 @@ fn handle_list<Settings: SerialSettings, Flash: NorFlash + 'static>(
     }
 }
 
-fn handle_reboot<Settings: SerialSettings, Flash: NorFlash + 'static>(
-    _menu: &menu::Menu<Context<Settings, Flash>>,
-    _item: &menu::Item<Context<Settings, Flash>>,
+fn handle_reboot<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
+    _menu: &menu::Menu<Context<'a, I, S, Flash>>,
+    _item: &menu::Item<Context<'a, I, S, Flash>>,
     _args: &[&str],
-    _context: &mut Context<Settings, Flash>,
+    _context: &mut Context<'a, I, S, Flash>,
 ) {
     cortex_m::peripheral::SCB::sys_reset();
 }
 
-fn handle_reset<Settings: SerialSettings, Flash: NorFlash + 'static>(
-    _menu: &menu::Menu<Context<Settings, Flash>>,
-    _item: &menu::Item<Context<Settings, Flash>>,
+fn handle_reset<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
+    _menu: &menu::Menu<Context<'a, I, S, Flash>>,
+    _item: &menu::Item<Context<'a, I, S, Flash>>,
     _args: &[&str],
-    context: &mut Context<Settings, Flash>,
+    context: &mut Context<'a, I, S, Flash>,
 ) {
     context.settings.reset();
-    context.save();
+    match context.save() {
+        Ok(_) => {
+            writeln!(context, "Settings reset to default").unwrap();
+        }
+        Err(e) => {
+            writeln!(context, "Failed to reset settings: {e:?}").unwrap();
+        }
+    }
 }
 
-fn handle_get<Settings: SerialSettings, Flash: NorFlash + 'static>(
-    _menu: &menu::Menu<Context<Settings, Flash>>,
-    item: &menu::Item<Context<Settings, Flash>>,
+fn handle_get<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
+    _menu: &menu::Menu<Context<'a, I, S, Flash>>,
+    item: &menu::Item<Context<'a, I, S, Flash>>,
     args: &[&str],
-    context: &mut Context<Settings, Flash>,
+    context: &mut Context<'a, I, S, Flash>,
 ) {
     let mut buf = [0u8; 256];
     let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
@@ -191,11 +201,11 @@ fn handle_get<Settings: SerialSettings, Flash: NorFlash + 'static>(
     writeln!(context, "{key}: {stringified}").unwrap();
 }
 
-fn handle_set<Settings: SerialSettings, Flash: NorFlash + 'static>(
-    _menu: &menu::Menu<Context<Settings, Flash>>,
-    item: &menu::Item<Context<Settings, Flash>>,
+fn handle_set<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
+    _menu: &menu::Menu<Context<'a, I, S, Flash>>,
+    item: &menu::Item<Context<'a, I, S, Flash>>,
     args: &[&str],
-    context: &mut Context<Settings, Flash>,
+    context: &mut Context<'a, I, S, Flash>,
 ) {
     let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
     let value = menu::argument_finder(item, args, "value").unwrap().unwrap();
@@ -203,103 +213,74 @@ fn handle_set<Settings: SerialSettings, Flash: NorFlash + 'static>(
     // Now, write the new value into memory.
     // TODO: Validate it first?
     match context.settings.set_json(key, value.as_bytes()) {
-        Ok(_) => {
-            context.save();
-            writeln!(
-                context,
-                "Settings in memory may differ from currently operating settings. \
-        Reset device to apply settings."
-            )
-    .unwrap();
-        }
+        Ok(_) => match context.save() {
+            Ok(_) => {
+                writeln!(
+                        context,
+                        "Settings in memory may differ from currently operating settings. \
+Reset device to apply settings."
+                    )
+                    .unwrap();
+            }
+            Err(e) => {
+                writeln!(context, "Failed to save settings: {e:?}").unwrap();
+            }
+        },
         Err(e) => {
             writeln!(context, "Failed to update {key}: {e:?}").unwrap();
         }
     }
 }
 
-pub struct SerialTerminal<'a, UsbBus: usb_device::bus::UsbBus, Settings: SerialSettings, Flash: NorFlash + 'static> {
-    usb_device: usb_device::device::UsbDevice<'a, UsbBus>,
-    usb_serial: usbd_serial::SerialPort<'a, UsbBus>,
-    menu: menu::Runner<'a, Context<Settings, Flash>>,
-    output: bbqueue::Consumer<'static, 512>,
+pub struct SerialSettings<
+    'a,
+    I: Interface,
+    S: Settings,
+    Flash: NorFlash + 'static,
+> {
+    menu: menu::Runner<'a, Context<'a, I, S, Flash>>,
 }
 
-impl<'a, UsbBus: usb_device::bus::UsbBus, Settings: SerialSettings, Flash: NorFlash + 'static> SerialTerminal<'a, UsbBus, Settings, Flash> {
+impl<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>
+    SerialSettings<'a, I, S, Flash>
+{
     pub fn new(
-        usb_device: usb_device::device::UsbDevice<'static, UsbBus>,
-        usb_serial: usbd_serial::SerialPort<'static, UsbBus>,
-        input_buffer: &'a mut [u8],
-        settings: Settings,
+        interface: I,
+        settings: S,
         flash: Flash,
+        line_buf: &'a mut [u8],
+        serialize_buf: &'a mut [u8],
     ) -> Self {
-        let (producer, consumer) = OUTPUT_BUFFER.try_split().unwrap();
-
         // TODO: Attempt to load from flash first.
 
         let context = Context {
             settings,
-            output: OutputBuffer { producer },
+            interface,
             flash,
+            buffer: serialize_buf,
         };
-        Self {
-            menu: menu::Runner::new(make_menu(), input_buffer, context),
-            usb_device,
-            usb_serial,
-            output: consumer,
-        }
+        let menu = menu::Runner::new(make_menu(), line_buf, context);
+        Self { menu }
     }
 
-    fn flush(&mut self) {
-        let read = match self.output.read() {
-            Ok(grant) => grant,
-            Err(bbqueue::Error::InsufficientSize) => return,
-            err => err.unwrap(),
-        };
-
-        match self.usb_serial.write(read.buf()) {
-            Ok(count) => read.release(count),
-            Err(usbd_serial::UsbError::WouldBlock) => read.release(0),
-            Err(_) => {
-                let len = read.buf().len();
-                read.release(len);
-            }
-        }
-    }
-
-    pub fn settings(&self) -> &Settings {
+    pub fn settings(&self) -> &S {
         &self.menu.context.settings
     }
 
-    pub fn usb_is_suspended(&self) -> bool {
-        self.usb_device.state() == usb_device::device::UsbDeviceState::Suspend
+    pub fn interface_mut(&mut self) -> &mut I {
+        &mut self.menu.context.interface
+    }
+
+    pub fn interface(&self) -> &I {
+        &self.menu.context.interface
     }
 
     pub fn process(&mut self) {
-        self.flush();
-
-        if !self.usb_device.poll(&mut [&mut self.usb_serial]) {
-            return;
-        }
-
-        let mut buffer = [0u8; 64];
-        match self.usb_serial.read(&mut buffer) {
-            Ok(count) => {
-                for &value in &buffer[..count] {
-                    self.menu.input_byte(value);
-                }
-            }
-
-            Err(usbd_serial::UsbError::WouldBlock) => {}
-            Err(_) => {
-                self.menu.prompt(true);
-                self.output
-                    .read()
-                    .map(|grant| {
-                        let len = grant.buf().len();
-                        grant.release(len);
-                    })
-                    .ok();
+        while self.menu.context.interface.read_ready().unwrap() {
+            let mut buffer = [0u8; 64];
+            let count = self.menu.context.interface.read(&mut buffer).unwrap();
+            for &value in &buffer[..count] {
+                self.menu.input_byte(value);
             }
         }
     }

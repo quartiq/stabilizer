@@ -7,12 +7,10 @@ edition = "2021"
 
 [dependencies]
 embedded-storage = "0.3"
-usbd-serial = "0.1.1"
-bbqueue = "0.5"
-usb-device = "0.2.9"
 miniconf = "0.9"
 menu = {path = "../../../rust-embedded-community/menu"}
 cortex-m = "0.7"
 heapless = "0.8"
 postcard = "1"
+embedded-io = "0.5"
 serde = {version = "1", default-features=false}
