@@ -1072,7 +1072,6 @@ pub fn setup(
 
     let usb_serial = {
         let (_, flash_bank2) = device.FLASH.split();
-        let settings = super::flash::Settings::new(network_devices.mac_address);
 
         let input_buffer =
             cortex_m::singleton!(: [u8; 256] = [0u8; 256]).unwrap();
@@ -1081,13 +1080,27 @@ pub fn setup(
 
         let usb_interface = SerialInterface::new(usb_device, usb_serial);
 
+        let settings_callback =
+            |maybe_settings: Option<super::flash::Settings>| {
+                match maybe_settings {
+                    Some(mut settings) => {
+                        settings.mac = network_devices.mac_address;
+                        settings
+                    }
+                    None => {
+                        super::flash::Settings::new(network_devices.mac_address)
+                    }
+                }
+            };
+
         serial_settings::SerialSettings::new(
             usb_interface,
-            settings,
             super::flash::Flash(flash_bank2.unwrap()),
+            settings_callback,
             input_buffer,
             serialize_buffer,
         )
+        .unwrap()
     };
 
     let stabilizer = StabilizerDevices {

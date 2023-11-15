@@ -3,10 +3,14 @@
 use core::fmt::Write;
 use embedded_storage::nor_flash::NorFlash;
 use miniconf::JsonCoreSlash;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub trait Settings:
-    for<'a> JsonCoreSlash<'a> + Serialize + Clone + 'static
+    for<'a> JsonCoreSlash<'a>
+    + Serialize
+    + Clone
+    + 'static
+    + for<'a> Deserialize<'a>
 {
     fn reset(&mut self);
 }
@@ -246,12 +250,15 @@ impl<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>
 {
     pub fn new(
         interface: I,
-        settings: S,
-        flash: Flash,
+        mut flash: Flash,
+        settings_callback: impl FnOnce(Option<S>) -> S,
         line_buf: &'a mut [u8],
         serialize_buf: &'a mut [u8],
-    ) -> Self {
-        // TODO: Attempt to load from flash first.
+    ) -> Result<Self, Flash::Error> {
+        flash.read(0, &mut serialize_buf[..])?;
+
+        let settings =
+            settings_callback(postcard::from_bytes::<S>(serialize_buf).ok());
 
         let context = Context {
             settings,
@@ -260,7 +267,7 @@ impl<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>
             buffer: serialize_buf,
         };
         let menu = menu::Runner::new(make_menu(), line_buf, context);
-        Self { menu }
+        Ok(Self { menu })
     }
 
     pub fn settings(&self) -> &S {
@@ -275,8 +282,8 @@ impl<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>
         &self.menu.context.interface
     }
 
-    pub fn process(&mut self) -> Result<(), I::Error>{
-        while self.menu.context.interface.read_ready().unwrap() {
+    pub fn process(&mut self) -> Result<(), I::Error> {
+        while self.menu.context.interface.read_ready()? {
             let mut buffer = [0u8; 64];
             let count = self.menu.context.interface.read(&mut buffer)?;
             for &value in &buffer[..count] {

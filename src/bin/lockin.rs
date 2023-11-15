@@ -518,12 +518,10 @@ mod app {
     #[task(priority = 1, shared=[usb_terminal])]
     fn usb(mut c: usb::Context) {
         // Handle the USB serial terminal.
-        c.shared
-            .usb_terminal
-            .lock(|usb| {
-                usb.interface_mut().process();
-                usb.process().ok();
-            });
+        c.shared.usb_terminal.lock(|usb| {
+            usb.interface_mut().process();
+            usb.process().ok();
+        });
 
         // Schedule to run this task every 10 milliseconds.
         usb::spawn_after(10u64.millis()).unwrap();
