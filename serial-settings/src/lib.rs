@@ -65,11 +65,6 @@ pub trait Settings:
     fn reset(&mut self) {}
 }
 
-impl<T> Settings for T where
-    T: for<'a> JsonCoreSlash<'a> + Serialize + Clone + for<'a> Deserialize<'a>
-{
-}
-
 pub trait Platform {
     /// This type specifies the interface to the user, for example, a USB CDC-ACM serial port.
     type Interface: embedded_io::Read

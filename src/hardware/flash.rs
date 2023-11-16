@@ -1,6 +1,5 @@
 use core::fmt::Write;
-use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
-use stm32h7xx_hal::flash::{LockedFlashBank, UnlockedFlashBank};
+use stm32h7xx_hal::flash::LockedFlashBank;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, miniconf::Tree)]
 pub struct Settings {
@@ -67,44 +66,5 @@ impl embedded_storage::nor_flash::NorFlash for Flash {
     fn write(&mut self, offset: u32, bytes: &[u8]) -> Result<(), Self::Error> {
         let mut bank = self.0.unlocked();
         bank.write(offset, bytes)
-    }
-}
-
-pub struct FlashSettings {
-    flash: LockedFlashBank,
-    pub settings: Settings,
-}
-
-impl FlashSettings {
-    pub fn new(
-        mut flash: LockedFlashBank,
-        mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
-    ) -> Self {
-        let mut buffer = [0u8; 512];
-        flash.read(0, &mut buffer[..]).unwrap();
-
-        let settings = match postcard::from_bytes::<Settings>(&buffer) {
-            Ok(mut settings) => {
-                settings.mac = mac;
-                settings
-            }
-            Err(_) => {
-                log::warn!(
-                    "Failed to load settings from flash. Using defaults"
-                );
-                Settings::new(mac)
-            }
-        };
-
-        Self { flash, settings }
-    }
-
-    pub fn save(&mut self) {
-        let mut bank = self.flash.unlocked();
-
-        let mut data = [0; 512];
-        let serialized = postcard::to_slice(&self.settings, &mut data).unwrap();
-        bank.erase(0, UnlockedFlashBank::ERASE_SIZE as u32).unwrap();
-        bank.write(0, serialized).unwrap();
     }
 }
