@@ -15,10 +15,10 @@ use smoltcp_nal::smoltcp;
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
     eeprom, input_stamper::InputStamper, pounder,
-    pounder::dds_output::DdsOutput, serial_terminal::SerialInterface,
-    shared_adc::SharedAdc, timers, DigitalInput0, DigitalInput1,
-    EemDigitalInput0, EemDigitalInput1, EemDigitalOutput0, EemDigitalOutput1,
-    EthernetPhy, NetworkStack, SystemTimer, Systick, UsbBus, AFE0, AFE1,
+    pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
+    usb::UsbDevice, DigitalInput0, DigitalInput1, EemDigitalInput0,
+    EemDigitalInput1, EemDigitalOutput0, EemDigitalOutput1, EthernetPhy,
+    NetworkStack, SerialTerminal, SystemTimer, Systick, UsbBus, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -117,7 +117,8 @@ pub struct StabilizerDevices {
     pub net: NetworkDevices,
     pub digital_inputs: (DigitalInput0, DigitalInput1),
     pub eem_gpio: EemGpioDevices,
-    pub usb_serial: super::SerialTerminal,
+    pub usb_serial: SerialTerminal,
+    pub usb_device: UsbDevice,
 }
 
 /// The available Pounder-specific hardware interfaces.
@@ -1061,13 +1062,15 @@ pub fn setup(
             usb_bus.as_ref().unwrap(),
             usb_device::device::UsbVidPid(0x1209, 0x392F),
         )
-        .manufacturer("ARTIQ/Sinara")
-        .product("Stabilizer")
-        .serial_number(serial_number.as_ref().unwrap())
+        .strings(&[usb_device::device::StringDescriptors::default()
+            .manufacturer("ARTIQ/Sinara")
+            .product("Stabilizer")
+            .serial_number(serial_number.as_ref().unwrap())])
+        .unwrap()
         .device_class(usbd_serial::USB_CLASS_CDC)
         .build();
 
-        (usb_device, serial)
+        (UsbDevice::new(usb_device), serial)
     };
 
     let usb_serial = {
@@ -1077,8 +1080,6 @@ pub fn setup(
             cortex_m::singleton!(: [u8; 256] = [0u8; 256]).unwrap();
         let serialize_buffer =
             cortex_m::singleton!(: [u8; 512] = [0u8; 512]).unwrap();
-
-        let usb_interface = SerialInterface::new(usb_device, usb_serial);
 
         let settings_callback =
             |maybe_settings: Option<super::flash::Settings>| {
@@ -1094,7 +1095,7 @@ pub fn setup(
             };
 
         serial_settings::SerialSettings::new(
-            usb_interface,
+            usb_serial,
             super::flash::Flash(flash_bank2.unwrap()),
             settings_callback,
             input_buffer,
@@ -1117,6 +1118,7 @@ pub fn setup(
         timestamp_timer,
         digital_inputs,
         eem_gpio,
+        usb_device,
         usb_serial,
     };
 

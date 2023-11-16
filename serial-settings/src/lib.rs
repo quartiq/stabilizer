@@ -1,4 +1,4 @@
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 
 use core::fmt::Write;
 use embedded_storage::nor_flash::NorFlash;
@@ -16,7 +16,18 @@ pub trait Settings:
 }
 
 pub trait Interface:
-    embedded_io::Read + embedded_io::ReadReady + embedded_io::Write
+    embedded_io::Read
+    + embedded_io::ReadReady
+    + embedded_io::Write
+    + embedded_io::WriteReady
+{
+}
+
+impl<T> Interface for T where
+    T: embedded_io::Read
+        + embedded_io::ReadReady
+        + embedded_io::Write
+        + embedded_io::WriteReady
 {
 }
 
@@ -43,7 +54,7 @@ impl<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>
     Context<'a, I, S, Flash>
 {
     fn save(&mut self) -> Result<(), Error<Flash::Error>> {
-        let serialized = postcard::to_slice(&self.settings, &mut self.buffer)?;
+        let serialized = postcard::to_slice(&self.settings, self.buffer)?;
         self.flash
             .erase(0, serialized.len() as u32)
             .map_err(Error::Flash)?;
@@ -123,7 +134,9 @@ impl<'a, I: Interface, S: Settings, Flash: NorFlash + 'static> core::fmt::Write
     /// # Note
     /// The terminal uses an internal buffer. Overflows of the output buffer are silently ignored.
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        self.interface.write_all(s.as_bytes()).ok();
+        if let Ok(true) = self.interface.write_ready() {
+            self.interface.write_all(s.as_bytes()).ok();
+        }
         Ok(())
     }
 }

@@ -12,11 +12,11 @@ pub mod design_parameters;
 pub mod flash;
 pub mod input_stamper;
 pub mod pounder;
-pub mod serial_terminal;
 pub mod setup;
 pub mod shared_adc;
 pub mod signal_generator;
 pub mod timers;
+pub mod usb;
 
 mod eeprom;
 
@@ -83,7 +83,7 @@ pub type I2c1Proxy =
 
 pub type SerialTerminal = serial_settings::SerialSettings<
     'static,
-    serial_terminal::SerialInterface,
+    usbd_serial::SerialPort<'static, UsbBus>,
     flash::Settings,
     flash::Flash,
 >;

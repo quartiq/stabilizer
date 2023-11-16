@@ -46,6 +46,7 @@ use stabilizer::{
         hal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
+        usb::UsbDevice,
         DigitalInput0, DigitalInput1, SerialTerminal, SystemTimer, Systick,
         AFE0, AFE1,
     },
@@ -183,7 +184,7 @@ mod app {
 
     #[shared]
     struct Shared {
-        usb_terminal: SerialTerminal,
+        usb: UsbDevice,
         network: NetworkUsers<Settings, Telemetry, 3>,
 
         settings: Settings,
@@ -193,6 +194,7 @@ mod app {
 
     #[local]
     struct Local {
+        usb_terminal: SerialTerminal,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         afes: (AFE0, AFE1),
@@ -231,7 +233,7 @@ mod app {
         let settings = Settings::default();
 
         let shared = Shared {
-            usb_terminal: stabilizer.usb_serial,
+            usb: stabilizer.usb_device,
             network,
             settings,
             telemetry: TelemetryBuffer::default(),
@@ -250,6 +252,7 @@ mod app {
         };
 
         let mut local = Local {
+            usb_terminal: stabilizer.usb_serial,
             sampling_timer: stabilizer.adc_dac_timer,
             digital_inputs: stabilizer.digital_inputs,
             afes: stabilizer.afes,
@@ -393,7 +396,7 @@ mod app {
         );
     }
 
-    #[idle(shared=[network, usb_terminal])]
+    #[idle(shared=[network, usb])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
             match c.shared.network.lock(|net| net.update()) {
@@ -403,9 +406,7 @@ mod app {
                 NetworkState::Updated => {}
                 NetworkState::NoChange => {
                     // We can't sleep if USB is not in suspend.
-                    if c.shared.usb_terminal.lock(|terminal| {
-                        terminal.interface().usb_is_suspended()
-                    }) {
+                    if c.shared.usb.lock(|usb| usb.usb_is_suspended()) {
                         cortex_m::asm::wfi();
                     }
                 }
@@ -464,12 +465,11 @@ mod app {
             .unwrap();
     }
 
-    #[task(priority = 1, shared=[usb_terminal])]
+    #[task(priority = 1, shared=[usb], local=[usb_terminal])]
     fn usb(mut c: usb::Context) {
         // Handle the USB serial terminal.
-        c.shared.usb_terminal.lock(|usb| {
-            usb.interface_mut().process();
-            usb.process().ok();
+        c.shared.usb.lock(|usb| {
+            usb.process(c.local.usb_terminal);
         });
 
         // Schedule to run this task every 10 milliseconds.

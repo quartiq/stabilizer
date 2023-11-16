@@ -8,9 +8,9 @@ edition = "2021"
 [dependencies]
 embedded-storage = "0.3"
 miniconf = "0.9"
-menu = {path = "../../../rust-embedded-community/menu"}
+menu = "0.4"
 cortex-m = "0.7"
 heapless = "0.8"
 postcard = "1"
-embedded-io = "0.5"
-serde = {version = "1", default-features=false}
+embedded-io = "0.6"
+serde = { version = "1", default-features=false }
