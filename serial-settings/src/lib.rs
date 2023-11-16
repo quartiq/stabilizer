@@ -19,23 +19,21 @@
 //! ```
 //!> help
 //! AVAILABLE ITEMS:
-//!   dfu
-//!   service
-//!   reboot
+//!   platform <cmd>
 //!   factory-reset
 //!   list
 //!   get <item>
 //!   set <item> <value>
 //!   help [ <command> ]
 //!
-//! > dfu
-//! Reset to DFU is not supported on this device
+//! > plaform dfu
+//! Reset to DFU is not supported
 //!
-//! > service
+//! > plaform service
 //! Service data not available
 //!
 //! > list
-//! Available items:
+//! Available settings:
 //! /broker: "test" [default: "mqtt"]
 //! /id: "04-91-62-d2-a8-6f" [default: "04-91-62-d2-a8-6f"]
 //! ```
@@ -52,68 +50,9 @@
 
 use core::fmt::Write;
 use embedded_io::{Read, ReadReady, Write as EioWrite, WriteReady};
-use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
+use embedded_storage::nor_flash::NorFlash;
 use miniconf::{JsonCoreSlash, TreeKey};
 use serde::{Deserialize, Serialize};
-
-/// Specifies the API required for objects that are used as settings with the serial terminal
-/// interface.
-pub trait Settings:
-    for<'a> JsonCoreSlash<'a> + Serialize + Clone + for<'a> Deserialize<'a>
-{
-    /// Reset the settings to their default values.
-    fn reset(&mut self) {}
-}
-
-pub trait Platform {
-    /// This type specifies the interface to the user, for example, a USB CDC-ACM serial port.
-    type Interface: embedded_io::Read
-        + embedded_io::ReadReady
-        + embedded_io::Write
-        + embedded_io::WriteReady;
-
-    /// Specifies the settings that are used on the device.
-    type Settings: Settings;
-
-    /// Specifies the type of storage used for persisting settings between device boots.
-    type Storage: NorFlash;
-
-    /// This function is called immediately before a device reset is initiated.
-    ///
-    /// # Args
-    /// * `interface` - An object to write device informational messages to.
-    fn reset(&mut self, _interface: impl embedded_io::Write) {}
-
-    /// This device is called when a reboot to DFU (device firmware update) mode is requested.
-    ///
-    /// # Args
-    /// * `interface` - An object to write device informational messages to.
-    fn dfu(&mut self, mut interface: impl embedded_io::Write) {
-        self.reset(&mut interface);
-        writeln!(
-            &mut interface,
-            "Reset to DFU is not supported on this device"
-        )
-        .ok();
-    }
-
-    /// This function is called to provide information about the operating device state to the
-    /// user.
-    ///
-    /// # Args
-    /// * `interface` - An object to write device status to.
-    fn service(&mut self, mut interface: impl embedded_io::Write) {
-        writeln!(&mut interface, "Service data not available").ok();
-    }
-}
-
-struct Context<'a, P: Platform> {
-    flash: P::Storage,
-    platform: P,
-    settings: P::Settings,
-    interface: P::Interface,
-    buffer: &'a mut [u8],
-}
 
 #[derive(Debug)]
 enum Error<F> {
@@ -127,6 +66,61 @@ impl<F> From<postcard::Error> for Error<F> {
     }
 }
 
+/// Specifies the API required for objects that are used as settings with the serial terminal
+/// interface.
+pub trait Settings:
+    for<'a> JsonCoreSlash<'a> + Serialize + Clone + for<'a> Deserialize<'a>
+{
+    /// Reset the settings to their default values.
+    fn reset(&mut self) {}
+}
+
+pub trait Platform: Sized {
+    /// This type specifies the interface to the user, for example, a USB CDC-ACM serial port.
+    type Interface: embedded_io::Read
+        + embedded_io::ReadReady
+        + embedded_io::Write
+        + embedded_io::WriteReady;
+
+    /// Specifies the settings that are used on the device.
+    type Settings: Settings;
+
+    /// Specifies the type of storage used for persisting settings between device boots.
+    type Storage: NorFlash;
+
+    /// Execute a platform specific command.
+    fn cmd(&mut self, cmd: &str) {
+        match cmd {
+            "reboot" => cortex_m::peripheral::SCB::sys_reset(),
+            "service" => {
+                writeln!(self.interface_mut(), "Service data not available")
+            }
+            "dfu" => {
+                writeln!(self.interface_mut(), "Reset to DFU is not supported")
+            }
+            _ => writeln!(
+                self.interface_mut(),
+                "Invalid platform command `{cmd}`"
+            ),
+        }
+        .ok();
+    }
+
+    /// Return a mutable reference to the `Interface`.
+    fn interface_mut(&mut self) -> &mut Self::Interface;
+    /// Return a reference to the `Settings`
+    fn settings(&self) -> &Self::Settings;
+    /// Return a mutable reference to the `Settings`.
+    fn settings_mut(&mut self) -> &mut Self::Settings;
+    /// Return a mutable referenc to the `Storage`.
+    fn storage_mut(&mut self) -> &mut Self::Storage;
+}
+
+struct Context<'a, P: Platform> {
+    platform: P,
+    buffer: &'a mut [u8],
+}
+
 impl<'a, P: Platform> Context<'a, P> {
     fn save(
         &mut self,
@@ -134,22 +128,27 @@ impl<'a, P: Platform> Context<'a, P> {
         (),
         Error<<P::Storage as embedded_storage::nor_flash::ErrorType>::Error>,
     > {
-        let serialized = postcard::to_slice(&self.settings, self.buffer)?;
-        self.flash
+        let serialized =
+            postcard::to_slice(&self.platform.settings(), self.buffer)?;
+        self.platform
+            .storage_mut()
             .erase(0, serialized.len() as u32)
             .map_err(Error::Flash)?;
-        self.flash.write(0, serialized).map_err(Error::Flash)?;
+        self.platform
+            .storage_mut()
+            .write(0, serialized)
+            .map_err(Error::Flash)?;
         Ok(())
     }
 
-    fn handle_reboot(
+    fn handle_platform(
         _menu: &menu::Menu<Self>,
-        _item: &menu::Item<Self>,
-        _args: &[&str],
+        item: &menu::Item<Self>,
+        args: &[&str],
         context: &mut Self,
     ) {
-        context.platform.reset(&mut context.interface);
-        cortex_m::peripheral::SCB::sys_reset();
+        let key = menu::argument_finder(item, args, "cmd").unwrap().unwrap();
+        context.platform.cmd(key);
     }
 
     fn handle_list(
@@ -158,44 +157,34 @@ impl<'a, P: Platform> Context<'a, P> {
         _args: &[&str],
         context: &mut Self,
     ) {
-        writeln!(context, "Available items:").unwrap();
+        writeln!(context, "Available settings:").unwrap();
 
-        let mut defaults = context.settings.clone();
+        let mut defaults = context.platform.settings().clone();
         defaults.reset();
 
         for path in P::Settings::iter_paths::<heapless::String<32>>("/") {
             let path = path.unwrap();
             let current_value = {
-                let len =
-                    context.settings.get_json(&path, context.buffer).unwrap();
+                let len = context
+                    .platform
+                    .settings()
+                    .get_json(&path, context.buffer)
+                    .unwrap();
                 core::str::from_utf8(&context.buffer[..len]).unwrap()
             };
-            write!(context.interface, "{path}: {current_value}").unwrap();
+            write!(context.platform.interface_mut(), "{path}: {current_value}")
+                .unwrap();
 
             let default_value = {
                 let len = defaults.get_json(&path, context.buffer).unwrap();
                 core::str::from_utf8(&context.buffer[..len]).unwrap()
             };
-            writeln!(context.interface, " [default: {default_value}]").unwrap()
+            writeln!(
+                context.platform.interface_mut(),
+                " [default: {default_value}]"
+            )
+            .unwrap()
         }
-    }
-
-    fn handle_dfu(
-        _menu: &menu::Menu<Self>,
-        _item: &menu::Item<Self>,
-        _args: &[&str],
-        context: &mut Self,
-    ) {
-        context.platform.dfu(&mut context.interface);
-    }
-
-    fn handle_service(
-        _menu: &menu::Menu<Self>,
-        _item: &menu::Item<Self>,
-        _args: &[&str],
-        context: &mut Self,
-    ) {
-        context.platform.service(&mut context.interface);
     }
 
     fn handle_factory_reset(
@@ -204,7 +193,7 @@ impl<'a, P: Platform> Context<'a, P> {
         _args: &[&str],
         context: &mut Self,
     ) {
-        context.settings.reset();
+        context.platform.settings_mut().reset();
         match context.save() {
             Ok(_) => {
                 writeln!(context, "Settings reset to default").unwrap();
@@ -222,16 +211,18 @@ impl<'a, P: Platform> Context<'a, P> {
         context: &mut Self,
     ) {
         let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
-        let len = match context.settings.get_json(key, context.buffer) {
-            Err(e) => {
-                writeln!(context, "Failed to read {key}: {e}").unwrap();
-                return;
-            }
-            Ok(len) => len,
-        };
+        let len =
+            match context.platform.settings().get_json(key, context.buffer) {
+                Err(e) => {
+                    writeln!(context, "Failed to read {key}: {e}").unwrap();
+                    return;
+                }
+                Ok(len) => len,
+            };
 
         let stringified = core::str::from_utf8(&context.buffer[..len]).unwrap();
-        writeln!(context.interface, "{key}: {stringified}").unwrap();
+        writeln!(context.platform.interface_mut(), "{key}: {stringified}")
+            .unwrap();
     }
 
     fn handle_set(
@@ -246,7 +237,11 @@ impl<'a, P: Platform> Context<'a, P> {
 
         // Now, write the new value into memory.
         // TODO: Validate it first?
-        match context.settings.set_json(key, value.as_bytes()) {
+        match context
+            .platform
+            .settings_mut()
+            .set_json(key, value.as_bytes())
+        {
             Ok(_) => match context.save() {
                 Ok(_) => {
                     writeln!(
@@ -272,27 +267,14 @@ impl<'a, P: Platform> Context<'a, P> {
         label: "settings",
         items: &[
             &menu::Item {
-                command: "dfu",
-                help: Some("Reboot the device to DFU mode"),
+                command: "platform",
+                help: Some("Platform specific command"),
                 item_type: menu::ItemType::Callback {
-                    function: Self::handle_dfu,
-                    parameters: &[]
-                },
-            },
-            &menu::Item {
-                command: "service",
-                help: Some("Read device service information"),
-                item_type: menu::ItemType::Callback {
-                    function: Self::handle_service,
-                    parameters: &[]
-                },
-            },
-            &menu::Item {
-                command: "reboot",
-                help: Some("Reboot the device to force new settings to take effect."),
-                item_type: menu::ItemType::Callback {
-                    function: Self::handle_reboot,
-                    parameters: &[]
+                    function: Self::handle_platform,
+                    parameters: &[menu::Parameter::Mandatory {
+                        parameter_name: "cmd",
+                        help: Some("The name of the command (e.g. `reboot`, `service`, `dfu`)."),
+                    }]
                 },
             },
             &menu::Item {
@@ -352,8 +334,8 @@ impl<'a, P: Platform> core::fmt::Write for Context<'a, P> {
     /// # Note
     /// The terminal uses an internal buffer. Overflows of the output buffer are silently ignored.
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        if let Ok(true) = self.interface.write_ready() {
-            self.interface.write_all(s.as_bytes()).ok();
+        if let Ok(true) = self.platform.interface_mut().write_ready() {
+            self.platform.interface_mut().write_all(s.as_bytes()).ok();
         }
         Ok(())
     }
@@ -381,25 +363,13 @@ impl<'a, P: Platform> SerialSettings<'a, P> {
     /// needs to be at least as big as the entire serialized settings structure.
     pub fn new(
         platform: P,
-        interface: P::Interface,
-        mut flash: P::Storage,
-        settings_callback: impl FnOnce(Option<P::Settings>) -> P::Settings,
         line_buf: &'a mut [u8],
         serialize_buf: &'a mut [u8],
     ) -> Result<
         Self,
         <P::Storage as embedded_storage::nor_flash::ErrorType>::Error,
     > {
-        flash.read(0, &mut serialize_buf[..])?;
-
-        let settings = settings_callback(
-            postcard::from_bytes::<P::Settings>(serialize_buf).ok(),
-        );
-
         let context = Context {
-            settings,
-            interface,
-            flash,
             platform,
             buffer: serialize_buf,
         };
@@ -410,26 +380,21 @@ impl<'a, P: Platform> SerialSettings<'a, P> {
 
     /// Get the current device settings.
     pub fn settings(&self) -> &P::Settings {
-        &self.menu.context.settings
+        self.menu.context.platform.settings()
     }
 
     /// Get the device communication interface
     pub fn interface_mut(&mut self) -> &mut P::Interface {
-        &mut self.menu.context.interface
-    }
-
-    /// Get the device communication interface
-    pub fn interface(&self) -> &P::Interface {
-        &self.menu.context.interface
+        self.menu.context.platform.interface_mut()
     }
 
     /// Must be called periodically to process user input.
     pub fn process(
         &mut self,
     ) -> Result<(), <P::Interface as embedded_io::ErrorType>::Error> {
-        while self.menu.context.interface.read_ready()? {
+        while self.interface_mut().read_ready()? {
             let mut buffer = [0u8; 64];
-            let count = self.menu.context.interface.read(&mut buffer)?;
+            let count = self.interface_mut().read(&mut buffer)?;
             for &value in &buffer[..count] {
                 self.menu.input_byte(value);
             }

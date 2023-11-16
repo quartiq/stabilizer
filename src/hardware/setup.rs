@@ -3,6 +3,7 @@
 //! This file contains all of the hardware-specific configuration of Stabilizer.
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{fmt::Write, ptr, slice};
+use embedded_storage::nor_flash::ReadNorFlash;
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
@@ -1075,30 +1076,30 @@ pub fn setup(
 
     let usb_serial = {
         let (_, flash_bank2) = device.FLASH.split();
+        let mut flash_bank2 = flash_bank2.unwrap();
 
         let input_buffer =
             cortex_m::singleton!(: [u8; 256] = [0u8; 256]).unwrap();
         let serialize_buffer =
             cortex_m::singleton!(: [u8; 512] = [0u8; 512]).unwrap();
 
-        let settings_callback =
-            |maybe_settings: Option<super::flash::Settings>| {
-                match maybe_settings {
-                    Some(mut settings) => {
-                        settings.mac = network_devices.mac_address;
-                        settings
-                    }
-                    None => {
-                        super::flash::Settings::new(network_devices.mac_address)
-                    }
-                }
-            };
+        flash_bank2.read(0, &mut serialize_buffer[..]).unwrap();
+        let settings = match postcard::from_bytes::<super::flash::Settings>(
+            serialize_buffer,
+        ) {
+            Ok(mut settings) => {
+                settings.mac = network_devices.mac_address;
+                settings
+            }
+            Err(_) => super::flash::Settings::new(network_devices.mac_address),
+        };
 
         serial_settings::SerialSettings::new(
-            super::SerialSettingsPlatform,
-            usb_serial,
-            super::flash::Flash(flash_bank2.unwrap()),
-            settings_callback,
+            super::SerialSettingsPlatform {
+                interface: usb_serial,
+                settings,
+                storage: super::flash::Flash(flash_bank2),
+            },
             input_buffer,
             serialize_buffer,
         )
