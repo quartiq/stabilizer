@@ -19,11 +19,11 @@
 //! ```
 //!> help
 //! AVAILABLE ITEMS:
-//!   platform <cmd>
-//!   factory-reset
 //!   list
 //!   get <item>
 //!   set <item> <value>
+//!   clear
+//!   platform <cmd>
 //!   help [ <command> ]
 //!
 //! > plaform dfu
@@ -69,20 +69,26 @@ pub trait Platform: Sized {
     /// Specifies the settings that are used on the device.
     type Settings: Settings;
 
+    /// `load()`/`save()` Error type
     type Error: core::fmt::Debug;
+
+    /// Load the settings from storage
+    fn load(&mut self, buffer: &mut [u8]) -> Result<(), Self::Error>;
+
+    /// Save the settings to storage
+    fn save(&mut self, buffer: &mut [u8]) -> Result<(), Self::Error>;
 
     /// Execute a platform specific command.
     fn cmd(&mut self, cmd: &str);
+
     /// Return a mutable reference to the `Interface`.
     fn interface_mut(&mut self) -> &mut Self::Interface;
+
     /// Return a reference to the `Settings`
     fn settings(&self) -> &Self::Settings;
+
     /// Return a mutable reference to the `Settings`.
     fn settings_mut(&mut self) -> &mut Self::Settings;
-    /// Load the settings from storage
-    fn load(&mut self, buffer: &mut [u8]) -> Result<(), Self::Error>;
-    /// Save the settings to storage
-    fn save(&mut self, buffer: &mut [u8]) -> Result<(), Self::Error>;
 }
 
 struct Context<'a, P: Platform> {
@@ -137,7 +143,7 @@ impl<'a, P: Platform> Context<'a, P> {
         }
     }
 
-    fn handle_factory_reset(
+    fn handle_clear(
         _menu: &menu::Menu<Self>,
         _item: &menu::Item<Self>,
         _args: &[&str],
@@ -146,10 +152,10 @@ impl<'a, P: Platform> Context<'a, P> {
         context.platform.settings_mut().reset();
         match context.platform.save(context.buffer) {
             Ok(_) => {
-                writeln!(context, "Settings reset to default").unwrap();
+                writeln!(context, "Settings cleared to defaults").unwrap();
             }
             Err(e) => {
-                writeln!(context, "Failed to reset settings: {e:?}").unwrap();
+                writeln!(context, "Failed to clear settings: {e:?}").unwrap();
             }
         }
     }
@@ -196,8 +202,7 @@ impl<'a, P: Platform> Context<'a, P> {
                 Ok(_) => {
                     writeln!(
                             context,
-                            "Settings in memory may differ from currently operating settings. \
-    Reset device to apply settings."
+                            "Settings saved. Reboot device (`platform reboot`) to apply."
                         )
                         .unwrap();
                 }
@@ -216,25 +221,6 @@ impl<'a, P: Platform> Context<'a, P> {
         menu::Menu {
         label: "settings",
         items: &[
-            &menu::Item {
-                command: "platform",
-                help: Some("Platform specific command"),
-                item_type: menu::ItemType::Callback {
-                    function: Self::handle_platform,
-                    parameters: &[menu::Parameter::Mandatory {
-                        parameter_name: "cmd",
-                        help: Some("The name of the command (e.g. `reboot`, `service`, `dfu`)."),
-                    }]
-                },
-            },
-            &menu::Item {
-                command: "factory-reset",
-                help: Some("Reset the device settings to default values."),
-                item_type: menu::ItemType::Callback {
-                    function: Self::handle_factory_reset,
-                    parameters: &[]
-                },
-            },
             &menu::Item {
                 command: "list",
                 help: Some("List all available settings and their current values."),
@@ -269,6 +255,25 @@ impl<'a, P: Platform> Context<'a, P> {
                             help: Some("Specifies the value to be written. Values must be JSON-encoded"),
                         },
                     ]
+                },
+            },
+            &menu::Item {
+                command: "clear",
+                help: Some("Clear the device settings to default values."),
+                item_type: menu::ItemType::Callback {
+                    function: Self::handle_clear,
+                    parameters: &[]
+                },
+            },
+            &menu::Item {
+                command: "platform",
+                help: Some("Platform specific commands"),
+                item_type: menu::ItemType::Callback {
+                    function: Self::handle_platform,
+                    parameters: &[menu::Parameter::Mandatory {
+                        parameter_name: "cmd",
+                        help: Some("The name of the command (e.g. `reboot`, `service`, `dfu`)."),
+                    }]
                 },
             },
         ],
@@ -341,7 +346,6 @@ impl<'a, P: Platform> Runner<'a, P> {
                 self.0.input_byte(value);
             }
         }
-
         Ok(())
     }
 }
