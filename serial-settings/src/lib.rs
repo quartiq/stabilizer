@@ -6,36 +6,17 @@ use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 use miniconf::{JsonCoreSlash, TreeKey};
 use serde::{Deserialize, Serialize};
 
-pub use menu;
-
 pub trait Settings:
-    for<'a> JsonCoreSlash<'a>
-    + Serialize
-    + Clone
-    + 'static
-    + for<'a> Deserialize<'a>
+    for<'a> JsonCoreSlash<'a> + Serialize + Clone + for<'a> Deserialize<'a>
 {
     fn reset(&mut self);
 }
 
-pub trait Interface:
-    embedded_io::Read
-    + embedded_io::ReadReady
-    + embedded_io::Write
-    + embedded_io::WriteReady
-{
-}
-
-impl<T> Interface for T where
-    T: embedded_io::Read
+pub trait Platform {
+    type Interface: embedded_io::Read
         + embedded_io::ReadReady
         + embedded_io::Write
-        + embedded_io::WriteReady
-{
-}
-
-pub trait Platform {
-    type Interface: Interface;
+        + embedded_io::WriteReady;
 
     type Settings: Settings;
 
