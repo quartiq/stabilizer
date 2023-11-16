@@ -1,3 +1,53 @@
+//! Persistent Settings Management Serial Interface
+//!
+//! # Description
+//! This crate provides a simple means to load, configure, and save device settings over a serial
+//! (i.e. text-based) interface. It is ideal to be used with serial ports and terminal emulators,
+//! and exposes a simple way to allow users to configure device operation.
+//!
+//! # Example
+//! Let's assume that your settings structure looks as follows:
+//! ```rust
+//! #[derive(miniconf::Tree, ...)]
+//! struct Settings {
+//!     broker: String,
+//!     id: String,
+//! }
+//! ```
+//!
+//! A user would be displayed the following terminal interface:
+//! ```
+//!> help
+//! AVAILABLE ITEMS:
+//!   dfu
+//!   service
+//!   reboot
+//!   factory-reset
+//!   list
+//!   get <item>
+//!   set <item> <value>
+//!   help [ <command> ]
+//!
+//! > dfu
+//! Reset to DFU is not supported on this device
+//!
+//! > service
+//! Service data not available
+//!
+//! > list
+//! Available items:
+//! /broker: "test" [default: "mqtt"]
+//! /id: "04-91-62-d2-a8-6f" [default: "04-91-62-d2-a8-6f"]
+//! ```
+//!
+//! # Design
+//! Settings are specified in a [`Miniconf::Tree`] settings tree and are transferred over the
+//! serial interface using JSON encoding. This means that things like strings must be encased in
+//! qutoes.
+//!
+//! # Limitations
+//! Currently, there is a hardcoded limit of 32-bytes on the settings path. This is arbitrary and
+//! can be changed if needed.
 #![no_std]
 
 use core::fmt::Write;
@@ -6,24 +56,43 @@ use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 use miniconf::{JsonCoreSlash, TreeKey};
 use serde::{Deserialize, Serialize};
 
+/// Specifies the API required for objects that are used as settings with the serial terminal
+/// interface.
 pub trait Settings:
     for<'a> JsonCoreSlash<'a> + Serialize + Clone + for<'a> Deserialize<'a>
 {
-    fn reset(&mut self);
+    /// Reset the settings to their default values.
+    fn reset(&mut self) {}
+}
+
+impl<T> Settings for T where
+    T: for<'a> JsonCoreSlash<'a> + Serialize + Clone + for<'a> Deserialize<'a>
+{
 }
 
 pub trait Platform {
+    /// This type specifies the interface to the user, for example, a USB CDC-ACM serial port.
     type Interface: embedded_io::Read
         + embedded_io::ReadReady
         + embedded_io::Write
         + embedded_io::WriteReady;
 
+    /// Specifies the settings that are used on the device.
     type Settings: Settings;
 
+    /// Specifies the type of storage used for persisting settings between device boots.
     type Storage: NorFlash;
 
+    /// This function is called immediately before a device reset is initiated.
+    ///
+    /// # Args
+    /// * `interface` - An object to write device informational messages to.
     fn reset(&mut self, _interface: impl embedded_io::Write) {}
 
+    /// This device is called when a reboot to DFU (device firmware update) mode is requested.
+    ///
+    /// # Args
+    /// * `interface` - An object to write device informational messages to.
     fn dfu(&mut self, mut interface: impl embedded_io::Write) {
         self.reset(&mut interface);
         writeln!(
@@ -33,12 +102,17 @@ pub trait Platform {
         .ok();
     }
 
+    /// This function is called to provide information about the operating device state to the
+    /// user.
+    ///
+    /// # Args
+    /// * `interface` - An object to write device status to.
     fn service(&mut self, mut interface: impl embedded_io::Write) {
         writeln!(&mut interface, "Service data not available").ok();
     }
 }
 
-pub struct Context<'a, P: Platform> {
+struct Context<'a, P: Platform> {
     flash: P::Storage,
     platform: P,
     settings: P::Settings,
@@ -287,11 +361,26 @@ Reset device to apply settings."
     }
 }
 
+/// The serial settings management object.
 pub struct SerialSettings<'a, P: Platform> {
     menu: menu::Runner<'a, Context<'a, P>>,
 }
 
 impl<'a, P: Platform> SerialSettings<'a, P> {
+    /// Constructor
+    ///
+    /// # Args
+    /// * `platform` - The platform associated with the serial settings, providing the necessary
+    /// context and API to manage device settings.
+    /// * `interface` - The interface to read/write data to/from serially (via text) to the user.
+    /// * `flash` - The storage mechanism used to persist settings to between boots.
+    /// * `settings_callback` - A function called after the settings are loaded from memory. If no
+    /// settings were found, `None` is provided. This function should provide the initial device
+    /// settings.
+    /// * `line_buf` - A buffer used for maintaining the serial menu input line. It should be at
+    /// least as long as the longest user input.
+    /// * `serialize_buf` - A buffer used for serializing and deserializing settings. This buffer
+    /// needs to be at least as big as the entire serialized settings structure.
     pub fn new(
         platform: P,
         interface: P::Interface,
@@ -321,18 +410,22 @@ impl<'a, P: Platform> SerialSettings<'a, P> {
         Ok(Self { menu })
     }
 
+    /// Get the current device settings.
     pub fn settings(&self) -> &P::Settings {
         &self.menu.context.settings
     }
 
+    /// Get the device communication interface
     pub fn interface_mut(&mut self) -> &mut P::Interface {
         &mut self.menu.context.interface
     }
 
+    /// Get the device communication interface
     pub fn interface(&self) -> &P::Interface {
         &self.menu.context.interface
     }
 
+    /// Must be called periodically to process user input.
     pub fn process(
         &mut self,
     ) -> Result<(), <P::Interface as embedded_io::ErrorType>::Error> {
