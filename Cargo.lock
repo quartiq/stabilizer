@@ -892,14 +892,10 @@ dependencies = [
 name = "serial-settings"
 version = "0.1.0"
 dependencies = [
- "cortex-m 0.7.7",
  "embedded-io 0.6.1",
- "embedded-storage",
  "heapless 0.8.0",
  "menu",
  "miniconf",
- "postcard",
- "serde",
 ]
 
 [[package]]

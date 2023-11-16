@@ -50,27 +50,11 @@
 
 use core::fmt::Write;
 use embedded_io::{Read, ReadReady, Write as EioWrite, WriteReady};
-use embedded_storage::nor_flash::NorFlash;
 use miniconf::{JsonCoreSlash, TreeKey};
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug)]
-enum Error<F> {
-    Postcard(postcard::Error),
-    Flash(F),
-}
-
-impl<F> From<postcard::Error> for Error<F> {
-    fn from(e: postcard::Error) -> Self {
-        Self::Postcard(e)
-    }
-}
 
 /// Specifies the API required for objects that are used as settings with the serial terminal
 /// interface.
-pub trait Settings:
-    for<'a> JsonCoreSlash<'a> + Serialize + Clone + for<'a> Deserialize<'a>
-{
+pub trait Settings: for<'a> JsonCoreSlash<'a> + Clone {
     /// Reset the settings to their default values.
     fn reset(&mut self) {}
 }
@@ -85,35 +69,20 @@ pub trait Platform: Sized {
     /// Specifies the settings that are used on the device.
     type Settings: Settings;
 
-    /// Specifies the type of storage used for persisting settings between device boots.
-    type Storage: NorFlash;
+    type Error: core::fmt::Debug;
 
     /// Execute a platform specific command.
-    fn cmd(&mut self, cmd: &str) {
-        match cmd {
-            "reboot" => cortex_m::peripheral::SCB::sys_reset(),
-            "service" => {
-                writeln!(self.interface_mut(), "Service data not available")
-            }
-            "dfu" => {
-                writeln!(self.interface_mut(), "Reset to DFU is not supported")
-            }
-            _ => writeln!(
-                self.interface_mut(),
-                "Invalid platform command `{cmd}`"
-            ),
-        }
-        .ok();
-    }
-
+    fn cmd(&mut self, cmd: &str);
     /// Return a mutable reference to the `Interface`.
     fn interface_mut(&mut self) -> &mut Self::Interface;
     /// Return a reference to the `Settings`
     fn settings(&self) -> &Self::Settings;
     /// Return a mutable reference to the `Settings`.
     fn settings_mut(&mut self) -> &mut Self::Settings;
-    /// Return a mutable referenc to the `Storage`.
-    fn storage_mut(&mut self) -> &mut Self::Storage;
+    /// Load the settings from storage
+    fn load(&mut self, buffer: &mut [u8]) -> Result<(), Self::Error>;
+    /// Save the settings to storage
+    fn save(&mut self, buffer: &mut [u8]) -> Result<(), Self::Error>;
 }
 
 struct Context<'a, P: Platform> {
@@ -122,25 +91,6 @@ struct Context<'a, P: Platform> {
 }
 
 impl<'a, P: Platform> Context<'a, P> {
-    fn save(
-        &mut self,
-    ) -> Result<
-        (),
-        Error<<P::Storage as embedded_storage::nor_flash::ErrorType>::Error>,
-    > {
-        let serialized =
-            postcard::to_slice(&self.platform.settings(), self.buffer)?;
-        self.platform
-            .storage_mut()
-            .erase(0, serialized.len() as u32)
-            .map_err(Error::Flash)?;
-        self.platform
-            .storage_mut()
-            .write(0, serialized)
-            .map_err(Error::Flash)?;
-        Ok(())
-    }
-
     fn handle_platform(
         _menu: &menu::Menu<Self>,
         item: &menu::Item<Self>,
@@ -194,7 +144,7 @@ impl<'a, P: Platform> Context<'a, P> {
         context: &mut Self,
     ) {
         context.platform.settings_mut().reset();
-        match context.save() {
+        match context.platform.save(context.buffer) {
             Ok(_) => {
                 writeln!(context, "Settings reset to default").unwrap();
             }
@@ -242,7 +192,7 @@ impl<'a, P: Platform> Context<'a, P> {
             .settings_mut()
             .set_json(key, value.as_bytes())
         {
-            Ok(_) => match context.save() {
+            Ok(_) => match context.platform.save(context.buffer) {
                 Ok(_) => {
                     writeln!(
                             context,
@@ -342,50 +292,42 @@ impl<'a, P: Platform> core::fmt::Write for Context<'a, P> {
 }
 
 /// The serial settings management object.
-pub struct SerialSettings<'a, P: Platform> {
-    menu: menu::Runner<'a, Context<'a, P>>,
-}
+pub struct Runner<'a, P: Platform>(menu::Runner<'a, Context<'a, P>>);
 
-impl<'a, P: Platform> SerialSettings<'a, P> {
+impl<'a, P: Platform> Runner<'a, P> {
     /// Constructor
     ///
     /// # Args
     /// * `platform` - The platform associated with the serial settings, providing the necessary
     /// context and API to manage device settings.
-    /// * `interface` - The interface to read/write data to/from serially (via text) to the user.
-    /// * `flash` - The storage mechanism used to persist settings to between boots.
-    /// * `settings_callback` - A function called after the settings are loaded from memory. If no
-    /// settings were found, `None` is provided. This function should provide the initial device
-    /// settings.
     /// * `line_buf` - A buffer used for maintaining the serial menu input line. It should be at
     /// least as long as the longest user input.
     /// * `serialize_buf` - A buffer used for serializing and deserializing settings. This buffer
     /// needs to be at least as big as the entire serialized settings structure.
     pub fn new(
-        platform: P,
+        mut platform: P,
         line_buf: &'a mut [u8],
         serialize_buf: &'a mut [u8],
-    ) -> Result<
-        Self,
-        <P::Storage as embedded_storage::nor_flash::ErrorType>::Error,
-    > {
-        let context = Context {
-            platform,
-            buffer: serialize_buf,
-        };
-
-        let menu = menu::Runner::new(Context::menu(), line_buf, context);
-        Ok(Self { menu })
+    ) -> Result<Self, P::Error> {
+        platform.load(serialize_buf)?;
+        Ok(Self(menu::Runner::new(
+            Context::menu(),
+            line_buf,
+            Context {
+                platform,
+                buffer: serialize_buf,
+            },
+        )))
     }
 
     /// Get the current device settings.
     pub fn settings(&self) -> &P::Settings {
-        self.menu.context.platform.settings()
+        self.0.context.platform.settings()
     }
 
     /// Get the device communication interface
     pub fn interface_mut(&mut self) -> &mut P::Interface {
-        self.menu.context.platform.interface_mut()
+        self.0.context.platform.interface_mut()
     }
 
     /// Must be called periodically to process user input.
@@ -396,7 +338,7 @@ impl<'a, P: Platform> SerialSettings<'a, P> {
             let mut buffer = [0u8; 64];
             let count = self.interface_mut().read(&mut buffer)?;
             for &value in &buffer[..count] {
-                self.menu.input_byte(value);
+                self.0.input_byte(value);
             }
         }
 

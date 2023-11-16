@@ -81,33 +81,8 @@ pub type I2c1 = hal::i2c::I2c<hal::stm32::I2C1>;
 pub type I2c1Proxy =
     shared_bus::I2cProxy<'static, shared_bus::AtomicCheckMutex<I2c1>>;
 
-pub struct SerialSettingsPlatform {
-    interface: usbd_serial::SerialPort<'static, UsbBus>,
-    settings: flash::Settings,
-    storage: flash::Flash,
-}
-
-impl serial_settings::Platform for SerialSettingsPlatform {
-    type Interface = usbd_serial::SerialPort<'static, UsbBus>;
-    type Storage = flash::Flash;
-    type Settings = flash::Settings;
-
-    fn settings(&self) -> &Self::Settings {
-        &self.settings
-    }
-    fn settings_mut(&mut self) -> &mut Self::Settings {
-        &mut self.settings
-    }
-    fn interface_mut(&mut self) -> &mut Self::Interface {
-        &mut self.interface
-    }
-    fn storage_mut(&mut self) -> &mut Self::Storage {
-        &mut self.storage
-    }
-}
-
 pub type SerialTerminal =
-    serial_settings::SerialSettings<'static, SerialSettingsPlatform>;
+    serial_settings::Runner<'static, flash::SerialSettingsPlatform>;
 
 #[inline(never)]
 #[panic_handler]
