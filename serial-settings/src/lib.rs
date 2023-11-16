@@ -5,6 +5,8 @@ use embedded_storage::nor_flash::NorFlash;
 use miniconf::JsonCoreSlash;
 use serde::{Deserialize, Serialize};
 
+pub use menu;
+
 pub trait Settings:
     for<'a> JsonCoreSlash<'a>
     + Serialize
@@ -31,8 +33,34 @@ impl<T> Interface for T where
 {
 }
 
-struct Context<'a, I: Interface, S: Settings, Flash: NorFlash + 'static> {
+pub trait Platform {
+    fn reset(&mut self, _interface: impl embedded_io::Write) {}
+
+    fn dfu(&mut self, mut interface: impl embedded_io::Write) {
+        self.reset(&mut interface);
+        writeln!(
+            &mut interface,
+            "Reset to DFU is not supported on this device"
+        )
+        .ok();
+    }
+
+    fn service(&mut self, mut interface: impl embedded_io::Write) {
+        writeln!(&mut interface, "Service data not available").ok();
+    }
+}
+
+impl<T> Platform for T {}
+
+pub struct Context<
+    'a,
+    I: Interface,
+    S: Settings,
+    P: Platform,
+    Flash: NorFlash + 'static,
+> {
     flash: Flash,
+    platform: P,
     settings: S,
     interface: I,
     buffer: &'a mut [u8],
@@ -50,8 +78,8 @@ impl<F> From<postcard::Error> for Error<F> {
     }
 }
 
-impl<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>
-    Context<'a, I, S, Flash>
+impl<'a, I: Interface, S: Settings, P: Platform, Flash: NorFlash + 'static>
+    Context<'a, I, S, P, Flash>
 {
     fn save(&mut self) -> Result<(), Error<Flash::Error>> {
         let serialized = postcard::to_slice(&self.settings, self.buffer)?;
@@ -63,11 +91,32 @@ impl<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>
     }
 }
 
-fn make_menu<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
-) -> menu::Menu<'a, Context<'a, I, S, Flash>> {
+fn settings_menu<
+    'a,
+    I: Interface,
+    S: Settings,
+    P: Platform,
+    Flash: NorFlash + 'static,
+>() -> menu::Menu<'a, Context<'a, I, S, P, Flash>> {
     menu::Menu {
-        label: "root",
+        label: "settings",
         items: &[
+            &menu::Item {
+                command: "dfu",
+                help: Some("Reboot the device to DFU mode"),
+                item_type: menu::ItemType::Callback {
+                    function: handle_dfu_reboot,
+                    parameters: &[]
+                },
+            },
+            &menu::Item {
+                command: "service",
+                help: Some("Read device service information"),
+                item_type: menu::ItemType::Callback {
+                    function: handle_service,
+                    parameters: &[]
+                },
+            },
             &menu::Item {
                 command: "reboot",
                 help: Some("Reboot the device to force new settings to take effect."),
@@ -126,8 +175,8 @@ fn make_menu<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
     }
 }
 
-impl<'a, I: Interface, S: Settings, Flash: NorFlash + 'static> core::fmt::Write
-    for Context<'a, I, S, Flash>
+impl<'a, I: Interface, S: Settings, P: Platform, Flash: NorFlash + 'static>
+    core::fmt::Write for Context<'a, I, S, P, Flash>
 {
     /// Write data to the serial terminal.
     ///
@@ -141,11 +190,17 @@ impl<'a, I: Interface, S: Settings, Flash: NorFlash + 'static> core::fmt::Write
     }
 }
 
-fn handle_list<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
-    _menu: &menu::Menu<Context<'a, I, S, Flash>>,
-    _item: &menu::Item<Context<'a, I, S, Flash>>,
+fn handle_list<
+    'a,
+    I: Interface,
+    S: Settings,
+    P: Platform,
+    Flash: NorFlash + 'static,
+>(
+    _menu: &menu::Menu<Context<'a, I, S, P, Flash>>,
+    _item: &menu::Item<Context<'a, I, S, P, Flash>>,
     _args: &[&str],
-    context: &mut Context<'a, I, S, Flash>,
+    context: &mut Context<'a, I, S, P, Flash>,
 ) {
     writeln!(context, "Available items:").unwrap();
 
@@ -168,20 +223,63 @@ fn handle_list<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
     }
 }
 
-fn handle_reboot<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
-    _menu: &menu::Menu<Context<'a, I, S, Flash>>,
-    _item: &menu::Item<Context<'a, I, S, Flash>>,
+fn handle_reboot<
+    'a,
+    I: Interface,
+    S: Settings,
+    P: Platform,
+    Flash: NorFlash + 'static,
+>(
+    _menu: &menu::Menu<Context<'a, I, S, P, Flash>>,
+    _item: &menu::Item<Context<'a, I, S, P, Flash>>,
     _args: &[&str],
-    _context: &mut Context<'a, I, S, Flash>,
+    context: &mut Context<'a, I, S, P, Flash>,
 ) {
+    context.platform.reset(&mut context.interface);
     cortex_m::peripheral::SCB::sys_reset();
 }
 
-fn handle_reset<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
-    _menu: &menu::Menu<Context<'a, I, S, Flash>>,
-    _item: &menu::Item<Context<'a, I, S, Flash>>,
+fn handle_dfu_reboot<
+    'a,
+    I: Interface,
+    S: Settings,
+    P: Platform,
+    Flash: NorFlash + 'static,
+>(
+    _menu: &menu::Menu<Context<'a, I, S, P, Flash>>,
+    _item: &menu::Item<Context<'a, I, S, P, Flash>>,
     _args: &[&str],
-    context: &mut Context<'a, I, S, Flash>,
+    context: &mut Context<'a, I, S, P, Flash>,
+) {
+    context.platform.dfu(&mut context.interface);
+}
+
+fn handle_service<
+    'a,
+    I: Interface,
+    S: Settings,
+    P: Platform,
+    Flash: NorFlash + 'static,
+>(
+    _menu: &menu::Menu<Context<'a, I, S, P, Flash>>,
+    _item: &menu::Item<Context<'a, I, S, P, Flash>>,
+    _args: &[&str],
+    context: &mut Context<'a, I, S, P, Flash>,
+) {
+    context.platform.service(&mut context.interface);
+}
+
+fn handle_reset<
+    'a,
+    I: Interface,
+    S: Settings,
+    P: Platform,
+    Flash: NorFlash + 'static,
+>(
+    _menu: &menu::Menu<Context<'a, I, S, P, Flash>>,
+    _item: &menu::Item<Context<'a, I, S, P, Flash>>,
+    _args: &[&str],
+    context: &mut Context<'a, I, S, P, Flash>,
 ) {
     context.settings.reset();
     match context.save() {
@@ -194,11 +292,17 @@ fn handle_reset<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
     }
 }
 
-fn handle_get<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
-    _menu: &menu::Menu<Context<'a, I, S, Flash>>,
-    item: &menu::Item<Context<'a, I, S, Flash>>,
+fn handle_get<
+    'a,
+    I: Interface,
+    S: Settings,
+    P: Platform,
+    Flash: NorFlash + 'static,
+>(
+    _menu: &menu::Menu<Context<'a, I, S, P, Flash>>,
+    item: &menu::Item<Context<'a, I, S, P, Flash>>,
     args: &[&str],
-    context: &mut Context<'a, I, S, Flash>,
+    context: &mut Context<'a, I, S, P, Flash>,
 ) {
     let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
     let len = match context.settings.get_json(key, context.buffer) {
@@ -213,11 +317,17 @@ fn handle_get<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
     writeln!(context.interface, "{key}: {stringified}").unwrap();
 }
 
-fn handle_set<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
-    _menu: &menu::Menu<Context<'a, I, S, Flash>>,
-    item: &menu::Item<Context<'a, I, S, Flash>>,
+fn handle_set<
+    'a,
+    I: Interface,
+    S: Settings,
+    P: Platform,
+    Flash: NorFlash + 'static,
+>(
+    _menu: &menu::Menu<Context<'a, I, S, P, Flash>>,
+    item: &menu::Item<Context<'a, I, S, P, Flash>>,
     args: &[&str],
-    context: &mut Context<'a, I, S, Flash>,
+    context: &mut Context<'a, I, S, P, Flash>,
 ) {
     let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
     let value = menu::argument_finder(item, args, "value").unwrap().unwrap();
@@ -248,17 +358,19 @@ pub struct SerialSettings<
     'a,
     I: Interface,
     S: Settings,
+    P: Platform,
     Flash: NorFlash + 'static,
 > {
-    menu: menu::Runner<'a, Context<'a, I, S, Flash>>,
+    menu: menu::Runner<'a, Context<'a, I, S, P, Flash>>,
 }
 
-impl<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>
-    SerialSettings<'a, I, S, Flash>
+impl<'a, I: Interface, S: Settings, P: Platform, Flash: NorFlash + 'static>
+    SerialSettings<'a, I, S, P, Flash>
 {
     pub fn new(
         interface: I,
         mut flash: Flash,
+        platform: P,
         settings_callback: impl FnOnce(Option<S>) -> S,
         line_buf: &'a mut [u8],
         serialize_buf: &'a mut [u8],
@@ -272,9 +384,11 @@ impl<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>
             settings,
             interface,
             flash,
+            platform,
             buffer: serialize_buf,
         };
-        let menu = menu::Runner::new(make_menu(), line_buf, context);
+
+        let menu = menu::Runner::new(settings_menu(), line_buf, context);
         Ok(Self { menu })
     }
 

@@ -85,6 +85,7 @@ pub type SerialTerminal = serial_settings::SerialSettings<
     'static,
     usbd_serial::SerialPort<'static, UsbBus>,
     flash::Settings,
+    (),
     flash::Flash,
 >;
 
