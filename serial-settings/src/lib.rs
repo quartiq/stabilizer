@@ -1,4 +1,4 @@
-#![cfg_attr(not(test), no_std)]
+#![no_std]
 
 use core::fmt::Write;
 use embedded_storage::nor_flash::NorFlash;
@@ -152,23 +152,19 @@ fn handle_list<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
     let mut defaults = context.settings.clone();
     defaults.reset();
 
-    let mut buf = [0; 256];
-    let mut default_buf = [0; 256];
     for path in S::iter_paths::<heapless::String<32>>("/") {
         let path = path.unwrap();
         let current_value = {
-            let len = context.settings.get_json(&path, &mut buf).unwrap();
-            core::str::from_utf8(&buf[..len]).unwrap()
+            let len = context.settings.get_json(&path, context.buffer).unwrap();
+            core::str::from_utf8(&context.buffer[..len]).unwrap()
         };
+        write!(context.interface, "{path}: {current_value}").unwrap();
+
         let default_value = {
-            let len = defaults.get_json(&path, &mut default_buf).unwrap();
-            core::str::from_utf8(&default_buf[..len]).unwrap()
+            let len = defaults.get_json(&path, context.buffer).unwrap();
+            core::str::from_utf8(&context.buffer[..len]).unwrap()
         };
-        writeln!(
-            context,
-            "{path}: {current_value} [default: {default_value}]"
-        )
-        .unwrap();
+        writeln!(context.interface, " [default: {default_value}]").unwrap()
     }
 }
 
@@ -204,9 +200,8 @@ fn handle_get<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
     args: &[&str],
     context: &mut Context<'a, I, S, Flash>,
 ) {
-    let mut buf = [0u8; 256];
     let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
-    let len = match context.settings.get_json(key, &mut buf) {
+    let len = match context.settings.get_json(key, context.buffer) {
         Err(e) => {
             writeln!(context, "Failed to read {key}: {e}").unwrap();
             return;
@@ -214,8 +209,8 @@ fn handle_get<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
         Ok(len) => len,
     };
 
-    let stringified = core::str::from_utf8(&buf[..len]).unwrap();
-    writeln!(context, "{key}: {stringified}").unwrap();
+    let stringified = core::str::from_utf8(&context.buffer[..len]).unwrap();
+    writeln!(context.interface, "{key}: {stringified}").unwrap();
 }
 
 fn handle_set<'a, I: Interface, S: Settings, Flash: NorFlash + 'static>(
