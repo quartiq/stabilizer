@@ -523,6 +523,8 @@ mod app {
             usb.process(c.local.usb_terminal);
         });
 
+        c.local.usb_terminal.process().unwrap();
+
         // Schedule to run this task every 10 milliseconds.
         usb::spawn_after(10u64.millis()).unwrap();
     }

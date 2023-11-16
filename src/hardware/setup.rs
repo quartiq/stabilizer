@@ -1095,9 +1095,9 @@ pub fn setup(
             };
 
         serial_settings::SerialSettings::new(
+            super::SerialSettingsPlatform,
             usb_serial,
             super::flash::Flash(flash_bank2.unwrap()),
-            (),
             settings_callback,
             input_buffer,
             serialize_buffer,
