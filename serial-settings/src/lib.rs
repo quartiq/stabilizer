@@ -141,17 +141,141 @@ impl<'a, P: Platform> Context<'a, P> {
         self.flash.write(0, serialized).map_err(Error::Flash)?;
         Ok(())
     }
-}
 
-fn settings_menu<'a, P: Platform>() -> menu::Menu<'a, Context<'a, P>> {
-    menu::Menu {
+    fn handle_reboot(
+        _menu: &menu::Menu<Self>,
+        _item: &menu::Item<Self>,
+        _args: &[&str],
+        context: &mut Self,
+    ) {
+        context.platform.reset(&mut context.interface);
+        cortex_m::peripheral::SCB::sys_reset();
+    }
+
+    fn handle_list(
+        _menu: &menu::Menu<Self>,
+        _item: &menu::Item<Self>,
+        _args: &[&str],
+        context: &mut Self,
+    ) {
+        writeln!(context, "Available items:").unwrap();
+
+        let mut defaults = context.settings.clone();
+        defaults.reset();
+
+        for path in P::Settings::iter_paths::<heapless::String<32>>("/") {
+            let path = path.unwrap();
+            let current_value = {
+                let len =
+                    context.settings.get_json(&path, context.buffer).unwrap();
+                core::str::from_utf8(&context.buffer[..len]).unwrap()
+            };
+            write!(context.interface, "{path}: {current_value}").unwrap();
+
+            let default_value = {
+                let len = defaults.get_json(&path, context.buffer).unwrap();
+                core::str::from_utf8(&context.buffer[..len]).unwrap()
+            };
+            writeln!(context.interface, " [default: {default_value}]").unwrap()
+        }
+    }
+
+    fn handle_dfu(
+        _menu: &menu::Menu<Self>,
+        _item: &menu::Item<Self>,
+        _args: &[&str],
+        context: &mut Self,
+    ) {
+        context.platform.dfu(&mut context.interface);
+    }
+
+    fn handle_service(
+        _menu: &menu::Menu<Self>,
+        _item: &menu::Item<Self>,
+        _args: &[&str],
+        context: &mut Self,
+    ) {
+        context.platform.service(&mut context.interface);
+    }
+
+    fn handle_factory_reset(
+        _menu: &menu::Menu<Self>,
+        _item: &menu::Item<Self>,
+        _args: &[&str],
+        context: &mut Self,
+    ) {
+        context.settings.reset();
+        match context.save() {
+            Ok(_) => {
+                writeln!(context, "Settings reset to default").unwrap();
+            }
+            Err(e) => {
+                writeln!(context, "Failed to reset settings: {e:?}").unwrap();
+            }
+        }
+    }
+
+    fn handle_get(
+        _menu: &menu::Menu<Self>,
+        item: &menu::Item<Self>,
+        args: &[&str],
+        context: &mut Self,
+    ) {
+        let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
+        let len = match context.settings.get_json(key, context.buffer) {
+            Err(e) => {
+                writeln!(context, "Failed to read {key}: {e}").unwrap();
+                return;
+            }
+            Ok(len) => len,
+        };
+
+        let stringified = core::str::from_utf8(&context.buffer[..len]).unwrap();
+        writeln!(context.interface, "{key}: {stringified}").unwrap();
+    }
+
+    fn handle_set(
+        _menu: &menu::Menu<Self>,
+        item: &menu::Item<Self>,
+        args: &[&str],
+        context: &mut Self,
+    ) {
+        let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
+        let value =
+            menu::argument_finder(item, args, "value").unwrap().unwrap();
+
+        // Now, write the new value into memory.
+        // TODO: Validate it first?
+        match context.settings.set_json(key, value.as_bytes()) {
+            Ok(_) => match context.save() {
+                Ok(_) => {
+                    writeln!(
+                            context,
+                            "Settings in memory may differ from currently operating settings. \
+    Reset device to apply settings."
+                        )
+                        .unwrap();
+                }
+                Err(e) => {
+                    writeln!(context, "Failed to save settings: {e:?}")
+                        .unwrap();
+                }
+            },
+            Err(e) => {
+                writeln!(context, "Failed to update {key}: {e:?}").unwrap();
+            }
+        }
+    }
+
+    fn menu() -> menu::Menu<'a, Self> {
+        menu::Menu {
         label: "settings",
         items: &[
             &menu::Item {
                 command: "dfu",
                 help: Some("Reboot the device to DFU mode"),
                 item_type: menu::ItemType::Callback {
-                    function: handle_dfu_reboot,
+                    function: Self::handle_dfu,
                     parameters: &[]
                 },
             },
@@ -159,7 +283,7 @@ fn settings_menu<'a, P: Platform>() -> menu::Menu<'a, Context<'a, P>> {
                 command: "service",
                 help: Some("Read device service information"),
                 item_type: menu::ItemType::Callback {
-                    function: handle_service,
+                    function: Self::handle_service,
                     parameters: &[]
                 },
             },
@@ -167,7 +291,7 @@ fn settings_menu<'a, P: Platform>() -> menu::Menu<'a, Context<'a, P>> {
                 command: "reboot",
                 help: Some("Reboot the device to force new settings to take effect."),
                 item_type: menu::ItemType::Callback {
-                    function: handle_reboot,
+                    function: Self::handle_reboot,
                     parameters: &[]
                 },
             },
@@ -175,7 +299,7 @@ fn settings_menu<'a, P: Platform>() -> menu::Menu<'a, Context<'a, P>> {
                 command: "factory-reset",
                 help: Some("Reset the device settings to default values."),
                 item_type: menu::ItemType::Callback {
-                    function: handle_reset,
+                    function: Self::handle_factory_reset,
                     parameters: &[]
                 },
             },
@@ -183,7 +307,7 @@ fn settings_menu<'a, P: Platform>() -> menu::Menu<'a, Context<'a, P>> {
                 command: "list",
                 help: Some("List all available settings and their current values."),
                 item_type: menu::ItemType::Callback {
-                    function: handle_list,
+                    function: Self::handle_list,
                     parameters: &[],
                 },
             },
@@ -191,7 +315,7 @@ fn settings_menu<'a, P: Platform>() -> menu::Menu<'a, Context<'a, P>> {
                 command: "get",
                 help: Some("Read a setting_from the device."),
                 item_type: menu::ItemType::Callback {
-                    function: handle_get,
+                    function: Self::handle_get,
                     parameters: &[menu::Parameter::Mandatory {
                         parameter_name: "item",
                         help: Some("The name of the setting to read."),
@@ -202,7 +326,7 @@ fn settings_menu<'a, P: Platform>() -> menu::Menu<'a, Context<'a, P>> {
                 command: "set",
                 help: Some("Update a a setting in the device."),
                 item_type: menu::ItemType::Callback {
-                    function: handle_set,
+                    function: Self::handle_set,
                     parameters: &[
                         menu::Parameter::Mandatory {
                             parameter_name: "item",
@@ -219,6 +343,7 @@ fn settings_menu<'a, P: Platform>() -> menu::Menu<'a, Context<'a, P>> {
         entry: None,
         exit: None,
     }
+    }
 }
 
 impl<'a, P: Platform> core::fmt::Write for Context<'a, P> {
@@ -231,128 +356,6 @@ impl<'a, P: Platform> core::fmt::Write for Context<'a, P> {
             self.interface.write_all(s.as_bytes()).ok();
         }
         Ok(())
-    }
-}
-
-fn handle_list<'a, P: Platform>(
-    _menu: &menu::Menu<Context<'a, P>>,
-    _item: &menu::Item<Context<'a, P>>,
-    _args: &[&str],
-    context: &mut Context<'a, P>,
-) {
-    writeln!(context, "Available items:").unwrap();
-
-    let mut defaults = context.settings.clone();
-    defaults.reset();
-
-    for path in P::Settings::iter_paths::<heapless::String<32>>("/") {
-        let path = path.unwrap();
-        let current_value = {
-            let len = context.settings.get_json(&path, context.buffer).unwrap();
-            core::str::from_utf8(&context.buffer[..len]).unwrap()
-        };
-        write!(context.interface, "{path}: {current_value}").unwrap();
-
-        let default_value = {
-            let len = defaults.get_json(&path, context.buffer).unwrap();
-            core::str::from_utf8(&context.buffer[..len]).unwrap()
-        };
-        writeln!(context.interface, " [default: {default_value}]").unwrap()
-    }
-}
-
-fn handle_reboot<'a, P: Platform>(
-    _menu: &menu::Menu<Context<'a, P>>,
-    _item: &menu::Item<Context<'a, P>>,
-    _args: &[&str],
-    context: &mut Context<'a, P>,
-) {
-    context.platform.reset(&mut context.interface);
-    cortex_m::peripheral::SCB::sys_reset();
-}
-
-fn handle_dfu_reboot<'a, P: Platform>(
-    _menu: &menu::Menu<Context<'a, P>>,
-    _item: &menu::Item<Context<'a, P>>,
-    _args: &[&str],
-    context: &mut Context<'a, P>,
-) {
-    context.platform.dfu(&mut context.interface);
-}
-
-fn handle_service<'a, P: Platform>(
-    _menu: &menu::Menu<Context<'a, P>>,
-    _item: &menu::Item<Context<'a, P>>,
-    _args: &[&str],
-    context: &mut Context<'a, P>,
-) {
-    context.platform.service(&mut context.interface);
-}
-
-fn handle_reset<'a, P: Platform>(
-    _menu: &menu::Menu<Context<'a, P>>,
-    _item: &menu::Item<Context<'a, P>>,
-    _args: &[&str],
-    context: &mut Context<'a, P>,
-) {
-    context.settings.reset();
-    match context.save() {
-        Ok(_) => {
-            writeln!(context, "Settings reset to default").unwrap();
-        }
-        Err(e) => {
-            writeln!(context, "Failed to reset settings: {e:?}").unwrap();
-        }
-    }
-}
-
-fn handle_get<'a, P: Platform>(
-    _menu: &menu::Menu<Context<'a, P>>,
-    item: &menu::Item<Context<'a, P>>,
-    args: &[&str],
-    context: &mut Context<'a, P>,
-) {
-    let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
-    let len = match context.settings.get_json(key, context.buffer) {
-        Err(e) => {
-            writeln!(context, "Failed to read {key}: {e}").unwrap();
-            return;
-        }
-        Ok(len) => len,
-    };
-
-    let stringified = core::str::from_utf8(&context.buffer[..len]).unwrap();
-    writeln!(context.interface, "{key}: {stringified}").unwrap();
-}
-
-fn handle_set<'a, P: Platform>(
-    _menu: &menu::Menu<Context<'a, P>>,
-    item: &menu::Item<Context<'a, P>>,
-    args: &[&str],
-    context: &mut Context<'a, P>,
-) {
-    let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
-    let value = menu::argument_finder(item, args, "value").unwrap().unwrap();
-
-    // Now, write the new value into memory.
-    // TODO: Validate it first?
-    match context.settings.set_json(key, value.as_bytes()) {
-        Ok(_) => match context.save() {
-            Ok(_) => {
-                writeln!(
-                        context,
-                        "Settings in memory may differ from currently operating settings. \
-Reset device to apply settings."
-                    )
-                    .unwrap();
-            }
-            Err(e) => {
-                writeln!(context, "Failed to save settings: {e:?}").unwrap();
-            }
-        },
-        Err(e) => {
-            writeln!(context, "Failed to update {key}: {e:?}").unwrap();
-        }
     }
 }
 
@@ -401,7 +404,7 @@ impl<'a, P: Platform> SerialSettings<'a, P> {
             buffer: serialize_buf,
         };
 
-        let menu = menu::Runner::new(settings_menu(), line_buf, context);
+        let menu = menu::Runner::new(Context::menu(), line_buf, context);
         Ok(Self { menu })
     }
 
