@@ -104,7 +104,7 @@ impl<'a, P: Platform> Context<'a, P> {
         context: &mut Self,
     ) {
         let key = menu::argument_finder(item, args, "cmd").unwrap().unwrap();
-        context.platform.cmd(key);
+        context.platform.cmd(key)
     }
 
     fn handle_list(
@@ -113,32 +113,52 @@ impl<'a, P: Platform> Context<'a, P> {
         _args: &[&str],
         context: &mut Self,
     ) {
-        writeln!(context, "Available settings:").unwrap();
-
         let mut defaults = context.platform.settings().clone();
         defaults.reset();
 
         for path in P::Settings::iter_paths::<heapless::String<32>>("/") {
-            let path = path.unwrap();
-            let current_value = {
-                let len = context
-                    .platform
-                    .settings()
-                    .get_json(&path, context.buffer)
-                    .unwrap();
-                core::str::from_utf8(&context.buffer[..len]).unwrap()
-            };
-            write!(context.platform.interface_mut(), "{path}: {current_value}")
-                .unwrap();
+            match path {
+                Err(e) => writeln!(
+                    context.platform.interface_mut(),
+                    "Failed to get path: {e}"
+                ),
+                Ok(path) => {
+                    match context
+                        .platform
+                        .settings()
+                        .get_json(&path, context.buffer)
+                    {
+                        Err(e) => {
+                            writeln!(
+                                context.platform.interface_mut(),
+                                "Failed to read {path}: {e}"
+                            )
+                            .unwrap();
+                            continue;
+                        }
+                        Ok(len) => write!(
+                            context.platform.interface_mut(),
+                            "{path}: {}",
+                            core::str::from_utf8(&context.buffer[..len])
+                                .unwrap()
+                        )
+                        .unwrap(),
+                    }
 
-            let default_value = {
-                let len = defaults.get_json(&path, context.buffer).unwrap();
-                core::str::from_utf8(&context.buffer[..len]).unwrap()
-            };
-            writeln!(
-                context.platform.interface_mut(),
-                " [default: {default_value}]"
-            )
+                    match defaults.get_json(&path, context.buffer) {
+                        Err(e) => writeln!(
+                            context.platform.interface_mut(),
+                            "[default serialization error: {e}]"
+                        ),
+                        Ok(len) => writeln!(
+                            context.platform.interface_mut(),
+                            " [default: {}]",
+                            core::str::from_utf8(&context.buffer[..len])
+                                .unwrap()
+                        ),
+                    }
+                }
+            }
             .unwrap()
         }
     }
@@ -152,12 +172,13 @@ impl<'a, P: Platform> Context<'a, P> {
         context.platform.settings_mut().reset();
         match context.platform.save(context.buffer) {
             Ok(_) => {
-                writeln!(context, "Settings cleared to defaults").unwrap();
+                writeln!(context, "Settings cleared to defaults and saved.")
             }
             Err(e) => {
-                writeln!(context, "Failed to clear settings: {e:?}").unwrap();
+                writeln!(context, "Failed to clear settings: {e:?}")
             }
         }
+        .unwrap();
     }
 
     fn handle_get(
@@ -167,18 +188,22 @@ impl<'a, P: Platform> Context<'a, P> {
         context: &mut Self,
     ) {
         let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
-        let len =
-            match context.platform.settings().get_json(key, context.buffer) {
-                Err(e) => {
-                    writeln!(context, "Failed to read {key}: {e}").unwrap();
-                    return;
-                }
-                Ok(len) => len,
-            };
-
-        let stringified = core::str::from_utf8(&context.buffer[..len]).unwrap();
-        writeln!(context.platform.interface_mut(), "{key}: {stringified}")
-            .unwrap();
+        match context.platform.settings().get_json(key, context.buffer) {
+            Err(e) => {
+                writeln!(
+                    context.platform.interface_mut(),
+                    "Failed to read {key}: {e}"
+                )
+            }
+            Ok(len) => {
+                writeln!(
+                    context.platform.interface_mut(),
+                    "{key}: {}",
+                    core::str::from_utf8(&context.buffer[..len]).unwrap()
+                )
+            }
+        }
+        .unwrap();
     }
 
     fn handle_set(
@@ -204,17 +229,15 @@ impl<'a, P: Platform> Context<'a, P> {
                             context,
                             "Settings saved. Reboot device (`platform reboot`) to apply."
                         )
-                        .unwrap();
                 }
                 Err(e) => {
                     writeln!(context, "Failed to save settings: {e:?}")
-                        .unwrap();
                 }
             },
             Err(e) => {
-                writeln!(context, "Failed to update {key}: {e:?}").unwrap();
+                writeln!(context, "Failed to update {key}: {e:?}")
             }
-        }
+        }.unwrap();
     }
 
     fn menu() -> menu::Menu<'a, Self> {
