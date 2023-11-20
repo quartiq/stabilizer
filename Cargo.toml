@@ -35,7 +35,7 @@ members = ["ad9959"]
 
 [dependencies]
 embedded-storage = "0.3"
-menu = "0.3"
+menu = "0.4"
 cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }
 cortex-m-rt = { version = "0.7", features = ["device"] }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
