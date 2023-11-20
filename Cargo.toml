@@ -64,7 +64,7 @@ rand_core = "0.6.4"
 minimq = "0.8.0"
 # patch with https://github.com/rust-embedded-community/usb-device/pull/129
 usb-device = "0.2.9"
-usbd-serial = "0.1.1"
+usbd-serial = "0.2.0"
 # Keep this synced with the miniconf version in py/setup.py
 miniconf = "0.9.0"
 smoltcp-nal = { version = "0.4.1", features = ["shared-stack"]}
