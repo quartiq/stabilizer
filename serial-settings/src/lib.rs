@@ -49,8 +49,12 @@
 #![no_std]
 
 use core::fmt::Write;
-use embedded_io::{Read, ReadReady, Write as EioWrite, WriteReady};
+use embedded_io::{Read, ReadReady};
 use miniconf::{JsonCoreSlash, TreeKey};
+
+mod interface;
+
+pub use interface::BestEffortInterface;
 
 /// Specifies the API required for objects that are used as settings with the serial terminal
 /// interface.
@@ -63,8 +67,7 @@ pub trait Platform: Sized {
     /// This type specifies the interface to the user, for example, a USB CDC-ACM serial port.
     type Interface: embedded_io::Read
         + embedded_io::ReadReady
-        + embedded_io::Write
-        + embedded_io::WriteReady;
+        + core::fmt::Write;
 
     /// Specifies the settings that are used on the device.
     type Settings: Settings;
@@ -128,7 +131,7 @@ impl<'a, P: Platform> Context<'a, P> {
                             continue;
                         }
                         Ok(len) => write!(
-                            Writer(&mut context.platform.interface_mut()),
+                            &mut context.platform.interface_mut(),
                             "{path}: {}",
                             core::str::from_utf8(&context.buffer[..len])
                                 .unwrap()
@@ -142,7 +145,7 @@ impl<'a, P: Platform> Context<'a, P> {
                             "[default serialization error: {e}]"
                         ),
                         Ok(len) => writeln!(
-                            Writer(&mut context.platform.interface_mut()),
+                            &mut context.platform.interface_mut(),
                             " [default: {}]",
                             core::str::from_utf8(&context.buffer[..len])
                                 .unwrap()
@@ -185,7 +188,7 @@ impl<'a, P: Platform> Context<'a, P> {
             }
             Ok(len) => {
                 writeln!(
-                    Writer(&mut context.platform.interface_mut()),
+                    &mut context.platform.interface_mut(),
                     "{key}: {}",
                     core::str::from_utf8(&context.buffer[..len]).unwrap()
                 )
@@ -295,26 +298,8 @@ impl<'a, P: Platform> Context<'a, P> {
 }
 
 impl<'a, P: Platform> core::fmt::Write for Context<'a, P> {
-    /// Write data to the serial terminal.
-    ///
-    /// # Note
-    /// The terminal uses an internal buffer. Overflows of the output buffer are silently ignored.
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        let mut writer = Writer(self.platform.interface_mut());
-        writer.write_str(s)
-    }
-}
-
-struct Writer<'a, T: WriteReady + EioWrite>(&'a mut T);
-
-impl<'a, T: embedded_io::WriteReady + embedded_io::Write> core::fmt::Write
-    for Writer<'a, T>
-{
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        if let Ok(true) = self.0.write_ready() {
-            self.0.write(s.as_bytes()).ok();
-        }
-        Ok(())
+        self.platform.interface_mut().write_str(s)
     }
 }
 

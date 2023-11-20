@@ -1088,7 +1088,9 @@ pub fn setup(
 
         serial_settings::Runner::new(
             super::flash::SerialSettingsPlatform {
-                interface: usb_serial,
+                interface: serial_settings::BestEffortInterface::new(
+                    usb_serial,
+                ),
                 storage,
                 settings,
             },

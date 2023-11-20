@@ -1,7 +1,6 @@
 use core::fmt::Write;
 use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 use stm32h7xx_hal::flash::LockedFlashBank;
-use usbd_serial::embedded_io::Write as EioWrite;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, miniconf::Tree)]
 pub struct Settings {
@@ -96,7 +95,9 @@ impl<F> From<postcard::Error> for Error<F> {
 
 pub struct SerialSettingsPlatform {
     /// The interface to read/write data to/from serially (via text) to the user.
-    pub interface: usbd_serial::SerialPort<'static, super::UsbBus>,
+    pub interface: serial_settings::BestEffortInterface<
+        usbd_serial::SerialPort<'static, super::UsbBus>,
+    >,
     /// The Settings structure.
     pub settings: Settings,
     /// The storage mechanism used to persist settings to between boots.
@@ -104,7 +105,9 @@ pub struct SerialSettingsPlatform {
 }
 
 impl serial_settings::Platform for SerialSettingsPlatform {
-    type Interface = usbd_serial::SerialPort<'static, super::UsbBus>;
+    type Interface = serial_settings::BestEffortInterface<
+        usbd_serial::SerialPort<'static, super::UsbBus>,
+    >;
     type Settings = Settings;
     type Error =
         Error<<Flash as embedded_storage::nor_flash::ErrorType>::Error>;

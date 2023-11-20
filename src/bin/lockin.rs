@@ -522,7 +522,7 @@ mod app {
     fn usb(mut c: usb::Context) {
         // Handle the USB serial terminal.
         c.shared.usb.lock(|usb| {
-            usb.poll(&mut [c.local.usb_terminal.interface_mut()]);
+            usb.poll(&mut [c.local.usb_terminal.interface_mut().inner_mut()]);
         });
 
         c.local.usb_terminal.process().unwrap();
