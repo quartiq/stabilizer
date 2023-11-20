@@ -16,7 +16,6 @@ pub mod setup;
 pub mod shared_adc;
 pub mod signal_generator;
 pub mod timers;
-pub mod usb;
 
 mod eeprom;
 
@@ -33,6 +32,9 @@ pub type AFE1 = afe::ProgrammableGainAmplifier<
 >;
 
 pub type UsbBus = stm32h7xx_hal::usb_hs::UsbBus<stm32h7xx_hal::usb_hs::USB2>;
+
+// Type alias for the USB device.
+pub type UsbDevice = usb_device::device::UsbDevice<'static, UsbBus>;
 
 // Type alias for digital input 0 (DI0).
 pub type DigitalInput0 = hal::gpio::gpiog::PG9<hal::gpio::Input>;

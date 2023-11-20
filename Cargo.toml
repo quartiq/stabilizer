@@ -78,7 +78,6 @@ features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
 
 [patch.crates-io.usbd-serial]
 git = "https://github.com/rust-embedded-community/usbd-serial"
-branch = "rs/bugfix"
 
 [patch.crates-io.synopsys-usb-otg]
 git = "https://github.com/quartiq/synopsys-usb-otg"

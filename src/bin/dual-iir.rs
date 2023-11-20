@@ -46,7 +46,7 @@ use stabilizer::{
         hal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
-        usb::UsbDevice,
+        UsbDevice,
         DigitalInput0, DigitalInput1, SerialTerminal, SystemTimer, Systick,
         AFE0, AFE1,
     },
@@ -233,7 +233,7 @@ mod app {
         let settings = Settings::default();
 
         let shared = Shared {
-            usb: stabilizer.usb_device,
+            usb: stabilizer.usb,
             network,
             settings,
             telemetry: TelemetryBuffer::default(),
@@ -406,7 +406,7 @@ mod app {
                 NetworkState::Updated => {}
                 NetworkState::NoChange => {
                     // We can't sleep if USB is not in suspend.
-                    if c.shared.usb.lock(|usb| usb.usb_is_suspended()) {
+                    if c.shared.usb.lock(|usb| usb.state() == usb_device::device::UsbDeviceState::Suspend) {
                         cortex_m::asm::wfi();
                     }
                 }
@@ -469,7 +469,7 @@ mod app {
     fn usb(mut c: usb::Context) {
         // Handle the USB serial terminal.
         c.shared.usb.lock(|usb| {
-            usb.process(c.local.usb_terminal);
+            usb.poll(&mut [c.local.usb_terminal.interface_mut()]);
         });
 
         c.local.usb_terminal.process().unwrap();

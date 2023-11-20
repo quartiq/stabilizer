@@ -16,7 +16,7 @@ use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
     eeprom, input_stamper::InputStamper, pounder,
     pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
-    usb::UsbDevice, DigitalInput0, DigitalInput1, EemDigitalInput0,
+    UsbDevice, DigitalInput0, DigitalInput1, EemDigitalInput0,
     EemDigitalInput1, EemDigitalOutput0, EemDigitalOutput1, EthernetPhy,
     NetworkStack, SerialTerminal, SystemTimer, Systick, UsbBus, AFE0, AFE1,
 };
@@ -118,7 +118,7 @@ pub struct StabilizerDevices {
     pub digital_inputs: (DigitalInput0, DigitalInput1),
     pub eem_gpio: EemGpioDevices,
     pub usb_serial: SerialTerminal,
-    pub usb_device: UsbDevice,
+    pub usb: UsbDevice,
 }
 
 /// The available Pounder-specific hardware interfaces.
@@ -1070,7 +1070,7 @@ pub fn setup(
         .device_class(usbd_serial::USB_CLASS_CDC)
         .build();
 
-        (UsbDevice::new(usb_device), serial)
+        (usb_device, serial)
     };
 
     let usb_serial = {
@@ -1109,7 +1109,7 @@ pub fn setup(
         timestamp_timer,
         digital_inputs,
         eem_gpio,
-        usb_device,
+        usb: usb_device,
         usb_serial,
     };
 
