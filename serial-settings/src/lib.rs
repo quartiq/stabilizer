@@ -69,11 +69,8 @@ pub trait Platform: Sized {
     /// Specifies the settings that are used on the device.
     type Settings: Settings;
 
-    /// `load()`/`save()` Error type
+    /// `save()` Error type
     type Error: core::fmt::Debug;
-
-    /// Load the settings from storage
-    fn load(&mut self, buffer: &mut [u8]) -> Result<(), Self::Error>;
 
     /// Save the settings to storage
     fn save(&mut self, buffer: &mut [u8]) -> Result<(), Self::Error>;
@@ -313,7 +310,7 @@ impl<'a, P: Platform> core::fmt::Write for Context<'a, P> {
     /// The terminal uses an internal buffer. Overflows of the output buffer are silently ignored.
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         if let Ok(true) = self.platform.interface_mut().write_ready() {
-            self.platform.interface_mut().write_all(s.as_bytes()).ok();
+            self.platform.interface_mut().write(s.as_bytes()).ok();
         }
         Ok(())
     }
@@ -331,13 +328,12 @@ impl<'a, P: Platform> Runner<'a, P> {
     /// * `line_buf` - A buffer used for maintaining the serial menu input line. It should be at
     /// least as long as the longest user input.
     /// * `serialize_buf` - A buffer used for serializing and deserializing settings. This buffer
-    /// needs to be at least as big as the entire serialized settings structure.
+    /// needs to be at least as big as the entire serialized settings member.
     pub fn new(
-        mut platform: P,
+        platform: P,
         line_buf: &'a mut [u8],
         serialize_buf: &'a mut [u8],
     ) -> Result<Self, P::Error> {
-        platform.load(serialize_buf)?;
         Ok(Self(menu::Runner::new(
             Context::menu(),
             line_buf,

@@ -19,6 +19,17 @@ impl serial_settings::Settings for Settings {
 }
 
 impl Settings {
+    pub fn reload(&mut self, storage: &mut Flash) {
+        let mut buffer = [0u8; 512];
+        storage.read(0, &mut buffer).unwrap();
+        let Ok(mut settings) = postcard::from_bytes::<Self>(&buffer) else {
+            return;
+        };
+
+        settings.mac = self.mac;
+        *self = settings;
+    }
+
     pub fn new(mac: smoltcp_nal::smoltcp::wire::EthernetAddress) -> Self {
         let mut id = heapless::String::new();
         write!(&mut id, "{mac}").unwrap();
@@ -97,18 +108,6 @@ impl serial_settings::Platform for SerialSettingsPlatform {
     type Settings = Settings;
     type Error =
         Error<<Flash as embedded_storage::nor_flash::ErrorType>::Error>;
-
-    fn load(&mut self, buffer: &mut [u8]) -> Result<(), Self::Error> {
-        self.storage.read(0, buffer).map_err(Self::Error::Flash)?;
-        self.settings = match postcard::from_bytes::<Self::Settings>(buffer) {
-            Ok(mut settings) => {
-                settings.mac = self.settings.mac;
-                settings
-            }
-            Err(_) => Self::Settings::new(self.settings.mac),
-        };
-        Ok(())
-    }
 
     fn save(&mut self, buf: &mut [u8]) -> Result<(), Self::Error> {
         let serialized = postcard::to_slice(self.settings(), buf)?;

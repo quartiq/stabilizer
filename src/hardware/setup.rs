@@ -16,9 +16,9 @@ use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
     eeprom, input_stamper::InputStamper, pounder,
     pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
-    UsbDevice, DigitalInput0, DigitalInput1, EemDigitalInput0,
-    EemDigitalInput1, EemDigitalOutput0, EemDigitalOutput1, EthernetPhy,
-    NetworkStack, SerialTerminal, SystemTimer, Systick, UsbBus, AFE0, AFE1,
+    DigitalInput0, DigitalInput1, EemDigitalInput0, EemDigitalInput1,
+    EemDigitalOutput0, EemDigitalOutput1, EthernetPhy, NetworkStack,
+    SerialTerminal, SystemTimer, Systick, UsbBus, UsbDevice, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -1081,13 +1081,16 @@ pub fn setup(
         let serialize_buffer =
             cortex_m::singleton!(: [u8; 512] = [0u8; 512]).unwrap();
 
+        let mut storage = super::flash::Flash(flash_bank2.unwrap());
+        let mut settings =
+            super::flash::Settings::new(network_devices.mac_address);
+        settings.reload(&mut storage);
+
         serial_settings::Runner::new(
             super::flash::SerialSettingsPlatform {
                 interface: usb_serial,
-                storage: super::flash::Flash(flash_bank2.unwrap()),
-                settings: super::flash::Settings::new(
-                    network_devices.mac_address,
-                ),
+                storage,
+                settings,
             },
             input_buffer,
             serialize_buffer,

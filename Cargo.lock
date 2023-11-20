@@ -1041,8 +1041,7 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e08bcfbdbe4458133f2fd55994a5c4f1b4bf28084f0218e93cdbc19d7c70219f"
+source = "git+https://github.com/quartiq/stm32h7xx-hal?branch=feature/usb-updates#4d424ff9bb67e7df112ee57b11c488c699979e90"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",
@@ -1083,8 +1082,9 @@ dependencies = [
 
 [[package]]
 name = "synopsys-usb-otg"
-version = "0.3.2"
-source = "git+https://github.com/quartiq/synopsys-usb-otg?branch=feature/usb-device-bump#06bd4b0827f4ae7907ce3a2f9db1444c4ad10d1c"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e948d523b316939545d8b21a48c27aef150ce25321b9f95ff7978647a806a6fe"
 dependencies = [
  "cortex-m 0.7.7",
  "embedded-hal",

@@ -49,9 +49,8 @@ use stabilizer::{
         input_stamper::InputStamper,
         signal_generator,
         timers::SamplingTimer,
-        UsbDevice,
         DigitalInput0, DigitalInput1, SerialTerminal, SystemTimer, Systick,
-        AFE0, AFE1,
+        UsbDevice, AFE0, AFE1,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -468,7 +467,10 @@ mod app {
                 NetworkState::Updated => {}
                 NetworkState::NoChange => {
                     // We can't sleep if USB is not in suspend.
-                    if c.shared.usb.lock(|usb| usb.state() == usb_device::device::UsbDeviceState::Suspend) {
+                    if c.shared.usb.lock(|usb| {
+                        usb.state()
+                            == usb_device::device::UsbDeviceState::Suspend
+                    }) {
                         cortex_m::asm::wfi();
                     }
                 }
