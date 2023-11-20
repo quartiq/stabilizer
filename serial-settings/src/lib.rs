@@ -115,10 +115,7 @@ impl<'a, P: Platform> Context<'a, P> {
 
         for path in P::Settings::iter_paths::<heapless::String<32>>("/") {
             match path {
-                Err(e) => writeln!(
-                    context.platform.interface_mut(),
-                    "Failed to get path: {e}"
-                ),
+                Err(e) => writeln!(context, "Failed to get path: {e}"),
                 Ok(path) => {
                     match context
                         .platform
@@ -126,15 +123,12 @@ impl<'a, P: Platform> Context<'a, P> {
                         .get_json(&path, context.buffer)
                     {
                         Err(e) => {
-                            writeln!(
-                                context.platform.interface_mut(),
-                                "Failed to read {path}: {e}"
-                            )
-                            .unwrap();
+                            writeln!(context, "Failed to read {path}: {e}")
+                                .unwrap();
                             continue;
                         }
                         Ok(len) => write!(
-                            context.platform.interface_mut(),
+                            Writer(&mut context.platform.interface_mut()),
                             "{path}: {}",
                             core::str::from_utf8(&context.buffer[..len])
                                 .unwrap()
@@ -144,11 +138,11 @@ impl<'a, P: Platform> Context<'a, P> {
 
                     match defaults.get_json(&path, context.buffer) {
                         Err(e) => writeln!(
-                            context.platform.interface_mut(),
+                            context,
                             "[default serialization error: {e}]"
                         ),
                         Ok(len) => writeln!(
-                            context.platform.interface_mut(),
+                            Writer(&mut context.platform.interface_mut()),
                             " [default: {}]",
                             core::str::from_utf8(&context.buffer[..len])
                                 .unwrap()
@@ -187,14 +181,11 @@ impl<'a, P: Platform> Context<'a, P> {
         let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
         match context.platform.settings().get_json(key, context.buffer) {
             Err(e) => {
-                writeln!(
-                    context.platform.interface_mut(),
-                    "Failed to read {key}: {e}"
-                )
+                writeln!(context, "Failed to read {key}: {e}")
             }
             Ok(len) => {
                 writeln!(
-                    context.platform.interface_mut(),
+                    Writer(&mut context.platform.interface_mut()),
                     "{key}: {}",
                     core::str::from_utf8(&context.buffer[..len]).unwrap()
                 )
@@ -309,8 +300,19 @@ impl<'a, P: Platform> core::fmt::Write for Context<'a, P> {
     /// # Note
     /// The terminal uses an internal buffer. Overflows of the output buffer are silently ignored.
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        if let Ok(true) = self.platform.interface_mut().write_ready() {
-            self.platform.interface_mut().write(s.as_bytes()).ok();
+        let mut writer = Writer(self.platform.interface_mut());
+        writer.write_str(s)
+    }
+}
+
+struct Writer<'a, T: WriteReady + EioWrite>(&'a mut T);
+
+impl<'a, T: embedded_io::WriteReady + embedded_io::Write> core::fmt::Write
+    for Writer<'a, T>
+{
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        if let Ok(true) = self.0.write_ready() {
+            self.0.write(s.as_bytes()).ok();
         }
         Ok(())
     }
@@ -328,7 +330,7 @@ impl<'a, P: Platform> Runner<'a, P> {
     /// * `line_buf` - A buffer used for maintaining the serial menu input line. It should be at
     /// least as long as the longest user input.
     /// * `serialize_buf` - A buffer used for serializing and deserializing settings. This buffer
-    /// needs to be at least as big as the entire serialized settings member.
+    /// needs to be at least as big as the entire serialized settings structure.
     pub fn new(
         platform: P,
         line_buf: &'a mut [u8],
