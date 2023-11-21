@@ -31,11 +31,11 @@ features = []
 default-target = "thumbv7em-none-eabihf"
 
 [workspace]
-members = ["ad9959"]
+members = ["ad9959", "serial-settings"]
 
 [dependencies]
+embedded-io = "0.5"
 embedded-storage = "0.3"
-menu = "0.3"
 cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }
 cortex-m-rt = { version = "0.7", features = ["device"] }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
@@ -49,6 +49,7 @@ num_enum = { version = "0.7.1", default-features = false }
 paste = "1"
 idsp = "0.13"
 ad9959 = { path = "ad9959", version = "0.2.1" }
+serial-settings = {path = "serial-settings"}
 mcp230xx = "1.0"
 mutex-trait = "0.2"
 fugit = "0.3"
@@ -62,9 +63,8 @@ enum-iterator = "1.4.1"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
 minimq = "0.8.0"
-# patch with https://github.com/rust-embedded-community/usb-device/pull/129
-usb-device = "0.2.9"
-usbd-serial = "0.1.1"
+usb-device = "0.3.0"
+usbd-serial = "0.2"
 # Keep this synced with the miniconf version in py/setup.py
 miniconf = "0.9.0"
 smoltcp-nal = { version = "0.4.1", features = ["shared-stack"]}
@@ -73,7 +73,12 @@ postcard = "1"
 
 [dependencies.stm32h7xx-hal]
 version = "0.15.1"
+git = "https://github.com/quartiq/stm32h7xx-hal"
+branch = "feature/usb-updates"
 features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
+
+[patch.crates-io.usbd-serial]
+git = "https://github.com/rust-embedded-community/usbd-serial"
 
 [features]
 nightly = [ ]

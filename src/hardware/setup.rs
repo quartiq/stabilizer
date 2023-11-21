@@ -14,11 +14,11 @@ use smoltcp_nal::smoltcp;
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
-    eeprom, flash::FlashSettings, input_stamper::InputStamper, pounder,
-    pounder::dds_output::DdsOutput, serial_terminal::SerialTerminal,
-    shared_adc::SharedAdc, timers, DigitalInput0, DigitalInput1,
-    EemDigitalInput0, EemDigitalInput1, EemDigitalOutput0, EemDigitalOutput1,
-    EthernetPhy, NetworkStack, SystemTimer, Systick, UsbBus, AFE0, AFE1,
+    eeprom, input_stamper::InputStamper, pounder,
+    pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
+    DigitalInput0, DigitalInput1, EemDigitalInput0, EemDigitalInput1,
+    EemDigitalOutput0, EemDigitalOutput1, EthernetPhy, NetworkStack,
+    SerialTerminal, SystemTimer, Systick, UsbBus, UsbDevice, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -118,6 +118,7 @@ pub struct StabilizerDevices {
     pub digital_inputs: (DigitalInput0, DigitalInput1),
     pub eem_gpio: EemGpioDevices,
     pub usb_serial: SerialTerminal,
+    pub usb: UsbDevice,
 }
 
 /// The available Pounder-specific hardware interfaces.
@@ -1061,19 +1062,43 @@ pub fn setup(
             usb_bus.as_ref().unwrap(),
             usb_device::device::UsbVidPid(0x1209, 0x392F),
         )
-        .manufacturer("ARTIQ/Sinara")
-        .product("Stabilizer")
-        .serial_number(serial_number.as_ref().unwrap())
+        .strings(&[usb_device::device::StringDescriptors::default()
+            .manufacturer("ARTIQ/Sinara")
+            .product("Stabilizer")
+            .serial_number(serial_number.as_ref().unwrap())])
+        .unwrap()
         .device_class(usbd_serial::USB_CLASS_CDC)
         .build();
 
         (usb_device, serial)
     };
 
-    let (_, flash_bank2) = device.FLASH.split();
+    let usb_serial = {
+        let (_, flash_bank2) = device.FLASH.split();
 
-    let settings =
-        FlashSettings::new(flash_bank2.unwrap(), network_devices.mac_address);
+        let input_buffer =
+            cortex_m::singleton!(: [u8; 256] = [0u8; 256]).unwrap();
+        let serialize_buffer =
+            cortex_m::singleton!(: [u8; 512] = [0u8; 512]).unwrap();
+
+        let mut storage = super::flash::Flash(flash_bank2.unwrap());
+        let mut settings =
+            super::flash::Settings::new(network_devices.mac_address);
+        settings.reload(&mut storage);
+
+        serial_settings::Runner::new(
+            super::flash::SerialSettingsPlatform {
+                interface: serial_settings::BestEffortInterface::new(
+                    usb_serial,
+                ),
+                storage,
+                settings,
+            },
+            input_buffer,
+            serialize_buffer,
+        )
+        .unwrap()
+    };
 
     let stabilizer = StabilizerDevices {
         systick,
@@ -1089,7 +1114,8 @@ pub fn setup(
         timestamp_timer,
         digital_inputs,
         eem_gpio,
-        usb_serial: SerialTerminal::new(usb_device, usb_serial, settings),
+        usb: usb_device,
+        usb_serial,
     };
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());

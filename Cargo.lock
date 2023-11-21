@@ -187,7 +187,7 @@ dependencies = [
  "bare-metal 1.0.0",
  "cortex-m 0.7.7",
  "cortex-m-rtic-macros",
- "heapless",
+ "heapless 0.7.16",
  "rtic-core",
  "rtic-monotonic",
  "version_check",
@@ -233,6 +233,12 @@ dependencies = [
 
 [[package]]
 name = "embedded-io"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "658bbadc628dc286b9ae02f0cb0f5411c056eb7487b72f0083203f115de94060"
+
+[[package]]
+name = "embedded-io"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
@@ -243,7 +249,7 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "447416d161ba378782c13e82b11b267d6d2104b4913679a7c5640e7e94f96ea7"
 dependencies = [
- "heapless",
+ "heapless 0.7.16",
  "nb 1.1.0",
  "no-std-net",
 ]
@@ -336,6 +342,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hash32"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47d60b12902ba28e2730cd37e95b8c9223af2808df9e902d4df49588d1470606"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -348,10 +363,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db04bc24a18b9ea980628ecf00e6c0264f3c1426dac36c00cb49b6fbad8b0743"
 dependencies = [
  "atomic-polyfill 0.1.11",
- "hash32",
+ "hash32 0.2.1",
  "rustc_version 0.4.0",
  "serde",
  "spin",
+ "stable_deref_trait",
+]
+
+[[package]]
+name = "heapless"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
+dependencies = [
+ "hash32 0.3.1",
  "stable_deref_trait",
 ]
 
@@ -433,9 +458,9 @@ dependencies = [
 
 [[package]]
 name = "menu"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b03d7f798bfe97329ad6df937951142eec93886b37d87010502dd25e8cc75fd5"
+checksum = "d5208bd660042c7760f40d960ba0b1a9dc7a9c90775bea4c4637c3b666d2b53d"
 
 [[package]]
 name = "miniconf"
@@ -443,8 +468,8 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9df2d7bdba3acb28460c347b21e1e88d869f2716ebe060eb6a79f7b76b57de72"
 dependencies = [
- "embedded-io",
- "heapless",
+ "embedded-io 0.6.1",
+ "heapless 0.7.16",
  "itoa",
  "log",
  "miniconf_derive",
@@ -474,7 +499,7 @@ dependencies = [
  "bit_field",
  "embedded-nal",
  "embedded-time",
- "heapless",
+ "heapless 0.7.16",
  "num_enum 0.7.1",
  "serde",
  "smlang",
@@ -608,6 +633,15 @@ dependencies = [
 
 [[package]]
 name = "num_enum"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a015b430d3c108a207fd776d2e2196aaf8b1cf8cf93253e3a097ff3085076a1"
+dependencies = [
+ "num_enum_derive 0.6.1",
+]
+
+[[package]]
+name = "num_enum"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "683751d591e6d81200c39fb0d1032608b77724f34114db54f571ff1317b337c0"
@@ -628,6 +662,17 @@ dependencies = [
 
 [[package]]
 name = "num_enum_derive"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96667db765a921f7b295ffee8b60472b686a51d4f21c2ee4ffdb94c7013b65a6"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.38",
+]
+
+[[package]]
+name = "num_enum_derive"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c11e44798ad209ccdd91fc192f0526a369a01234f7373e1b141c96d7cee4f0e"
@@ -644,13 +689,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de3145af08024dea9fa9914f381a17b8fc6034dfb00f3a84013f7ff43f29ed4c"
 
 [[package]]
+name = "portable-atomic"
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bccab0e7fd7cc19f820a1c8c91720af652d0c88dc9664dd72aef2614f04af3b"
+
+[[package]]
 name = "postcard"
 version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a55c51ee6c0db07e68448e336cf8ea4131a620edefebf9893e759b2d793420f8"
 dependencies = [
  "cobs",
- "heapless",
+ "heapless 0.7.16",
  "serde",
 ]
 
@@ -821,7 +872,7 @@ version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c9e1ab533c0bc414c34920ec7e5f097101d126ed5eac1a1aac711222e0bbb33"
 dependencies = [
- "heapless",
+ "heapless 0.7.16",
  "ryu",
  "serde",
 ]
@@ -835,6 +886,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.38",
+]
+
+[[package]]
+name = "serial-settings"
+version = "0.1.0"
+dependencies = [
+ "embedded-io 0.6.1",
+ "heapless 0.8.0",
+ "menu",
+ "miniconf",
 ]
 
 [[package]]
@@ -890,7 +951,7 @@ dependencies = [
  "bitflags 1.3.2",
  "byteorder",
  "cfg-if",
- "heapless",
+ "heapless 0.7.16",
  "managed",
 ]
 
@@ -902,7 +963,7 @@ checksum = "6dd2ed2f8e7643a170506863ed0f52ad1dc5762abdcff27de825dde14fc8025f"
 dependencies = [
  "embedded-nal",
  "embedded-time",
- "heapless",
+ "heapless 0.7.16",
  "nanorand",
  "shared-bus 0.2.5",
  "smoltcp",
@@ -927,15 +988,15 @@ dependencies = [
  "cortex-m-rt",
  "cortex-m-rtic",
  "embedded-hal",
+ "embedded-io 0.5.0",
  "embedded-storage",
  "enum-iterator",
  "fugit",
- "heapless",
+ "heapless 0.7.16",
  "idsp",
  "lm75",
  "log",
  "mcp230xx",
- "menu",
  "miniconf",
  "minimq",
  "mono-clock",
@@ -949,6 +1010,7 @@ dependencies = [
  "rtt-target",
  "serde",
  "serde-json-core",
+ "serial-settings",
  "shared-bus 0.3.1",
  "smoltcp-nal",
  "spin",
@@ -979,8 +1041,7 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e08bcfbdbe4458133f2fd55994a5c4f1b4bf28084f0218e93cdbc19d7c70219f"
+source = "git+https://github.com/quartiq/stm32h7xx-hal?branch=feature/usb-updates#4d424ff9bb67e7df112ee57b11c488c699979e90"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",
@@ -1021,9 +1082,9 @@ dependencies = [
 
 [[package]]
 name = "synopsys-usb-otg"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "678f3707a7b1fd4863023292c42f73c6bab0e9b0096f41ae612d1af0ff221b45"
+checksum = "e948d523b316939545d8b21a48c27aef150ce25321b9f95ff7978647a806a6fe"
 dependencies = [
  "cortex-m 0.7.7",
  "embedded-hal",
@@ -1062,18 +1123,23 @@ checksum = "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b"
 
 [[package]]
 name = "usb-device"
-version = "0.2.9"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f6cc3adc849b5292b4075fc0d5fdcf2f24866e88e336dd27a8943090a520508"
+checksum = "e73e438f527e567fb3982f2370967821fab4f5aea84c42e218a211dd2002b6a2"
+dependencies = [
+ "heapless 0.7.16",
+ "num_enum 0.6.1",
+ "portable-atomic",
+]
 
 [[package]]
 name = "usbd-serial"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db75519b86287f12dcf0d171c7cf4ecc839149fe9f3b720ac4cfce52959e1dfe"
+version = "0.2.0"
+source = "git+https://github.com/rust-embedded-community/usbd-serial#6611dc092822c60b4482e28aab2fe084c1756410"
 dependencies = [
  "embedded-hal",
- "nb 0.1.3",
+ "embedded-io 0.6.1",
+ "nb 1.1.0",
  "usb-device",
 ]
 
