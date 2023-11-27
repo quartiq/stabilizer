@@ -44,10 +44,10 @@ use stabilizer::{
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
         hal,
-        serial_terminal::SerialTerminal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
-        DigitalInput0, DigitalInput1, SystemTimer, Systick, AFE0, AFE1,
+        DigitalInput0, DigitalInput1, SerialTerminal, SystemTimer, Systick,
+        UsbDevice, AFE0, AFE1,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -183,7 +183,7 @@ mod app {
 
     #[shared]
     struct Shared {
-        usb_terminal: SerialTerminal,
+        usb: UsbDevice,
         network: NetworkUsers<Settings, Telemetry, 3>,
 
         settings: Settings,
@@ -193,6 +193,7 @@ mod app {
 
     #[local]
     struct Local {
+        usb_terminal: SerialTerminal,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         afes: (AFE0, AFE1),
@@ -208,7 +209,7 @@ mod app {
         let clock = SystemTimer::new(|| monotonics::now().ticks() as u32);
 
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) = hardware::setup::setup(
+        let (stabilizer, _pounder) = hardware::setup::setup(
             c.core,
             c.device,
             clock,
@@ -216,14 +217,14 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let flash = stabilizer.usb_serial.flash();
+        let settings = stabilizer.usb_serial.settings();
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
             clock,
             env!("CARGO_BIN_NAME"),
-            &flash.settings.broker,
-            &flash.settings.id,
+            &settings.broker,
+            &settings.id,
         );
 
         let generator = network.configure_streaming(StreamFormat::AdcDacData);
@@ -231,7 +232,7 @@ mod app {
         let settings = Settings::default();
 
         let shared = Shared {
-            usb_terminal: stabilizer.usb_serial,
+            usb: stabilizer.usb,
             network,
             settings,
             telemetry: TelemetryBuffer::default(),
@@ -250,6 +251,7 @@ mod app {
         };
 
         let mut local = Local {
+            usb_terminal: stabilizer.usb_serial,
             sampling_timer: stabilizer.adc_dac_timer,
             digital_inputs: stabilizer.digital_inputs,
             afes: stabilizer.afes,
@@ -393,7 +395,7 @@ mod app {
         );
     }
 
-    #[idle(shared=[network, usb_terminal])]
+    #[idle(shared=[network, usb])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
             match c.shared.network.lock(|net| net.update()) {
@@ -403,10 +405,10 @@ mod app {
                 NetworkState::Updated => {}
                 NetworkState::NoChange => {
                     // We can't sleep if USB is not in suspend.
-                    if c.shared
-                        .usb_terminal
-                        .lock(|terminal| terminal.usb_is_suspended())
-                    {
+                    if c.shared.usb.lock(|usb| {
+                        usb.state()
+                            == usb_device::device::UsbDeviceState::Suspend
+                    }) {
                         cortex_m::asm::wfi();
                     }
                 }
@@ -465,10 +467,14 @@ mod app {
             .unwrap();
     }
 
-    #[task(priority = 1, shared=[usb_terminal])]
+    #[task(priority = 1, shared=[usb], local=[usb_terminal])]
     fn usb(mut c: usb::Context) {
         // Handle the USB serial terminal.
-        c.shared.usb_terminal.lock(|usb| usb.process());
+        c.shared.usb.lock(|usb| {
+            usb.poll(&mut [c.local.usb_terminal.interface_mut().inner_mut()]);
+        });
+
+        c.local.usb_terminal.process().unwrap();
 
         // Schedule to run this task every 10 milliseconds.
         usb::spawn_after(10u64.millis()).unwrap();

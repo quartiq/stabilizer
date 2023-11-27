@@ -12,7 +12,6 @@ pub mod design_parameters;
 pub mod flash;
 pub mod input_stamper;
 pub mod pounder;
-pub mod serial_terminal;
 pub mod setup;
 pub mod shared_adc;
 pub mod signal_generator;
@@ -33,6 +32,9 @@ pub type AFE1 = afe::ProgrammableGainAmplifier<
 >;
 
 pub type UsbBus = stm32h7xx_hal::usb_hs::UsbBus<stm32h7xx_hal::usb_hs::USB2>;
+
+// Type alias for the USB device.
+pub type UsbDevice = usb_device::device::UsbDevice<'static, UsbBus>;
 
 // Type alias for digital input 0 (DI0).
 pub type DigitalInput0 = hal::gpio::gpiog::PG9<hal::gpio::Input>;
@@ -80,6 +82,9 @@ pub type SystemTimer = mono_clock::MonoClock<u32, MONOTONIC_FREQUENCY>;
 pub type I2c1 = hal::i2c::I2c<hal::stm32::I2C1>;
 pub type I2c1Proxy =
     shared_bus::I2cProxy<'static, shared_bus::AtomicCheckMutex<I2c1>>;
+
+pub type SerialTerminal =
+    serial_settings::Runner<'static, flash::SerialSettingsPlatform>;
 
 #[inline(never)]
 #[panic_handler]
