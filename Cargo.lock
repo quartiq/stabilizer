@@ -1041,7 +1041,7 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.15.1"
-source = "git+https://github.com/quartiq/stm32h7xx-hal?branch=feature/usb-updates#4d424ff9bb67e7df112ee57b11c488c699979e90"
+source = "git+https://github.com/stm32-rs/stm32h7xx-hal.git?branch=master#c2a4c0e13c3a511d417295a84d735ec3c71c2dd4"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",

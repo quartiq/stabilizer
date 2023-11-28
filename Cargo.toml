@@ -73,8 +73,8 @@ postcard = "1"
 
 [dependencies.stm32h7xx-hal]
 version = "0.15.1"
-git = "https://github.com/quartiq/stm32h7xx-hal"
-branch = "feature/usb-updates"
+git = "https://github.com/stm32-rs/stm32h7xx-hal.git"
+branch = "master"
 features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
 
 [patch.crates-io.usbd-serial]
