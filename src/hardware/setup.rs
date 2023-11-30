@@ -247,6 +247,8 @@ pub fn setup(
             .unwrap();
         log::info!("Starting");
     }
+    const DFU_VER: *const u8 = 0x1FF1E7FE as _;
+    unsafe { log::info!("DFU version: {:x}", *DFU_VER) };
 
     let pwr = device.PWR.constrain();
     let vos = pwr.freeze();
