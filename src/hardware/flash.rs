@@ -1,3 +1,4 @@
+use crate::hardware::platform;
 use core::fmt::Write;
 use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 use stm32h7xx_hal::flash::LockedFlashBank;
@@ -126,12 +127,15 @@ impl serial_settings::Platform for SerialSettingsPlatform {
     fn cmd(&mut self, cmd: &str) {
         match cmd {
             "reboot" => cortex_m::peripheral::SCB::sys_reset(),
-            _ => writeln!(
-                self.interface_mut(),
-                "Invalid platform command `{cmd}`"
-            ),
+            "dfu" => platform::start_dfu_reboot(),
+            _ => {
+                writeln!(
+                    self.interface_mut(),
+                    "Invalid platform command: `{cmd}` not in [`dfu`, `reboot`]"
+                )
+                .ok();
+            }
         }
-        .ok();
     }
 
     fn settings(&self) -> &Self::Settings {

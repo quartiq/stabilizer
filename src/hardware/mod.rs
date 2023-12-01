@@ -9,15 +9,15 @@ pub mod cpu_temp_sensor;
 pub mod dac;
 pub mod delay;
 pub mod design_parameters;
+mod eeprom;
 pub mod flash;
 pub mod input_stamper;
+pub mod platform;
 pub mod pounder;
 pub mod setup;
 pub mod shared_adc;
 pub mod signal_generator;
 pub mod timers;
-
-mod eeprom;
 
 // Type alias for the analog front-end (AFE) for ADC0.
 pub type AFE0 = afe::ProgrammableGainAmplifier<
