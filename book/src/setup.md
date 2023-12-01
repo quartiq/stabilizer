@@ -146,12 +146,6 @@ in to the front of Stabilizer, and a DFU utility.
     connector on the front panel
 1. Insert the module into the crate
 1. Then power it
-1. Open the serial terminal of Stabilizer to place it in DFU mode by using the `platform dfu`
-   command. Once the DFU command is entered, the serial port should immediately disconnect:
-    ```bash
-    python -m serial <STABILIZER_SERIAL_PORT>
-    > platform dfu
-    ```
 1. Perform the Device Firmware Upgrade (DFU)
     ```bash
     dfu-util -a 0 -s 0x08000000:leave -D dual-iir.bin
