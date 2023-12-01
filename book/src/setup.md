@@ -102,11 +102,10 @@ docker run -p 1883:1883 --name mosquitto -v ${pwd}/mosquitto.conf:/mosquitto/con
 
 Firmware can be loaded onto stabilizer using **one** of the three following methods.
 
-> **Note:** All methods except the DFU procedure require access to the circuit board. Pulling the
-> device from a crate always requires power removal as there are sensitive leads and components on
-> both sides of the board that may come into contact with adjacent front panels.
-> Every access to the board also requires proper ESD precautions. Never
-> hot-plug the device or the probe.
+> **Note:** Most methods below require access to the circuit board. Pulling the device from a crate
+> always requires power removal as there are sensitive leads and components on both sides of the
+> board that may come into contact with adjacent front panels. Every access to the board also
+> requires proper ESD precautions. Never hot-plug the device or the probe.
 
 ### ST-Link virtual mass storage
 
@@ -124,13 +123,29 @@ and applying power again.
 
 ### DFU Upload
 
-If an SWD/JTAG probe is not available,
-you can flash firmware using only a micro USB cable
-plugged in to the front of Stabilizer, and a DFU utility.
+If an SWD/JTAG probe is not available, you can flash firmware using only a micro USB cable plugged
+in to the front of Stabilizer, and a DFU utility.
+
+> **Note:** If there is already newer firmware running on Stabilizer that supports the USB serial
+> interface, there is no need to remove Stabilizer from the crate or disconnect any existing
+> connectors/power supplies or to jumper the BOOT0 pin. Instead, open the serial port on Stabilizer
+> and request it to enter DFU mode:
+> ```bash
+> python -m serial <serial-port>
+> > platform dfu
+> ```
+>
+> After the device is in DFU mode, use the `dfu-util` command specified in the instructions below,
+> and the DFU firmware update will be complete.
 
 1. Install the DFU USB tool [`dfu-util`](http://dfu-util.sourceforge.net)
+1. Remove power
+1. Then carefully remove the module from the crate to gain acccess to the board
+1. Short JC2/BOOT with the jumper
 1. Connect your computer to the Micro USB connector below/left of the RJ45
     connector on the front panel
+1. Insert the module into the crate
+1. Then power it
 1. Open the serial terminal of Stabilizer to place it in DFU mode by using the `platform dfu`
    command. Once the DFU command is entered, the serial port should immediately disconnect:
     ```bash
@@ -141,6 +156,9 @@ plugged in to the front of Stabilizer, and a DFU utility.
     ```bash
     dfu-util -a 0 -s 0x08000000:leave -D dual-iir.bin
     ```
+1. To keep the device from entering the bootloader remove power,
+   pull the board from the crate, remove the JC2/BOOT jumper, insert the module
+   into the crate, and power it again
 
 ### SWD/JTAG Firmware Development
 
