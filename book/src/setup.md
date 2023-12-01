@@ -102,11 +102,11 @@ docker run -p 1883:1883 --name mosquitto -v ${pwd}/mosquitto.conf:/mosquitto/con
 
 Firmware can be loaded onto stabilizer using **one** of the three following methods.
 
-> **Note:** All methods require access to the circuit board. Pulling the device from a
-> crate always requires power removal as there are sensitive leads and components on
-> both sides of the board that may come into contact with adjacent front panels.
-> Every access to the board also requires proper ESD precautions. Never
-> hot-plug the device or the probe.
+-> **Note:** All methods except the DFU procedure require access to the circuit board. Pulling the
+-> device from a crate always requires power removal as there are sensitive leads and components on
+-> both sides of the board that may come into contact with adjacent front panels.
+-> Every access to the board also requires proper ESD precautions. Never
+-> hot-plug the device or the probe.
 
 ### ST-Link virtual mass storage
 
@@ -126,25 +126,21 @@ and applying power again.
 
 If an SWD/JTAG probe is not available,
 you can flash firmware using only a micro USB cable
-plugged in to the front of Stabilizer, a DFU utility, and a jumper to activate
-the bootloader.
+plugged in to the front of Stabilizer, and a DFU utility.
 
 1. Install the DFU USB tool [`dfu-util`](http://dfu-util.sourceforge.net)
-1. Remove power
-1. Then carefully remove the module from the crate to gain
-    access to the board
-1. Short JC2/BOOT with the jumper
 1. Connect your computer to the Micro USB connector below/left of the RJ45
     connector on the front panel
-1. Insert the module into the crate
-1. Then power it
+1. Open the serial terminal of Stabilizer to place it in DFU mode by using the `platform dfu`
+   command. Once the DFU command is entered, the serial port should immediately disconnect:
+    ```bash
+    python -m serial <STABILIZER_SERIAL_PORT>
+    > platform dfu
+    ```
 1. Perform the Device Firmware Upgrade (DFU)
     ```bash
     dfu-util -a 0 -s 0x08000000:leave -D dual-iir.bin
     ```
-1. To keep the device from entering the bootloader remove power,
-   pull the board from the crate, remove the JC2/BOOT jumper, insert the module
-   into the crate, and power it again
 
 ### SWD/JTAG Firmware Development
 
