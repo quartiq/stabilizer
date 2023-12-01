@@ -1,3 +1,6 @@
+/// Flag used to indicate that a reboot to DFU is requested.
+const DFU_REBOOT_FLAG: u32 = 0xDEAD_BEEF;
+
 /// Indicate a reboot to DFU is requested.
 pub fn start_dfu_reboot() {
     extern "C" {
@@ -6,7 +9,7 @@ pub fn start_dfu_reboot() {
 
     unsafe {
         let start_ptr = &mut _bootflag as *mut u8;
-        core::ptr::write_unaligned(start_ptr.cast::<u32>(), 0xDEAD_BEEF);
+        core::ptr::write_unaligned(start_ptr.cast::<u32>(), DFU_REBOOT_FLAG);
     }
 
     cortex_m::peripheral::SCB::sys_reset();
@@ -21,8 +24,8 @@ pub fn dfu_bootflag() -> bool {
 
     unsafe {
         let start_ptr = &mut _bootflag as *mut u8;
-        let set =
-            0xDEAD_BEEF == core::ptr::read_unaligned(start_ptr.cast::<u32>());
+        let set = DFU_REBOOT_FLAG
+            == core::ptr::read_unaligned(start_ptr.cast::<u32>());
 
         // Clear the boot flag after checking it to ensure it doesn't stick between reboots.
         core::ptr::write_unaligned(start_ptr.cast::<u32>(), 0);
