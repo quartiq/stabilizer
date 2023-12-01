@@ -131,7 +131,7 @@ impl serial_settings::Platform for SerialSettingsPlatform {
             _ => {
                 writeln!(
                     self.interface_mut(),
-                    "Invalid platform command `{cmd}`"
+                    "Invalid platform command: `{cmd}` not in [`dfu`, `reboot`]"
                 )
                 .ok();
             }
