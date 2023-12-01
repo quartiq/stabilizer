@@ -8,7 +8,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased](https://github.com/quartiq/stabilizer/compare/v0.9.0...main)
 
 ### Added
-* Support added for pounder v1.2
 * Serial terminal is available on USB for settings configurations
 * Reboot to DFU support added via the serial terminal for remote bootloading
 
