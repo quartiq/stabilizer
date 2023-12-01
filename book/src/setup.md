@@ -102,11 +102,10 @@ docker run -p 1883:1883 --name mosquitto -v ${pwd}/mosquitto.conf:/mosquitto/con
 
 Firmware can be loaded onto stabilizer using **one** of the three following methods.
 
-> **Note:** All methods require access to the circuit board. Pulling the device from a
-> crate always requires power removal as there are sensitive leads and components on
-> both sides of the board that may come into contact with adjacent front panels.
-> Every access to the board also requires proper ESD precautions. Never
-> hot-plug the device or the probe.
+> **Note:** Most methods below require access to the circuit board. Pulling the device from a crate
+> always requires power removal as there are sensitive leads and components on both sides of the
+> board that may come into contact with adjacent front panels. Every access to the board also
+> requires proper ESD precautions. Never hot-plug the device or the probe.
 
 ### ST-Link virtual mass storage
 
@@ -124,15 +123,24 @@ and applying power again.
 
 ### DFU Upload
 
-If an SWD/JTAG probe is not available,
-you can flash firmware using only a micro USB cable
-plugged in to the front of Stabilizer, a DFU utility, and a jumper to activate
-the bootloader.
+If an SWD/JTAG probe is not available, you can flash firmware using only a micro USB cable plugged
+in to the front of Stabilizer, and a DFU utility.
+
+> **Note:** If there is already newer firmware running on Stabilizer that supports the USB serial
+> interface, there is no need to remove Stabilizer from the crate or disconnect any existing
+> connectors/power supplies or to jumper the BOOT0 pin. Instead, open the serial port on Stabilizer
+> and request it to enter DFU mode:
+> ```bash
+> python -m serial <serial-port>
+> > platform dfu
+> ```
+>
+> After the device is in DFU mode, use the `dfu-util` command specified in the instructions below,
+> and the DFU firmware update will be complete.
 
 1. Install the DFU USB tool [`dfu-util`](http://dfu-util.sourceforge.net)
 1. Remove power
-1. Then carefully remove the module from the crate to gain
-    access to the board
+1. Then carefully remove the module from the crate to gain acccess to the board
 1. Short JC2/BOOT with the jumper
 1. Connect your computer to the Micro USB connector below/left of the RJ45
     connector on the front panel
