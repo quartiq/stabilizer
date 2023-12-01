@@ -148,7 +148,7 @@ in to the front of Stabilizer, and a DFU utility.
 1. Then power it
 1. Perform the Device Firmware Upgrade (DFU)
     ```bash
-    dfu-util -a 0 -s 0x08000000:leave -D dual-iir.bin
+    dfu-util -a 0 -s 0x08000000:leave -R -D dual-iir.bin
     ```
 1. To keep the device from entering the bootloader remove power,
    pull the board from the crate, remove the JC2/BOOT jumper, insert the module
