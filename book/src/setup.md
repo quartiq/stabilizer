@@ -102,11 +102,11 @@ docker run -p 1883:1883 --name mosquitto -v ${pwd}/mosquitto.conf:/mosquitto/con
 
 Firmware can be loaded onto stabilizer using **one** of the three following methods.
 
--> **Note:** All methods except the DFU procedure require access to the circuit board. Pulling the
--> device from a crate always requires power removal as there are sensitive leads and components on
--> both sides of the board that may come into contact with adjacent front panels.
--> Every access to the board also requires proper ESD precautions. Never
--> hot-plug the device or the probe.
+> **Note:** All methods except the DFU procedure require access to the circuit board. Pulling the
+> device from a crate always requires power removal as there are sensitive leads and components on
+> both sides of the board that may come into contact with adjacent front panels.
+> Every access to the board also requires proper ESD precautions. Never
+> hot-plug the device or the probe.
 
 ### ST-Link virtual mass storage
 
