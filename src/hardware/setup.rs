@@ -14,7 +14,7 @@ use smoltcp_nal::smoltcp;
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
-    eeprom, input_stamper::InputStamper, pounder,
+    eeprom, input_stamper::InputStamper, platform, pounder,
     pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
     DigitalInput0, DigitalInput1, EemDigitalInput0, EemDigitalInput1,
     EemDigitalOutput0, EemDigitalOutput1, EthernetPhy, NetworkStack,
@@ -247,8 +247,11 @@ pub fn setup(
             .unwrap();
         log::info!("Starting");
     }
-    const DFU_VER: *const u8 = 0x1FF1E7FE as _;
-    unsafe { log::info!("DFU version: {:x}", *DFU_VER) };
+
+    // Check for a reboot to DFU before doing any system configuration.
+    if platform::dfu_bootflag() {
+        platform::execute_system_bootloader();
+    }
 
     let pwr = device.PWR.constrain();
     let vos = pwr.freeze();
