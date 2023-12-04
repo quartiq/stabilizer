@@ -1,13 +1,13 @@
 use crate::hardware::platform;
 use core::fmt::Write;
-use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
+use miniconf::{TreeDeserialize, TreeKey, TreeSerialize};
+use postcard::ser_flavors::Flavor;
 use stm32h7xx_hal::flash::LockedFlashBank;
 
-#[derive(Clone, serde::Serialize, serde::Deserialize, miniconf::Tree)]
+#[derive(Clone, miniconf::Tree)]
 pub struct Settings {
     pub broker: heapless::String<255>,
     pub id: heapless::String<23>,
-    #[serde(skip)]
     #[tree(skip)]
     pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
 }
@@ -20,14 +20,32 @@ impl serial_settings::Settings for Settings {
 
 impl Settings {
     pub fn reload(&mut self, storage: &mut Flash) {
+        // Loop over flash and read settings
         let mut buffer = [0u8; 512];
-        storage.read(0, &mut buffer).unwrap();
-        let Ok(mut settings) = postcard::from_bytes::<Self>(&buffer) else {
-            return;
-        };
+        for path in Settings::iter_paths::<heapless::String<32>>("/") {
+            let path = path.unwrap();
 
-        settings.mac = self.mac;
-        *self = settings;
+            // Try to fetch the setting from flash.
+            let Some(item) =
+                sequential_storage::map::fetch_item::<SettingsItem, _>(
+                    storage,
+                    storage.range(),
+                    &mut buffer,
+                    path.clone(),
+                )
+                .unwrap()
+            else {
+                continue;
+            };
+
+            log::info!("Found `{path}` in flash settings");
+
+            let mut deserializer = postcard::Deserializer::from_flavor(
+                postcard::de_flavors::Slice::new(&item.data),
+            );
+            self.deserialize_by_key(path.split('/').skip(1), &mut deserializer)
+                .unwrap();
+        }
     }
 
     pub fn new(mac: smoltcp_nal::smoltcp::wire::EthernetAddress) -> Self {
@@ -43,6 +61,12 @@ impl Settings {
 }
 
 pub struct Flash(pub LockedFlashBank);
+
+impl Flash {
+    fn range(&self) -> core::ops::Range<u32> {
+        0..(self.0.len() as u32)
+    }
+}
 
 impl embedded_storage::nor_flash::ErrorType for Flash {
     type Error =
@@ -110,17 +134,69 @@ impl serial_settings::Platform for SerialSettingsPlatform {
         usbd_serial::SerialPort<'static, super::UsbBus>,
     >;
     type Settings = Settings;
-    type Error =
-        Error<<Flash as embedded_storage::nor_flash::ErrorType>::Error>;
+    type Error = Error<
+        <LockedFlashBank as embedded_storage::nor_flash::ErrorType>::Error,
+    >;
 
     fn save(&mut self, buf: &mut [u8]) -> Result<(), Self::Error> {
-        let serialized = postcard::to_slice(self.settings(), buf)?;
-        self.storage
-            .erase(0, serialized.len() as u32)
-            .map_err(Self::Error::Flash)?;
-        self.storage
-            .write(0, serialized)
-            .map_err(Self::Error::Flash)?;
+        for path in Settings::iter_paths::<heapless::String<32>>("/") {
+            let path = path.unwrap();
+            let range = self.storage.range();
+
+            let (buf1, buf2) = buf.split_at_mut(buf.len() / 2);
+            let mut serializer = postcard::Serializer {
+                output: postcard::ser_flavors::Slice::new(buf1),
+            };
+            self.settings
+                .serialize_by_key(path.split('/').skip(1), &mut serializer)
+                .unwrap();
+
+            let serialized_setting = heapless::Vec::from_slice(
+                serializer.output.finalize().unwrap(),
+            )
+            .unwrap();
+
+            // Check if the settings has changed from what's currently in flash (or if it doesn't
+            // yet exist).
+            let update = if let Some(item) =
+                sequential_storage::map::fetch_item::<SettingsItem, _>(
+                    &mut self.storage,
+                    range.clone(),
+                    buf2,
+                    path.clone(),
+                )
+                .unwrap()
+            {
+                let changed = item.data != serialized_setting;
+                if changed {
+                    log::info!(
+                        "{path} yet exists in flash, but has changed. Updating"
+                    );
+                }
+
+                changed
+            } else {
+                log::info!("{path} does not yet exist in flash. Setting it");
+                true
+            };
+
+            // If the value needs to be rewritten to flash, update it now.
+            if update {
+                let item = SettingsItem {
+                    data: serialized_setting,
+                    path,
+                };
+
+                sequential_storage::map::store_item(
+                    &mut self.storage,
+                    range,
+                    buf2,
+                    item,
+                )
+                .unwrap();
+            }
+        }
+
         Ok(())
     }
 
@@ -148,5 +224,29 @@ impl serial_settings::Platform for SerialSettingsPlatform {
 
     fn interface_mut(&mut self) -> &mut Self::Interface {
         &mut self.interface
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SettingsItem {
+    // We only make these owned vec/string to get around lifetime limitations.
+    path: heapless::String<32>,
+    data: heapless::Vec<u8, 256>,
+}
+
+impl sequential_storage::map::StorageItem for SettingsItem {
+    type Key = heapless::String<32>;
+    type Error = postcard::Error;
+
+    fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, Self::Error> {
+        Ok(postcard::to_slice(self, buffer)?.len())
+    }
+
+    fn deserialize_from(buffer: &[u8]) -> Result<Self, Self::Error> {
+        postcard::from_bytes(buffer)
+    }
+
+    fn key(&self) -> Self::Key {
+        self.path.clone()
     }
 }
