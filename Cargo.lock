@@ -233,12 +233,6 @@ dependencies = [
 
 [[package]]
 name = "embedded-io"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "658bbadc628dc286b9ae02f0cb0f5411c056eb7487b72f0083203f115de94060"
-
-[[package]]
-name = "embedded-io"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
@@ -468,7 +462,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9df2d7bdba3acb28460c347b21e1e88d869f2716ebe060eb6a79f7b76b57de72"
 dependencies = [
- "embedded-io 0.6.1",
+ "embedded-io",
  "heapless 0.7.16",
  "itoa",
  "log",
@@ -892,7 +886,7 @@ dependencies = [
 name = "serial-settings"
 version = "0.1.0"
 dependencies = [
- "embedded-io 0.6.1",
+ "embedded-io",
  "heapless 0.8.0",
  "menu",
  "miniconf",
@@ -988,7 +982,7 @@ dependencies = [
  "cortex-m-rt",
  "cortex-m-rtic",
  "embedded-hal",
- "embedded-io 0.5.0",
+ "embedded-io",
  "embedded-storage",
  "enum-iterator",
  "fugit",
@@ -1138,7 +1132,7 @@ version = "0.2.0"
 source = "git+https://github.com/rust-embedded-community/usbd-serial#6611dc092822c60b4482e28aab2fe084c1756410"
 dependencies = [
  "embedded-hal",
- "embedded-io 0.6.1",
+ "embedded-io",
  "nb 1.1.0",
  "usb-device",
 ]
