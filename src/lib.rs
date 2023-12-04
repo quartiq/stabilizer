@@ -3,3 +3,4 @@
 
 pub mod hardware;
 pub mod net;
+pub mod settings;

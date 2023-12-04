@@ -84,7 +84,7 @@ pub type I2c1Proxy =
     shared_bus::I2cProxy<'static, shared_bus::AtomicCheckMutex<I2c1>>;
 
 pub type SerialTerminal =
-    serial_settings::Runner<'static, flash::SerialSettingsPlatform>;
+    serial_settings::Runner<'static, crate::settings::SerialSettingsPlatform>;
 
 #[inline(never)]
 #[panic_handler]
