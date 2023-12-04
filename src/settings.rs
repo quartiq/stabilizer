@@ -88,7 +88,7 @@ impl Settings {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Default, serde::Serialize, serde::Deserialize)]
 pub struct SettingsItem {
     // We only make these owned vec/string to get around lifetime limitations.
     pub path: heapless::String<32>,
@@ -146,61 +146,47 @@ impl serial_settings::Platform for SerialSettingsPlatform {
 
     fn save(&mut self, buf: &mut [u8]) -> Result<(), Self::Error> {
         for path in Settings::iter_paths::<heapless::String<32>>("/") {
-            let path = path.unwrap();
-            let range = self.storage.range();
-
-            let (buf1, buf2) = buf.split_at_mut(buf.len() / 2);
-            let mut serializer = postcard::Serializer {
-                output: postcard::ser_flavors::Slice::new(buf1),
+            let mut item = SettingsItem {
+                path: path.unwrap(),
+                ..Default::default()
             };
+
+            item.data.resize(item.data.capacity(), 0).unwrap();
+
+            let mut serializer = postcard::Serializer {
+                output: postcard::ser_flavors::Slice::new(&mut item.data),
+            };
+
             if let Err(e) = self
                 .settings
-                .serialize_by_key(path.split('/').skip(1), &mut serializer)
+                .serialize_by_key(item.path.split('/').skip(1), &mut serializer)
             {
-                log::warn!("Failed to save {path} to flash: {e:?}");
+                log::warn!("Failed to save {} to flash: {e:?}", item.path);
                 continue;
             }
 
-            let serialized_setting = heapless::Vec::from_slice(
-                serializer.output.finalize().unwrap(),
-            )
-            .unwrap();
+            let len = serializer.output.finalize()?.len();
+            item.data.truncate(len);
+
+            let range = self.storage.range();
 
             // Check if the settings has changed from what's currently in flash (or if it doesn't
             // yet exist).
-            let update = if let Some(item) =
-                sequential_storage::map::fetch_item::<SettingsItem, _>(
-                    &mut self.storage,
-                    range.clone(),
-                    buf2,
-                    path.clone(),
-                )
-                .unwrap()
+            if sequential_storage::map::fetch_item::<SettingsItem, _>(
+                &mut self.storage,
+                range.clone(),
+                buf,
+                item.path.clone(),
+            )
+            .unwrap()
+            .map(|old| old.data != item.data)
+            .unwrap_or(true)
             {
-                let changed = item.data != serialized_setting;
-                if changed {
-                    log::info!(
-                        "{path} yet exists in flash, but has changed. Updating"
-                    );
-                }
-
-                changed
-            } else {
-                log::info!("{path} does not yet exist in flash. Setting it");
-                true
-            };
-
-            // If the value needs to be rewritten to flash, update it now.
-            if update {
-                let item = SettingsItem {
-                    data: serialized_setting,
-                    path,
-                };
-
+                log::info!("Storing setting `{}` in flash", item.path);
                 sequential_storage::map::store_item(
                     &mut self.storage,
                     range,
-                    buf2,
+                    buf,
                     item,
                 )
                 .unwrap();
