@@ -193,7 +193,7 @@ impl<T: Serialize> TelemetryClient<T> {
             } = self;
 
             let mut topic = self.prefix.clone();
-            topic.push_str("/alive/meta").unwrap();
+            topic.push_str("/meta").unwrap();
 
             if mqtt
                 .client()
