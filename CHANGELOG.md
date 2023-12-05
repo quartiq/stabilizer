@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 * Serial terminal is available on USB for settings configurations
 * Reboot to DFU support added via the serial terminal for remote bootloading
-* The `alive` topic now contains metadata about the compiler, firmware, and hardware similar to
+* The `meta` topic now contains metadata about the compiler, firmware, and hardware similar to
 Booster
 * Panic information is now persisted after reboot and available via telemetry and the USB serial
 console.
