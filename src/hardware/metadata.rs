@@ -24,7 +24,6 @@ impl ApplicationMetadata {
     ///
     /// # Args
     /// * `hardware_version` - The hardware version detected.
-    /// * `phy` - The identifier of the detected ethernet PHY.
     ///
     /// # Returns
     /// A reference to the global metadata.
