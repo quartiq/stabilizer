@@ -1079,11 +1079,11 @@ pub fn setup(
 
         let mut storage = super::flash::Flash(flash_bank2.unwrap());
         let mut settings =
-            super::flash::Settings::new(network_devices.mac_address);
+            crate::settings::Settings::new(network_devices.mac_address);
         settings.reload(&mut storage);
 
         serial_settings::Runner::new(
-            super::flash::SerialSettingsPlatform {
+            crate::settings::SerialSettingsPlatform {
                 interface: serial_settings::BestEffortInterface::new(
                     usb_serial,
                 ),

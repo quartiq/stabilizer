@@ -233,12 +233,6 @@ dependencies = [
 
 [[package]]
 name = "embedded-io"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "658bbadc628dc286b9ae02f0cb0f5411c056eb7487b72f0083203f115de94060"
-
-[[package]]
-name = "embedded-io"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
@@ -468,7 +462,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9df2d7bdba3acb28460c347b21e1e88d869f2716ebe060eb6a79f7b76b57de72"
 dependencies = [
- "embedded-io 0.6.1",
+ "embedded-io",
  "heapless 0.7.16",
  "itoa",
  "log",
@@ -858,10 +852,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
-name = "serde"
-version = "1.0.192"
+name = "sequential-storage"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bca2a08484b285dcb282d0f67b26cadc0df8b19f8c12502c13d966bf9482f001"
+checksum = "12a9b1d6543a56b04200e1447774e6b9397b8a99e4f9a922bbc191d116c32817"
+dependencies = [
+ "embedded-storage",
+]
+
+[[package]]
+name = "serde"
+version = "1.0.193"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25dd9975e68d0cb5aa1120c288333fc98731bd1dd12f561e468ea4728c042b89"
 dependencies = [
  "serde_derive",
 ]
@@ -879,9 +882,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.192"
+version = "1.0.193"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6c7207fbec9faa48073f3e3074cbe553af6ea512d7c21ba46e434e70ea9fbc1"
+checksum = "43576ca501357b9b071ac53cdc7da8ef0cbd9493d8df094cd821777ea6e894d3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -892,7 +895,7 @@ dependencies = [
 name = "serial-settings"
 version = "0.1.0"
 dependencies = [
- "embedded-io 0.6.1",
+ "embedded-io",
  "heapless 0.8.0",
  "menu",
  "miniconf",
@@ -989,7 +992,7 @@ dependencies = [
  "cortex-m-rt",
  "cortex-m-rtic",
  "embedded-hal",
- "embedded-io 0.5.0",
+ "embedded-io",
  "embedded-storage",
  "enum-iterator",
  "fugit",
@@ -1009,6 +1012,7 @@ dependencies = [
  "rand_xorshift",
  "rtt-logger",
  "rtt-target",
+ "sequential-storage",
  "serde",
  "serde-json-core",
  "serial-settings",
@@ -1043,7 +1047,7 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.15.1"
-source = "git+https://github.com/stm32-rs/stm32h7xx-hal.git?branch=master#c2a4c0e13c3a511d417295a84d735ec3c71c2dd4"
+source = "git+https://github.com/stm32-rs/stm32h7xx-hal.git?branch=master#cd7c125cceceada4a3c70cc7387d187b00f9f7d2"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",
@@ -1151,7 +1155,7 @@ version = "0.2.0"
 source = "git+https://github.com/rust-embedded-community/usbd-serial#6611dc092822c60b4482e28aab2fe084c1756410"
 dependencies = [
  "embedded-hal",
- "embedded-io 0.6.1",
+ "embedded-io",
  "nb 1.1.0",
  "usb-device",
 ]
