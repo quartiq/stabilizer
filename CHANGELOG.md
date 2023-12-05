@@ -17,6 +17,7 @@ console.
 
 ### Changed
 * Broker is no longer configured at compile time, but is maintained in device memory
+* MSRV bumped to v1.66
 
 ## [0.9.0](https://github.com/quartiq/stabilizer/compare/v0.8.1...v0.9.0)
 
