@@ -13,7 +13,10 @@ pub mod data_stream;
 pub mod network_processor;
 pub mod telemetry;
 
-use crate::hardware::{EthernetPhy, NetworkManager, NetworkStack, SystemTimer};
+use crate::hardware::{
+    metadata::ApplicationMetadata, EthernetPhy, NetworkManager, NetworkStack,
+    SystemTimer,
+};
 use data_stream::{DataStream, FrameGenerator};
 use network_processor::NetworkProcessor;
 use telemetry::TelemetryClient;
@@ -85,6 +88,8 @@ where
     /// * `clock` - A `SystemTimer` implementing `Clock`.
     /// * `app` - The name of the application.
     /// * `broker` - The domain name of the MQTT broker to use.
+    /// * `id` - The MQTT client ID base to use.
+    /// * `metadata` - The application metadata
     ///
     /// # Returns
     /// A new struct of network users.
@@ -95,6 +100,7 @@ where
         app: &str,
         broker: &str,
         id: &str,
+        metadata: &'static ApplicationMetadata,
     ) -> Self {
         let stack_manager =
             cortex_m::singleton!(: NetworkManager = NetworkManager::new(stack))
@@ -144,7 +150,7 @@ where
                 .unwrap(),
         );
 
-        let telemetry = TelemetryClient::new(mqtt, &prefix);
+        let telemetry = TelemetryClient::new(mqtt, &prefix, metadata);
 
         let (generator, stream) =
             data_stream::setup_streaming(stack_manager.acquire_stack());

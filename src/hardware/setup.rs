@@ -1,6 +1,7 @@
 //! Stabilizer hardware configuration
 //!
 //! This file contains all of the hardware-specific configuration of Stabilizer.
+use bit_field::BitField;
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{fmt::Write, ptr, slice};
 use stm32h7xx_hal::{
@@ -14,11 +15,12 @@ use smoltcp_nal::smoltcp;
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
-    eeprom, input_stamper::InputStamper, platform, pounder,
-    pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
-    DigitalInput0, DigitalInput1, EemDigitalInput0, EemDigitalInput1,
-    EemDigitalOutput0, EemDigitalOutput1, EthernetPhy, NetworkStack,
-    SerialTerminal, SystemTimer, Systick, UsbBus, UsbDevice, AFE0, AFE1,
+    eeprom, input_stamper::InputStamper, metadata::ApplicationMetadata,
+    platform, pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc,
+    timers, DigitalInput0, DigitalInput1, EemDigitalInput0, EemDigitalInput1,
+    EemDigitalOutput0, EemDigitalOutput1, EthernetPhy, HardwareVersion,
+    NetworkStack, SerialTerminal, SystemTimer, Systick, UsbBus, UsbDevice,
+    AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -119,6 +121,7 @@ pub struct StabilizerDevices {
     pub eem_gpio: EemGpioDevices,
     pub usb_serial: SerialTerminal,
     pub usb: UsbDevice,
+    pub metadata: &'static ApplicationMetadata,
 }
 
 /// The available Pounder-specific hardware interfaces.
@@ -594,6 +597,25 @@ pub fn setup(
             ccdr.peripheral.I2C2,
             &ccdr.clocks,
         )
+    };
+
+    let metadata = {
+        // Read the hardware version pins.
+        let hardware_version = {
+            let hwrev0 = gpiog.pg0.into_pull_down_input();
+            let hwrev1 = gpiog.pg1.into_pull_down_input();
+            let hwrev2 = gpiog.pg2.into_pull_down_input();
+            let hwrev3 = gpiog.pg3.into_pull_down_input();
+
+            HardwareVersion::from(
+                *0u8.set_bit(0, hwrev0.is_high())
+                    .set_bit(1, hwrev1.is_high())
+                    .set_bit(2, hwrev2.is_high())
+                    .set_bit(3, hwrev3.is_high()),
+            )
+        };
+
+        ApplicationMetadata::new(hardware_version)
     };
 
     let mac_addr = smoltcp::wire::EthernetAddress(eeprom::read_eui48(
@@ -1098,6 +1120,7 @@ pub fn setup(
                 ),
                 storage,
                 settings,
+                metadata,
             },
             input_buffer,
             serialize_buffer,
@@ -1121,6 +1144,7 @@ pub fn setup(
         eem_gpio,
         usb: usb_device,
         usb_serial,
+        metadata,
     };
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());

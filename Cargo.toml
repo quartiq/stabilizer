@@ -16,7 +16,8 @@ readme = "README.md"
 documentation = "https://docs.rs/stabilizer/"
 edition = "2021"
 # keep MSRV in sync in ci.yaml and Cargo.toml
-rust-version = "1.65"
+rust-version = "1.66"
+build = "build.rs"
 exclude = [
 	".gitignore",
 	"doc/",
@@ -34,6 +35,7 @@ default-target = "thumbv7em-none-eabihf"
 members = ["ad9959", "serial-settings"]
 
 [dependencies]
+panic-persist = { version = "0.3", features = ["utf8", "custom-panic-handler"] }
 sequential-storage = "0.6"
 embedded-io = "0.6"
 embedded-storage = "0.3"
@@ -71,6 +73,10 @@ miniconf = "0.9.0"
 smoltcp-nal = { version = "0.4.1", features = ["shared-stack"]}
 bbqueue = "0.5"
 postcard = "1"
+bit_field = "0.10.2"
+
+[build-dependencies]
+built = { version = "0.7", features = ["git2"], default-features = false }
 
 [dependencies.stm32h7xx-hal]
 version = "0.15.1"
@@ -80,6 +86,7 @@ features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
 
 [patch.crates-io.usbd-serial]
 git = "https://github.com/rust-embedded-community/usbd-serial"
+rev = "096742c1c480f6f63c1a936a3c23ede7993c624d"
 
 [features]
 nightly = [ ]
