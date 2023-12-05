@@ -22,8 +22,7 @@
 //!    settings values
 //! 3. Unknown/unneeded settings values in flash can be actively ignored, facilitating simple flash
 //!    storage sharing.
-use crate::hardware::flash::Flash;
-use crate::hardware::platform;
+use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
 use core::fmt::Write;
 use miniconf::{TreeDeserialize, TreeKey, TreeSerialize};
 use postcard::ser_flavors::Flavor;
@@ -133,6 +132,9 @@ pub struct SerialSettingsPlatform {
     pub settings: Settings,
     /// The storage mechanism used to persist settings to between boots.
     pub storage: Flash,
+
+    /// Metadata associated with the application
+    pub metadata: &'static ApplicationMetadata,
 }
 
 impl serial_settings::Platform for SerialSettingsPlatform {
@@ -200,10 +202,44 @@ impl serial_settings::Platform for SerialSettingsPlatform {
         match cmd {
             "reboot" => cortex_m::peripheral::SCB::sys_reset(),
             "dfu" => platform::start_dfu_reboot(),
+            "service" => {
+                writeln!(
+                    &mut self.interface,
+                    "{:<20}: {} [{}]",
+                    "Version",
+                    self.metadata.firmware_version,
+                    self.metadata.profile,
+                )
+                .unwrap();
+                writeln!(
+                    &mut self.interface,
+                    "{:<20}: {}",
+                    "Hardware Revision", self.metadata.hardware_version
+                )
+                .unwrap();
+                writeln!(
+                    &mut self.interface,
+                    "{:<20}: {}",
+                    "Rustc Version", self.metadata.rust_version
+                )
+                .unwrap();
+                writeln!(
+                    &mut self.interface,
+                    "{:<20}: {}",
+                    "Features", self.metadata.features
+                )
+                .unwrap();
+                writeln!(
+                    &mut self.interface,
+                    "{:<20}: {}",
+                    "Panic Info", self.metadata.panic_info
+                )
+                .unwrap();
+            }
             _ => {
                 writeln!(
                     self.interface_mut(),
-                    "Invalid platform command: `{cmd}` not in [`dfu`, `reboot`]"
+                    "Invalid platform command: `{cmd}` not in [`dfu`, `reboot`, `service`]"
                 )
                 .ok();
             }

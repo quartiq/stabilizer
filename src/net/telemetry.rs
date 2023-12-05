@@ -10,11 +10,16 @@
 //! sampling frequency. Instead, the raw codes are stored and the telemetry is generated as
 //! required immediately before transmission. This ensures that any slower computation required
 //! for unit conversion can be off-loaded to lower priority tasks.
+use crate::hardware::metadata::ApplicationMetadata;
 use heapless::{String, Vec};
+use minimq::{DeferredPublication, Publication};
 use serde::Serialize;
 
 use super::NetworkReference;
 use crate::hardware::{adc::AdcCode, afe::Gain, dac::DacCode, SystemTimer};
+
+/// Default metadata message if formatting errors occur.
+const DEFAULT_METADATA: &str = "{\"message\":\"Truncated: See USB terminal\"}";
 
 /// The telemetry client for reporting telemetry data over MQTT.
 pub struct TelemetryClient<T: Serialize> {
@@ -24,8 +29,10 @@ pub struct TelemetryClient<T: Serialize> {
         SystemTimer,
         minimq::broker::NamedBroker<NetworkReference>,
     >,
-    telemetry_topic: String<128>,
+    prefix: String<128>,
+    meta_published: bool,
     _telemetry: core::marker::PhantomData<T>,
+    metadata: &'static ApplicationMetadata,
 }
 
 /// The telemetry buffer is used for storing sample values during execution.
@@ -114,14 +121,14 @@ impl<T: Serialize> TelemetryClient<T> {
             minimq::broker::NamedBroker<NetworkReference>,
         >,
         prefix: &str,
+        metadata: &'static ApplicationMetadata,
     ) -> Self {
-        let mut telemetry_topic: String<128> = String::from(prefix);
-        telemetry_topic.push_str("/telemetry").unwrap();
-
         Self {
             mqtt,
-            telemetry_topic,
+            meta_published: false,
+            prefix: String::from(prefix),
             _telemetry: core::marker::PhantomData,
+            metadata,
         }
     }
 
@@ -134,13 +141,17 @@ impl<T: Serialize> TelemetryClient<T> {
     /// # Args
     /// * `telemetry` - The telemetry to report
     pub fn publish(&mut self, telemetry: &T) {
+        let mut topic = self.prefix.clone();
+        topic.push_str("/telemetry").unwrap();
+
         let telemetry: Vec<u8, 512> =
             serde_json_core::to_vec(telemetry).unwrap();
+
         self.mqtt
             .client()
             .publish(
                 minimq::Publication::<&[u8]>::new(&telemetry)
-                    .topic(&self.telemetry_topic)
+                    .topic(&topic)
                     .finish()
                     .unwrap(),
             )
@@ -164,6 +175,51 @@ impl<T: Serialize> TelemetryClient<T> {
 
             Err(error) => log::info!("Unexpected error: {:?}", error),
             _ => {}
+        }
+
+        if !self.mqtt.client().is_connected() {
+            self.meta_published = false;
+            return;
+        }
+
+        // Publish application metadata
+        if !self.meta_published
+            && self.mqtt.client().can_publish(minimq::QoS::AtMostOnce)
+        {
+            let Self {
+                ref mut mqtt,
+                metadata,
+                ..
+            } = self;
+
+            let mut topic = self.prefix.clone();
+            topic.push_str("/alive/meta").unwrap();
+
+            if mqtt
+                .client()
+                .publish(
+                    DeferredPublication::new(|buf| {
+                        serde_json_core::to_slice(&metadata, buf)
+                    })
+                    .topic(&topic)
+                    .finish()
+                    .unwrap(),
+                )
+                .is_err()
+            {
+                // Note(unwrap): We can guarantee that this message will be sent because we checked
+                // for ability to publish above.
+                mqtt.client()
+                    .publish(
+                        Publication::new(DEFAULT_METADATA.as_bytes())
+                            .topic(&topic)
+                            .finish()
+                            .unwrap(),
+                    )
+                    .unwrap();
+            }
+
+            self.meta_published = true;
         }
     }
 }
