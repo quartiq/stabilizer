@@ -265,6 +265,7 @@ mod app {
             env!("CARGO_BIN_NAME"),
             &settings.broker,
             &settings.id,
+            stabilizer.metadata,
         );
 
         let generator = network.configure_streaming(StreamFormat::AdcDacData);

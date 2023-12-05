@@ -10,9 +10,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 * Serial terminal is available on USB for settings configurations
 * Reboot to DFU support added via the serial terminal for remote bootloading
+* The `meta` topic now contains metadata about the compiler, firmware, and hardware similar to
+Booster
+* Panic information is now persisted after reboot and available via telemetry and the USB serial
+console.
 
 ### Changed
 * Broker is no longer configured at compile time, but is maintained in device memory
+* MSRV bumped to v1.66
 
 ## [0.9.0](https://github.com/quartiq/stabilizer/compare/v0.8.1...v0.9.0)
 
