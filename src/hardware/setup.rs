@@ -108,7 +108,6 @@ pub struct EemGpioDevices {
 
 /// The available hardware interfaces on Stabilizer.
 pub struct StabilizerDevices {
-    pub systick: Systick,
     pub temperature_sensor: CpuTempSensor,
     pub afes: (AFE0, AFE1),
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
@@ -293,7 +292,8 @@ pub fn setup(
     // Before being able to call any code in ITCM, load that code from flash.
     load_itcm();
 
-    let systick = Systick::new(core.SYST, ccdr.clocks.sysclk().to_Hz());
+    let mono_token = rtic_monotonics::create_systick_token!();
+    Systick::start(core.SYST, ccdr.clocks.sysclk().to_Hz(), mono_token);
 
     // After ITCM loading.
     core.SCB.enable_icache();
@@ -1129,7 +1129,6 @@ pub fn setup(
     };
 
     let stabilizer = StabilizerDevices {
-        systick,
         afes,
         adcs,
         dacs,
