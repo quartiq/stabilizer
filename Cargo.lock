@@ -428,7 +428,7 @@ dependencies = [
 [[package]]
 name = "idsp"
 version = "0.13.0"
-source = "git+https://github.com/quartiq/idsp.git?branch=iir-rework#31ab7e6fbf0ac86669b79ab4c6b389d7d382836d"
+source = "git+https://github.com/quartiq/idsp.git?branch=iir-rework#71a0944873df564ab706ebacb300f26c7b366c78"
 dependencies = [
  "num-complex 0.4.4",
  "num-traits",

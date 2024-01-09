@@ -149,7 +149,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        let mut i = iir::Biquad::identity();
+        let mut i = iir::Biquad::IDENTITY;
         i.set_min(-SCALE);
         i.set_max(SCALE);
         Self {
@@ -201,10 +201,9 @@ mod app {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        iir_state: [[[f32; 5]; IIR_CASCADE_LENGTH]; 2],
+        iir_state: [[[f32; 4]; IIR_CASCADE_LENGTH]; 2],
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
-        hold: iir::Biquad<f32>,
     }
 
     #[init]
@@ -261,10 +260,9 @@ mod app {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            iir_state: [[[0.; 5]; IIR_CASCADE_LENGTH]; 2],
+            iir_state: [[[0.; 4]; IIR_CASCADE_LENGTH]; 2],
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
-            hold: iir::Biquad::hold(),
         };
 
         // Enable ADC/DAC events
@@ -305,7 +303,7 @@ mod app {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator, hold], shared=[settings, signal_generator, telemetry], priority=3)]
+    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[settings, signal_generator, telemetry], priority=3)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
@@ -320,7 +318,6 @@ mod app {
             dacs: (dac0, dac1),
             iir_state,
             generator,
-            hold,
         } = c.local;
 
         (settings, telemetry, signal_generator).lock(
@@ -329,7 +326,7 @@ mod app {
                     [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
                 telemetry.digital_inputs = digital_inputs;
 
-                let use_hold = settings.force_hold
+                let hold = settings.force_hold
                     || (digital_inputs[1] && settings.allow_hold);
 
                 (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
@@ -350,8 +347,11 @@ mod app {
                                     .iter()
                                     .zip(iir_state[channel].iter_mut())
                                     .fold(x, |yi, (ch, state)| {
-                                        let filter =
-                                            if use_hold { &hold } else { ch };
+                                        let filter = if hold {
+                                            &iir::Biquad::HOLD
+                                        } else {
+                                            ch
+                                        };
 
                                         filter.update(state, yi)
                                     });
