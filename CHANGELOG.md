@@ -18,6 +18,8 @@ console.
 ### Changed
 * Broker is no longer configured at compile time, but is maintained in device memory
 * MSRV bumped to v1.66
+* The IIR (biquad) filter used for PID action has changed its serialization format.
+  See also the `iir_coefficients` Python CLI implementation.
 
 ## [0.9.0](https://github.com/quartiq/stabilizer/compare/v0.8.1...v0.9.0)
 
@@ -35,7 +37,7 @@ console.
  * `hitl/streaming.py` no longer requires a prefix
  * Streaming now supports UDP multicast addresses
 
-## [v0.8.1](https://github.com/quartiq/stabilizer/compare/v0.8.0...v0.8.1) - 2022-11-14)
+## [v0.8.1](https://github.com/quartiq/stabilizer/compare/v0.8.0...v0.8.1) - 2022-11-14
 
 * Fixed the python package dependencies
 

@@ -300,10 +300,10 @@ def _main():
         # Note: In the future, we will need to Handle higher-order cascades.
         await interface.set(f"/iir_ch/{args.channel}/0", {
             "ba": coefficients,
-            "y_min": stabilizer.voltage_to_machine_units(args.y_min),
-            "y_max": stabilizer.voltage_to_machine_units(args.y_max),
-            "y_offset": stabilizer.voltage_to_machine_units(
-                args.y_offset + forward_gain * args.x_offset)
+            "u": stabilizer.voltage_to_machine_units(
+                args.y_offset + forward_gain * args.x_offset),
+            "min": stabilizer.voltage_to_machine_units(args.y_min),
+            "max": stabilizer.voltage_to_machine_units(args.y_max),
         })
 
     asyncio.run(configure())
