@@ -94,7 +94,7 @@ pub struct Settings {
     /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
     /// * `<m>` specifies which cascade to configure. `<m>` := [0, 1], depending on [IIR_CASCADE_LENGTH]
     ///
-    /// See [iir::IIR]
+    /// See [iir::Biquad]
     #[tree(depth(2))]
     iir_ch: [[iir::Biquad<f32>; IIR_CASCADE_LENGTH]; 2],
 

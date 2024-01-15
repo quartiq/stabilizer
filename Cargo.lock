@@ -427,8 +427,9 @@ dependencies = [
 
 [[package]]
 name = "idsp"
-version = "0.13.0"
-source = "git+https://github.com/quartiq/idsp.git#9e527f34c45817986bb3035bd7a6d9efefd4f071"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f255ee573949fb629362d10aa3abd0a97a7c4950a3b8890b435b8c7516cf38f"
 dependencies = [
  "num-complex 0.4.4",
  "num-traits",
