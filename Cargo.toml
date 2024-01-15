@@ -50,7 +50,7 @@ cortex-m-rtic = "1.0"
 embedded-hal = "0.2.7"
 num_enum = { version = "0.7.1", default-features = false }
 paste = "1"
-idsp = "0.13"
+idsp = { git = "https://github.com/quartiq/idsp.git" }
 ad9959 = { path = "ad9959", version = "0.2.1" }
 serial-settings = {path = "serial-settings"}
 mcp230xx = "1.0"

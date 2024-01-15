@@ -94,10 +94,9 @@ pub struct Settings {
     /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
     /// * `<m>` specifies which cascade to configure. `<m>` := [0, 1], depending on [IIR_CASCADE_LENGTH]
     ///
-    /// # Value
-    /// See [iir::IIR#miniconf]
+    /// See [iir::IIR]
     #[tree(depth(2))]
-    iir_ch: [[iir::IIR<f32>; IIR_CASCADE_LENGTH]; 2],
+    iir_ch: [[iir::Biquad<f32>; IIR_CASCADE_LENGTH]; 2],
 
     /// Specified true if DI1 should be used as a "hold" input.
     ///
@@ -150,6 +149,9 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
+        let mut i = iir::Biquad::IDENTITY;
+        i.set_min(-SCALE);
+        i.set_max(SCALE);
         Self {
             // Analog frontend programmable gain amplifier gains (G1, G2, G5, G10)
             afe: [Gain::G1, Gain::G1],
@@ -158,7 +160,7 @@ impl Default for Settings {
             // The array is `iir_state[channel-index][cascade-index][coeff-index]`.
             // The IIR coefficients can be mapped to other transfer function
             // representations, for example as described in https://arxiv.org/abs/1508.06319
-            iir_ch: [[iir::IIR::new(1., -SCALE, SCALE); IIR_CASCADE_LENGTH]; 2],
+            iir_ch: [[i; IIR_CASCADE_LENGTH]; 2],
 
             // Permit the DI1 digital input to suppress filter output updates.
             allow_hold: false,
@@ -199,7 +201,7 @@ mod app {
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        iir_state: [[iir::Vec5<f32>; IIR_CASCADE_LENGTH]; 2],
+        iir_state: [[[f32; 4]; IIR_CASCADE_LENGTH]; 2],
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
     }
@@ -258,7 +260,7 @@ mod app {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            iir_state: [[[0.; 5]; IIR_CASCADE_LENGTH]; 2],
+            iir_state: [[[0.; 4]; IIR_CASCADE_LENGTH]; 2],
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
         };
@@ -345,7 +347,13 @@ mod app {
                                     .iter()
                                     .zip(iir_state[channel].iter_mut())
                                     .fold(x, |yi, (ch, state)| {
-                                        ch.update(state, yi, hold)
+                                        let filter = if hold {
+                                            &iir::Biquad::HOLD
+                                        } else {
+                                            ch
+                                        };
+
+                                        filter.update(state, yi)
                                     });
 
                                 // Note(unsafe): The filter limits must ensure that the value is in range.
