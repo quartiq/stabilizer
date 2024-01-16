@@ -70,7 +70,7 @@ usb-device = "0.3.0"
 usbd-serial = "0.2"
 # Keep this synced with the miniconf version in py/setup.py
 miniconf = "0.9.0"
-tca9539 = "0.1"
+tca9539 = "0.2"
 smoltcp-nal = { version = "0.4.1", features = ["shared-stack"]}
 bbqueue = "0.5"
 postcard = "1"

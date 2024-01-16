@@ -1224,9 +1224,9 @@ dependencies = [
 
 [[package]]
 name = "tca9539"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c1dbae158fb8077e98deb1825f191bea96ee54376428d74f4b05431e2503b76"
+checksum = "05458b00a3a73c5b64c0de8f2a5182f6d51eb1aeb54c638e585092d26fc9a971"
 dependencies = [
  "bit_field",
  "embedded-hal",
