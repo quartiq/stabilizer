@@ -349,7 +349,7 @@ impl IoExpander {
             Self::Mcp(mcp23017)
         } else {
             let pca9359 = tca9539::Pca9539::new_default(i2c).unwrap();
-            IoExpander::Pca(pca9359)
+            Self::Pca(pca9359)
         }
     }
 
