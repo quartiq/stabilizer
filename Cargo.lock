@@ -1134,6 +1134,7 @@ dependencies = [
  "spin",
  "stm32h7xx-hal",
  "systick-monotonic",
+ "tca9539",
  "usb-device",
  "usbd-serial",
 ]
@@ -1219,6 +1220,17 @@ dependencies = [
  "cortex-m 0.7.7",
  "fugit",
  "rtic-monotonic",
+]
+
+[[package]]
+name = "tca9539"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c1dbae158fb8077e98deb1825f191bea96ee54376428d74f4b05431e2503b76"
+dependencies = [
+ "bit_field",
+ "embedded-hal",
+ "num_enum 0.5.11",
 ]
 
 [[package]]
