@@ -36,7 +36,7 @@ members = ["ad9959", "serial-settings"]
 
 [dependencies]
 panic-persist = { version = "0.3", features = ["utf8", "custom-panic-handler"] }
-sequential-storage = "0.6"
+sequential-storage = "0.7"
 embedded-io = "0.6"
 embedded-storage = "0.3"
 cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }
