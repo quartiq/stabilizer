@@ -17,11 +17,9 @@ For OITG-specific information, see below
 
 [![Pounder](https://user-images.githubusercontent.com/1338946/125936814-3664aa2d-a530-4c85-9393-999a7173424e.png)](https://github.com/sinara-hw/Pounder/wiki)
 
-## OITG-specifc changes
-Documenting changes made to this fork over upstream. Please update it when making major changes.
-
+## Notable changes over upstream
 * Added `fnc.rs` binary for fibre noise cancellation based on `dual-iir.rs`, along with a corresponding script to push messages specific to an fnc application. Relies on Pounder
 * Changed default MQTT broker to `10.255.6.4`. It does not need to be flashed separately unless using a different broker.
 
 ### Active branches
-Many stabilizer applications in the group rely on branches not up to date with `main`. It might prove useful to keep a track of them here for maintenance purposes. 
+Many stabilizer applications in the group rely on branches not up to date with `main`. It might prove useful to keep a track of them here for maintenance. 
