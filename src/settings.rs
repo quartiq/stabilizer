@@ -48,7 +48,7 @@ impl Settings {
         write!(&mut id, "{mac}").unwrap();
 
         Self {
-            broker: "mqtt".into(),
+            broker: "10.255.6.4".into(),
             id,
             mac,
         }
