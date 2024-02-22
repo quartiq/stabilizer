@@ -188,23 +188,6 @@ def _main():
         prefix = devices.pop()
         logger.info("Automatically using detected device prefix: %s", prefix)
 
-    filename = "fnc_values/{}.json".format(device_path.replace("/", "_"))
-
-    print(coefficients)
-
-    # try:
-    #     with open(filename, 'r') as fp:
-    #         json_dict = json.load(fp)
-    # except:
-    #     json_dict = {}
-    #     args_dict = vars(args)
-    #     json_dict["ch{}".format(args.channel)] = {key: args_dict[key] for key in default_args.keys()}
-    #     json_dict["ch{}".format(1-args.channel)] = {key: default_args[key] for key in default_args.keys()}
-
-    #     with open(filename, 'w') as fp:
-    #         json.dump(json_dict, fp)
-    
-
     async def configure():
         logger.info("Connecting to broker")
         interface = await miniconf.Miniconf.create(prefix, args.broker)
@@ -213,10 +196,10 @@ def _main():
         # Note: In the future, we will need to Handle higher-order cascades.
         await interface.set(f"/iir_ch/{args.channel}/0", {
             "ba": coefficients,
-            "y_min": stabilizer.voltage_to_machine_units(args.y_min),
-            "y_max": stabilizer.voltage_to_machine_units(args.y_max),
-            "y_offset": stabilizer.voltage_to_machine_units(
-                args.y_offset + forward_gain * args.x_offset)
+            "u": stabilizer.voltage_to_machine_units(
+                args.y_offset + forward_gain * args.x_offset),
+            "min": stabilizer.voltage_to_machine_units(args.y_min),
+            "max": stabilizer.voltage_to_machine_units(args.y_max),
         }, retain=True)
         await interface.set(f"/aom_centre_f", args.aom_frequency, retain=True)
 
