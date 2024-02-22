@@ -1,15 +1,19 @@
 //! # Fibre Noise Cancellation
 //!
-//! The FNC application exposes two configurable channels. Pounder samples the error signal input at a fixed
-//! rate, mixes it down with a DDS at 2*f, and passes it to Stabilizer for digital filtering (normally a PI application).
-//! This is used to feedback into the phase offset of the DDS channel at f output through the pounder. 
+//! Pounder samples the error signal input and mixes it down with a DDS at
+//! 2*aom_f (channel::TWO). It passes it to Stabilizer for digital filtering
+//! (normally a PI application) where it is read at a fixed rate. This is used
+//! to feedback back into the phase offset of the DDS channel::ONE at aom_f
+//! output through the Pounder. It currently only exposes CHANNEL 0 of the
+//! Pounder for maximising feedback bandwidth, but can be easily extended to
+//! expose both channels in the future if required and it proves sufficient
+//!
+//! Currently samples at 195.3 kHz, i.e. once in 5.12 us
 //!
 //! ## Features
-//! * Two indpenendent channels
-//! * up to 800 kHz rate, timed sampling
+//! * up to 200 kHz rate, timed sampling
 //! * Run-time filter configuration
 //! * Input/Output data streaming
-//! * Down to 2 µs latency
 //! * f32 IIR math
 //! * Generic biquad (second order) IIR filter
 //! * Anti-windup
@@ -25,7 +29,7 @@
 //! ## Livestreaming
 //! This application streams raw ADC and DAC data over UDP. Refer to
 //! [stabilizer::net::data_stream](../stabilizer/net/data_stream/index.html) for more information.
-// #![deny(warnings)]
+#![deny(warnings)]
 #![no_std]
 #![no_main]
 
@@ -64,12 +68,10 @@ const IIR_CASCADE_LENGTH: usize = 1;
 // The number of samples in each batch process
 const BATCH_SIZE: usize = 1;
 
-// The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^7 =
-// 128, there is 1.28uS per sample, corresponding to a sampling frequency of 781.25 KHz.
+// The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^9 =
+// 512, there is 5.12uS per sample, corresponding to a sampling frequency of 195.3125 KHz.
 const SAMPLE_TICKS_LOG2: u8 = 9;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
-// const SAMPLE_PERIOD: f32 =
-//     SAMPLE_TICKS as f32 * hardware::design_parameters::TIMER_PERIOD;
 
 #[derive(Clone, Copy, Debug, Tree)]
 pub struct Settings {
@@ -144,7 +146,7 @@ pub struct Settings {
     aom_centre_f: f32,
 
     /// Specifies the amplitude of the dds output driving the aom relative to max (10 dBm)
-    /// 
+    ///
     /// # Path
     /// `amplitude_out`
     ///
@@ -287,8 +289,17 @@ mod app {
         let settings = Settings::default();
 
         // Turn off digital attenuators
-        pounder.pounder.set_attenuation(pounder::Channel::Out0, settings.output_attenuation).unwrap();
-        pounder.pounder.set_attenuation(pounder::Channel::In0, settings.input_attenuation).unwrap();
+        pounder
+            .pounder
+            .set_attenuation(
+                pounder::Channel::Out0,
+                settings.output_attenuation,
+            )
+            .unwrap();
+        pounder
+            .pounder
+            .set_attenuation(pounder::Channel::In0, settings.input_attenuation)
+            .unwrap();
 
         let mut shared = Shared {
             usb: stabilizer.usb,
@@ -322,8 +333,10 @@ mod app {
         );
 
         // amplitudes
-        let acr_out = pounder::dds_output::amplitude_to_acr(settings.amplitude_out).ok();
-        let acr_mix = pounder::dds_output::amplitude_to_acr(settings.amplitude_mix).ok();
+        let acr_out =
+            pounder::dds_output::amplitude_to_acr(settings.amplitude_out).ok();
+        let acr_mix =
+            pounder::dds_output::amplitude_to_acr(settings.amplitude_mix).ok();
 
         // aom frequency
         let ftw = pounder::dds_output::frequency_to_ftw(
@@ -339,7 +352,7 @@ mod app {
             design_parameters::DDS_SYSTEM_CLK.to_Hz() as f32,
         )
         .ok();
-        
+
         dds_profile.update_channels(ad9959::Channel::TWO, ftw, None, acr_mix);
 
         dds_profile.write();
@@ -397,7 +410,7 @@ mod app {
             generator,
             phase_offset,
         } = c.local;
-        
+
         (settings, telemetry, dds).lock(|settings, telemetry, dds| {
             let digital_inputs =
                 [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
@@ -424,15 +437,12 @@ mod app {
                             .iter()
                             .zip(iir_state[0].iter_mut())
                             .fold(power_in, |iir_accumulator, (ch, state)| {
-                                let filter = if hold {
-                                    &iir::Biquad::HOLD
-                                } else {
-                                    ch
-                                };
+                                let filter =
+                                    if hold { &iir::Biquad::HOLD } else { ch };
                                 filter.update(state, iir_accumulator)
                             });
 
-                        // Phase offset word might be off by 1 for negative iir_out, not sure.  
+                        // Phase offset word might be off by 1 for negative iir_out, not sure.
                         *phase_offset = (((iir_out * (1 << 14) as f32) as i16
                             & 0x3FFFi16)
                             as u16
@@ -521,8 +531,10 @@ mod app {
         )
         .ok();
 
-        let acr_out = pounder::dds_output::amplitude_to_acr(settings.amplitude_out).ok();
-        let acr_mix = pounder::dds_output::amplitude_to_acr(settings.amplitude_mix).ok();
+        let acr_out =
+            pounder::dds_output::amplitude_to_acr(settings.amplitude_out).ok();
+        let acr_mix =
+            pounder::dds_output::amplitude_to_acr(settings.amplitude_mix).ok();
 
         if ftw_ch1.is_none() || ftw_ch2.is_none() {
             log::warn!("Failed to set desired aom centre frequency");
@@ -547,10 +559,21 @@ mod app {
             });
         }
 
-        if c.local.pounder.set_attenuation(pounder::Channel::Out0, settings.output_attenuation).is_err() {
+        if c.local
+            .pounder
+            .set_attenuation(
+                pounder::Channel::Out0,
+                settings.output_attenuation,
+            )
+            .is_err()
+        {
             log::warn!("Failed to set output attenuation");
         }
-        if c.local.pounder.set_attenuation(pounder::Channel::In0, settings.input_attenuation).is_err() {
+        if c.local
+            .pounder
+            .set_attenuation(pounder::Channel::In0, settings.input_attenuation)
+            .is_err()
+        {
             log::warn!("Failed to set input attenuation");
         }
 
