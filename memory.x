@@ -1,7 +1,7 @@
 MEMORY
 {
   ITCM   (rwx) : ORIGIN = 0x00000000, LENGTH = 64K
-  RAM    (rwx) : ORIGIN = 0x20000000, LENGTH = 128K
+  RAM    (rwx) : ORIGIN = 0x20000000, LENGTH = 127K
   AXISRAM (rwx) : ORIGIN = 0x24000000, LENGTH = 512K
   SRAM1 (rwx) : ORIGIN = 0x30000000, LENGTH = 128K
   SRAM2 (rwx) : ORIGIN = 0x30020000, LENGTH = 128K
@@ -10,7 +10,16 @@ MEMORY
   RAM_B  (rwx) : ORIGIN = 0x38800000, LENGTH = 4K
   FLASH  (rx)  : ORIGIN = 0x08000000, LENGTH = 1024K
   FLASH1 (rx)  : ORIGIN = 0x08100000, LENGTH = 1024K
+  PERSISTENT_RAM: ORIGIN = 0x2001FC00, LENGTH = 1K
 }
+
+/*
+ * Persistent memory has a u32 bootflag at the beginning and then the remainder is used for
+ * persisting panic information between boots.
+ */
+_bootflag = ORIGIN(PERSISTENT_RAM);
+_panic_dump_start = ORIGIN(PERSISTENT_RAM) + 4;
+_panic_dump_end = ORIGIN(PERSISTENT_RAM) + LENGTH(PERSISTENT_RAM) - 4;
 
 SECTIONS {
   .axisram (NOLOAD) : ALIGN(8) {

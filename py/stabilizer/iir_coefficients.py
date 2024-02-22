@@ -225,14 +225,14 @@ def _main():
                     "Note: This script assumes an AFE input gain of 1.")
     parser.add_argument('-v', '--verbose', action='count', default=0,
                         help='Increase logging verbosity')
-    parser.add_argument("--broker", "-b", type=str, default="mqtt",
+    parser.add_argument("--broker", "-b", type=str, default="10.255.6.4",
                         help="The MQTT broker to use to communicate with "
-                        "Stabilizer (%(default)s)")
+                        "Stabilizer. Default: (%(default)s)")
     parser.add_argument("--prefix", "-p", type=str,
                         default="dt/sinara/dual-iir/+",
                         help="The Stabilizer device prefix in MQTT, "
                         "wildcards allowed as long as the match is unique "
-                        "(%(default)s)")
+                        "Default: (%(default)s)")
     parser.add_argument("--no-discover", "-d", action="store_true",
                         help="Do not discover Stabilizer device prefix.")
 
@@ -240,7 +240,8 @@ def _main():
                         required=True, help="The filter channel to configure.")
     parser.add_argument("--sample-period", type=float,
                         default=stabilizer.SAMPLE_PERIOD,
-                        help="Sample period in seconds (%(default)s s)")
+                        help="Sample period in seconds. "
+                        "Default: (%(default)s s)")
 
     parser.add_argument("--x-offset", type=float, default=0,
                         help="The channel input offset (%(default)s V)")
@@ -252,6 +253,12 @@ def _main():
                         help="The channel maximum output (%(default)s V)")
     parser.add_argument("--y-offset", type=float, default=0,
                         help="The channel output offset (%(default)s V)")
+    parser.add_argument("--aom-frequency", "-f", type=float, default=80e3,
+                        help="Aom centre frequency (%(default)s Hz) ")
+    parser.add_argument("--attn-out", type=float, default=0.5,
+                        help="Output attenuation (%(default)s dB) ")
+    parser.add_argument("--attn-in", type=float, default=0.5,
+                        help="Input attenuation (%(default)s dB) ")
 
     # Next, add subparsers and their arguments.
     subparsers = parser.add_subparsers(
@@ -280,6 +287,13 @@ def _main():
     if forward_gain == 0 and args.x_offset != 0:
         logger.warning("Filter has no DC gain but x_offset is non-zero")
 
+    if not (0.5 <= args.attn_out <= 31.5):
+        logger.warning("Output attenuation out of range, setting to default 0.5 dB")
+        args.attn_out = 0.5
+    if not (0.5 <= args.attn_in <= 31.5):
+        logger.warning("Input attenuation out of range, setting to default 0.5 dB")
+        args.attn_in = 0.5
+
     if args.no_discover:
         prefix = args.prefix
     else:
@@ -300,11 +314,15 @@ def _main():
         # Note: In the future, we will need to Handle higher-order cascades.
         await interface.set(f"/iir_ch/{args.channel}/0", {
             "ba": coefficients,
-            "y_min": stabilizer.voltage_to_machine_units(args.y_min),
-            "y_max": stabilizer.voltage_to_machine_units(args.y_max),
-            "y_offset": stabilizer.voltage_to_machine_units(
-                args.y_offset + forward_gain * args.x_offset)
-        })
+            "u": stabilizer.voltage_to_machine_units(
+                args.y_offset + forward_gain * args.x_offset),
+            "min": stabilizer.voltage_to_machine_units(args.y_min),
+            "max": stabilizer.voltage_to_machine_units(args.y_max),
+        }, retain=True)
+        await interface.set(f"/aom_centre_f", args.aom_frequency, retain=True)
+
+        await interface.set(f"/output_attenuation", args.attn_out, retain=True)
+        await interface.set(f"/input_attenuation", args.attn_in, retain=True)
 
     asyncio.run(configure())
 

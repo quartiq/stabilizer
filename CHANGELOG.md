@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased](https://github.com/quartiq/stabilizer/compare/v0.9.0...main)
+
+### Added
+* Serial terminal is available on USB for settings configurations
+* Reboot to DFU support added via the serial terminal for remote bootloading
+* The `meta` topic now contains metadata about the compiler, firmware, and hardware similar to
+Booster
+* Panic information is now persisted after reboot and available via telemetry and the USB serial
+console.
+
+### Changed
+* Broker is no longer configured at compile time, but is maintained in device memory
+* MSRV bumped to v1.66
+* The IIR (biquad) filter used for PID action has changed its serialization format.
+  See also the `iir_coefficients` Python CLI implementation.
+* Bumped MSRV 1.66.0 -> 1.66.1
+
 ## [0.9.0](https://github.com/quartiq/stabilizer/compare/v0.8.1...v0.9.0)
 
 ### Fixed
@@ -21,7 +38,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  * `hitl/streaming.py` no longer requires a prefix
  * Streaming now supports UDP multicast addresses
 
-## [v0.8.1](https://github.com/quartiq/stabilizer/compare/v0.8.0...v0.8.1) - 2022-11-14)
+## [v0.8.1](https://github.com/quartiq/stabilizer/compare/v0.8.0...v0.8.1) - 2022-11-14
 
 * Fixed the python package dependencies
 

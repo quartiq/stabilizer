@@ -27,10 +27,10 @@ def static_iir_output(output_voltage):
     """
     machine_units = voltage_to_machine_units(output_voltage)
     return {
-        'y_min': machine_units,
-        'y_max': machine_units,
-        'y_offset': 0,
         'ba': [1, 0, 0, 0, 0],
+        'u': 0,
+        'min': machine_units,
+        'max': machine_units,
     }
 
 

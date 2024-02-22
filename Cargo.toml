@@ -16,7 +16,8 @@ readme = "README.md"
 documentation = "https://docs.rs/stabilizer/"
 edition = "2021"
 # keep MSRV in sync in ci.yaml and Cargo.toml
-rust-version = "1.65"
+rust-version = "1.66.1"
+build = "build.rs"
 exclude = [
 	".gitignore",
 	"doc/",
@@ -31,9 +32,13 @@ features = []
 default-target = "thumbv7em-none-eabihf"
 
 [workspace]
-members = ["ad9959"]
+members = ["ad9959", "serial-settings"]
 
 [dependencies]
+panic-persist = { version = "0.3", features = ["utf8", "custom-panic-handler"] }
+sequential-storage = "0.6"
+embedded-io = "0.6"
+embedded-storage = "0.3"
 cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }
 cortex-m-rt = { version = "0.7", features = ["device"] }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
@@ -43,10 +48,11 @@ serde-json-core = "0.5"
 heapless = { version = "0.7.16", features = ["serde"] }
 cortex-m-rtic = "1.0"
 embedded-hal = "0.2.7"
-num_enum = { version = "0.7.1", default-features = false }
+num_enum = { version = "0.7.2", default-features = false }
 paste = "1"
-idsp = "0.13"
+idsp = "0.15.0"
 ad9959 = { path = "ad9959", version = "0.2.1" }
+serial-settings = {path = "serial-settings"}
 mcp230xx = "1.0"
 mutex-trait = "0.2"
 fugit = "0.3"
@@ -60,21 +66,32 @@ enum-iterator = "1.4.1"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
 minimq = "0.8.0"
-# patch with https://github.com/rust-embedded-community/usb-device/pull/129
-usb-device = "0.2.9"
-usbd-serial = "0.1.1"
+usb-device = "0.3.0"
+usbd-serial = "0.2"
 # Keep this synced with the miniconf version in py/setup.py
 miniconf = "0.9.0"
+tca9539 = "0.2"
 smoltcp-nal = { version = "0.4.1", features = ["shared-stack"]}
 bbqueue = "0.5"
+postcard = "1"
+bit_field = "0.10.2"
+
+[build-dependencies]
+built = { version = "0.7", features = ["git2"], default-features = false }
 
 [dependencies.stm32h7xx-hal]
 version = "0.15.1"
+git = "https://github.com/stm32-rs/stm32h7xx-hal.git"
+branch = "master"
 features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
 
+[patch.crates-io.usbd-serial]
+git = "https://github.com/rust-embedded-community/usbd-serial"
+rev = "096742c1c480f6f63c1a936a3c23ede7993c624d"
+
 [features]
-nightly = [ ]
-pounder_v1_0 = [ ]
+nightly = []
+pounder_v1_0 = []
 
 [profile.dev]
 codegen-units = 1

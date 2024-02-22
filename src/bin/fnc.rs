@@ -1,15 +1,19 @@
-//! # Dual IIR
+//! # Fibre Noise Cancellation
 //!
-//! The Dual IIR application exposes two configurable channels. Stabilizer samples input at a fixed
-//! rate, digitally filters the data, and then generates filtered output signals on the respective
-//! channel outputs.
+//! Pounder samples the error signal input and mixes it down with a DDS at
+//! 2*aom_f (channel::TWO). It passes it to Stabilizer for digital filtering
+//! (normally a PI application) where it is read at a fixed rate. This is used
+//! to feedback back into the phase offset of the DDS channel::ONE at aom_f
+//! output through the Pounder. It currently only exposes CHANNEL 0 of the
+//! Pounder for maximising feedback bandwidth, but can be easily extended to
+//! expose both channels in the future if required and it proves sufficient
+//!
+//! Currently samples at 195.3 kHz, i.e. once in 5.12 us
 //!
 //! ## Features
-//! * Two indpenendent channels
-//! * up to 800 kHz rate, timed sampling
+//! * up to 200 kHz rate, timed sampling
 //! * Run-time filter configuration
 //! * Input/Output data streaming
-//! * Down to 2 µs latency
 //! * f32 IIR math
 //! * Generic biquad (second order) IIR filter
 //! * Anti-windup
@@ -42,9 +46,8 @@ use stabilizer::{
         self,
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
-        dac::{Dac0Output, Dac1Output, DacCode},
         hal,
-        signal_generator::{self, SignalGenerator},
+        pounder::{self, attenuators::AttenuatorInterface},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SerialTerminal, SystemTimer, Systick,
         UsbDevice, AFE0, AFE1,
@@ -63,14 +66,12 @@ const SCALE: f32 = i16::MAX as _;
 const IIR_CASCADE_LENGTH: usize = 1;
 
 // The number of samples in each batch process
-const BATCH_SIZE: usize = 8;
+const BATCH_SIZE: usize = 1;
 
-// The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^7 =
-// 128, there is 1.28uS per sample, corresponding to a sampling frequency of 781.25 KHz.
-const SAMPLE_TICKS_LOG2: u8 = 7;
+// The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^9 =
+// 512, there is 5.12uS per sample, corresponding to a sampling frequency of 195.3125 KHz.
+const SAMPLE_TICKS_LOG2: u8 = 9;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
-const SAMPLE_PERIOD: f32 =
-    SAMPLE_TICKS as f32 * hardware::design_parameters::TIMER_PERIOD;
 
 #[derive(Clone, Copy, Debug, Tree)]
 pub struct Settings {
@@ -94,7 +95,8 @@ pub struct Settings {
     /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
     /// * `<m>` specifies which cascade to configure. `<m>` := [0, 1], depending on [IIR_CASCADE_LENGTH]
     ///
-    /// See [iir::Biquad]
+    /// # Value
+    /// See [iir::IIR#Biquad]
     #[tree(depth(2))]
     iir_ch: [[iir::Biquad<f32>; IIR_CASCADE_LENGTH]; 2],
 
@@ -134,17 +136,50 @@ pub struct Settings {
     /// See [StreamTarget#miniconf]
     stream_target: StreamTarget,
 
-    /// Specifies the config for signal generators to add on to DAC0/DAC1 outputs.
+    /// Specifies the centre frequency of the fnc double-pass AOM in hertz
     ///
     /// # Path
-    /// `signal_generator/<n>`
-    ///
-    /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
+    /// `aom_centre_f`
     ///
     /// # Value
-    /// See [signal_generator::BasicConfig#miniconf]
-    #[tree(depth(2))]
-    signal_generator: [signal_generator::BasicConfig; 2],
+    /// A positive 32-bit float in the range [1 MHz, 200 Mhz]
+    aom_centre_f: f32,
+
+    /// Specifies the amplitude of the dds output driving the aom relative to max (10 dBm)
+    ///
+    /// # Path
+    /// `amplitude_out`
+    ///
+    /// # Value
+    /// A positive 32-bit float in the range [0.0, 1.0]
+    amplitude_out: f32,
+
+    /// Specifies the amplitude of the dds output to mix down the error signal relative to max (10 dBm)
+    ///
+    /// # Path
+    /// `amplitude_mix`
+    ///
+    /// # Value
+    /// A positive 32-bit float in the range [0.0, 1.0]
+    amplitude_mix: f32,
+
+    /// Specifies the attenuation applied to the output channel driving the aom (dB)
+    ///
+    /// # Path
+    /// `output_attenuation`
+    ///
+    /// # Value
+    /// A positive 32-bit float in the range [0.5, 31.5] in steps of 0.5
+    output_attenuation: f32,
+
+    /// Specifies the attenuation applied to the input channel from the photodiode (dB)
+    ///
+    /// # Path
+    /// `input_attenuation`
+    ///
+    /// # Value
+    /// A positive 32-bit float in the range [0.5, 31.5] in steps of 0.5
+    input_attenuation: f32,
 }
 
 impl Default for Settings {
@@ -169,15 +204,28 @@ impl Default for Settings {
             // The default telemetry period in seconds.
             telemetry_period: 10,
 
-            signal_generator: [signal_generator::BasicConfig::default(); 2],
-
             stream_target: StreamTarget::default(),
+
+            // Default AOM centre frequency for max efficiency
+            aom_centre_f: 80_000_000.0,
+
+            // Default output and mixed amplitudes of 10dBm
+            amplitude_out: 1.0,
+            amplitude_mix: 1.0,
+
+            // Output attenuation off by default to run near max
+            output_attenuation: 0.5,
+
+            // Input attenuation off by default from photodiode
+            input_attenuation: 0.5,
         }
     }
 }
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
+    use stabilizer::hardware::design_parameters::{self, DDS_SYSTEM_CLK};
+
     use super::*;
 
     #[monotonic(binds = SysTick, default = true, priority = 2)]
@@ -190,7 +238,8 @@ mod app {
 
         settings: Settings,
         telemetry: TelemetryBuffer,
-        signal_generator: [SignalGenerator; 2],
+
+        dds: pounder::dds_output::DdsOutput,
     }
 
     #[local]
@@ -200,10 +249,11 @@ mod app {
         digital_inputs: (DigitalInput0, DigitalInput1),
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
-        dacs: (Dac0Output, Dac1Output),
         iir_state: [[[f32; 4]; IIR_CASCADE_LENGTH]; 2],
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
+        phase_offset: u16,
+        pounder: pounder::PounderDevices,
     }
 
     #[init]
@@ -211,13 +261,16 @@ mod app {
         let clock = SystemTimer::new(|| monotonics::now().ticks() as u32);
 
         // Configure the microcontroller
-        let (stabilizer, _pounder) = hardware::setup::setup(
+        let (stabilizer, pounder) = hardware::setup::setup(
             c.core,
             c.device,
             clock,
             BATCH_SIZE,
             SAMPLE_TICKS,
         );
+
+        let mut pounder =
+            pounder.expect("Fibre noise cancellation requires a Pounder");
 
         let settings = stabilizer.usb_serial.settings();
         let mut network = NetworkUsers::new(
@@ -230,27 +283,30 @@ mod app {
             stabilizer.metadata,
         );
 
+        // todo: check streamformat for pounder data
         let generator = network.configure_streaming(StreamFormat::AdcDacData);
 
         let settings = Settings::default();
 
-        let shared = Shared {
+        // Turn off digital attenuators
+        pounder
+            .pounder
+            .set_attenuation(
+                pounder::Channel::Out0,
+                settings.output_attenuation,
+            )
+            .unwrap();
+        pounder
+            .pounder
+            .set_attenuation(pounder::Channel::In0, settings.input_attenuation)
+            .unwrap();
+
+        let mut shared = Shared {
             usb: stabilizer.usb,
             network,
             settings,
             telemetry: TelemetryBuffer::default(),
-            signal_generator: [
-                SignalGenerator::new(
-                    settings.signal_generator[0]
-                        .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
-                        .unwrap(),
-                ),
-                SignalGenerator::new(
-                    settings.signal_generator[1]
-                        .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
-                        .unwrap(),
-                ),
-            ],
+            dds: pounder.dds_output,
         };
 
         let mut local = Local {
@@ -259,17 +315,51 @@ mod app {
             digital_inputs: stabilizer.digital_inputs,
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
-            dacs: stabilizer.dacs,
             iir_state: [[[0.; 4]; IIR_CASCADE_LENGTH]; 2],
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
+            phase_offset: 0x00,
+            pounder: pounder.pounder,
         };
+
+        let mut dds_profile = shared.dds.builder();
+
+        // set both channels to the same phase
+        dds_profile.update_channels(
+            ad9959::Channel::ONE | ad9959::Channel::TWO,
+            None,
+            Some(local.phase_offset),
+            None,
+        );
+
+        // amplitudes
+        let acr_out =
+            pounder::dds_output::amplitude_to_acr(settings.amplitude_out).ok();
+        let acr_mix =
+            pounder::dds_output::amplitude_to_acr(settings.amplitude_mix).ok();
+
+        // aom frequency
+        let ftw = pounder::dds_output::frequency_to_ftw(
+            settings.aom_centre_f,
+            design_parameters::DDS_SYSTEM_CLK.to_Hz() as f32,
+        )
+        .ok();
+        dds_profile.update_channels(ad9959::Channel::ONE, ftw, None, acr_out);
+
+        // Mix down 2 * aom centre frequency with input APD signal
+        let ftw = pounder::dds_output::frequency_to_ftw(
+            2.0 * settings.aom_centre_f,
+            design_parameters::DDS_SYSTEM_CLK.to_Hz() as f32,
+        )
+        .ok();
+
+        dds_profile.update_channels(ad9959::Channel::TWO, ftw, None, acr_mix);
+
+        dds_profile.write();
 
         // Enable ADC/DAC events
         local.adcs.0.start();
         local.adcs.1.start();
-        local.dacs.0.start();
-        local.dacs.1.start();
 
         // Spawn a settings update for default settings.
         settings_update::spawn().unwrap();
@@ -303,105 +393,102 @@ mod app {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[settings, signal_generator, telemetry], priority=3)]
+    // todo: binds?
+    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, iir_state, generator, phase_offset], shared=[settings, telemetry, dds], priority=3)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
             settings,
             telemetry,
-            signal_generator,
+            dds,
         } = c.shared;
 
         let process::LocalResources {
             digital_inputs,
             adcs: (adc0, adc1),
-            dacs: (dac0, dac1),
             iir_state,
             generator,
+            phase_offset,
         } = c.local;
 
-        (settings, telemetry, signal_generator).lock(
-            |settings, telemetry, signal_generator| {
-                let digital_inputs =
-                    [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
-                telemetry.digital_inputs = digital_inputs;
+        (settings, telemetry, dds).lock(|settings, telemetry, dds| {
+            let digital_inputs =
+                [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
+            telemetry.digital_inputs = digital_inputs;
 
-                let hold = settings.force_hold
-                    || (digital_inputs[1] && settings.allow_hold);
+            let hold = settings.force_hold
+                || (digital_inputs[1] && settings.allow_hold);
 
-                (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
-                    let adc_samples = [adc0, adc1];
-                    let dac_samples = [dac0, dac1];
+            let mut dds_profile = dds.builder();
 
-                    // Preserve instruction and data ordering w.r.t. DMA flag access.
-                    fence(Ordering::SeqCst);
+            let power_in: f32 = 0.0;
+            (adc0, adc1).lock(|adc0, adc1| {
+                let adc_samples = [adc0, adc1];
 
-                    for channel in 0..adc_samples.len() {
-                        adc_samples[channel]
+                // Preserve instruction and data ordering w.r.t. DMA flag access.
+                fence(Ordering::SeqCst);
+
+                adc_samples[0]
+                    .iter()
+                    .map(|ai| {
+                        let power_in = f32::from(*ai as i16);
+
+                        let iir_out = settings.iir_ch[0]
                             .iter()
-                            .zip(dac_samples[channel].iter_mut())
-                            .zip(&mut signal_generator[channel])
-                            .map(|((ai, di), signal)| {
-                                let x = f32::from(*ai as i16);
-                                let y = settings.iir_ch[channel]
-                                    .iter()
-                                    .zip(iir_state[channel].iter_mut())
-                                    .fold(x, |yi, (ch, state)| {
-                                        let filter = if hold {
-                                            &iir::Biquad::HOLD
-                                        } else {
-                                            ch
-                                        };
+                            .zip(iir_state[0].iter_mut())
+                            .fold(power_in, |iir_accumulator, (ch, state)| {
+                                let filter =
+                                    if hold { &iir::Biquad::HOLD } else { ch };
+                                filter.update(state, iir_accumulator)
+                            });
 
-                                        filter.update(state, yi)
-                                    });
+                        // Phase offset word might be off by 1 for negative iir_out, not sure.
+                        *phase_offset = (((iir_out * (1 << 14) as f32) as i16
+                            & 0x3FFFi16)
+                            as u16
+                            + *phase_offset)
+                            & 0x3FFFu16;
 
-                                // Note(unsafe): The filter limits must ensure that the value is in range.
-                                // The truncation introduces 1/2 LSB distortion.
-                                let y: i16 = unsafe { y.to_int_unchecked() };
+                        dds_profile.update_channels(
+                            ad9959::Channel::ONE,
+                            None,
+                            Some(*phase_offset),
+                            None,
+                        );
 
-                                let y = y.saturating_add(signal);
+                        dds_profile.write();
+                    })
+                    .last();
 
-                                // Convert to DAC code
-                                *di = DacCode::from(y).0;
-                            })
-                            .last();
-                    }
+                generator.add(|buf| {
+                    let power_data = unsafe {
+                        core::slice::from_raw_parts(
+                            power_in.to_ne_bytes().as_ptr()
+                                as *const MaybeUninit<u8>,
+                            4,
+                        )
+                    };
+                    let phase_data = unsafe {
+                        core::slice::from_raw_parts(
+                            phase_offset.to_ne_bytes().as_ptr()
+                                as *const MaybeUninit<u8>,
+                            2,
+                        )
+                    };
 
-                    // Stream the data.
-                    const N: usize = BATCH_SIZE * core::mem::size_of::<i16>();
-                    generator.add(|buf| {
-                        for (data, buf) in adc_samples
-                            .iter()
-                            .chain(dac_samples.iter())
-                            .zip(buf.chunks_exact_mut(N))
-                        {
-                            let data = unsafe {
-                                core::slice::from_raw_parts(
-                                    data.as_ptr() as *const MaybeUninit<u8>,
-                                    N,
-                                )
-                            };
-                            buf.copy_from_slice(data)
-                        }
-                        N * 4
-                    });
-                    // Update telemetry measurements.
-                    telemetry.adcs = [
-                        AdcCode(adc_samples[0][0]),
-                        AdcCode(adc_samples[1][0]),
-                    ];
+                    buf[0..4].copy_from_slice(power_data);
+                    buf[4..6].copy_from_slice(phase_data);
 
-                    telemetry.dacs = [
-                        DacCode(dac_samples[0][0]),
-                        DacCode(dac_samples[1][0]),
-                    ];
-
-                    // Preserve instruction and data ordering w.r.t. DMA flag access.
-                    fence(Ordering::SeqCst);
+                    6 as usize
                 });
-            },
-        );
+
+                // Update telemetry measurements.
+                telemetry.adcs =
+                    [AdcCode(adc_samples[0][0]), AdcCode(adc_samples[0][0])];
+
+                fence(Ordering::SeqCst);
+            });
+        });
     }
 
     #[idle(shared=[network, usb])]
@@ -425,7 +512,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, signal_generator])]
+    #[task(priority = 1, local=[afes, pounder], shared=[network, settings, dds])]
     fn settings_update(mut c: settings_update::Context) {
         let settings = c.shared.network.lock(|net| *net.miniconf.settings());
         c.shared.settings.lock(|current| *current = settings);
@@ -433,26 +520,68 @@ mod app {
         c.local.afes.0.set_gain(settings.afe[0]);
         c.local.afes.1.set_gain(settings.afe[1]);
 
-        // Update the signal generators
-        for (i, &config) in settings.signal_generator.iter().enumerate() {
-            match config.try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE) {
-                Ok(config) => {
-                    c.shared
-                        .signal_generator
-                        .lock(|generator| generator[i].update_waveform(config));
-                }
-                Err(err) => log::error!(
-                    "Failed to update signal generation on DAC{}: {:?}",
-                    i,
-                    err
-                ),
-            }
+        let ftw_ch1 = pounder::dds_output::frequency_to_ftw(
+            settings.aom_centre_f,
+            DDS_SYSTEM_CLK.to_Hz() as f32,
+        )
+        .ok();
+        let ftw_ch2 = pounder::dds_output::frequency_to_ftw(
+            2.0 * settings.aom_centre_f,
+            DDS_SYSTEM_CLK.to_Hz() as f32,
+        )
+        .ok();
+
+        let acr_out =
+            pounder::dds_output::amplitude_to_acr(settings.amplitude_out).ok();
+        let acr_mix =
+            pounder::dds_output::amplitude_to_acr(settings.amplitude_mix).ok();
+
+        if ftw_ch1.is_none() || ftw_ch2.is_none() {
+            log::warn!("Failed to set desired aom centre frequency");
+        } else if acr_out.is_none() || acr_mix.is_none() {
+            log::warn!("Failed to set amplitude");
+        } else {
+            c.shared.dds.lock(|dds| {
+                let mut dds_profile = dds.builder();
+                dds_profile.update_channels(
+                    ad9959::Channel::ONE,
+                    ftw_ch1,
+                    None,
+                    None,
+                );
+                dds_profile.update_channels(
+                    ad9959::Channel::TWO,
+                    ftw_ch2,
+                    None,
+                    None,
+                );
+                dds_profile.write();
+            });
+        }
+
+        if c.local
+            .pounder
+            .set_attenuation(
+                pounder::Channel::Out0,
+                settings.output_attenuation,
+            )
+            .is_err()
+        {
+            log::warn!("Failed to set output attenuation");
+        }
+        if c.local
+            .pounder
+            .set_attenuation(pounder::Channel::In0, settings.input_attenuation)
+            .is_err()
+        {
+            log::warn!("Failed to set input attenuation");
         }
 
         let target = settings.stream_target.into();
         c.shared.network.lock(|net| net.direct_stream(target));
     }
 
+    // todo: fix pounder telemetry structuresl
     #[task(priority = 1, shared=[network, settings, telemetry], local=[cpu_temp_sensor])]
     fn telemetry(mut c: telemetry::Context) {
         let telemetry: TelemetryBuffer =

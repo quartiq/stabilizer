@@ -1,6 +1,7 @@
 //! Stabilizer hardware configuration
 //!
 //! This file contains all of the hardware-specific configuration of Stabilizer.
+use bit_field::BitField;
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{fmt::Write, ptr, slice};
 use stm32h7xx_hal::{
@@ -14,11 +15,12 @@ use smoltcp_nal::smoltcp;
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
-    eeprom, input_stamper::InputStamper, pounder,
-    pounder::dds_output::DdsOutput, serial_terminal::SerialTerminal,
-    shared_adc::SharedAdc, timers, DigitalInput0, DigitalInput1,
-    EemDigitalInput0, EemDigitalInput1, EemDigitalOutput0, EemDigitalOutput1,
-    EthernetPhy, NetworkStack, SystemTimer, Systick, UsbBus, AFE0, AFE1,
+    eeprom, input_stamper::InputStamper, metadata::ApplicationMetadata,
+    platform, pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc,
+    timers, DigitalInput0, DigitalInput1, EemDigitalInput0, EemDigitalInput1,
+    EemDigitalOutput0, EemDigitalOutput1, EthernetPhy, HardwareVersion,
+    NetworkStack, SerialTerminal, SystemTimer, Systick, UsbBus, UsbDevice,
+    AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -118,6 +120,8 @@ pub struct StabilizerDevices {
     pub digital_inputs: (DigitalInput0, DigitalInput1),
     pub eem_gpio: EemGpioDevices,
     pub usb_serial: SerialTerminal,
+    pub usb: UsbDevice,
+    pub metadata: &'static ApplicationMetadata,
 }
 
 /// The available Pounder-specific hardware interfaces.
@@ -245,6 +249,11 @@ pub fn setup(
             .map(|()| log::set_max_level(log::LevelFilter::Trace))
             .unwrap();
         log::info!("Starting");
+    }
+
+    // Check for a reboot to DFU before doing any system configuration.
+    if platform::dfu_bootflag() {
+        platform::execute_system_bootloader();
     }
 
     let pwr = device.PWR.constrain();
@@ -590,6 +599,25 @@ pub fn setup(
         )
     };
 
+    let metadata = {
+        // Read the hardware version pins.
+        let hardware_version = {
+            let hwrev0 = gpiog.pg0.into_pull_down_input();
+            let hwrev1 = gpiog.pg1.into_pull_down_input();
+            let hwrev2 = gpiog.pg2.into_pull_down_input();
+            let hwrev3 = gpiog.pg3.into_pull_down_input();
+
+            HardwareVersion::from(
+                *0u8.set_bit(0, hwrev0.is_high())
+                    .set_bit(1, hwrev1.is_high())
+                    .set_bit(2, hwrev2.is_high())
+                    .set_bit(3, hwrev3.is_high()),
+            )
+        };
+
+        ApplicationMetadata::new(hardware_version)
+    };
+
     let mac_addr = smoltcp::wire::EthernetAddress(eeprom::read_eui48(
         &mut eeprom_i2c,
         &mut delay,
@@ -813,12 +841,6 @@ pub fn setup(
             shared_bus::new_atomic_check!(hal::i2c::I2c<hal::stm32::I2C1> = i2c1).unwrap()
         };
 
-        let io_expander =
-            mcp230xx::Mcp230xx::new_default(i2c1.acquire_i2c()).unwrap();
-
-        let temp_sensor =
-            lm75::Lm75::new(i2c1.acquire_i2c(), lm75::Address::default());
-
         let spi = {
             let mosi = gpiod.pd7.into_alternate();
             let miso = gpioa.pa6.into_alternate();
@@ -846,13 +868,10 @@ pub fn setup(
         let aux_adc1 = adc3.create_channel(gpiof.pf4.into_analog());
 
         let pounder_devices = pounder::PounderDevices::new(
-            temp_sensor,
-            io_expander,
+            i2c1.acquire_i2c(),
             spi,
-            pwr0,
-            pwr1,
-            aux_adc0,
-            aux_adc1,
+            (pwr0, pwr1),
+            (aux_adc0, aux_adc1),
         )
         .unwrap();
 
@@ -1061,13 +1080,43 @@ pub fn setup(
             usb_bus.as_ref().unwrap(),
             usb_device::device::UsbVidPid(0x1209, 0x392F),
         )
-        .manufacturer("ARTIQ/Sinara")
-        .product("Stabilizer")
-        .serial_number(serial_number.as_ref().unwrap())
+        .strings(&[usb_device::device::StringDescriptors::default()
+            .manufacturer("ARTIQ/Sinara")
+            .product("Stabilizer")
+            .serial_number(serial_number.as_ref().unwrap())])
+        .unwrap()
         .device_class(usbd_serial::USB_CLASS_CDC)
         .build();
 
         (usb_device, serial)
+    };
+
+    let usb_serial = {
+        let (_, flash_bank2) = device.FLASH.split();
+
+        let input_buffer =
+            cortex_m::singleton!(: [u8; 256] = [0u8; 256]).unwrap();
+        let serialize_buffer =
+            cortex_m::singleton!(: [u8; 512] = [0u8; 512]).unwrap();
+
+        let mut storage = super::flash::Flash(flash_bank2.unwrap());
+        let mut settings =
+            crate::settings::Settings::new(network_devices.mac_address);
+        settings.reload(&mut storage);
+
+        serial_settings::Runner::new(
+            crate::settings::SerialSettingsPlatform {
+                interface: serial_settings::BestEffortInterface::new(
+                    usb_serial,
+                ),
+                storage,
+                settings,
+                metadata,
+            },
+            input_buffer,
+            serialize_buffer,
+        )
+        .unwrap()
     };
 
     let stabilizer = StabilizerDevices {
@@ -1084,7 +1133,9 @@ pub fn setup(
         timestamp_timer,
         digital_inputs,
         eem_gpio,
-        usb_serial: SerialTerminal::new(usb_device, usb_serial),
+        usb: usb_device,
+        usb_serial,
+        metadata,
     };
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());

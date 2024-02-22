@@ -9,15 +9,16 @@ pub mod cpu_temp_sensor;
 pub mod dac;
 pub mod delay;
 pub mod design_parameters;
+mod eeprom;
+pub mod flash;
 pub mod input_stamper;
+pub mod metadata;
+pub mod platform;
 pub mod pounder;
-pub mod serial_terminal;
 pub mod setup;
 pub mod shared_adc;
 pub mod signal_generator;
 pub mod timers;
-
-mod eeprom;
 
 // Type alias for the analog front-end (AFE) for ADC0.
 pub type AFE0 = afe::ProgrammableGainAmplifier<
@@ -32,6 +33,9 @@ pub type AFE1 = afe::ProgrammableGainAmplifier<
 >;
 
 pub type UsbBus = stm32h7xx_hal::usb_hs::UsbBus<stm32h7xx_hal::usb_hs::USB2>;
+
+// Type alias for the USB device.
+pub type UsbDevice = usb_device::device::UsbDevice<'static, UsbBus>;
 
 // Type alias for digital input 0 (DI0).
 pub type DigitalInput0 = hal::gpio::gpiog::PG9<hal::gpio::Input>;
@@ -80,6 +84,56 @@ pub type I2c1 = hal::i2c::I2c<hal::stm32::I2C1>;
 pub type I2c1Proxy =
     shared_bus::I2cProxy<'static, shared_bus::AtomicCheckMutex<I2c1>>;
 
+pub type SerialTerminal =
+    serial_settings::Runner<'static, crate::settings::SerialSettingsPlatform>;
+
+pub enum HardwareVersion {
+    Rev1_0,
+    Rev1_1,
+    Rev1_2,
+    Rev1_3,
+    Unknown(u8),
+}
+
+impl From<u8> for HardwareVersion {
+    fn from(bitfield: u8) -> Self {
+        match bitfield {
+            0b000 => HardwareVersion::Rev1_0,
+            0b001 => HardwareVersion::Rev1_1,
+            0b010 => HardwareVersion::Rev1_2,
+            0b011 => HardwareVersion::Rev1_3,
+            other => HardwareVersion::Unknown(other),
+        }
+    }
+}
+
+impl core::fmt::Display for HardwareVersion {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            HardwareVersion::Rev1_0 => write!(f, "v1.0"),
+            HardwareVersion::Rev1_1 => write!(f, "v1.1"),
+            HardwareVersion::Rev1_2 => write!(f, "v1.2"),
+            HardwareVersion::Rev1_3 => write!(f, "v1.3"),
+            HardwareVersion::Unknown(other) => {
+                write!(f, "Unknown ({:#b})", other)
+            }
+        }
+    }
+}
+
+impl serde::Serialize for HardwareVersion {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        use core::fmt::Write;
+
+        let mut version_string: heapless::String<32> = heapless::String::new();
+        write!(&mut version_string, "{}", self).unwrap();
+        serializer.serialize_str(&version_string)
+    }
+}
+
 #[inline(never)]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
@@ -108,6 +162,8 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
         channel.set_mode(ChannelMode::BlockIfFull);
         writeln!(channel, "{info}").ok();
     }
+
+    panic_persist::report_panic_info(info);
 
     // Abort
     asm::udf();
