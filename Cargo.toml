@@ -41,7 +41,7 @@ embedded-io = "0.6"
 embedded-storage = "0.3"
 cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }
 cortex-m-rt = { version = "0.7", features = ["device"] }
-log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
+log = { version = "0.4", features = ["max_level_trace", "release_max_level_trace"] }
 rtt-target = "0.3"
 serde = { version = "1.0", features = ["derive"], default-features = false }
 serde-json-core = "0.5"
@@ -66,7 +66,7 @@ enum-iterator = "1.4.1"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
 minimq = "0.8.0"
-usb-device = "0.3.0"
+usb-device = { git = "https://github.com/rust-embedded-community/usb-device", branch = "feature/usb-tracing", features = ["log"] }
 usbd-serial = "0.2"
 # Keep this synced with the miniconf version in py/setup.py
 miniconf = "0.9.0"
@@ -75,6 +75,10 @@ smoltcp-nal = { version = "0.4.1", features = ["shared-stack"]}
 bbqueue = "0.5"
 postcard = "1"
 bit_field = "0.10.2"
+
+[patch.crates-io.usb-device]
+git = "https://github.com/rust-embedded-community/usb-device"
+branch = "feature/usb-tracing"
 
 [build-dependencies]
 built = { version = "0.7", features = ["git2"], default-features = false }
