@@ -1275,11 +1275,9 @@ dependencies = [
 [[package]]
 name = "usb-device"
 version = "0.3.1"
-source = "git+https://github.com/rust-embedded-community/usb-device?branch=feature/usb-tracing#af340092074123540098da6821d10fa64dbc9e9f"
+source = "git+https://github.com/vitalyvb/usb-device#7c998d88fb2b29316f971a8fc96c7a57d663b6ee"
 dependencies = [
  "heapless 0.8.0",
- "log",
- "num_enum 0.7.2",
  "portable-atomic",
 ]
 
