@@ -1275,7 +1275,7 @@ dependencies = [
 [[package]]
 name = "usb-device"
 version = "0.3.1"
-source = "git+https://github.com/vitalyvb/usb-device#7c998d88fb2b29316f971a8fc96c7a57d663b6ee"
+source = "git+https://github.com/rust-embedded-community/usb-device#2dbba84d71797bc12d964b1b936a7c464777c864"
 dependencies = [
  "heapless 0.8.0",
  "portable-atomic",

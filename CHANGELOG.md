@@ -22,6 +22,9 @@ console.
   See also the `iir_coefficients` Python CLI implementation.
 * Bumped MSRV 1.66.0 -> 1.66.1
 
+### Fixed
+* Fixed an issue where the device would rarely not enumerate on Windows
+
 ## [0.9.0](https://github.com/quartiq/stabilizer/compare/v0.8.1...v0.9.0)
 
 ### Fixed
