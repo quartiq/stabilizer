@@ -66,7 +66,7 @@ enum-iterator = "1.4.1"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
 minimq = "0.8.0"
-usb-device = "0.3"
+usb-device = "0.3.0"
 usbd-serial = "0.2"
 # Keep this synced with the miniconf version in py/setup.py
 miniconf = "0.9.0"
