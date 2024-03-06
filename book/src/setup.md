@@ -160,9 +160,9 @@ To observe logging messages or to develop and debug applications a SWD/JTAG
 probe is required. To use a compatible probe with `probe-run` connect it as
 described [above](#st-link-virtual-mass-storage).
 
-1. Install `probe-run`
+1. Install `probe-rs`
     ```bash
-    cargo install probe-run
+    cargo install probe-rs --features cli
     ```
 2. Build and run firmware on the device
     ```bash
