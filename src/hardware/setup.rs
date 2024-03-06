@@ -244,7 +244,7 @@ pub fn setup(
         }
 
         static LOGGER: rtt_logger::RTTLogger =
-            rtt_logger::RTTLogger::new(log::LevelFilter::Trace);
+            rtt_logger::RTTLogger::new(log::LevelFilter::Info);
         log::set_logger(&LOGGER)
             .map(|()| log::set_max_level(log::LevelFilter::Trace))
             .unwrap();
