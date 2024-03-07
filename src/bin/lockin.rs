@@ -24,7 +24,6 @@
 //! ## Livestreaming
 //! This application streams raw ADC and DAC data over UDP. Refer to
 //! [stabilizer::net::data_stream](../stabilizer/net/data_stream/index.html) for more information.
-#![deny(warnings)]
 #![no_std]
 #![no_main]
 
@@ -34,7 +33,9 @@ use core::{
     sync::atomic::{fence, Ordering},
 };
 
-use fugit::ExtU64;
+use rtic_monotonics::Monotonic;
+
+use fugit::ExtU32;
 use mutex_trait::prelude::*;
 
 use idsp::{Accu, Complex, ComplexExt, Filter, Lockin, Lowpass, Repeat, RPLL};
@@ -217,9 +218,6 @@ impl Default for Settings {
 mod app {
     use super::*;
 
-    #[monotonic(binds = SysTick, default = true, priority = 2)]
-    type Monotonic = Systick;
-
     #[shared]
     struct Shared {
         usb: UsbDevice,
@@ -245,8 +243,8 @@ mod app {
     }
 
     #[init]
-    fn init(c: init::Context) -> (Shared, Local, init::Monotonics) {
-        let clock = SystemTimer::new(|| monotonics::now().ticks() as u32);
+    fn init(c: init::Context) -> (Shared, Local) {
+        let clock = SystemTimer::new(|| Systick::now().ticks() as u32);
 
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup::setup(
@@ -315,7 +313,7 @@ mod app {
         settings_update::spawn().unwrap();
         telemetry::spawn().unwrap();
         ethernet_link::spawn().unwrap();
-        start::spawn_after(100.millis()).unwrap();
+        start::spawn().unwrap();
 
         // Start recording digital input timestamps.
         stabilizer.timestamp_timer.start();
@@ -323,11 +321,12 @@ mod app {
         // Enable the timestamper.
         local.timestamper.start();
 
-        (shared, local, init::Monotonics(stabilizer.systick))
+        (shared, local)
     }
 
     #[task(priority = 1, local=[sampling_timer])]
-    fn start(c: start::Context) {
+    async fn start(c: start::Context) {
+        Systick::delay(100.millis()).await;
         // Start sampling ADCs and DACs.
         c.local.sampling_timer.start();
     }
@@ -345,6 +344,7 @@ mod app {
         let process::SharedResources {
             settings,
             telemetry,
+            ..
         } = c.shared;
 
         let process::LocalResources {
@@ -355,6 +355,7 @@ mod app {
             lockin,
             signal_generator,
             generator,
+            ..
         } = c.local;
 
         (settings, telemetry).lock(|settings, telemetry| {
@@ -480,7 +481,7 @@ mod app {
     }
 
     #[task(priority = 1, local=[afes], shared=[network, settings])]
-    fn settings_update(mut c: settings_update::Context) {
+    async fn settings_update(mut c: settings_update::Context) {
         let settings = c.shared.network.lock(|net| *net.miniconf.settings());
         c.shared.settings.lock(|current| *current = settings);
 
@@ -492,50 +493,59 @@ mod app {
     }
 
     #[task(priority = 1, local=[digital_inputs, cpu_temp_sensor], shared=[network, settings, telemetry])]
-    fn telemetry(mut c: telemetry::Context) {
-        let mut telemetry: TelemetryBuffer =
-            c.shared.telemetry.lock(|telemetry| *telemetry);
+    async fn telemetry(mut c: telemetry::Context) {
+        loop {
+            let mut telemetry: TelemetryBuffer =
+                c.shared.telemetry.lock(|telemetry| *telemetry);
 
-        telemetry.digital_inputs = [
-            c.local.digital_inputs.0.is_high(),
-            c.local.digital_inputs.1.is_high(),
-        ];
+            telemetry.digital_inputs = [
+                c.local.digital_inputs.0.is_high(),
+                c.local.digital_inputs.1.is_high(),
+            ];
 
-        let (gains, telemetry_period) = c
-            .shared
-            .settings
-            .lock(|settings| (settings.afe, settings.telemetry_period));
+            let (gains, telemetry_period) = c
+                .shared
+                .settings
+                .lock(|settings| (settings.afe, settings.telemetry_period));
 
-        c.shared.network.lock(|net| {
-            net.telemetry.publish(&telemetry.finalize(
-                gains[0],
-                gains[1],
-                c.local.cpu_temp_sensor.get_temperature().unwrap(),
-            ))
-        });
+            c.shared.network.lock(|net| {
+                net.telemetry.publish(&telemetry.finalize(
+                    gains[0],
+                    gains[1],
+                    c.local.cpu_temp_sensor.get_temperature().unwrap(),
+                ))
+            });
 
-        // Schedule the telemetry task in the future.
-        telemetry::Monotonic::spawn_after((telemetry_period as u64).secs())
-            .unwrap();
+            // Schedule the telemetry task in the future.
+            Systick::delay((telemetry_period as u32).secs()).await;
+        }
     }
 
     #[task(priority = 1, shared=[usb], local=[usb_terminal])]
-    fn usb(mut c: usb::Context) {
-        // Handle the USB serial terminal.
-        c.shared.usb.lock(|usb| {
-            usb.poll(&mut [c.local.usb_terminal.interface_mut().inner_mut()]);
-        });
+    async fn usb(mut c: usb::Context) {
+        loop {
+            // Handle the USB serial terminal.
+            c.shared.usb.lock(|usb| {
+                usb.poll(&mut [c
+                    .local
+                    .usb_terminal
+                    .interface_mut()
+                    .inner_mut()]);
+            });
 
-        c.local.usb_terminal.process().unwrap();
+            c.local.usb_terminal.process().unwrap();
 
-        // Schedule to run this task every 10 milliseconds.
-        usb::spawn_after(10u64.millis()).unwrap();
+            // Schedule to run this task every 10 milliseconds.
+            Systick::delay(10.millis()).await;
+        }
     }
 
     #[task(priority = 1, shared=[network])]
-    fn ethernet_link(mut c: ethernet_link::Context) {
-        c.shared.network.lock(|net| net.processor.handle_link());
-        ethernet_link::Monotonic::spawn_after(1.secs()).unwrap();
+    async fn ethernet_link(mut c: ethernet_link::Context) {
+        loop {
+            c.shared.network.lock(|net| net.processor.handle_link());
+            Systick::delay(1.secs()).await;
+        }
     }
 
     #[task(binds = ETH, priority = 1)]
