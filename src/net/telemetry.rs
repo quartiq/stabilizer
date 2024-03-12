@@ -69,6 +69,23 @@ pub struct Telemetry {
 
     /// The CPU temperature in degrees Celsius.
     pub cpu_temp: f32,
+
+    /// Measurements related to Pounder
+    pub pounder: Option<PounderTelemetry>,
+}
+
+/// The structure that holds the telemetry related to Pounder.
+///
+/// # Note
+/// This structure should be generated on-demand by the buffer when required to minimize conversion
+/// overhead.
+#[derive(Copy, Clone, Serialize)]
+pub struct PounderTelemetry {
+    /// The Pounder temperature in degrees Celsius
+    pub temperature: f32,
+
+    /// The detected RF power into IN channels
+    pub input_power: [f32; 2],
 }
 
 impl Default for TelemetryBuffer {
@@ -88,10 +105,17 @@ impl TelemetryBuffer {
     /// * `afe0` - The current AFE configuration for channel 0.
     /// * `afe1` - The current AFE configuration for channel 1.
     /// * `cpu_temp` - The current CPU temperature.
+    /// * `pounder` - The current Pounder telemetry.
     ///
     /// # Returns
     /// The finalized telemetry structure that can be serialized and reported.
-    pub fn finalize(self, afe0: Gain, afe1: Gain, cpu_temp: f32) -> Telemetry {
+    pub fn finalize(
+        self,
+        afe0: Gain,
+        afe1: Gain,
+        cpu_temp: f32,
+        pounder: Option<PounderTelemetry>,
+    ) -> Telemetry {
         let in0_volts = Into::<f32>::into(self.adcs[0]) / afe0.as_multiplier();
         let in1_volts = Into::<f32>::into(self.adcs[1]) / afe1.as_multiplier();
 
@@ -100,6 +124,7 @@ impl TelemetryBuffer {
             adcs: [in0_volts, in1_volts],
             dacs: [self.dacs[0].into(), self.dacs[1].into()],
             digital_inputs: self.digital_inputs,
+            pounder,
         }
     }
 }

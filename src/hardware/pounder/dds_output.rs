@@ -55,7 +55,7 @@
 use log::warn;
 use stm32h7xx_hal as hal;
 
-use super::{hrtimer::HighResTimerE, Error, QspiInterface};
+use super::{hrtimer::HighResTimerE, Error, Profile, QspiInterface};
 use ad9959::{Channel, Mode, ProfileSerializer};
 
 /// The DDS profile update stream.
@@ -155,6 +155,46 @@ impl<'a> ProfileBuilder<'a> {
     ) -> &mut Self {
         self.serializer.update_channels(channels, ftw, pow, acr);
         self
+    }
+
+    /// Update a number of channels with fully defined profile settings.
+    ///
+    /// # Args
+    /// * `channels` - A set of channels to apply the configuration to.
+    /// * `profile` - The complete DDS profile, which defines the frequency tuning word,
+    ///   amplitude control register & the phase offset word of the channels.
+    /// # Note
+    /// The ACR should be stored in the 3 LSB of the word.
+    /// If amplitude scaling is to be used, the "Amplitude multiplier enable" bit must be set.
+    #[inline]
+    pub fn update_channels_with_profile(
+        &mut self,
+        channels: Channel,
+        profile: Profile,
+    ) -> &mut Self {
+        self.serializer.update_channels(
+            channels,
+            Some(profile.frequency_tuning_word),
+            Some(profile.phase_offset),
+            Some(profile.amplitude_control),
+        );
+        self
+    }
+
+    /// Update the system clock configuration.
+    ///
+    /// # Args
+    /// * `reference_clock_frequency` - The reference clock frequency provided to the AD9959 core.
+    /// * `multiplier` - The frequency multiplier of the system clock. Must be 1 or 4-20.
+    #[inline]
+    pub fn set_system_clock(
+        &mut self,
+        reference_clock_frequency: f32,
+        multiplier: u8,
+    ) -> Result<&mut Self, ad9959::Error> {
+        self.serializer
+            .set_system_clock(reference_clock_frequency, multiplier)?;
+        Ok(self)
     }
 
     /// Write the profile to the DDS asynchronously.
