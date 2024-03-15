@@ -203,60 +203,16 @@ impl<'a> ProfileBuilder<'a> {
     pub fn write(&mut self) {
         self.dds_output.write(self.serializer.finalize());
     }
-}
 
-/// Return the frequency tuning word to set the requested frequency.
-///
-/// # Args
-/// * `frequency_out` - the DDS output frequency to be set in hertz
-/// * `dds_clock_frequency` - dds clock frequency in hertz
-pub fn frequency_to_ftw(
-    frequency_out: f32,
-    dds_clock_frequency: f32,
-) -> Result<u32, Error> {
-    if frequency_out < 0.0 || frequency_out > dds_clock_frequency {
-        return Err(Error::Bounds);
-    }
-
-    Ok(
-        (frequency_out / dds_clock_frequency * 1u64.wrapping_shl(32) as f32)
-            as u32,
-    )
-}
-
-/// Return the required amplitude control register value to set the requested relative amplitude
-///
-/// # Args
-/// * `amplitude` - the requested relative amplitude in range [0, 1]
-pub fn amplitude_to_acr(amplitude: f32) -> Result<u32, Error> {
-    if !(0.0..=1.0).contains(&amplitude) {
-        return Err(Error::Bounds);
-    }
-
-    let mut amplitude_control: u16 =
-        (amplitude * (1 << 10) as f32) as u16 & 0x03FF;
-
-    // Enable the amplitude multiplier for the channel if required. The amplitude control has
-    // full-scale at 0x3FF (amplitude of 1), so the multiplier should be disabled whenever
-    // full-scale is used by setting ACR[12] = 1;
-    if amplitude != 1.0 {
-        amplitude_control = amplitude_control | 0x1000;
-    }
-
-    Ok(amplitude_control as u32)
-}
-
-/// Return the phase offset word to set the requested phase offset
-///
-/// # Args
-/// * `phase_offset` - requested phase offset in turns. `0 <= phase_offset < 1`
-pub fn phase_to_pow(
-    phase_offset: f32,
-    wrap_bounds: bool,
-) -> Result<u16, Error> {
-    if wrap_bounds || (0.0..1.0).contains(&phase_offset) {
-        Ok((phase_offset * (1 << 14) as f32) as u16 & 0x3FFF)
-    } else {
-        Err(Error::Bounds)
+    /// Get the current phase of a specified channel.
+    ///
+    /// Args:
+    /// * `channel` - The channel to get the phase of.
+    ///
+    /// Returns:
+    /// The phase of the channel in turns
+    #[inline]
+    pub fn get_channel_phase(&self, channel: Channel) {
+        self.serializer.get_phase(channel)
     }
 }

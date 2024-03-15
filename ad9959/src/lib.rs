@@ -594,14 +594,17 @@ pub fn frequency_to_ftw(
 }
 
 /// Convert phase into phase offset word.
+/// The returned word may have an error of 1 (i.e. 6e-5 turns) for netgative `phase_turns`
+/// Wraps around every 2*pi
 ///
 /// Arguments:
-/// * `phase_turns` - The normalized number of phase turns of a DDS channel.
+/// * `phase_turns` - The normalized number of phase turns of a DDS channel. Can be negative
 ///
 /// Returns:
 /// The corresponding phase offset word.
 pub fn phase_to_pow(phase_turns: f32) -> Result<u16, Error> {
-    Ok((phase_turns * (1 << 14) as f32) as u16 & 0x3FFFu16)
+    // Ok((phase_turns * (1 << 14) as f32) as u16 & 0x3FFFu16);
+    Ok(((phase_turns * (1 << 14) as f32) as i16 & 0x3FFFi16) as u16)
 }
 
 /// Convert amplitude into amplitude control register values.
