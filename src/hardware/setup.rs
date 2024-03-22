@@ -107,7 +107,15 @@ pub struct EemGpioDevices {
 }
 
 /// The available hardware interfaces on Stabilizer.
-pub struct StabilizerDevices {
+pub struct StabilizerDevices<C, const Y: usize>
+where
+    for<'d> C: miniconf::JsonCoreSlash<'d, Y>
+        + Default
+        + Clone
+        + serde::Serialize
+        + serde::Deserialize<'d>
+        + 'static,
+{
     pub temperature_sensor: CpuTempSensor,
     pub afes: (AFE0, AFE1),
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
@@ -118,7 +126,7 @@ pub struct StabilizerDevices {
     pub net: NetworkDevices,
     pub digital_inputs: (DigitalInput0, DigitalInput1),
     pub eem_gpio: EemGpioDevices,
-    pub usb_serial: SerialTerminal,
+    pub usb_serial: SerialTerminal<C, Y>,
     pub usb: UsbDevice,
     pub metadata: &'static ApplicationMetadata,
 }
@@ -200,13 +208,21 @@ fn load_itcm() {
 /// stabilizer hardware interfaces in a disabled state. `pounder` is an `Option` containing
 /// `Some(devices)` if pounder is detected, where `devices` is a `PounderDevices` structure
 /// containing all of the pounder hardware interfaces in a disabled state.
-pub fn setup(
+pub fn setup<C, const Y: usize>(
     mut core: stm32h7xx_hal::stm32::CorePeripherals,
     device: stm32h7xx_hal::stm32::Peripherals,
     clock: SystemTimer,
     batch_size: usize,
     sample_ticks: u32,
-) -> (StabilizerDevices, Option<PounderDevices>) {
+) -> (StabilizerDevices<C, Y>, Option<PounderDevices>)
+where
+    for<'d> C: miniconf::JsonCoreSlash<'d, Y>
+        + Default
+        + Clone
+        + serde::Serialize
+        + serde::Deserialize<'d>
+        + 'static,
+{
     // Set up RTT logging
     {
         // Enable debug during WFE/WFI-induced sleep

@@ -193,7 +193,7 @@ mod app {
 
     #[local]
     struct Local {
-        usb_terminal: SerialTerminal,
+        usb_terminal: SerialTerminal<Settings, 3>,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         afes: (AFE0, AFE1),
@@ -230,12 +230,10 @@ mod app {
 
         let generator = network.configure_streaming(StreamFormat::AdcDacData);
 
-        let settings = Settings::default();
-
         let shared = Shared {
             usb: stabilizer.usb,
             network,
-            settings,
+            settings: settings.runtime,
             telemetry: TelemetryBuffer::default(),
             signal_generator: [
                 SignalGenerator::new(

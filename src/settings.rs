@@ -6,7 +6,7 @@
 //! 2. Dynamic Run-time Settings
 //!
 //! Static device configuration settings are loaded and used only at device power-up. These include
-//! things like the MQTT broker address and the MQTT identified. Conversely, the dynamic run-time
+//! things like the MQTT broker address and the MQTT identifier. Conversely, the dynamic run-time
 //! settings can be changed and take effect immediately during device operation.
 //!
 //! This settings management interface is currently targeted at the static device configuration
@@ -29,20 +29,46 @@ use postcard::ser_flavors::Flavor;
 use stm32h7xx_hal::flash::LockedFlashBank;
 
 #[derive(Clone, miniconf::Tree)]
-pub struct Settings {
+pub struct Settings<C, const Y: usize>
+where
+    for<'d> C: miniconf::JsonCoreSlash<'d, Y>
+        + Default
+        + Clone
+        + serde::Serialize
+        + serde::Deserialize<'d>
+        + 'static,
+{
     pub broker: heapless::String<255>,
     pub id: heapless::String<23>,
+
+    pub runtime: C,
     #[tree(skip)]
     pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
 }
 
-impl serial_settings::Settings for Settings {
+impl<C, const Y: usize> serial_settings::Settings for Settings<C, Y>
+where
+    for<'d> C: miniconf::JsonCoreSlash<'d, Y>
+        + Default
+        + Clone
+        + serde::Serialize
+        + serde::Deserialize<'d>
+        + 'static,
+{
     fn reset(&mut self) {
         *self = Self::new(self.mac)
     }
 }
 
-impl Settings {
+impl<C, const Y: usize> Settings<C, Y>
+where
+    for<'d> C: miniconf::JsonCoreSlash<'d, Y>
+        + Default
+        + Clone
+        + serde::Serialize
+        + serde::Deserialize<'d>
+        + 'static,
+{
     pub fn new(mac: smoltcp_nal::smoltcp::wire::EthernetAddress) -> Self {
         let mut id = heapless::String::new();
         write!(&mut id, "{mac}").unwrap();
@@ -51,13 +77,14 @@ impl Settings {
             broker: "mqtt".into(),
             id,
             mac,
+            runtime: C::default(),
         }
     }
 
     pub fn reload(&mut self, storage: &mut Flash) {
         // Loop over flash and read settings
         let mut buffer = [0u8; 512];
-        for path in Settings::iter_paths::<heapless::String<32>>("/") {
+        for path in Self::iter_paths::<heapless::String<32>>("/") {
             let path = path.unwrap();
 
             // Try to fetch the setting from flash.
@@ -123,13 +150,21 @@ impl<F> From<postcard::Error> for Error<F> {
     }
 }
 
-pub struct SerialSettingsPlatform {
+pub struct SerialSettingsPlatform<C, const Y: usize>
+where
+    for<'d> C: miniconf::JsonCoreSlash<'d, Y>
+        + Default
+        + Clone
+        + serde::Serialize
+        + serde::Deserialize<'d>
+        + 'static,
+{
     /// The interface to read/write data to/from serially (via text) to the user.
     pub interface: serial_settings::BestEffortInterface<
         usbd_serial::SerialPort<'static, crate::hardware::UsbBus>,
     >,
     /// The Settings structure.
-    pub settings: Settings,
+    pub settings: Settings<C, Y>,
     /// The storage mechanism used to persist settings to between boots.
     pub storage: Flash,
 
@@ -137,17 +172,26 @@ pub struct SerialSettingsPlatform {
     pub metadata: &'static ApplicationMetadata,
 }
 
-impl serial_settings::Platform for SerialSettingsPlatform {
+impl<C, const Y: usize> serial_settings::Platform
+    for SerialSettingsPlatform<C, Y>
+where
+    for<'d> C: miniconf::JsonCoreSlash<'d, Y>
+        + Default
+        + Clone
+        + serde::Serialize
+        + serde::Deserialize<'d>
+        + 'static,
+{
     type Interface = serial_settings::BestEffortInterface<
         usbd_serial::SerialPort<'static, crate::hardware::UsbBus>,
     >;
-    type Settings = Settings;
+    type Settings = Settings<C, Y>;
     type Error = Error<
         <LockedFlashBank as embedded_storage::nor_flash::ErrorType>::Error,
     >;
 
     fn save(&mut self, buf: &mut [u8]) -> Result<(), Self::Error> {
-        for path in Settings::iter_paths::<heapless::String<32>>("/") {
+        for path in Settings::<C, Y>::iter_paths::<heapless::String<32>>("/") {
             let mut item = SettingsItem {
                 path: path.unwrap(),
                 ..Default::default()

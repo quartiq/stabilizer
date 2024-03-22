@@ -272,7 +272,7 @@ mod app {
             network,
             usb: stabilizer.usb,
             telemetry: TelemetryBuffer::default(),
-            settings: Settings::default(),
+            settings: settings.runtime,
         };
 
         let signal_config = signal_generator::Config {
