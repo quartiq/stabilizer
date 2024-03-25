@@ -57,20 +57,25 @@ impl Settings {
     pub fn reload(&mut self, storage: &mut Flash) {
         // Loop over flash and read settings
         let mut buffer = [0u8; 512];
-        for path in Settings::iter_paths::<heapless::String<32>>("/") {
+        for path in Settings::iter_paths::<heapless::String<64>>("/") {
             let path = path.unwrap();
 
             // Try to fetch the setting from flash.
-            let Some(item) =
-                sequential_storage::map::fetch_item::<SettingsItem, _>(
-                    storage,
-                    storage.range(),
-                    &mut buffer,
-                    path.clone(),
-                )
-                .unwrap()
-            else {
-                continue;
+            let item = match sequential_storage::map::fetch_item::<
+                SettingsItem,
+                _,
+            >(
+                storage,
+                storage.range(),
+                &mut buffer,
+                path.clone(),
+            ) {
+                Err(e) => {
+                    log::warn!("Failed to load flash setting `{path}`: {e:?}");
+                    continue;
+                }
+                Ok(Some(item)) => item,
+                _ => continue,
             };
 
             log::info!("Found `{path}` in flash settings");
@@ -90,12 +95,12 @@ impl Settings {
 #[derive(Default, serde::Serialize, serde::Deserialize)]
 pub struct SettingsItem {
     // We only make these owned vec/string to get around lifetime limitations.
-    pub path: heapless::String<32>,
+    pub path: heapless::String<64>,
     pub data: heapless::Vec<u8, 256>,
 }
 
 impl sequential_storage::map::StorageItem for SettingsItem {
-    type Key = heapless::String<32>;
+    type Key = heapless::String<64>;
     type Error = postcard::Error;
 
     fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, Self::Error> {
@@ -147,7 +152,7 @@ impl serial_settings::Platform for SerialSettingsPlatform {
     >;
 
     fn save(&mut self, buf: &mut [u8]) -> Result<(), Self::Error> {
-        for path in Settings::iter_paths::<heapless::String<32>>("/") {
+        for path in Settings::iter_paths::<heapless::String<64>>("/") {
             let mut item = SettingsItem {
                 path: path.unwrap(),
                 ..Default::default()
