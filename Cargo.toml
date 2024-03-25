@@ -41,7 +41,7 @@ embedded-io = "0.6"
 embedded-storage = "0.3"
 cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }
 cortex-m-rt = { version = "0.7", features = ["device"] }
-log = { version = "0.4", features = ["max_level_trace", "release_max_level_trace"] }
+log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
 rtt-target = "0.3"
 serde = { version = "1.0", features = ["derive"], default-features = false }
 serde-json-core = "0.5"
@@ -67,8 +67,8 @@ enum-iterator = "1.4.1"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
 minimq = "0.8.0"
-usb-device = { version = "0.3.2", features = ["log"]}
-usbd-serial = {path = "../../rust-embedded-community/usbd-serial"}
+usb-device = "0.3.2"
+usbd-serial = "0.2"
 # Keep this synced with the miniconf version in py/setup.py
 miniconf = "0.9.0"
 tca9539 = "0.2"
@@ -88,7 +88,7 @@ features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
 
 [patch.crates-io.usbd-serial]
 git = "https://github.com/rust-embedded-community/usbd-serial"
-rev = "096742c1c480f6f63c1a936a3c23ede7993c624d"
+rev = "ccff77578925942e40e0a2c7b6d397ad164fdedb"
 
 [features]
 nightly = []

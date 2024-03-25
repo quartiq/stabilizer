@@ -1348,13 +1348,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98816b1accafbb09085168b90f27e93d790b4bfa19d883466b5e53315b5f06a6"
 dependencies = [
  "heapless 0.8.0",
- "log",
  "portable-atomic",
 ]
 
 [[package]]
 name = "usbd-serial"
 version = "0.2.1"
+source = "git+https://github.com/rust-embedded-community/usbd-serial?rev=ccff77578925942e40e0a2c7b6d397ad164fdedb#ccff77578925942e40e0a2c7b6d397ad164fdedb"
 dependencies = [
  "embedded-hal 0.2.7",
  "embedded-io",
@@ -1400,8 +1400,3 @@ checksum = "de437e2a6208b014ab52972a27e59b33fa2920d3e00fe05026167a1c509d19cc"
 dependencies = [
  "vcell",
 ]
-
-[[patch.unused]]
-name = "usbd-serial"
-version = "0.2.0"
-source = "git+https://github.com/rust-embedded-community/usbd-serial?rev=096742c1c480f6f63c1a936a3c23ede7993c624d#096742c1c480f6f63c1a936a3c23ede7993c624d"
