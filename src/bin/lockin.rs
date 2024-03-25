@@ -15,8 +15,8 @@
 //! * Input/output data streamng via UDP
 //!
 //! ## Settings
-//! Refer to the [Settings] structure for documentation of run-time configurable settings for this
-//! application.
+//! Refer to the [RuntimeSettings] structure for documentation of run-time configurable settings
+//! for this application.
 //!
 //! ## Telemetry
 //! Refer to [Telemetry] for information about telemetry reported by this application.
