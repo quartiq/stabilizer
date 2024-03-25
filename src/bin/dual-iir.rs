@@ -30,6 +30,7 @@
 
 use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
+use serde::{Serialize, Deserialize};
 
 use rtic_monotonics::Monotonic;
 
@@ -73,7 +74,7 @@ const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 const SAMPLE_PERIOD: f32 =
     SAMPLE_TICKS as f32 * hardware::design_parameters::TIMER_PERIOD;
 
-#[derive(Clone, Copy, Debug, Tree)]
+#[derive(Clone, Copy, Debug, Tree, Serialize, Deserialize)]
 pub struct Settings {
     /// Configure the Analog Front End (AFE) gain.
     ///
@@ -233,16 +234,16 @@ mod app {
         let shared = Shared {
             usb: stabilizer.usb,
             network,
-            settings: settings.runtime,
+            settings: settings.init,
             telemetry: TelemetryBuffer::default(),
             signal_generator: [
                 SignalGenerator::new(
-                    settings.signal_generator[0]
+                    settings.init.signal_generator[0]
                         .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),
                 SignalGenerator::new(
-                    settings.signal_generator[1]
+                    settings.init.signal_generator[1]
                         .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),

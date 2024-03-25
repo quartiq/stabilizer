@@ -41,7 +41,7 @@ where
     pub broker: heapless::String<255>,
     pub id: heapless::String<23>,
 
-    pub runtime: C,
+    pub init: C,
     #[tree(skip)]
     pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
 }
