@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 miniconf = "0.9"
-menu = {path = "../../../rust-embedded-community/menu", features = ["echo"]}
+menu = {version = "0.4", features = ["echo"]}
 heapless = "0.8"
 embedded-io = "0.6"
-log = {version = "0.4", default-features = false }
