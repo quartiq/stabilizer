@@ -363,6 +363,7 @@ mod app {
         telemetry::spawn().unwrap();
         ethernet_link::spawn().unwrap();
         start::spawn().unwrap();
+        usb::spawn().unwrap();
 
         // Start recording digital input timestamps.
         stabilizer.timestamp_timer.start();
