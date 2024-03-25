@@ -479,7 +479,7 @@ mod app {
 
     #[task(priority = 1, shared=[usb], local=[usb_terminal])]
     async fn usb(mut c: usb::Context) {
-        {
+        loop {
             // Handle the USB serial terminal.
             c.shared.usb.lock(|usb| {
                 usb.poll(&mut [c
