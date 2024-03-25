@@ -24,92 +24,43 @@
 //!    storage sharing.
 use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
 use core::fmt::Write;
-use miniconf::{TreeDeserialize, TreeKey, TreeSerialize};
 use postcard::ser_flavors::Flavor;
 use stm32h7xx_hal::flash::LockedFlashBank;
 
-#[derive(Clone, miniconf::Tree)]
-pub struct Settings<C, const Y: usize>
-where
-    for<'d> C: miniconf::JsonCoreSlash<'d, Y>
-        + Default
-        + Clone
-        + serde::Serialize
-        + serde::Deserialize<'d>
-        + 'static,
-{
-    pub broker: heapless::String<255>,
-    pub id: heapless::String<23>,
+pub fn load_from_flash<
+    T: for<'d> miniconf::JsonCoreSlash<'d, Y>,
+    const Y: usize,
+>(
+    structure: &mut T,
+    storage: &mut Flash,
+) {
+    // Loop over flash and read settings
+    let mut buffer = [0u8; 512];
+    for path in T::iter_paths::<heapless::String<64>>("/") {
+        let path = path.unwrap();
 
-    pub init: C,
-    #[tree(skip)]
-    pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
-}
+        // Try to fetch the setting from flash.
+        let Some(item) =
+            sequential_storage::map::fetch_item::<SettingsItem, _>(
+                storage,
+                storage.range(),
+                &mut buffer,
+                path.clone(),
+            )
+            .unwrap()
+        else {
+            continue;
+        };
 
-impl<C, const Y: usize> serial_settings::Settings for Settings<C, Y>
-where
-    for<'d> C: miniconf::JsonCoreSlash<'d, Y>
-        + Default
-        + Clone
-        + serde::Serialize
-        + serde::Deserialize<'d>
-        + 'static,
-{
-    fn reset(&mut self) {
-        *self = Self::new(self.mac)
-    }
-}
+        log::info!("Found `{path}` in flash settings");
 
-impl<C, const Y: usize> Settings<C, Y>
-where
-    for<'d> C: miniconf::JsonCoreSlash<'d, Y>
-        + Default
-        + Clone
-        + serde::Serialize
-        + serde::Deserialize<'d>
-        + 'static,
-{
-    pub fn new(mac: smoltcp_nal::smoltcp::wire::EthernetAddress) -> Self {
-        let mut id = heapless::String::new();
-        write!(&mut id, "{mac}").unwrap();
-
-        Self {
-            broker: "mqtt".into(),
-            id,
-            mac,
-            runtime: C::default(),
-        }
-    }
-
-    pub fn reload(&mut self, storage: &mut Flash) {
-        // Loop over flash and read settings
-        let mut buffer = [0u8; 512];
-        for path in Self::iter_paths::<heapless::String<32>>("/") {
-            let path = path.unwrap();
-
-            // Try to fetch the setting from flash.
-            let Some(item) =
-                sequential_storage::map::fetch_item::<SettingsItem, _>(
-                    storage,
-                    storage.range(),
-                    &mut buffer,
-                    path.clone(),
-                )
-                .unwrap()
-            else {
-                continue;
-            };
-
-            log::info!("Found `{path}` in flash settings");
-
-            let mut deserializer = postcard::Deserializer::from_flavor(
-                postcard::de_flavors::Slice::new(&item.data),
-            );
-            if let Err(e) = self
-                .deserialize_by_key(path.split('/').skip(1), &mut deserializer)
-            {
-                log::warn!("Failed to load {path} from flash settings: {e:?}");
-            }
+        let mut deserializer = postcard::Deserializer::from_flavor(
+            postcard::de_flavors::Slice::new(&item.data),
+        );
+        if let Err(e) = structure
+            .deserialize_by_key(path.split('/').skip(1), &mut deserializer)
+        {
+            log::warn!("Failed to load {path} from flash settings: {e:?}");
         }
     }
 }
@@ -117,12 +68,12 @@ where
 #[derive(Default, serde::Serialize, serde::Deserialize)]
 pub struct SettingsItem {
     // We only make these owned vec/string to get around lifetime limitations.
-    pub path: heapless::String<32>,
+    pub path: heapless::String<64>,
     pub data: heapless::Vec<u8, 256>,
 }
 
 impl sequential_storage::map::StorageItem for SettingsItem {
-    type Key = heapless::String<32>;
+    type Key = heapless::String<64>;
     type Error = postcard::Error;
 
     fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, Self::Error> {
@@ -152,19 +103,14 @@ impl<F> From<postcard::Error> for Error<F> {
 
 pub struct SerialSettingsPlatform<C, const Y: usize>
 where
-    for<'d> C: miniconf::JsonCoreSlash<'d, Y>
-        + Default
-        + Clone
-        + serde::Serialize
-        + serde::Deserialize<'d>
-        + 'static,
+    C: serial_settings::Settings<Y>,
 {
     /// The interface to read/write data to/from serially (via text) to the user.
-    pub interface: serial_settings::BestEffortInterface<
-        usbd_serial::SerialPort<'static, crate::hardware::UsbBus>,
-    >,
+    pub interface:
+        serial_settings::BestEffortInterface<crate::hardware::SerialPort>,
+
     /// The Settings structure.
-    pub settings: Settings<C, Y>,
+    pub settings: C,
     /// The storage mechanism used to persist settings to between boots.
     pub storage: Flash,
 
@@ -172,26 +118,20 @@ where
     pub metadata: &'static ApplicationMetadata,
 }
 
-impl<C, const Y: usize> serial_settings::Platform
+impl<C, const Y: usize> serial_settings::Platform<Y>
     for SerialSettingsPlatform<C, Y>
 where
-    for<'d> C: miniconf::JsonCoreSlash<'d, Y>
-        + Default
-        + Clone
-        + serde::Serialize
-        + serde::Deserialize<'d>
-        + 'static,
+    C: serial_settings::Settings<Y>,
 {
-    type Interface = serial_settings::BestEffortInterface<
-        usbd_serial::SerialPort<'static, crate::hardware::UsbBus>,
-    >;
-    type Settings = Settings<C, Y>;
+    type Interface =
+        serial_settings::BestEffortInterface<crate::hardware::SerialPort>;
+    type Settings = C;
     type Error = Error<
         <LockedFlashBank as embedded_storage::nor_flash::ErrorType>::Error,
     >;
 
     fn save(&mut self, buf: &mut [u8]) -> Result<(), Self::Error> {
-        for path in Settings::<C, Y>::iter_paths::<heapless::String<32>>("/") {
+        for path in Self::Settings::iter_paths::<heapless::String<64>>("/") {
             let mut item = SettingsItem {
                 path: path.unwrap(),
                 ..Default::default()

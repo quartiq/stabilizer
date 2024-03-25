@@ -84,9 +84,17 @@ pub type I2c1 = hal::i2c::I2c<hal::stm32::I2C1>;
 pub type I2c1Proxy =
     shared_bus::I2cProxy<'static, shared_bus::AtomicCheckMutex<I2c1>>;
 
+pub type SerialPort = usbd_serial::SerialPort<
+    'static,
+    crate::hardware::UsbBus,
+    setup::SerialBufferStore,
+    setup::SerialBufferStore,
+>;
+
 pub type SerialTerminal<C, const Y: usize> = serial_settings::Runner<
     'static,
     crate::settings::SerialSettingsPlatform<C, Y>,
+    Y,
 >;
 
 pub enum HardwareVersion {

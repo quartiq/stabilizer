@@ -16,7 +16,7 @@
 //! * Derivative kick avoidance
 //!
 //! ## Settings
-//! Refer to the [Settings] structure for documentation of run-time configurable settings for this
+//! Refer to the [RuntimeSettings] structure for documentation of run-time configurable settings for this
 //! application.
 //!
 //! ## Telemetry
@@ -28,9 +28,10 @@
 #![no_std]
 #![no_main]
 
+use core::fmt::Write;
 use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use rtic_monotonics::Monotonic;
 
@@ -69,13 +70,45 @@ const BATCH_SIZE: usize = 8;
 
 // The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^7 =
 // 128, there is 1.28uS per sample, corresponding to a sampling frequency of 781.25 KHz.
-const SAMPLE_TICKS_LOG2: u8 = 7;
+const SAMPLE_TICKS_LOG2: u8 = 12;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 const SAMPLE_PERIOD: f32 =
     SAMPLE_TICKS as f32 * hardware::design_parameters::TIMER_PERIOD;
 
+#[derive(Clone, Debug, Tree)]
+pub struct FlashSettings {
+    pub broker: heapless::String<255>,
+    pub id: heapless::String<23>,
+
+    #[tree(depth(3))]
+    pub dual_iir: RuntimeSettings,
+
+    #[tree(skip)]
+    pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
+}
+
+impl FlashSettings {
+    pub fn new(mac: smoltcp_nal::smoltcp::wire::EthernetAddress) -> Self {
+        let mut id = heapless::String::new();
+        write!(&mut id, "{mac}").unwrap();
+
+        Self {
+            broker: "mqtt".into(),
+            id,
+            mac,
+            dual_iir: RuntimeSettings::default(),
+        }
+    }
+}
+
+impl serial_settings::Settings<4> for FlashSettings {
+    fn reset(&mut self) {
+        *self = Self::new(self.mac)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Tree, Serialize, Deserialize)]
-pub struct Settings {
+pub struct RuntimeSettings {
     /// Configure the Analog Front End (AFE) gain.
     ///
     /// # Path
@@ -149,7 +182,7 @@ pub struct Settings {
     signal_generator: [signal_generator::BasicConfig; 2],
 }
 
-impl Default for Settings {
+impl Default for RuntimeSettings {
     fn default() -> Self {
         let mut i = iir::Biquad::IDENTITY;
         i.set_min(-SCALE);
@@ -185,16 +218,16 @@ mod app {
     #[shared]
     struct Shared {
         usb: UsbDevice,
-        network: NetworkUsers<Settings, Telemetry, 3>,
+        network: NetworkUsers<RuntimeSettings, Telemetry, 3>,
 
-        settings: Settings,
+        settings: RuntimeSettings,
         telemetry: TelemetryBuffer,
         signal_generator: [SignalGenerator; 2],
     }
 
     #[local]
     struct Local {
-        usb_terminal: SerialTerminal<Settings, 3>,
+        usb_terminal: SerialTerminal<FlashSettings, 4>,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         afes: (AFE0, AFE1),
@@ -210,7 +243,7 @@ mod app {
         let clock = SystemTimer::new(|| Systick::now().ticks() as u32);
 
         // Configure the microcontroller
-        let (stabilizer, _pounder) = hardware::setup::setup(
+        let (mut stabilizer, _pounder) = hardware::setup::setup(
             c.core,
             c.device,
             clock,
@@ -218,7 +251,24 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let settings = stabilizer.usb_serial.settings();
+        let usb_terminal = {
+            let mut settings = FlashSettings::new(stabilizer.net.mac_address);
+
+            stabilizer::settings::load_from_flash(
+                &mut settings,
+                &mut stabilizer.flash,
+            );
+            hardware::setup::setup_serial(
+                settings,
+                stabilizer.metadata,
+                stabilizer.flash,
+                stabilizer.usb_serial,
+            )
+        };
+
+        log::trace!("USB Setup done");
+
+        let settings = usb_terminal.settings();
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
@@ -234,16 +284,16 @@ mod app {
         let shared = Shared {
             usb: stabilizer.usb,
             network,
-            settings: settings.init,
+            settings: settings.dual_iir,
             telemetry: TelemetryBuffer::default(),
             signal_generator: [
                 SignalGenerator::new(
-                    settings.init.signal_generator[0]
+                    settings.dual_iir.signal_generator[0]
                         .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),
                 SignalGenerator::new(
-                    settings.init.signal_generator[1]
+                    settings.dual_iir.signal_generator[1]
                         .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),
@@ -251,7 +301,7 @@ mod app {
         };
 
         let mut local = Local {
-            usb_terminal: stabilizer.usb_serial,
+            usb_terminal,
             sampling_timer: stabilizer.adc_dac_timer,
             digital_inputs: stabilizer.digital_inputs,
             afes: stabilizer.afes,
@@ -478,7 +528,7 @@ mod app {
 
     #[task(priority = 1, shared=[usb], local=[usb_terminal])]
     async fn usb(mut c: usb::Context) {
-        {
+        loop {
             // Handle the USB serial terminal.
             c.shared.usb.lock(|usb| {
                 usb.poll(&mut [c
@@ -490,7 +540,7 @@ mod app {
 
             c.local.usb_terminal.process().unwrap();
 
-            Systick::delay(10.millis()).await;
+            Systick::delay(1.millis()).await;
         }
     }
 
