@@ -382,7 +382,7 @@ impl<I: Interface> Ad9959<I> {
             &phase_offset.to_be_bytes(),
         )?;
 
-        Ok((phase_offset as f32) / ((1 << 14) as f32))
+        pow_to_phase(phase_offset)
     }
 
     /// Get the current phase of a specified channel.
@@ -398,7 +398,7 @@ impl<I: Interface> Ad9959<I> {
 
         let phase_offset = u16::from_be_bytes(phase_offset) & 0x3FFFu16;
 
-        Ok((phase_offset as f32) / ((1 << 14) as f32))
+        pow_to_phase(phase_offset)
     }
 
     /// Configure the amplitude of a specified channel.
@@ -487,8 +487,7 @@ impl<I: Interface> Ad9959<I> {
             Register::CFTW0,
             &tuning_word.to_be_bytes(),
         )?;
-        Ok((tuning_word as f32 / 1u64.wrapping_shl(32) as f32)
-            * self.system_clock_frequency())
+        ftw_to_frequency(tuning_word, self.system_clock_frequency())
     }
 
     /// Get the frequency of a channel.
@@ -505,8 +504,7 @@ impl<I: Interface> Ad9959<I> {
         let tuning_word = u32::from_be_bytes(tuning_word);
 
         // Convert the tuning word into a frequency.
-        Ok((tuning_word as f32 * self.system_clock_frequency())
-            / (1u64 << 32) as f32)
+        ftw_to_frequency(tuning_word, self.system_clock_frequency())
     }
 
     /// Finalize DDS configuration
@@ -593,6 +591,21 @@ pub fn frequency_to_ftw(
     Ok(((dds_frequency / system_clock_frequency) * (1u64 << 32) as f32) as u32)
 }
 
+/// Convert the tuning word into frequency in Hz
+///
+/// Arguments:
+/// * `tuning_word` - The frequency tuning word to be converted
+///
+/// Returns:
+/// The corresponding frequency in Hz
+pub fn ftw_to_frequency(
+    tuning_word: u32,
+    system_clock_frequency: f32,
+) -> Result<f32, Error> {
+    Ok((tuning_word as f32 / 1u64.wrapping_shl(32) as f32)
+        * system_clock_frequency)
+}
+
 /// Convert phase into phase offset word.
 /// The returned word may have an error of 1 (i.e. 6e-5 turns) for netgative `phase_turns`
 /// Wraps around every 2*pi
@@ -603,8 +616,18 @@ pub fn frequency_to_ftw(
 /// Returns:
 /// The corresponding phase offset word.
 pub fn phase_to_pow(phase_turns: f32) -> Result<u16, Error> {
-    // Ok((phase_turns * (1 << 14) as f32) as u16 & 0x3FFFu16);
     Ok(((phase_turns * (1 << 14) as f32) as i16 & 0x3FFFi16) as u16)
+}
+
+/// Convert phase offset word into turns
+///
+/// Arguments:
+/// * `pow` - The phase offset word of a DDS channel
+///
+/// Returns:
+/// The corresponding normalized number of phase turns
+pub fn pow_to_phase(pow: u16) -> Result<f32, Error> {
+    Ok((pow as f32) / ((1 << 14) as f32))
 }
 
 /// Convert amplitude into amplitude control register values.

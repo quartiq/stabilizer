@@ -257,15 +257,18 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let settings = stabilizer.usb_serial.settings();
+        let device_settings = stabilizer.usb_serial.settings();
+        let application_settings = Settings::default();
+
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
             clock,
             env!("CARGO_BIN_NAME"),
-            &settings.broker,
-            &settings.id,
+            &device_settings.broker,
+            &device_settings.id,
             stabilizer.metadata,
+            application_settings,
         );
 
         let generator = network.configure_streaming(StreamFormat::AdcDacData);
@@ -274,7 +277,7 @@ mod app {
             network,
             usb: stabilizer.usb,
             telemetry: TelemetryBuffer::default(),
-            settings: Settings::default(),
+            settings: application_settings,
         };
 
         let signal_config = signal_generator::Config {
@@ -511,6 +514,7 @@ mod app {
                 gains[0],
                 gains[1],
                 c.local.cpu_temp_sensor.get_temperature().unwrap(),
+                None,
             ))
         });
 

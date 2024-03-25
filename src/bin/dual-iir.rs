@@ -44,6 +44,8 @@ use stabilizer::{
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
         hal,
+        pounder::{ClockConfig, PounderConfig},
+        setup::PounderDevices as Pounder,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SerialTerminal, SystemTimer, Systick,
@@ -145,6 +147,17 @@ pub struct Settings {
     /// See [signal_generator::BasicConfig#miniconf]
     #[tree(depth(2))]
     signal_generator: [signal_generator::BasicConfig; 2],
+
+    /// Specifies the config for pounder DDS clock configuration, DDS channels & attenuations
+    ///
+    /// # Path
+    /// `pounder`
+    ///
+    /// # Value
+    /// See [PounderConfig#miniconf]
+    /// TODO: this was #[miniconf(defer)] -- is this right? Also, miniconf::Option vs Option?
+    #[tree]
+    pounder: Option<PounderConfig>,
 }
 
 impl Default for Settings {
@@ -172,6 +185,8 @@ impl Default for Settings {
             signal_generator: [signal_generator::BasicConfig::default(); 2],
 
             stream_target: StreamTarget::default(),
+
+            pounder: None.into(),
         }
     }
 }
@@ -191,6 +206,7 @@ mod app {
         settings: Settings,
         telemetry: TelemetryBuffer,
         signal_generator: [SignalGenerator; 2],
+        pounder: Option<Pounder>,
     }
 
     #[local]
@@ -202,6 +218,7 @@ mod app {
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         iir_state: [[[f32; 4]; IIR_CASCADE_LENGTH]; 2],
+        dds_clock_state: Option<ClockConfig>,
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
     }
@@ -211,7 +228,7 @@ mod app {
         let clock = SystemTimer::new(|| monotonics::now().ticks() as u32);
 
         // Configure the microcontroller
-        let (stabilizer, _pounder) = hardware::setup::setup(
+        let (stabilizer, pounder) = hardware::setup::setup(
             c.core,
             c.device,
             clock,
@@ -219,38 +236,47 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let settings = stabilizer.usb_serial.settings();
+        let device_settings = stabilizer.usb_serial.settings();
+        let mut application_settings = Settings::default();
+        if pounder.is_some() {
+            application_settings
+                .pounder
+                .replace(PounderConfig::default());
+        }
+
+        let dds_clock_state = pounder.as_ref().map(|_| ClockConfig::default());
+
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
             clock,
             env!("CARGO_BIN_NAME"),
-            &settings.broker,
-            &settings.id,
+            &device_settings.broker,
+            &device_settings.id,
             stabilizer.metadata,
+            application_settings,
         );
 
         let generator = network.configure_streaming(StreamFormat::AdcDacData);
 
-        let settings = Settings::default();
-
         let shared = Shared {
             usb: stabilizer.usb,
             network,
-            settings,
+            settings: application_settings,
             telemetry: TelemetryBuffer::default(),
             signal_generator: [
                 SignalGenerator::new(
-                    settings.signal_generator[0]
+                    application_settings.signal_generator[0]
                         .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),
                 SignalGenerator::new(
-                    settings.signal_generator[1]
+                    application_settings.signal_generator[1]
                         .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),
             ],
+            pounder,
         };
 
         let mut local = Local {
@@ -261,6 +287,7 @@ mod app {
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
             iir_state: [[[0.; 4]; IIR_CASCADE_LENGTH]; 2],
+            dds_clock_state,
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
         };
@@ -425,7 +452,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, signal_generator])]
+    #[task(priority = 1, local=[afes, dds_clock_state], shared=[network, settings, signal_generator, pounder])]
     fn settings_update(mut c: settings_update::Context) {
         let settings = c.shared.network.lock(|net| *net.miniconf.settings());
         c.shared.settings.lock(|current| *current = settings);
@@ -449,25 +476,44 @@ mod app {
             }
         }
 
+        // Update Pounder configurations
+        c.shared.pounder.lock(|pounder| {
+            if let Some(pounder) = pounder {
+                let pounder_settings = settings.pounder.as_ref().unwrap();
+                // let mut clocking = c.local.dds_clock_state;
+                pounder.update_dds(
+                    *pounder_settings,
+                    &mut c.local.dds_clock_state,
+                );
+            }
+        });
+
         let target = settings.stream_target.into();
         c.shared.network.lock(|net| net.direct_stream(target));
     }
 
-    #[task(priority = 1, shared=[network, settings, telemetry], local=[cpu_temp_sensor])]
+    #[task(priority = 1, shared=[network, settings, telemetry, pounder], local=[cpu_temp_sensor])]
     fn telemetry(mut c: telemetry::Context) {
         let telemetry: TelemetryBuffer =
             c.shared.telemetry.lock(|telemetry| *telemetry);
 
-        let (gains, telemetry_period) = c
-            .shared
-            .settings
-            .lock(|settings| (settings.afe, settings.telemetry_period));
+        let (gains, telemetry_period, pounder_telemetry) =
+            (c.shared.settings, c.shared.pounder).lock(|settings, pounder| {
+                (
+                    settings.afe,
+                    settings.telemetry_period,
+                    pounder.as_mut().map(|pdr| {
+                        pdr.get_telemetry(settings.pounder.unwrap())
+                    }),
+                )
+            });
 
         c.shared.network.lock(|net| {
             net.telemetry.publish(&telemetry.finalize(
                 gains[0],
                 gains[1],
                 c.local.cpu_temp_sensor.get_temperature().unwrap(),
+                pounder_telemetry,
             ))
         });
 

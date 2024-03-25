@@ -1,3 +1,5 @@
+use core::borrow::BorrowMut;
+
 use self::attenuators::AttenuatorInterface;
 
 use super::hal;
@@ -8,7 +10,7 @@ use ad9959::{
 };
 use embedded_hal::blocking::spi::Transfer;
 use enum_iterator::Sequence;
-use miniconf::Miniconf;
+use miniconf::Tree;
 use rf_power::PowerMeasurementInterface;
 use serde::{Deserialize, Serialize};
 use stm32h7xx_hal::time::MegaHertz;
@@ -127,7 +129,7 @@ impl From<Channel> for GpioPin {
     }
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, Miniconf)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, Tree)]
 pub struct DdsChannelConfig {
     pub frequency: f32,
     pub phase_offset: f32,
@@ -210,14 +212,13 @@ impl Default for ClockConfig {
     }
 }
 
-//TODO: miniconf -> tree updated here
-
-#[derive(Copy, Clone, Debug, Default, Tree)]
+#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize, Tree)]
 pub struct PounderConfig {
+    #[tree]
     pub clock: ClockConfig,
-    #[tree(depth(2))]
+    #[tree(depth(3))]
     pub in_channel: [ChannelConfig; 2],
-    #[tree(depth(2))]
+    #[tree(depth(3))]
     pub out_channel: [ChannelConfig; 2],
 }
 
@@ -657,42 +658,55 @@ impl setup::PounderDevices {
     pub fn update_dds(
         &mut self,
         settings: PounderConfig,
-        clocking: &mut ClockConfig,
+        current_clock: &mut Option<ClockConfig>,
     ) {
-        if *clocking != settings.clock {
+        self.update_dds_clock(settings.clock, current_clock.borrow_mut());
+        self.update_dds_waveform(settings);
+    }
+
+    pub fn update_dds_clock(
+        &mut self,
+        new_clock_settings: ClockConfig,
+        mut current_clock_settings: &mut Option<ClockConfig>,
+    ) {
+        // Note(unwrap): Short-cut evaluation ensures `current_clock_settings` is `Some`
+        if current_clock_settings.is_none()
+            || (current_clock_settings.unwrap() != new_clock_settings)
+        {
             match validate_clocking(
-                settings.clock.reference_clock,
-                settings.clock.multiplier,
+                new_clock_settings.reference_clock,
+                new_clock_settings.multiplier,
             ) {
                 Ok(_frequency) => {
                     self.pounder
-                        .set_ext_clk(settings.clock.external_clock)
+                        .set_ext_clk(new_clock_settings.external_clock)
                         .unwrap();
 
                     self.dds_output
                         .builder()
                         .set_system_clock(
-                            settings.clock.reference_clock,
-                            settings.clock.multiplier,
+                            new_clock_settings.reference_clock,
+                            new_clock_settings.multiplier,
                         )
                         .unwrap()
                         .write();
-
-                    *clocking = settings.clock;
+                    current_clock_settings.replace(new_clock_settings);
                 }
                 Err(err) => {
                     log::error!("Invalid AD9959 clocking parameters: {:?}", err)
                 }
             }
         }
+    }
 
+    pub fn update_dds_waveform(&mut self, settings: PounderConfig) {
         for (channel_config, pounder_channel) in settings
             .in_channel
             .iter()
             .chain(settings.out_channel.iter())
             .zip([Channel::In0, Channel::In1, Channel::Out0, Channel::Out1])
         {
-            match Profile::try_from((*clocking, *channel_config)) {
+            match Profile::try_from((settings.clock, *channel_config)) {
                 Ok(dds_profile) => {
                     self.dds_output
                         .builder()
@@ -716,13 +730,14 @@ impl setup::PounderDevices {
         }
     }
 
-    pub fn get_telemetry(&mut self) -> PounderTelemetry {
+    pub fn get_telemetry(&mut self, config: PounderConfig) -> PounderTelemetry {
         PounderTelemetry {
             temperature: self.pounder.lm75.read_temperature().unwrap(),
             input_power: [
                 self.pounder.measure_power(Channel::In0).unwrap(),
                 self.pounder.measure_power(Channel::In1).unwrap(),
             ],
+            config,
         }
     }
 }

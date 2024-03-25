@@ -58,7 +58,7 @@ pub enum NetworkState {
 /// A structure of Stabilizer's default network users.
 pub struct NetworkUsers<S, T, const Y: usize>
 where
-    for<'de> S: Default + JsonCoreSlash<'de, Y> + Clone,
+    for<'de> S: JsonCoreSlash<'de, Y> + Clone,
     T: Serialize,
 {
     pub miniconf: miniconf::MqttClient<
@@ -77,7 +77,7 @@ where
 
 impl<S, T, const Y: usize> NetworkUsers<S, T, Y>
 where
-    for<'de> S: Default + JsonCoreSlash<'de, Y> + Clone,
+    for<'de> S: JsonCoreSlash<'de, Y> + Clone,
     T: Serialize,
 {
     /// Construct Stabilizer's default network users.
@@ -90,6 +90,7 @@ where
     /// * `broker` - The domain name of the MQTT broker to use.
     /// * `id` - The MQTT client ID base to use.
     /// * `metadata` - The application metadata
+    /// * `settings` - The initial application settings value
     ///
     /// # Returns
     /// A new struct of network users.
@@ -98,9 +99,11 @@ where
         phy: EthernetPhy,
         clock: SystemTimer,
         app: &str,
+
         broker: &str,
         id: &str,
         metadata: &'static ApplicationMetadata,
+        settings: S,
     ) -> Self {
         let stack_manager =
             cortex_m::singleton!(: NetworkManager = NetworkManager::new(stack))
@@ -124,7 +127,7 @@ where
             stack_manager.acquire_stack(),
             &prefix,
             clock,
-            S::default(),
+            settings,
             miniconf::minimq::ConfigBuilder::new(
                 named_broker,
                 &mut store.settings,

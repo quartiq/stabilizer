@@ -55,7 +55,7 @@
 use log::warn;
 use stm32h7xx_hal as hal;
 
-use super::{hrtimer::HighResTimerE, Error, Profile, QspiInterface};
+use super::{hrtimer::HighResTimerE, Profile, QspiInterface};
 use ad9959::{Channel, Mode, ProfileSerializer};
 
 /// The DDS profile update stream.
@@ -202,17 +202,5 @@ impl<'a> ProfileBuilder<'a> {
     #[inline]
     pub fn write(&mut self) {
         self.dds_output.write(self.serializer.finalize());
-    }
-
-    /// Get the current phase of a specified channel.
-    ///
-    /// Args:
-    /// * `channel` - The channel to get the phase of.
-    ///
-    /// Returns:
-    /// The phase of the channel in turns
-    #[inline]
-    pub fn get_channel_phase(&self, channel: Channel) {
-        self.serializer.get_phase(channel)
     }
 }
