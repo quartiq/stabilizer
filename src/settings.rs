@@ -40,16 +40,18 @@ pub fn load_from_flash<
         let path = path.unwrap();
 
         // Try to fetch the setting from flash.
-        let Some(item) =
-            sequential_storage::map::fetch_item::<SettingsItem, _>(
-                storage,
-                storage.range(),
-                &mut buffer,
-                path.clone(),
-            )
-            .unwrap()
-        else {
-            continue;
+        let item = match sequential_storage::map::fetch_item::<SettingsItem, _>(
+            storage,
+            storage.range(),
+            &mut buffer,
+            path.clone(),
+        ) {
+            Err(e) => {
+                log::warn!("Failed to load flash setting `{path}`: {e:?}");
+                continue;
+            }
+            Ok(Some(item)) => item,
+            _ => continue,
         };
 
         log::info!("Found `{path}` in flash settings");
