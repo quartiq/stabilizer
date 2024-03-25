@@ -29,6 +29,7 @@
 
 use core::{
     convert::TryFrom,
+    fmt::Write,
     mem::MaybeUninit,
     sync::atomic::{fence, Ordering},
 };
@@ -73,6 +74,38 @@ const BATCH_SIZE: usize = 1 << BATCH_SIZE_LOG2;
 const SAMPLE_TICKS_LOG2: u32 = 7;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 
+#[derive(Clone, Debug, Tree)]
+pub struct FlashSettings {
+    pub broker: heapless::String<255>,
+    pub id: heapless::String<23>,
+
+    #[tree(depth(2))]
+    pub lockin: RuntimeSettings,
+
+    #[tree(skip)]
+    pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
+}
+
+impl FlashSettings {
+    pub fn new(mac: smoltcp_nal::smoltcp::wire::EthernetAddress) -> Self {
+        let mut id = heapless::String::new();
+        write!(&mut id, "{mac}").unwrap();
+
+        Self {
+            broker: "mqtt".into(),
+            id,
+            mac,
+            lockin: RuntimeSettings::default(),
+        }
+    }
+}
+
+impl serial_settings::Settings<3> for FlashSettings {
+    fn reset(&mut self) {
+        *self = Self::new(self.mac)
+    }
+}
+
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 enum Conf {
     /// Output the lockin magnitude.
@@ -100,7 +133,7 @@ enum LockinMode {
 }
 
 #[derive(Copy, Clone, Debug, Tree)]
-pub struct Settings {
+pub struct RuntimeSettings {
     /// Configure the Analog Front End (AFE) gain.
     ///
     /// # Path
@@ -192,7 +225,7 @@ pub struct Settings {
     stream_target: StreamTarget,
 }
 
-impl Default for Settings {
+impl Default for RuntimeSettings {
     fn default() -> Self {
         Self {
             afe: [Gain::G1; 2],
@@ -221,14 +254,14 @@ mod app {
     #[shared]
     struct Shared {
         usb: UsbDevice,
-        network: NetworkUsers<Settings, Telemetry, 2>,
-        settings: Settings,
+        network: NetworkUsers<RuntimeSettings, Telemetry, 2>,
+        settings: RuntimeSettings,
         telemetry: TelemetryBuffer,
     }
 
     #[local]
     struct Local {
-        usb_terminal: SerialTerminal,
+        usb_terminal: SerialTerminal<FlashSettings, 3>,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         timestamper: InputStamper,
@@ -255,7 +288,23 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let settings = stabilizer.usb_serial.settings();
+        let usb_terminal = {
+            let mut settings = FlashSettings::new(stabilizer.net.mac_address);
+
+            stabilizer::settings::load_from_flash(
+                &mut settings,
+                &mut stabilizer.flash,
+            );
+            hardware::setup::setup_serial(
+                settings,
+                stabilizer.metadata,
+                stabilizer.flash,
+                stabilizer.usb_serial,
+            )
+        };
+
+        let settings = usb_terminal.settings();
+
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
@@ -272,7 +321,7 @@ mod app {
             network,
             usb: stabilizer.usb,
             telemetry: TelemetryBuffer::default(),
-            settings: settings.runtime,
+            settings: settings.lockin,
         };
 
         let signal_config = signal_generator::Config {
@@ -285,7 +334,7 @@ mod app {
         };
 
         let mut local = Local {
-            usb_terminal: stabilizer.usb_serial,
+            usb_terminal,
             sampling_timer: stabilizer.adc_dac_timer,
             digital_inputs: stabilizer.digital_inputs,
             afes: stabilizer.afes,
