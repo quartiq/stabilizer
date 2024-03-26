@@ -1,5 +1,5 @@
 //! Stabilizer hardware configuration
-//! -> SerialTermianl
+//!
 //! This file contains all of the hardware-specific configuration of Stabilizer.
 use bit_field::BitField;
 use core::sync::atomic::{self, AtomicBool, Ordering};
@@ -12,6 +12,8 @@ use stm32h7xx_hal::{
 };
 
 use smoltcp_nal::smoltcp;
+
+use crate::settings::{AppSettings, NetSettings};
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
@@ -35,13 +37,13 @@ impl Default for SerialBufferStore {
     }
 }
 
-impl core::borrow::Borrow<[u8]> for SerialBufferStore {
+impl core::borrow::Borrow<[u8]> for &mut SerialBufferStore {
     fn borrow(&self) -> &[u8] {
         &self.0
     }
 }
 
-impl core::borrow::BorrowMut<[u8]> for SerialBufferStore {
+impl core::borrow::BorrowMut<[u8]> for &mut SerialBufferStore {
     fn borrow_mut(&mut self) -> &mut [u8] {
         &mut self.0
     }
@@ -127,7 +129,10 @@ pub struct EemGpioDevices {
 }
 
 /// The available hardware interfaces on Stabilizer.
-pub struct StabilizerDevices {
+pub struct StabilizerDevices<
+    C: serial_settings::Settings<Y> + 'static,
+    const Y: usize,
+> {
     pub temperature_sensor: CpuTempSensor,
     pub afes: (AFE0, AFE1),
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
@@ -138,10 +143,9 @@ pub struct StabilizerDevices {
     pub net: NetworkDevices,
     pub digital_inputs: (DigitalInput0, DigitalInput1),
     pub eem_gpio: EemGpioDevices,
+    pub usb_serial: SerialTerminal<C, Y>,
     pub usb: UsbDevice,
     pub metadata: &'static ApplicationMetadata,
-    pub flash: super::flash::Flash,
-    pub usb_serial: super::SerialPort,
 }
 
 /// The available Pounder-specific hardware interfaces.
@@ -221,13 +225,18 @@ fn load_itcm() {
 /// stabilizer hardware interfaces in a disabled state. `pounder` is an `Option` containing
 /// `Some(devices)` if pounder is detected, where `devices` is a `PounderDevices` structure
 /// containing all of the pounder hardware interfaces in a disabled state.
-pub fn setup(
+pub fn setup<C, const Y: usize>(
     mut core: stm32h7xx_hal::stm32::CorePeripherals,
     device: stm32h7xx_hal::stm32::Peripherals,
     clock: SystemTimer,
     batch_size: usize,
     sample_ticks: u32,
-) -> (StabilizerDevices, Option<PounderDevices>) {
+) -> (StabilizerDevices<C, Y>, Option<PounderDevices>)
+where
+    C: serial_settings::Settings<Y>
+        + for<'d> miniconf::JsonCoreSlash<'d, Y>
+        + AppSettings,
+{
     // Set up RTT logging
     {
         // Enable debug during WFE/WFI-induced sleep
@@ -1096,11 +1105,14 @@ pub fn setup(
             &mut endpoint_memory[..],
         ));
 
+        let rx_buffer = cortex_m::singleton!(: SerialBufferStore = SerialBufferStore::default()).unwrap();
+        let tx_buffer = cortex_m::singleton!(: SerialBufferStore = SerialBufferStore::default()).unwrap();
+
         let serial = {
             usbd_serial::SerialPort::new_with_store(
                 usb_bus.as_ref().unwrap(),
-                SerialBufferStore::default(),
-                SerialBufferStore::default(),
+                rx_buffer,
+                tx_buffer,
             )
         };
         let usb_device = usb_device::device::UsbDeviceBuilder::new(
@@ -1118,9 +1130,34 @@ pub fn setup(
         (usb_device, serial)
     };
 
-    let flash = {
-        let (_, flash_bank2) = device.FLASH.split();
-        super::flash::Flash(flash_bank2.unwrap())
+    let usb_terminal = {
+        let mut flash = {
+            let (_, flash_bank2) = device.FLASH.split();
+            super::flash::Flash(flash_bank2.unwrap())
+        };
+
+        let input_buffer =
+            cortex_m::singleton!(: [u8; 256] = [0u8; 256]).unwrap();
+        let serialize_buffer =
+            cortex_m::singleton!(: [u8; 512] = [0u8; 512]).unwrap();
+
+        let mut settings =
+            C::new(NetSettings::new(network_devices.mac_address));
+        crate::settings::load_from_flash(&mut settings, &mut flash);
+
+        serial_settings::Runner::new(
+            crate::settings::SerialSettingsPlatform {
+                interface: serial_settings::BestEffortInterface::new(
+                    usb_serial,
+                ),
+                storage: flash,
+                settings,
+                metadata,
+            },
+            input_buffer,
+            serialize_buffer,
+        )
+        .unwrap()
     };
 
     let stabilizer = StabilizerDevices {
@@ -1130,7 +1167,7 @@ pub fn setup(
         temperature_sensor: CpuTempSensor::new(
             adc3.create_channel(hal::adc::Temperature::new()),
         ),
-        usb_serial,
+        usb_serial: usb_terminal,
         timestamper: input_stamper,
         net: network_devices,
         adc_dac_timer: sampling_timer,
@@ -1138,7 +1175,6 @@ pub fn setup(
         digital_inputs,
         eem_gpio,
         usb: usb_device,
-        flash,
         metadata,
     };
 
@@ -1148,30 +1184,4 @@ pub fn setup(
     log::info!("setup() complete");
 
     (stabilizer, pounder)
-}
-
-pub fn setup_serial<C, const Y: usize>(
-    settings: C,
-    metadata: &'static ApplicationMetadata,
-    flash: super::flash::Flash,
-    usb_serial: super::SerialPort,
-) -> SerialTerminal<C, Y>
-where
-    C: serial_settings::Settings<Y>,
-{
-    let input_buffer = cortex_m::singleton!(: [u8; 256] = [0u8; 256]).unwrap();
-    let serialize_buffer =
-        cortex_m::singleton!(: [u8; 1024] = [0u8; 1024]).unwrap();
-
-    serial_settings::Runner::new(
-        crate::settings::SerialSettingsPlatform {
-            interface: serial_settings::BestEffortInterface::new(usb_serial),
-            storage: flash,
-            settings,
-            metadata,
-        },
-        input_buffer,
-        serialize_buffer,
-    )
-    .unwrap()
 }

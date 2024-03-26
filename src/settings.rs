@@ -24,8 +24,44 @@
 //!    storage sharing.
 use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
 use core::fmt::Write;
+use miniconf::Tree;
 use postcard::ser_flavors::Flavor;
 use stm32h7xx_hal::flash::LockedFlashBank;
+
+/// Settings that are used for configuring the network interface to Stabilizer.
+#[derive(Clone, Debug, Tree)]
+pub struct NetSettings {
+    /// The broker domain name (or IP address) to use for MQTT connections.
+    pub broker: heapless::String<255>,
+
+    /// The MQTT ID to use upon connection with a broker.
+    pub id: heapless::String<23>,
+
+    #[tree(skip)]
+    /// The MAC address of Stabilizer, which is used to reinitialize the ID to default settings.
+    pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
+}
+
+impl NetSettings {
+    pub fn new(mac: smoltcp_nal::smoltcp::wire::EthernetAddress) -> Self {
+        let mut id = heapless::String::new();
+        write!(&mut id, "{mac}").unwrap();
+
+        Self {
+            broker: "mqtt".into(),
+            id,
+            mac,
+        }
+    }
+}
+
+pub trait AppSettings {
+    /// Construct the settings given known network settings.
+    fn new(net: NetSettings) -> Self;
+
+    /// Get the network settings from the application settings.
+    fn net(&self) -> &NetSettings;
+}
 
 pub fn load_from_flash<
     T: for<'d> miniconf::JsonCoreSlash<'d, Y>,
@@ -103,10 +139,7 @@ impl<F> From<postcard::Error> for Error<F> {
     }
 }
 
-pub struct SerialSettingsPlatform<C, const Y: usize>
-where
-    C: serial_settings::Settings<Y>,
-{
+pub struct SerialSettingsPlatform<C, const Y: usize> {
     /// The interface to read/write data to/from serially (via text) to the user.
     pub interface:
         serial_settings::BestEffortInterface<crate::hardware::SerialPort>,

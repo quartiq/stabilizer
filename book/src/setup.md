@@ -21,6 +21,23 @@ Power Stabilizer through **exactly one** of the following mechanisms.
 > **Note:** Applying power through more than one mechanism may lead to damage.
 > Ensure the two unused methods are not connected or explicitly disabled.
 
+## USB Configuration
+
+The USB port can be used to bootstrap Stabilizer and configure all internal settings. This is useful
+either when first configuring the MQTT connection or when operating Stabilizer in standalone mode
+(i.e. without an ethernet connection or an MQTT broker).
+
+Connect a USB cable and open up the serial port in a serial terminal of your choice. `pyserial`
+provides a simple, easy-to-use terminal emulator:
+```sh
+python -m serial <port>
+```
+
+Once you have opened the port, you can use the provided menu to update any of Stabilizers runtime
+settings. All settings configured via the USB interface are only applied when Stabilizer first boots
+up. Any modifications that occur after boot over the MQTT interface will occur after the initial
+settings configured via USB.
+
 ## Network and DHCP
 
 Stabilizer supports 10Base-T or 100Base-T with Auto MDI-X.
@@ -28,11 +45,14 @@ Stabilizer uses DHCP to obtain its network configuration information. Ensure the
 properly configured DHCP server running on the network segment that Stabilizer is
 connected to.
 Alternatively, a static IP can be enforced in the firmware build command by specifying
-the environmental variable `STATIC_IP` analogous to how a specific broker IP is set.
+the environmental variable `STATIC_IP` or by configuring the static IP via the USB interface.
 
 > **Note:** If Stabilizer is connected directly to an Ubuntu system (for example using a USB-Ethernet dongle) 
 you can set the IPv4 settings of this Ethernet connection in the Ubuntu network settings to
 "Shared to other computers". This will start and configure a DHCP server for this connection.  
+
+> **Note:** Stabilizer contains an internal setting for static IP configuration that can be
+> optionally configured via the USB serial port to bypass DHCP.
 
 ## MQTT Broker
 
@@ -179,15 +199,8 @@ missing timer deadlines and panicing.
 
 ## Set the MQTT broker
 
-The MQTT broker can be configured via the USB port on Stabilizer's front. Connect a USB cable and
-open up the serial port in a serial terminal of your choice. `pyserial` provides a simple,
-easy-to-use terminal emulator:
-```sh
-python -m serial <port>
-```
-
-Once you have opened the port, you can use the provided menu to update the MQTT broker address. The
-address can be an IP address or a domain name. Once the broker has been updated, power cycle
+The MQTT broker can be [configured via the USB port on Stabilizer's front](#usb-configuration).
+The address can be an IP address or a domain name. Once the broker has been updated, power cycle
 stabilizer to have the new broker address take effect.
 
 ## Verify MQTT connection

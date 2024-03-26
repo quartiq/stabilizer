@@ -28,7 +28,6 @@
 #![no_std]
 #![no_main]
 
-use core::fmt::Write;
 use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
 use serde::{Deserialize, Serialize};
@@ -58,6 +57,7 @@ use stabilizer::{
         telemetry::{Telemetry, TelemetryBuffer},
         NetworkState, NetworkUsers,
     },
+    settings::NetSettings,
 };
 
 const SCALE: f32 = i16::MAX as _;
@@ -77,33 +77,32 @@ const SAMPLE_PERIOD: f32 =
 
 #[derive(Clone, Debug, Tree)]
 pub struct FlashSettings {
-    pub broker: heapless::String<255>,
-    pub id: heapless::String<23>,
-
     #[tree(depth(3))]
     pub dual_iir: RuntimeSettings,
 
-    #[tree(skip)]
-    pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
+    #[tree(depth(1))]
+    pub net: NetSettings,
 }
 
-impl FlashSettings {
-    pub fn new(mac: smoltcp_nal::smoltcp::wire::EthernetAddress) -> Self {
-        let mut id = heapless::String::new();
-        write!(&mut id, "{mac}").unwrap();
-
+impl stabilizer::settings::AppSettings for FlashSettings {
+    fn new(net: NetSettings) -> Self {
         Self {
-            broker: "mqtt".into(),
-            id,
-            mac,
+            net,
             dual_iir: RuntimeSettings::default(),
         }
+    }
+
+    fn net(&self) -> &NetSettings {
+        &self.net
     }
 }
 
 impl serial_settings::Settings<4> for FlashSettings {
     fn reset(&mut self) {
-        *self = Self::new(self.mac)
+        *self = Self {
+            dual_iir: RuntimeSettings::default(),
+            net: NetSettings::new(self.net.mac),
+        }
     }
 }
 
@@ -243,7 +242,7 @@ mod app {
         let clock = SystemTimer::new(|| Systick::now().ticks() as u32);
 
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) = hardware::setup::setup(
+        let (stabilizer, _pounder) = hardware::setup::setup(
             c.core,
             c.device,
             clock,
@@ -251,29 +250,14 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let usb_terminal = {
-            let mut settings = FlashSettings::new(stabilizer.net.mac_address);
-
-            stabilizer::settings::load_from_flash(
-                &mut settings,
-                &mut stabilizer.flash,
-            );
-            hardware::setup::setup_serial(
-                settings,
-                stabilizer.metadata,
-                stabilizer.flash,
-                stabilizer.usb_serial,
-            )
-        };
-
-        let settings = usb_terminal.settings();
+        let settings: &FlashSettings = stabilizer.usb_serial.settings();
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
             clock,
             env!("CARGO_BIN_NAME"),
-            &settings.broker,
-            &settings.id,
+            &settings.net.broker,
+            &settings.net.id,
             stabilizer.metadata,
         );
 
@@ -299,7 +283,7 @@ mod app {
         };
 
         let mut local = Local {
-            usb_terminal,
+            usb_terminal: stabilizer.usb_serial,
             sampling_timer: stabilizer.adc_dac_timer,
             digital_inputs: stabilizer.digital_inputs,
             afes: stabilizer.afes,
