@@ -519,7 +519,10 @@ mod app {
         c.shared.settings.lock(|current| *current = settings);
 
         c.shared.usb_terminal.lock(|terminal| {
-            terminal.platform_mut().active_settings.lockin = settings
+            terminal.platform_mut().active_settings = Settings {
+                lockin: settings,
+                ..terminal.settings().clone()
+            }
         });
 
         c.local.afes.0.set_gain(settings.afe[0]);

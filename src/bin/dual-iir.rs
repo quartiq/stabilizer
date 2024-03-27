@@ -462,7 +462,10 @@ mod app {
         c.shared.settings.lock(|current| *current = settings);
 
         c.shared.usb_terminal.lock(|terminal| {
-            terminal.platform_mut().active_settings.dual_iir = settings
+            terminal.platform_mut().active_settings = Settings {
+                dual_iir: settings,
+                ..terminal.settings().clone()
+            }
         });
 
         c.local.afes.0.set_gain(settings.afe[0]);

@@ -43,9 +43,9 @@ All settings configured via the USB interface are only applied when Stabilizer f
 > that occur after startup (i.e. via MQTT) will take precedent over those configured via USB. MQTT
 > settings can only be persisted or retained via the MQTT broker.
 
-> **Note:** Saving settings through the USB interface only saves the initial settings. It does not
-> take into account the current operational settings that may have been applied via MQTT. To save
-> the active settings, use the `platform save-active` command.
+> **Note:** Modifying settings through the USB interface only modifies the initial settings. It does
+> not take into account the current operational settings that may have been applied via MQTT. To
+> save the active settings, use the `platform save-active` command.
 
 ## Network and DHCP
 
