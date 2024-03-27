@@ -1354,8 +1354,8 @@ dependencies = [
 
 [[package]]
 name = "usbd-serial"
-version = "0.2.0"
-source = "git+https://github.com/rust-embedded-community/usbd-serial?rev=096742c1c480f6f63c1a936a3c23ede7993c624d#096742c1c480f6f63c1a936a3c23ede7993c624d"
+version = "0.2.1"
+source = "git+https://github.com/rust-embedded-community/usbd-serial?rev=ccff77578925942e40e0a2c7b6d397ad164fdedb#ccff77578925942e40e0a2c7b6d397ad164fdedb"
 dependencies = [
  "embedded-hal 0.2.7",
  "embedded-io",

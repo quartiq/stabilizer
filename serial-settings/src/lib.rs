@@ -44,7 +44,7 @@
 //! qutoes.
 //!
 //! # Limitations
-//! Currently, there is a hardcoded limit of 32-bytes on the settings path. This is arbitrary and
+//! Currently, there is a hardcoded limit of 64-bytes on the settings path. This is arbitrary and
 //! can be changed if needed.
 #![no_std]
 
@@ -58,19 +58,21 @@ pub use interface::BestEffortInterface;
 
 /// Specifies the API required for objects that are used as settings with the serial terminal
 /// interface.
-pub trait Settings: for<'a> JsonCoreSlash<'a> + Clone {
+pub trait Settings<const Y: usize>:
+    for<'a> JsonCoreSlash<'a, Y> + Clone
+{
     /// Reset the settings to their default values.
     fn reset(&mut self) {}
 }
 
-pub trait Platform: Sized {
+pub trait Platform<const Y: usize>: Sized {
     /// This type specifies the interface to the user, for example, a USB CDC-ACM serial port.
     type Interface: embedded_io::Read
         + embedded_io::ReadReady
         + core::fmt::Write;
 
     /// Specifies the settings that are used on the device.
-    type Settings: Settings;
+    type Settings: Settings<Y>;
 
     /// `save()` Error type
     type Error: core::fmt::Debug;
@@ -91,12 +93,12 @@ pub trait Platform: Sized {
     fn settings_mut(&mut self) -> &mut Self::Settings;
 }
 
-struct Context<'a, P: Platform> {
+struct Context<'a, P: Platform<Y>, const Y: usize> {
     platform: P,
     buffer: &'a mut [u8],
 }
 
-impl<'a, P: Platform> Context<'a, P> {
+impl<'a, P: Platform<Y>, const Y: usize> Context<'a, P, Y> {
     fn handle_platform(
         _menu: &menu::Menu<Self>,
         item: &menu::Item<Self>,
@@ -116,7 +118,7 @@ impl<'a, P: Platform> Context<'a, P> {
         let mut defaults = context.platform.settings().clone();
         defaults.reset();
 
-        for path in P::Settings::iter_paths::<heapless::String<32>>("/") {
+        for path in P::Settings::iter_paths::<heapless::String<64>>("/") {
             match path {
                 Err(e) => writeln!(context, "Failed to get path: {e}"),
                 Ok(path) => {
@@ -297,16 +299,20 @@ impl<'a, P: Platform> Context<'a, P> {
     }
 }
 
-impl<'a, P: Platform> core::fmt::Write for Context<'a, P> {
+impl<'a, P: Platform<Y>, const Y: usize> core::fmt::Write
+    for Context<'a, P, Y>
+{
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         self.platform.interface_mut().write_str(s)
     }
 }
 
 /// The serial settings management object.
-pub struct Runner<'a, P: Platform>(menu::Runner<'a, Context<'a, P>>);
+pub struct Runner<'a, P: Platform<Y>, const Y: usize>(
+    menu::Runner<'a, Context<'a, P, Y>>,
+);
 
-impl<'a, P: Platform> Runner<'a, P> {
+impl<'a, P: Platform<Y>, const Y: usize> Runner<'a, P, Y> {
     /// Constructor
     ///
     /// # Args

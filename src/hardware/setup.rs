@@ -13,6 +13,8 @@ use stm32h7xx_hal::{
 
 use smoltcp_nal::smoltcp;
 
+use crate::settings::{AppSettings, NetSettings};
+
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
     eeprom, input_stamper::InputStamper, metadata::ApplicationMetadata,
@@ -26,6 +28,26 @@ use super::{
 const NUM_TCP_SOCKETS: usize = 4;
 const NUM_UDP_SOCKETS: usize = 1;
 const NUM_SOCKETS: usize = NUM_UDP_SOCKETS + NUM_TCP_SOCKETS;
+
+pub struct SerialBufferStore([u8; 1024]);
+
+impl Default for SerialBufferStore {
+    fn default() -> Self {
+        Self([0u8; 1024])
+    }
+}
+
+impl core::borrow::Borrow<[u8]> for &mut SerialBufferStore {
+    fn borrow(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl core::borrow::BorrowMut<[u8]> for &mut SerialBufferStore {
+    fn borrow_mut(&mut self) -> &mut [u8] {
+        &mut self.0
+    }
+}
 
 pub struct NetStorage {
     pub ip_addrs: [smoltcp::wire::IpCidr; 1],
@@ -107,7 +129,10 @@ pub struct EemGpioDevices {
 }
 
 /// The available hardware interfaces on Stabilizer.
-pub struct StabilizerDevices {
+pub struct StabilizerDevices<
+    C: serial_settings::Settings<Y> + 'static,
+    const Y: usize,
+> {
     pub temperature_sensor: CpuTempSensor,
     pub afes: (AFE0, AFE1),
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
@@ -118,7 +143,7 @@ pub struct StabilizerDevices {
     pub net: NetworkDevices,
     pub digital_inputs: (DigitalInput0, DigitalInput1),
     pub eem_gpio: EemGpioDevices,
-    pub usb_serial: SerialTerminal,
+    pub usb_serial: SerialTerminal<C, Y>,
     pub usb: UsbDevice,
     pub metadata: &'static ApplicationMetadata,
 }
@@ -200,13 +225,18 @@ fn load_itcm() {
 /// stabilizer hardware interfaces in a disabled state. `pounder` is an `Option` containing
 /// `Some(devices)` if pounder is detected, where `devices` is a `PounderDevices` structure
 /// containing all of the pounder hardware interfaces in a disabled state.
-pub fn setup(
+pub fn setup<C, const Y: usize>(
     mut core: stm32h7xx_hal::stm32::CorePeripherals,
     device: stm32h7xx_hal::stm32::Peripherals,
     clock: SystemTimer,
     batch_size: usize,
     sample_ticks: u32,
-) -> (StabilizerDevices, Option<PounderDevices>) {
+) -> (StabilizerDevices<C, Y>, Option<PounderDevices>)
+where
+    C: serial_settings::Settings<Y>
+        + for<'d> miniconf::JsonCoreSlash<'d, Y>
+        + AppSettings,
+{
     // Set up RTT logging
     {
         // Enable debug during WFE/WFI-induced sleep
@@ -624,6 +654,17 @@ pub fn setup(
     ));
     log::info!("EUI48: {}", mac_addr);
 
+    let (flash, settings) = {
+        let mut flash = {
+            let (_, flash_bank2) = device.FLASH.split();
+            super::flash::Flash(flash_bank2.unwrap())
+        };
+
+        let mut settings = C::new(NetSettings::new(mac_addr.clone()));
+        crate::settings::load_from_flash(&mut settings, &mut flash);
+        (flash, settings)
+    };
+
     let network_devices = {
         let ethernet_pins = {
             // Reset the PHY before configuring pins.
@@ -668,10 +709,14 @@ pub fn setup(
         unsafe { ethernet::enable_interrupt() };
 
         // Configure IP address according to DHCP socket availability
-        let ip_addrs: smoltcp::wire::IpAddress = option_env!("STATIC_IP")
-            .unwrap_or("0.0.0.0")
-            .parse()
-            .unwrap();
+        let ip_addrs: smoltcp::wire::IpAddress = match settings.net().ip.parse()
+        {
+            Ok(addr) => addr,
+            Err(e) => {
+                log::warn!("Invalid IP address in settings: {e:?}. Defaulting to 0.0.0.0 (DHCP)");
+                "0.0.0.0".parse().unwrap()
+            }
+        };
 
         let random_seed = {
             let mut rng =
@@ -1075,7 +1120,16 @@ pub fn setup(
             &mut endpoint_memory[..],
         ));
 
-        let serial = usbd_serial::SerialPort::new(usb_bus.as_ref().unwrap());
+        let rx_buffer = cortex_m::singleton!(: SerialBufferStore = SerialBufferStore::default()).unwrap();
+        let tx_buffer = cortex_m::singleton!(: SerialBufferStore = SerialBufferStore::default()).unwrap();
+
+        let serial = {
+            usbd_serial::SerialPort::new_with_store(
+                usb_bus.as_ref().unwrap(),
+                rx_buffer,
+                tx_buffer,
+            )
+        };
         let usb_device = usb_device::device::UsbDeviceBuilder::new(
             usb_bus.as_ref().unwrap(),
             usb_device::device::UsbVidPid(0x1209, 0x392F),
@@ -1091,25 +1145,18 @@ pub fn setup(
         (usb_device, serial)
     };
 
-    let usb_serial = {
-        let (_, flash_bank2) = device.FLASH.split();
-
+    let usb_terminal = {
         let input_buffer =
             cortex_m::singleton!(: [u8; 256] = [0u8; 256]).unwrap();
         let serialize_buffer =
             cortex_m::singleton!(: [u8; 512] = [0u8; 512]).unwrap();
-
-        let mut storage = super::flash::Flash(flash_bank2.unwrap());
-        let mut settings =
-            crate::settings::Settings::new(network_devices.mac_address);
-        settings.reload(&mut storage);
 
         serial_settings::Runner::new(
             crate::settings::SerialSettingsPlatform {
                 interface: serial_settings::BestEffortInterface::new(
                     usb_serial,
                 ),
-                storage,
+                storage: flash,
                 settings,
                 metadata,
             },
@@ -1126,6 +1173,7 @@ pub fn setup(
         temperature_sensor: CpuTempSensor::new(
             adc3.create_channel(hal::adc::Temperature::new()),
         ),
+        usb_serial: usb_terminal,
         timestamper: input_stamper,
         net: network_devices,
         adc_dac_timer: sampling_timer,
@@ -1133,7 +1181,6 @@ pub fn setup(
         digital_inputs,
         eem_gpio,
         usb: usb_device,
-        usb_serial,
         metadata,
     };
 

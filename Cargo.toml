@@ -88,7 +88,7 @@ features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
 
 [patch.crates-io.usbd-serial]
 git = "https://github.com/rust-embedded-community/usbd-serial"
-rev = "096742c1c480f6f63c1a936a3c23ede7993c624d"
+rev = "ccff77578925942e40e0a2c7b6d397ad164fdedb"
 
 [features]
 nightly = []

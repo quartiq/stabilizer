@@ -6,7 +6,7 @@
 //! 2. Dynamic Run-time Settings
 //!
 //! Static device configuration settings are loaded and used only at device power-up. These include
-//! things like the MQTT broker address and the MQTT identified. Conversely, the dynamic run-time
+//! things like the MQTT broker address and the MQTT identifier. Conversely, the dynamic run-time
 //! settings can be changed and take effect immediately during device operation.
 //!
 //! This settings management interface is currently targeted at the static device configuration
@@ -24,70 +24,85 @@
 //!    storage sharing.
 use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
 use core::fmt::Write;
-use miniconf::{TreeDeserialize, TreeKey, TreeSerialize};
+use miniconf::Tree;
 use postcard::ser_flavors::Flavor;
 use stm32h7xx_hal::flash::LockedFlashBank;
 
-#[derive(Clone, miniconf::Tree)]
-pub struct Settings {
+/// Settings that are used for configuring the network interface to Stabilizer.
+#[derive(Clone, Debug, Tree)]
+pub struct NetSettings {
+    /// The broker domain name (or IP address) to use for MQTT connections.
     pub broker: heapless::String<255>,
+
+    /// The MQTT ID to use upon connection with a broker.
     pub id: heapless::String<23>,
+
+    /// An optional static IP address to use. An unspecified IP address (or malformed address) will
+    /// use DHCP.
+    pub ip: heapless::String<15>,
     #[tree(skip)]
+    /// The MAC address of Stabilizer, which is used to reinitialize the ID to default settings.
     pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
 }
 
-impl serial_settings::Settings for Settings {
-    fn reset(&mut self) {
-        *self = Self::new(self.mac)
-    }
-}
-
-impl Settings {
+impl NetSettings {
     pub fn new(mac: smoltcp_nal::smoltcp::wire::EthernetAddress) -> Self {
         let mut id = heapless::String::new();
         write!(&mut id, "{mac}").unwrap();
 
         Self {
             broker: "mqtt".into(),
+            ip: "0.0.0.0".into(),
             id,
             mac,
         }
     }
+}
 
-    pub fn reload(&mut self, storage: &mut Flash) {
-        // Loop over flash and read settings
-        let mut buffer = [0u8; 512];
-        for path in Settings::iter_paths::<heapless::String<64>>("/") {
-            let path = path.unwrap();
+pub trait AppSettings {
+    /// Construct the settings given known network settings.
+    fn new(net: NetSettings) -> Self;
 
-            // Try to fetch the setting from flash.
-            let item = match sequential_storage::map::fetch_item::<
-                SettingsItem,
-                _,
-            >(
-                storage,
-                storage.range(),
-                &mut buffer,
-                path.clone(),
-            ) {
-                Err(e) => {
-                    log::warn!("Failed to load flash setting `{path}`: {e:?}");
-                    continue;
-                }
-                Ok(Some(item)) => item,
-                _ => continue,
-            };
+    /// Get the network settings from the application settings.
+    fn net(&self) -> &NetSettings;
+}
 
-            log::info!("Found `{path}` in flash settings");
+pub fn load_from_flash<
+    T: for<'d> miniconf::JsonCoreSlash<'d, Y>,
+    const Y: usize,
+>(
+    structure: &mut T,
+    storage: &mut Flash,
+) {
+    // Loop over flash and read settings
+    let mut buffer = [0u8; 512];
+    for path in T::iter_paths::<heapless::String<64>>("/") {
+        let path = path.unwrap();
 
-            let mut deserializer = postcard::Deserializer::from_flavor(
-                postcard::de_flavors::Slice::new(&item.data),
-            );
-            if let Err(e) = self
-                .deserialize_by_key(path.split('/').skip(1), &mut deserializer)
-            {
-                log::warn!("Failed to load {path} from flash settings: {e:?}");
+        // Try to fetch the setting from flash.
+        let item = match sequential_storage::map::fetch_item::<SettingsItem, _>(
+            storage,
+            storage.range(),
+            &mut buffer,
+            path.clone(),
+        ) {
+            Err(e) => {
+                log::warn!("Failed to fetch `{path}` from flash: {e:?}");
+                continue;
             }
+            Ok(Some(item)) => item,
+            _ => continue,
+        };
+
+        log::info!("Loading initial `{path}` from flash");
+
+        let mut deserializer = postcard::Deserializer::from_flavor(
+            postcard::de_flavors::Slice::new(&item.data),
+        );
+        if let Err(e) = structure
+            .deserialize_by_key(path.split('/').skip(1), &mut deserializer)
+        {
+            log::warn!("Failed to deserialize `{path}` from flash: {e:?}");
         }
     }
 }
@@ -128,13 +143,13 @@ impl<F> From<postcard::Error> for Error<F> {
     }
 }
 
-pub struct SerialSettingsPlatform {
+pub struct SerialSettingsPlatform<C, const Y: usize> {
     /// The interface to read/write data to/from serially (via text) to the user.
-    pub interface: serial_settings::BestEffortInterface<
-        usbd_serial::SerialPort<'static, crate::hardware::UsbBus>,
-    >,
+    pub interface:
+        serial_settings::BestEffortInterface<crate::hardware::SerialPort>,
+
     /// The Settings structure.
-    pub settings: Settings,
+    pub settings: C,
     /// The storage mechanism used to persist settings to between boots.
     pub storage: Flash,
 
@@ -142,17 +157,20 @@ pub struct SerialSettingsPlatform {
     pub metadata: &'static ApplicationMetadata,
 }
 
-impl serial_settings::Platform for SerialSettingsPlatform {
-    type Interface = serial_settings::BestEffortInterface<
-        usbd_serial::SerialPort<'static, crate::hardware::UsbBus>,
-    >;
-    type Settings = Settings;
+impl<C, const Y: usize> serial_settings::Platform<Y>
+    for SerialSettingsPlatform<C, Y>
+where
+    C: serial_settings::Settings<Y>,
+{
+    type Interface =
+        serial_settings::BestEffortInterface<crate::hardware::SerialPort>;
+    type Settings = C;
     type Error = Error<
         <LockedFlashBank as embedded_storage::nor_flash::ErrorType>::Error,
     >;
 
     fn save(&mut self, buf: &mut [u8]) -> Result<(), Self::Error> {
-        for path in Settings::iter_paths::<heapless::String<64>>("/") {
+        for path in Self::Settings::iter_paths::<heapless::String<64>>("/") {
             let mut item = SettingsItem {
                 path: path.unwrap(),
                 ..Default::default()
@@ -168,7 +186,7 @@ impl serial_settings::Platform for SerialSettingsPlatform {
                 .settings
                 .serialize_by_key(item.path.split('/').skip(1), &mut serializer)
             {
-                log::warn!("Failed to save {} to flash: {e:?}", item.path);
+                log::warn!("Failed to save `{}` to flash: {e:?}", item.path);
                 continue;
             }
 
@@ -189,7 +207,7 @@ impl serial_settings::Platform for SerialSettingsPlatform {
             .map(|old| old.data != item.data)
             .unwrap_or(true)
             {
-                log::info!("Storing setting `{}` in flash", item.path);
+                log::info!("Storing `{}` to flash", item.path);
                 sequential_storage::map::store_item(
                     &mut self.storage,
                     range,

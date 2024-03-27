@@ -16,7 +16,7 @@
 //! * Derivative kick avoidance
 //!
 //! ## Settings
-//! Refer to the [Settings] structure for documentation of run-time configurable settings for this
+//! Refer to the [DualIir] structure for documentation of run-time configurable settings for this
 //! application.
 //!
 //! ## Telemetry
@@ -30,6 +30,7 @@
 
 use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
+use serde::{Deserialize, Serialize};
 
 use rtic_monotonics::Monotonic;
 
@@ -56,6 +57,7 @@ use stabilizer::{
         telemetry::{Telemetry, TelemetryBuffer},
         NetworkState, NetworkUsers,
     },
+    settings::NetSettings,
 };
 
 const SCALE: f32 = i16::MAX as _;
@@ -73,8 +75,39 @@ const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 const SAMPLE_PERIOD: f32 =
     SAMPLE_TICKS as f32 * hardware::design_parameters::TIMER_PERIOD;
 
-#[derive(Clone, Copy, Debug, Tree)]
+#[derive(Clone, Debug, Tree)]
 pub struct Settings {
+    #[tree(depth(3))]
+    pub dual_iir: DualIir,
+
+    #[tree(depth(1))]
+    pub net: NetSettings,
+}
+
+impl stabilizer::settings::AppSettings for Settings {
+    fn new(net: NetSettings) -> Self {
+        Self {
+            net,
+            dual_iir: DualIir::default(),
+        }
+    }
+
+    fn net(&self) -> &NetSettings {
+        &self.net
+    }
+}
+
+impl serial_settings::Settings<4> for Settings {
+    fn reset(&mut self) {
+        *self = Self {
+            dual_iir: DualIir::default(),
+            net: NetSettings::new(self.net.mac),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Tree, Serialize, Deserialize)]
+pub struct DualIir {
     /// Configure the Analog Front End (AFE) gain.
     ///
     /// # Path
@@ -148,7 +181,7 @@ pub struct Settings {
     signal_generator: [signal_generator::BasicConfig; 2],
 }
 
-impl Default for Settings {
+impl Default for DualIir {
     fn default() -> Self {
         let mut i = iir::Biquad::IDENTITY;
         i.set_min(-SCALE);
@@ -184,16 +217,16 @@ mod app {
     #[shared]
     struct Shared {
         usb: UsbDevice,
-        network: NetworkUsers<Settings, Telemetry, 3>,
+        network: NetworkUsers<DualIir, Telemetry, 3>,
 
-        settings: Settings,
+        settings: DualIir,
         telemetry: TelemetryBuffer,
         signal_generator: [SignalGenerator; 2],
     }
 
     #[local]
     struct Local {
-        usb_terminal: SerialTerminal,
+        usb_terminal: SerialTerminal<Settings, 4>,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         afes: (AFE0, AFE1),
@@ -217,34 +250,31 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let settings = stabilizer.usb_serial.settings();
+        let settings: &Settings = stabilizer.usb_serial.settings();
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
             clock,
             env!("CARGO_BIN_NAME"),
-            &settings.broker,
-            &settings.id,
+            &settings.net,
             stabilizer.metadata,
         );
 
         let generator = network.configure_streaming(StreamFormat::AdcDacData);
 
-        let settings = Settings::default();
-
         let shared = Shared {
             usb: stabilizer.usb,
             network,
-            settings,
+            settings: settings.dual_iir,
             telemetry: TelemetryBuffer::default(),
             signal_generator: [
                 SignalGenerator::new(
-                    settings.signal_generator[0]
+                    settings.dual_iir.signal_generator[0]
                         .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),
                 SignalGenerator::new(
-                    settings.signal_generator[1]
+                    settings.dual_iir.signal_generator[1]
                         .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),

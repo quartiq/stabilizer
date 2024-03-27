@@ -15,8 +15,8 @@
 //! * Input/output data streamng via UDP
 //!
 //! ## Settings
-//! Refer to the [Settings] structure for documentation of run-time configurable settings for this
-//! application.
+//! Refer to the [Lockin] structure for documentation of run-time configurable settings
+//! for this application.
 //!
 //! ## Telemetry
 //! Refer to [Telemetry] for information about telemetry reported by this application.
@@ -38,7 +38,7 @@ use rtic_monotonics::Monotonic;
 use fugit::ExtU32;
 use mutex_trait::prelude::*;
 
-use idsp::{Accu, Complex, ComplexExt, Filter, Lockin, Lowpass, Repeat, RPLL};
+use idsp::{Accu, Complex, ComplexExt, Filter, Lowpass, Repeat, RPLL};
 
 use stabilizer::{
     hardware::{
@@ -60,6 +60,7 @@ use stabilizer::{
         telemetry::{Telemetry, TelemetryBuffer},
         NetworkState, NetworkUsers,
     },
+    settings::NetSettings,
 };
 
 // The logarithm of the number of samples in each batch process. This corresponds with 2^3 samples
@@ -72,6 +73,37 @@ const BATCH_SIZE: usize = 1 << BATCH_SIZE_LOG2;
 // period of 1.28 uS or 781.25 KHz.
 const SAMPLE_TICKS_LOG2: u32 = 7;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
+
+#[derive(Clone, Debug, Tree)]
+pub struct Settings {
+    #[tree(depth(2))]
+    pub lockin: Lockin,
+
+    #[tree(depth(1))]
+    pub net: NetSettings,
+}
+
+impl stabilizer::settings::AppSettings for Settings {
+    fn new(net: NetSettings) -> Self {
+        Self {
+            net,
+            lockin: Lockin::default(),
+        }
+    }
+
+    fn net(&self) -> &NetSettings {
+        &self.net
+    }
+}
+
+impl serial_settings::Settings<3> for Settings {
+    fn reset(&mut self) {
+        *self = Self {
+            lockin: Lockin::default(),
+            net: NetSettings::new(self.net.mac),
+        }
+    }
+}
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 enum Conf {
@@ -100,7 +132,7 @@ enum LockinMode {
 }
 
 #[derive(Copy, Clone, Debug, Tree)]
-pub struct Settings {
+pub struct Lockin {
     /// Configure the Analog Front End (AFE) gain.
     ///
     /// # Path
@@ -192,7 +224,7 @@ pub struct Settings {
     stream_target: StreamTarget,
 }
 
-impl Default for Settings {
+impl Default for Lockin {
     fn default() -> Self {
         Self {
             afe: [Gain::G1; 2],
@@ -221,14 +253,14 @@ mod app {
     #[shared]
     struct Shared {
         usb: UsbDevice,
-        network: NetworkUsers<Settings, Telemetry, 2>,
-        settings: Settings,
+        network: NetworkUsers<Lockin, Telemetry, 2>,
+        settings: Lockin,
         telemetry: TelemetryBuffer,
     }
 
     #[local]
     struct Local {
-        usb_terminal: SerialTerminal,
+        usb_terminal: SerialTerminal<Settings, 3>,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         timestamper: InputStamper,
@@ -236,7 +268,7 @@ mod app {
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         pll: RPLL,
-        lockin: Lockin<Repeat<2, Lowpass<2>>>,
+        lockin: idsp::Lockin<Repeat<2, Lowpass<2>>>,
         signal_generator: signal_generator::SignalGenerator,
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
@@ -255,14 +287,14 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let settings = stabilizer.usb_serial.settings();
+        let settings: &Settings = stabilizer.usb_serial.settings();
+
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
             clock,
             env!("CARGO_BIN_NAME"),
-            &settings.broker,
-            &settings.id,
+            &settings.net,
             stabilizer.metadata,
         );
 
@@ -272,7 +304,7 @@ mod app {
             network,
             usb: stabilizer.usb,
             telemetry: TelemetryBuffer::default(),
-            settings: Settings::default(),
+            settings: settings.lockin,
         };
 
         let signal_config = signal_generator::Config {
@@ -294,7 +326,7 @@ mod app {
             timestamper: stabilizer.timestamper,
 
             pll: RPLL::new(SAMPLE_TICKS_LOG2 + BATCH_SIZE_LOG2),
-            lockin: Lockin::default(),
+            lockin: idsp::Lockin::default(),
             signal_generator: signal_generator::SignalGenerator::new(
                 signal_config,
             ),
