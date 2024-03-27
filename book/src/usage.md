@@ -116,3 +116,10 @@ Livestreamed data is sent with "best effort" - it's possible that data may be lo
 network congestion or by Stabilizer.
 
 Refer to the the respective [application documentation](overview.md#applications) for more information.
+
+# USB Port
+Stabilizer exposes a USB port to interact with and configure the device without an MQTT connection.
+
+Refer to the [setup](setup.md) document around usage of this interface. The USB interface can also
+be used to save the currently-active settings (those configured via MQTT) to device memory so that
+they are applied when the device reboots by using the `platform save-active` command.

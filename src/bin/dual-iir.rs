@@ -216,6 +216,7 @@ mod app {
 
     #[shared]
     struct Shared {
+        usb_terminal: SerialTerminal<Settings, 4>,
         usb: UsbDevice,
         network: NetworkUsers<DualIir, Telemetry, 3>,
 
@@ -226,7 +227,6 @@ mod app {
 
     #[local]
     struct Local {
-        usb_terminal: SerialTerminal<Settings, 4>,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         afes: (AFE0, AFE1),
@@ -279,10 +279,10 @@ mod app {
                         .unwrap(),
                 ),
             ],
+            usb_terminal: stabilizer.usb_serial,
         };
 
         let mut local = Local {
-            usb_terminal: stabilizer.usb_serial,
             sampling_timer: stabilizer.adc_dac_timer,
             digital_inputs: stabilizer.digital_inputs,
             afes: stabilizer.afes,
@@ -456,10 +456,14 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, signal_generator])]
+    #[task(priority = 1, local=[afes], shared=[network, settings, signal_generator, usb_terminal])]
     async fn settings_update(mut c: settings_update::Context) {
         let settings = c.shared.network.lock(|net| *net.miniconf.settings());
         c.shared.settings.lock(|current| *current = settings);
+
+        c.shared.usb_terminal.lock(|terminal| {
+            terminal.platform_mut().active_settings.dual_iir = settings
+        });
 
         c.local.afes.0.set_gain(settings.afe[0]);
         c.local.afes.1.set_gain(settings.afe[1]);
@@ -507,19 +511,16 @@ mod app {
         }
     }
 
-    #[task(priority = 1, shared=[usb], local=[usb_terminal])]
+    #[task(priority = 1, shared=[usb, usb_terminal])]
     async fn usb(mut c: usb::Context) {
         loop {
             // Handle the USB serial terminal.
-            c.shared.usb.lock(|usb| {
-                usb.poll(&mut [c
-                    .local
-                    .usb_terminal
-                    .interface_mut()
-                    .inner_mut()]);
-            });
-
-            c.local.usb_terminal.process().unwrap();
+            (&mut c.shared.usb, &mut c.shared.usb_terminal).lock(
+                |usb, usb_terminal| {
+                    usb.poll(&mut [usb_terminal.interface_mut().inner_mut()]);
+                    usb_terminal.process().unwrap();
+                },
+            );
 
             Systick::delay(10.millis()).await;
         }

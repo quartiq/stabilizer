@@ -1157,6 +1157,7 @@ where
                     usb_serial,
                 ),
                 storage: flash,
+                active_settings: settings.clone(),
                 settings,
                 metadata,
             },

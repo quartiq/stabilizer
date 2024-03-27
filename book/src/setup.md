@@ -23,7 +23,7 @@ Power Stabilizer through **exactly one** of the following mechanisms.
 
 ## USB Configuration
 
-The USB port can be used to bootstrap Stabilizer and configure all internal settings. This is useful
+The USB port can be used to bootstrap Stabilizer and configure initial settings. This is useful
 either when first configuring the MQTT connection or when operating Stabilizer in standalone mode
 (i.e. without an ethernet connection or an MQTT broker).
 
@@ -33,20 +33,19 @@ provides a simple, easy-to-use terminal emulator:
 python -m serial <port>
 ```
 
-Once you have opened the port, you can use the provided menu to update any of Stabilizers runtime
-settings. All settings configured via the USB interface are only applied when Stabilizer first boots
-up. Any modifications that occur after boot over the MQTT interface will occur after the initial
-settings configured via USB.
+Once you have opened the port, you can use the provided menu to update any of Stabilizers settings.
+All settings configured via the USB interface are only applied when Stabilizer first boots up.
 
-> **Note:** Settings configured via USB do not take immediat effect. Instead, they will apply after
+> **Note:** Settings configured via USB do not take immediate effect. Instead, they will apply after
 > the device is rebooted.
 
 > **Note:** Settings configured via USB are only initial settings. Any modifications
 > that occur after startup (i.e. via MQTT) will take precedent over those configured via USB. MQTT
 > settings can only be persisted or retained via the MQTT broker.
 
-> **Note:** Saving settings via the USB port only saves the initial settings. It does not take into
-> account the current operational settings that may have been applied via MQTT.
+> **Note:** Saving settings through the USB interface only saves the initial settings. It does not
+> take into account the current operational settings that may have been applied via MQTT. To save
+> the active settings, use the `platform save-active` command.
 
 ## Network and DHCP
 

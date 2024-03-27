@@ -99,8 +99,8 @@ impl stabilizer::settings::AppSettings for Settings {
 impl serial_settings::Settings<3> for Settings {
     fn reset(&mut self) {
         *self = Self {
-            lockin: Lockin::default(),
             net: NetSettings::new(self.net.mac),
+            lockin: Lockin::default(),
         }
     }
 }
@@ -253,6 +253,7 @@ mod app {
     #[shared]
     struct Shared {
         usb: UsbDevice,
+        usb_terminal: SerialTerminal<Settings, 3>,
         network: NetworkUsers<Lockin, Telemetry, 2>,
         settings: Lockin,
         telemetry: TelemetryBuffer,
@@ -260,7 +261,6 @@ mod app {
 
     #[local]
     struct Local {
-        usb_terminal: SerialTerminal<Settings, 3>,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         timestamper: InputStamper,
@@ -301,10 +301,11 @@ mod app {
         let generator = network.configure_streaming(StreamFormat::AdcDacData);
 
         let shared = Shared {
+            settings: settings.lockin,
             network,
+            usb_terminal: stabilizer.usb_serial,
             usb: stabilizer.usb,
             telemetry: TelemetryBuffer::default(),
-            settings: settings.lockin,
         };
 
         let signal_config = signal_generator::Config {
@@ -317,7 +318,6 @@ mod app {
         };
 
         let mut local = Local {
-            usb_terminal: stabilizer.usb_serial,
             sampling_timer: stabilizer.adc_dac_timer,
             digital_inputs: stabilizer.digital_inputs,
             afes: stabilizer.afes,
@@ -513,10 +513,14 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings])]
+    #[task(priority = 1, local=[afes], shared=[network, settings, usb_terminal])]
     async fn settings_update(mut c: settings_update::Context) {
         let settings = c.shared.network.lock(|net| *net.miniconf.settings());
         c.shared.settings.lock(|current| *current = settings);
+
+        c.shared.usb_terminal.lock(|terminal| {
+            terminal.platform_mut().active_settings.lockin = settings
+        });
 
         c.local.afes.0.set_gain(settings.afe[0]);
         c.local.afes.1.set_gain(settings.afe[1]);
@@ -554,19 +558,16 @@ mod app {
         }
     }
 
-    #[task(priority = 1, shared=[usb], local=[usb_terminal])]
+    #[task(priority = 1, shared=[usb, usb_terminal])]
     async fn usb(mut c: usb::Context) {
         loop {
             // Handle the USB serial terminal.
-            c.shared.usb.lock(|usb| {
-                usb.poll(&mut [c
-                    .local
-                    .usb_terminal
-                    .interface_mut()
-                    .inner_mut()]);
-            });
-
-            c.local.usb_terminal.process().unwrap();
+            (&mut c.shared.usb, &mut c.shared.usb_terminal).lock(
+                |usb, usb_terminal| {
+                    usb.poll(&mut [usb_terminal.interface_mut().inner_mut()]);
+                    usb_terminal.process().unwrap();
+                },
+            );
 
             // Schedule to run this task every 10 milliseconds.
             Systick::delay(10.millis()).await;

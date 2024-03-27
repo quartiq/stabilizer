@@ -81,7 +81,7 @@ pub trait Platform<const Y: usize>: Sized {
     fn save(&mut self, buffer: &mut [u8]) -> Result<(), Self::Error>;
 
     /// Execute a platform specific command.
-    fn cmd(&mut self, cmd: &str);
+    fn cmd(&mut self, cmd: &str, buffer: &mut [u8]) -> Result<(), Self::Error>;
 
     /// Return a mutable reference to the `Interface`.
     fn interface_mut(&mut self) -> &mut Self::Interface;
@@ -106,7 +106,10 @@ impl<'a, P: Platform<Y>, const Y: usize> Context<'a, P, Y> {
         context: &mut Self,
     ) {
         let key = menu::argument_finder(item, args, "cmd").unwrap().unwrap();
-        context.platform.cmd(key)
+        if let Err(e) = context.platform.cmd(key, context.buffer) {
+            writeln!(context, "Platform command `{key}` failed: {e:?}")
+                .unwrap();
+        }
     }
 
     fn handle_list(
@@ -337,9 +340,22 @@ impl<'a, P: Platform<Y>, const Y: usize> Runner<'a, P, Y> {
         )))
     }
 
+    pub fn platform(&self) -> &P {
+        &self.0.context.platform
+    }
+
+    pub fn platform_mut(&mut self) -> &mut P {
+        &mut self.0.context.platform
+    }
+
     /// Get the current device settings.
     pub fn settings(&self) -> &P::Settings {
         self.0.context.platform.settings()
+    }
+
+    /// Get the current device settings.
+    pub fn settings_mut(&mut self) -> &mut P::Settings {
+        self.0.context.platform.settings_mut()
     }
 
     /// Get the device communication interface
