@@ -75,7 +75,7 @@ const SAMPLE_TICKS_LOG2: u32 = 7;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 
 #[derive(Clone, Debug, Tree)]
-pub struct FlashSettings {
+pub struct Settings {
     #[tree(depth(2))]
     pub lockin: Lockin,
 
@@ -83,7 +83,7 @@ pub struct FlashSettings {
     pub net: NetSettings,
 }
 
-impl stabilizer::settings::AppSettings for FlashSettings {
+impl stabilizer::settings::AppSettings for Settings {
     fn new(net: NetSettings) -> Self {
         Self {
             net,
@@ -96,7 +96,7 @@ impl stabilizer::settings::AppSettings for FlashSettings {
     }
 }
 
-impl serial_settings::Settings<3> for FlashSettings {
+impl serial_settings::Settings<3> for Settings {
     fn reset(&mut self) {
         *self = Self {
             lockin: Lockin::default(),
@@ -260,7 +260,7 @@ mod app {
 
     #[local]
     struct Local {
-        usb_terminal: SerialTerminal<FlashSettings, 3>,
+        usb_terminal: SerialTerminal<Settings, 3>,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         timestamper: InputStamper,
@@ -287,7 +287,7 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let settings: &FlashSettings = stabilizer.usb_serial.settings();
+        let settings: &Settings = stabilizer.usb_serial.settings();
 
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
