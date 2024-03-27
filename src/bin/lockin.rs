@@ -15,7 +15,7 @@
 //! * Input/output data streamng via UDP
 //!
 //! ## Settings
-//! Refer to the [RuntimeSettings] structure for documentation of run-time configurable settings
+//! Refer to the [Lockin] structure for documentation of run-time configurable settings
 //! for this application.
 //!
 //! ## Telemetry
@@ -38,7 +38,7 @@ use rtic_monotonics::Monotonic;
 use fugit::ExtU32;
 use mutex_trait::prelude::*;
 
-use idsp::{Accu, Complex, ComplexExt, Filter, Lockin, Lowpass, Repeat, RPLL};
+use idsp::{Accu, Complex, ComplexExt, Filter, Lowpass, Repeat, RPLL};
 
 use stabilizer::{
     hardware::{
@@ -77,7 +77,7 @@ const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 #[derive(Clone, Debug, Tree)]
 pub struct FlashSettings {
     #[tree(depth(2))]
-    pub lockin: RuntimeSettings,
+    pub lockin: Lockin,
 
     #[tree(depth(1))]
     pub net: NetSettings,
@@ -87,7 +87,7 @@ impl stabilizer::settings::AppSettings for FlashSettings {
     fn new(net: NetSettings) -> Self {
         Self {
             net,
-            lockin: RuntimeSettings::default(),
+            lockin: Lockin::default(),
         }
     }
 
@@ -99,7 +99,7 @@ impl stabilizer::settings::AppSettings for FlashSettings {
 impl serial_settings::Settings<3> for FlashSettings {
     fn reset(&mut self) {
         *self = Self {
-            lockin: RuntimeSettings::default(),
+            lockin: Lockin::default(),
             net: NetSettings::new(self.net.mac),
         }
     }
@@ -132,7 +132,7 @@ enum LockinMode {
 }
 
 #[derive(Copy, Clone, Debug, Tree)]
-pub struct RuntimeSettings {
+pub struct Lockin {
     /// Configure the Analog Front End (AFE) gain.
     ///
     /// # Path
@@ -224,7 +224,7 @@ pub struct RuntimeSettings {
     stream_target: StreamTarget,
 }
 
-impl Default for RuntimeSettings {
+impl Default for Lockin {
     fn default() -> Self {
         Self {
             afe: [Gain::G1; 2],
@@ -253,8 +253,8 @@ mod app {
     #[shared]
     struct Shared {
         usb: UsbDevice,
-        network: NetworkUsers<RuntimeSettings, Telemetry, 2>,
-        settings: RuntimeSettings,
+        network: NetworkUsers<Lockin, Telemetry, 2>,
+        settings: Lockin,
         telemetry: TelemetryBuffer,
     }
 
@@ -268,7 +268,7 @@ mod app {
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         pll: RPLL,
-        lockin: Lockin<Repeat<2, Lowpass<2>>>,
+        lockin: idsp::Lockin<Repeat<2, Lowpass<2>>>,
         signal_generator: signal_generator::SignalGenerator,
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
@@ -294,8 +294,7 @@ mod app {
             stabilizer.net.phy,
             clock,
             env!("CARGO_BIN_NAME"),
-            &settings.net.broker,
-            &settings.net.id,
+            &settings.net,
             stabilizer.metadata,
         );
 
@@ -327,7 +326,7 @@ mod app {
             timestamper: stabilizer.timestamper,
 
             pll: RPLL::new(SAMPLE_TICKS_LOG2 + BATCH_SIZE_LOG2),
-            lockin: Lockin::default(),
+            lockin: idsp::Lockin::default(),
             signal_generator: signal_generator::SignalGenerator::new(
                 signal_config,
             ),

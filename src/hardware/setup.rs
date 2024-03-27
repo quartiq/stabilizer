@@ -654,6 +654,17 @@ where
     ));
     log::info!("EUI48: {}", mac_addr);
 
+    let (flash, settings) = {
+        let mut flash = {
+            let (_, flash_bank2) = device.FLASH.split();
+            super::flash::Flash(flash_bank2.unwrap())
+        };
+
+        let mut settings = C::new(NetSettings::new(mac_addr.clone()));
+        crate::settings::load_from_flash(&mut settings, &mut flash);
+        (flash, settings)
+    };
+
     let network_devices = {
         let ethernet_pins = {
             // Reset the PHY before configuring pins.
@@ -698,10 +709,14 @@ where
         unsafe { ethernet::enable_interrupt() };
 
         // Configure IP address according to DHCP socket availability
-        let ip_addrs: smoltcp::wire::IpAddress = option_env!("STATIC_IP")
-            .unwrap_or("0.0.0.0")
-            .parse()
-            .unwrap();
+        let ip_addrs: smoltcp::wire::IpAddress = match settings.net().ip.parse()
+        {
+            Ok(addr) => addr,
+            Err(e) => {
+                log::warn!("Invalid IP address in settings: {e:?}. Defaulting to 0.0.0.0 (DHCP)");
+                "0.0.0.0".parse().unwrap()
+            }
+        };
 
         let random_seed = {
             let mut rng =
@@ -1131,19 +1146,10 @@ where
     };
 
     let usb_terminal = {
-        let mut flash = {
-            let (_, flash_bank2) = device.FLASH.split();
-            super::flash::Flash(flash_bank2.unwrap())
-        };
-
         let input_buffer =
             cortex_m::singleton!(: [u8; 256] = [0u8; 256]).unwrap();
         let serialize_buffer =
             cortex_m::singleton!(: [u8; 512] = [0u8; 512]).unwrap();
-
-        let mut settings =
-            C::new(NetSettings::new(network_devices.mac_address));
-        crate::settings::load_from_flash(&mut settings, &mut flash);
 
         serial_settings::Runner::new(
             crate::settings::SerialSettingsPlatform {

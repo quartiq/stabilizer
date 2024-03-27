@@ -37,6 +37,9 @@ pub struct NetSettings {
     /// The MQTT ID to use upon connection with a broker.
     pub id: heapless::String<23>,
 
+    /// An optional static IP address to use. An unspecified IP address (or malformed address) will
+    /// use DHCP.
+    pub ip: heapless::String<15>,
     #[tree(skip)]
     /// The MAC address of Stabilizer, which is used to reinitialize the ID to default settings.
     pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
@@ -49,6 +52,7 @@ impl NetSettings {
 
         Self {
             broker: "mqtt".into(),
+            ip: "0.0.0.0".into(),
             id,
             mac,
         }
@@ -83,14 +87,14 @@ pub fn load_from_flash<
             path.clone(),
         ) {
             Err(e) => {
-                log::warn!("Failed to load flash setting `{path}`: {e:?}");
+                log::warn!("Failed to fetch `{path}` from flash: {e:?}");
                 continue;
             }
             Ok(Some(item)) => item,
             _ => continue,
         };
 
-        log::info!("Found `{path}` in flash settings");
+        log::info!("Loading initial `{path}` from flash");
 
         let mut deserializer = postcard::Deserializer::from_flavor(
             postcard::de_flavors::Slice::new(&item.data),
@@ -98,7 +102,7 @@ pub fn load_from_flash<
         if let Err(e) = structure
             .deserialize_by_key(path.split('/').skip(1), &mut deserializer)
         {
-            log::warn!("Failed to load {path} from flash settings: {e:?}");
+            log::warn!("Failed to deserialize `{path}` from flash: {e:?}");
         }
     }
 }
@@ -182,7 +186,7 @@ where
                 .settings
                 .serialize_by_key(item.path.split('/').skip(1), &mut serializer)
             {
-                log::warn!("Failed to save {} to flash: {e:?}", item.path);
+                log::warn!("Failed to save `{}` to flash: {e:?}", item.path);
                 continue;
             }
 
@@ -203,7 +207,7 @@ where
             .map(|old| old.data != item.data)
             .unwrap_or(true)
             {
-                log::info!("Storing setting `{}` in flash", item.path);
+                log::info!("Storing `{}` to flash", item.path);
                 sequential_storage::map::store_item(
                     &mut self.storage,
                     range,

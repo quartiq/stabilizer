@@ -16,7 +16,7 @@
 //! * Derivative kick avoidance
 //!
 //! ## Settings
-//! Refer to the [RuntimeSettings] structure for documentation of run-time configurable settings for this
+//! Refer to the [DualIir] structure for documentation of run-time configurable settings for this
 //! application.
 //!
 //! ## Telemetry
@@ -78,7 +78,7 @@ const SAMPLE_PERIOD: f32 =
 #[derive(Clone, Debug, Tree)]
 pub struct FlashSettings {
     #[tree(depth(3))]
-    pub dual_iir: RuntimeSettings,
+    pub dual_iir: DualIir,
 
     #[tree(depth(1))]
     pub net: NetSettings,
@@ -88,7 +88,7 @@ impl stabilizer::settings::AppSettings for FlashSettings {
     fn new(net: NetSettings) -> Self {
         Self {
             net,
-            dual_iir: RuntimeSettings::default(),
+            dual_iir: DualIir::default(),
         }
     }
 
@@ -100,14 +100,14 @@ impl stabilizer::settings::AppSettings for FlashSettings {
 impl serial_settings::Settings<4> for FlashSettings {
     fn reset(&mut self) {
         *self = Self {
-            dual_iir: RuntimeSettings::default(),
+            dual_iir: DualIir::default(),
             net: NetSettings::new(self.net.mac),
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, Tree, Serialize, Deserialize)]
-pub struct RuntimeSettings {
+pub struct DualIir {
     /// Configure the Analog Front End (AFE) gain.
     ///
     /// # Path
@@ -181,7 +181,7 @@ pub struct RuntimeSettings {
     signal_generator: [signal_generator::BasicConfig; 2],
 }
 
-impl Default for RuntimeSettings {
+impl Default for DualIir {
     fn default() -> Self {
         let mut i = iir::Biquad::IDENTITY;
         i.set_min(-SCALE);
@@ -217,9 +217,9 @@ mod app {
     #[shared]
     struct Shared {
         usb: UsbDevice,
-        network: NetworkUsers<RuntimeSettings, Telemetry, 3>,
+        network: NetworkUsers<DualIir, Telemetry, 3>,
 
-        settings: RuntimeSettings,
+        settings: DualIir,
         telemetry: TelemetryBuffer,
         signal_generator: [SignalGenerator; 2],
     }
@@ -256,8 +256,7 @@ mod app {
             stabilizer.net.phy,
             clock,
             env!("CARGO_BIN_NAME"),
-            &settings.net.broker,
-            &settings.net.id,
+            &settings.net,
             stabilizer.metadata,
         );
 

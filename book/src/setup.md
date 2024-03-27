@@ -38,21 +38,28 @@ settings. All settings configured via the USB interface are only applied when St
 up. Any modifications that occur after boot over the MQTT interface will occur after the initial
 settings configured via USB.
 
+> **Note:** Settings configured via USB do not take immediat effect. Instead, they will apply after
+> the device is rebooted.
+
+> **Note:** Settings configured via USB are only initial settings. Any modifications
+> that occur after startup (i.e. via MQTT) will take precedent over those configured via USB. MQTT
+> settings can only be persisted or retained via the MQTT broker.
+
+> **Note:** Saving settings via the USB port only saves the initial settings. It does not take into
+> account the current operational settings that may have been applied via MQTT.
+
 ## Network and DHCP
 
 Stabilizer supports 10Base-T or 100Base-T with Auto MDI-X.
-Stabilizer uses DHCP to obtain its network configuration information. Ensure there is a
-properly configured DHCP server running on the network segment that Stabilizer is
-connected to.
-Alternatively, a static IP can be enforced in the firmware build command by specifying
-the environmental variable `STATIC_IP` or by configuring the static IP via the USB interface.
+
+Stabilizer uses DHCP to obtain its network configuration information. Ensure there is a properly
+configured DHCP server running on the network segment that Stabilizer is connected to. If a DHCP
+server is not available and a static IP is desired, Stabilizer can be configured with a static IP
+via the USB interface. A configured `ip` of "0.0.0.0" will use DHCP.
 
 > **Note:** If Stabilizer is connected directly to an Ubuntu system (for example using a USB-Ethernet dongle) 
 you can set the IPv4 settings of this Ethernet connection in the Ubuntu network settings to
 "Shared to other computers". This will start and configure a DHCP server for this connection.  
-
-> **Note:** Stabilizer contains an internal setting for static IP configuration that can be
-> optionally configured via the USB serial port to bypass DHCP.
 
 ## MQTT Broker
 
@@ -199,9 +206,9 @@ missing timer deadlines and panicing.
 
 ## Set the MQTT broker
 
-The MQTT broker can be [configured via the USB port on Stabilizer's front](#usb-configuration).
-The address can be an IP address or a domain name. Once the broker has been updated, power cycle
-stabilizer to have the new broker address take effect.
+The MQTT broker address is [configured via the USB port on Stabilizer's front](#usb-configuration).
+The address can be an IP address or a domain name. Once the broker address has been updated, power
+cycle stabilizer to have the new broker address take effect.
 
 ## Verify MQTT connection
 
