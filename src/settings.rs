@@ -153,6 +153,8 @@ pub struct SerialSettingsPlatform<C, const Y: usize> {
     /// The storage mechanism used to persist settings to between boots.
     pub storage: Flash,
 
+    pub active_settings: C,
+
     /// Metadata associated with the application
     pub metadata: &'static ApplicationMetadata,
 }
@@ -221,10 +223,19 @@ where
         Ok(())
     }
 
-    fn cmd(&mut self, cmd: &str) {
+    fn cmd(&mut self, cmd: &str, buf: &mut [u8]) -> Result<(), Self::Error> {
         match cmd {
             "reboot" => cortex_m::peripheral::SCB::sys_reset(),
             "dfu" => platform::start_dfu_reboot(),
+            "save-active" => {
+                self.settings = self.active_settings.clone();
+                self.save(buf)?;
+                writeln!(
+                    &mut self.interface,
+                    "Currently active settings saved."
+                )
+                .unwrap();
+            }
             "service" => {
                 writeln!(
                     &mut self.interface,
@@ -262,11 +273,13 @@ where
             _ => {
                 writeln!(
                     self.interface_mut(),
-                    "Invalid platform command: `{cmd}` not in [`dfu`, `reboot`, `service`]"
+                    "Invalid platform command: `{cmd}` not in [`dfu`, `reboot`, `service`, `save-active`]"
                 )
                 .ok();
             }
         }
+
+        Ok(())
     }
 
     fn settings(&self) -> &Self::Settings {
