@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["atan2","cossin","overflowing_sub","saturating_scale"],"mod":["hbf","iir","svf"],"struct":["Accu","Cascade","Complex","Dsm","Lockin","Lowpass","Nyquist","PLL","RPLL","Repeat","Unwrapper"],"trait":["Coefficient","ComplexExt","Filter","MulScaled"],"type":["Lowpass1","Lowpass2"]};
