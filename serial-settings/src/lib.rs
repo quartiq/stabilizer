@@ -161,14 +161,42 @@ impl<'a, P: Platform<Y>, const Y: usize> Context<'a, P, Y> {
 
     fn handle_clear(
         _menu: &menu::Menu<Self>,
-        _item: &menu::Item<Self>,
-        _args: &[&str],
+        item: &menu::Item<Self>,
+        args: &[&str],
         context: &mut Self,
     ) {
-        context.platform.settings_mut().reset();
+        if let Some(key) = menu::argument_finder(item, args, "item").unwrap() {
+            let mut defaults = context.platform.settings().clone();
+            defaults.reset();
+
+            let len = match defaults.get_json(key, context.buffer) {
+                Err(e) => {
+                    writeln!(context, "Failed to clear `{key}`: {e:?}")
+                        .unwrap();
+                    return;
+                }
+
+                Ok(len) => len,
+            };
+
+            if let Err(e) = context
+                .platform
+                .settings_mut()
+                .set_json(key, &context.buffer[..len])
+            {
+                writeln!(context, "Failed to update {key}: {e:?}").unwrap();
+                return;
+            }
+
+            writeln!(context, "{key} cleared to default").unwrap();
+        } else {
+            context.platform.settings_mut().reset();
+            writeln!(context, "All settings cleared").unwrap();
+        }
+
         match context.platform.save(context.buffer) {
             Ok(_) => {
-                writeln!(context, "Settings cleared to defaults and saved.")
+                writeln!(context, "Settings saved. Reboot device (`platform reboot`) to apply.")
             }
             Err(e) => {
                 writeln!(context, "Failed to clear settings: {e:?}")
@@ -278,7 +306,12 @@ impl<'a, P: Platform<Y>, const Y: usize> Context<'a, P, Y> {
                 help: Some("Clear the device settings to default values."),
                 item_type: menu::ItemType::Callback {
                     function: Self::handle_clear,
-                    parameters: &[]
+                    parameters: &[
+                        menu::Parameter::Optional {
+                            parameter_name: "item",
+                            help: Some("The name of the setting to clear."),
+                        },
+                    ]
                 },
             },
             &menu::Item {
