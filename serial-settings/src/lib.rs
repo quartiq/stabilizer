@@ -196,7 +196,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Context<'a, P, Y> {
 
         match context.platform.save(context.buffer) {
             Ok(_) => {
-                writeln!(context, "Clear successful.")
+                writeln!(context, "Settings saved. Reboot device (`platform reboot`) to apply.")
             }
             Err(e) => {
                 writeln!(context, "Failed to clear settings: {e:?}")
