@@ -122,7 +122,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Context<'a, P, Y> {
             match path {
                 Err(e) => writeln!(context, "Failed to get path: {e}"),
                 Ok(path) => {
-                    match context
+                    let value = match context
                         .platform
                         .settings()
                         .get_json(&path, context.buffer)
@@ -132,26 +132,44 @@ impl<'a, P: Platform<Y>, const Y: usize> Context<'a, P, Y> {
                                 .unwrap();
                             continue;
                         }
-                        Ok(len) => write!(
-                            &mut context.platform.interface_mut(),
-                            "{path}: {}",
-                            core::str::from_utf8(&context.buffer[..len])
-                                .unwrap()
-                        )
-                        .unwrap(),
-                    }
+                        Ok(len) => core::str::from_utf8(&context.buffer[..len])
+                            .unwrap(),
+                    };
 
-                    match defaults.get_json(&path, context.buffer) {
-                        Err(e) => writeln!(
-                            context,
-                            "[default serialization error: {e}]"
-                        ),
-                        Ok(len) => writeln!(
+                    write!(
+                        &mut context.platform.interface_mut(),
+                        "{path}: {value}"
+                    )
+                    .unwrap();
+                    let value_hash = const_fnv1a_hash::fnv1a_hash_str_64(value);
+
+                    let default_value = match defaults
+                        .get_json(&path, context.buffer)
+                    {
+                        Err(e) => {
+                            writeln!(
+                                context,
+                                "[default serialization error: {e}]"
+                            )
+                            .unwrap();
+                            continue;
+                        }
+                        Ok(len) => core::str::from_utf8(&context.buffer[..len])
+                            .unwrap(),
+                    };
+
+                    let default_hash =
+                        const_fnv1a_hash::fnv1a_hash_str_64(default_value);
+                    if default_hash != value_hash {
+                        writeln!(
                             &mut context.platform.interface_mut(),
-                            " [default: {}]",
-                            core::str::from_utf8(&context.buffer[..len])
-                                .unwrap()
-                        ),
+                            " [default: {default_value}]"
+                        )
+                    } else {
+                        writeln!(
+                            &mut context.platform.interface_mut(),
+                            " [default]"
+                        )
                     }
                 }
             }
