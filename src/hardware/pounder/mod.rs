@@ -167,7 +167,7 @@ impl TryFrom<(ClockConfig, ChannelConfig)> for Profile {
         (clocking, channel): (ClockConfig, ChannelConfig),
     ) -> Result<Self, Self::Error> {
         let system_clock_frequency =
-            clocking.reference_clock * clocking.multiplier as f32;
+            clocking.reference_clock_frequency * clocking.multiplier as f32;
         Ok(Profile {
             frequency_tuning_word: frequency_to_ftw(
                 channel.dds.frequency,
@@ -198,7 +198,7 @@ impl Default for ChannelConfig {
 #[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Tree)]
 pub struct ClockConfig {
     pub multiplier: u8,
-    pub reference_clock: f32,
+    pub reference_clock_frequency: f32,
     pub external_clock: bool,
 }
 
@@ -206,7 +206,7 @@ impl Default for ClockConfig {
     fn default() -> Self {
         Self {
             multiplier: 5,
-            reference_clock: MegaHertz::MHz(100).to_Hz() as f32,
+            reference_clock_frequency: MegaHertz::MHz(100).to_Hz() as f32,
             external_clock: false,
         }
     }
@@ -674,7 +674,7 @@ impl setup::PounderDevices {
             || (current_clock_settings.unwrap() != new_clock_settings)
         {
             match validate_clocking(
-                new_clock_settings.reference_clock,
+                new_clock_settings.reference_clock_frequency,
                 new_clock_settings.multiplier,
             ) {
                 Ok(_frequency) => {
@@ -685,7 +685,7 @@ impl setup::PounderDevices {
                     self.dds_output
                         .builder()
                         .set_system_clock(
-                            new_clock_settings.reference_clock,
+                            new_clock_settings.reference_clock_frequency,
                             new_clock_settings.multiplier,
                         )
                         .unwrap()
