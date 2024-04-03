@@ -194,10 +194,12 @@ fn load_itcm() {
         // Ensure ITCM is enabled before loading.
         atomic::fence(Ordering::SeqCst);
 
-        let len =
-            (&__eitcm as *const u32).offset_from(&__sitcm as *const _) as usize;
-        let dst = slice::from_raw_parts_mut(&mut __sitcm as *mut _, len);
-        let src = slice::from_raw_parts(&__siitcm as *const _, len);
+        let sitcm = core::ptr::addr_of_mut!(__sitcm);
+        let eitcm = core::ptr::addr_of_mut!(__eitcm);
+
+        let len = eitcm.offset_from(sitcm) as usize;
+        let dst = slice::from_raw_parts_mut(sitcm, len);
+        let src = slice::from_raw_parts(sitcm, len);
         // Load code into ITCM.
         dst.copy_from_slice(src);
     }
@@ -660,7 +662,7 @@ where
             super::flash::Flash(flash_bank2.unwrap())
         };
 
-        let mut settings = C::new(NetSettings::new(mac_addr.clone()));
+        let mut settings = C::new(NetSettings::new(mac_addr));
         crate::settings::load_from_flash(&mut settings, &mut flash);
         (flash, settings)
     };
