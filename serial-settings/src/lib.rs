@@ -49,6 +49,7 @@
 #![no_std]
 
 use core::fmt::Write;
+use core::hash::Hasher;
 use embedded_io::{Read, ReadReady};
 use miniconf::{JsonCoreSlash, TreeKey};
 
@@ -141,7 +142,12 @@ impl<'a, P: Platform<Y>, const Y: usize> Context<'a, P, Y> {
                         "{path}: {value}"
                     )
                     .unwrap();
-                    let value_hash = const_fnv1a_hash::fnv1a_hash_str_64(value);
+
+                    let value_hash = {
+                        let mut hasher = yafnv::Fnv1aHasher::default();
+                        hasher.write(value.as_bytes());
+                        hasher.finish()
+                    };
 
                     let default_value = match defaults
                         .get_json(&path, context.buffer)
@@ -158,8 +164,11 @@ impl<'a, P: Platform<Y>, const Y: usize> Context<'a, P, Y> {
                             .unwrap(),
                     };
 
-                    let default_hash =
-                        const_fnv1a_hash::fnv1a_hash_str_64(default_value);
+                    let default_hash = {
+                        let mut hasher = yafnv::Fnv1aHasher::default();
+                        hasher.write(default_value.as_bytes());
+                        hasher.finish()
+                    };
                     if default_hash != value_hash {
                         writeln!(
                             &mut context.platform.interface_mut(),
