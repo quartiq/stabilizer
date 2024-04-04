@@ -65,11 +65,13 @@
 //! In this implementation, double buffer mode DMA transfers are used because the SPI RX FIFOs
 //! have finite depth, FIFO access is slower than AXISRAM access, and because the single
 //! buffer mode DMA disable/enable and buffer update sequence is slow.
+use core::mem::MaybeUninit;
+
 use stm32h7xx_hal as hal;
 
 use mutex_trait::Mutex;
 
-use super::design_parameters::{SampleBuffer, MAX_SAMPLE_BUFFER_SIZE};
+use super::design_parameters::SampleBuffer;
 use super::timers;
 
 use hal::{
@@ -149,21 +151,20 @@ impl TryFrom<f32> for AdcCode {
 // transfer. Data in AXI SRAM is not initialized on boot, so the contents are random. This value is
 // initialized during setup.
 #[link_section = ".axisram.buffers"]
-static mut SPI_START: [u32; 1] = [0x00; 1];
+static mut SPI_START: MaybeUninit<[u32; 1]> = MaybeUninit::uninit();
 
 // The following data is written by the timer flag clear trigger into the SPI IFCR register to clear
 // the EOT flag. Data in AXI SRAM is not initialized on boot, so the contents are random. This
 // value is initialized during setup.
 #[link_section = ".axisram.buffers"]
-static mut SPI_EOT_CLEAR: [u32; 1] = [0x00];
+static mut SPI_EOT_CLEAR: MaybeUninit<[u32; 1]> = MaybeUninit::uninit();
 
 // The following global buffers are used for the ADC sample DMA transfers. Two buffers are used for
 // each transfer in a ping-pong buffer configuration (one is being acquired while the other is being
 // processed). Note that the contents of AXI SRAM is uninitialized, so the buffer contents on
 // startup are undefined. The dimensions are `ADC_BUF[adc_index][ping_pong_index][sample_index]`.
 #[link_section = ".axisram.buffers"]
-static mut ADC_BUF: [[SampleBuffer; 2]; 2] =
-    [[[0; MAX_SAMPLE_BUFFER_SIZE]; 2]; 2];
+static mut ADC_BUF: MaybeUninit<[[SampleBuffer; 2]; 2]> = MaybeUninit::uninit();
 
 macro_rules! adc_input {
     ($name:ident, $index:literal, $trigger_stream:ident, $data_stream:ident, $clear_stream:ident,
@@ -290,9 +291,13 @@ macro_rules! adc_input {
                         .priority(Priority::VeryHigh)
                         .circular_buffer(true);
 
-                    unsafe {
-                        SPI_EOT_CLEAR[0] = 1 << 3;
-                    }
+                    // Note(unsafe): Because this is a Memory->Peripheral transfer, this data is
+                    // never actually modified. It technically only needs to be immutably
+                    // borrowed, but the current HAL API only supports mutable borrows.
+                    let spi_eot_clear = unsafe {
+                        SPI_EOT_CLEAR.write([1 << 3]);
+                        &mut *SPI_EOT_CLEAR.as_mut_ptr()
+                    };
 
                     // Generate DMA events when the timer hits zero (roll-over). This must be before
                     // the trigger channel DMA occurs, as if the trigger occurs first, the
@@ -309,10 +314,7 @@ macro_rules! adc_input {
                     > = Transfer::init(
                         clear_stream,
                         [< $spi IFCR >]::new(clear_channel),
-                        // Note(unsafe): Because this is a Memory->Peripheral transfer, this data is
-                        // never actually modified. It technically only needs to be immutably
-                        // borrowed, but the current HAL API only supports mutable borrows.
-                        unsafe { &mut SPI_EOT_CLEAR },
+                        spi_eot_clear,
                         None,
                         clear_config,
                     );
@@ -332,9 +334,13 @@ macro_rules! adc_input {
 
                     // Note(unsafe): This word is initialized once per ADC initialization to verify
                     // it is initialized properly.
-                    unsafe {
+                        // Note(unsafe): Because this is a Memory->Peripheral transfer, this data is never
+                        // actually modified. It technically only needs to be immutably borrowed, but the
+                        // current HAL API only supports mutable borrows.
+                    let spi_start = unsafe {
                         // Write a binary code into the SPI control register to initiate a transfer.
-                        SPI_START[0] = 0x201;
+                        SPI_START.write([0x201]);
+                        &mut *SPI_START.as_mut_ptr()
                     };
 
                     // Construct the trigger stream to write from memory to the peripheral.
@@ -347,10 +353,7 @@ macro_rules! adc_input {
                     > = Transfer::init(
                         trigger_stream,
                         [< $spi CR >]::new(trigger_channel),
-                        // Note(unsafe): Because this is a Memory->Peripheral transfer, this data is never
-                        // actually modified. It technically only needs to be immutably borrowed, but the
-                        // current HAL API only supports mutable borrows.
-                        unsafe { &mut SPI_START },
+                        spi_start,
                         None,
                         trigger_config,
                     );
@@ -373,6 +376,12 @@ macro_rules! adc_input {
                     let mut spi = spi.disable();
                     spi.listen(hal::spi::Event::Error);
 
+                    let adc_buf = unsafe {
+                        ADC_BUF.write(Default::default());
+                        &mut *ADC_BUF.as_mut_ptr()
+                    };
+                    let adc_bufs = adc_buf[$index].split_at_mut(1);
+
                     // The data transfer is always a transfer of data from the peripheral to a RAM
                     // buffer.
                     let data_transfer: Transfer<_, _, PeripheralToMemory, _, _> =
@@ -381,8 +390,8 @@ macro_rules! adc_input {
                             spi,
                             // Note(unsafe): The ADC_BUF[$index] is "owned" by this peripheral.
                             // It shall not be used anywhere else in the module.
-                            unsafe { &mut ADC_BUF[$index][0][..batch_size] },
-                            unsafe { Some(&mut ADC_BUF[$index][1][..batch_size]) },
+                            &mut adc_bufs.0[0][..batch_size],
+                            Some(&mut adc_bufs.1[0][..batch_size]),
                             data_config,
                         );
 

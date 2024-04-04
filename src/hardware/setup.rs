@@ -2,6 +2,7 @@
 //!
 //! This file contains all of the hardware-specific configuration of Stabilizer.
 use bit_field::BitField;
+use core::mem::MaybeUninit;
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{fmt::Write, ptr, slice};
 use stm32h7xx_hal::{
@@ -159,10 +160,9 @@ pub struct PounderDevices {
 
 #[link_section = ".sram3.eth"]
 /// Static storage for the ethernet DMA descriptor ring.
-static mut DES_RING: ethernet::DesRing<
-    { super::TX_DESRING_CNT },
-    { super::RX_DESRING_CNT },
-> = ethernet::DesRing::new();
+static mut DES_RING: MaybeUninit<
+    ethernet::DesRing<{ super::TX_DESRING_CNT }, { super::RX_DESRING_CNT }>,
+> = MaybeUninit::uninit();
 
 /// Setup ITCM and load its code from flash.
 ///
@@ -689,6 +689,11 @@ where
             (ref_clk, mdio, mdc, crs_dv, rxd0, rxd1, tx_en, txd0, txd1)
         };
 
+        let ring = unsafe {
+            DES_RING.write(ethernet::DesRing::new());
+            &mut *DES_RING.as_mut_ptr()
+        };
+
         // Configure the ethernet controller
         let (mut eth_dma, eth_mac) = ethernet::new(
             device.ETHERNET_MAC,
@@ -697,7 +702,7 @@ where
             ethernet_pins,
             // Note(unsafe): We only call this function once to take ownership of the
             // descriptor ring.
-            unsafe { &mut DES_RING },
+            ring,
             mac_addr,
             ccdr.peripheral.ETH1MAC,
             &ccdr.clocks,
