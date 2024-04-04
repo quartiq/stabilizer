@@ -41,7 +41,7 @@ use mutex_trait::prelude::*;
 
 use idsp::iir;
 
-use ad9959::{phase_to_pow, pow_to_phase};
+use ad9959::phase_to_pow;
 use stabilizer::{
     hardware::{
         self,
@@ -70,12 +70,14 @@ const SCALE: f32 = i16::MAX as _;
 const IIR_CASCADE_LENGTH: usize = 1;
 
 // The number of samples in each batch process
+// The Pounder dds can only be updated once per batch, else the QSPI stalls.
+// Disabling the second channel would allow for a batch size of 2.
+// This does not strictly need a DMA, but the right interrupt binding is needed otherwise
 const BATCH_SIZE: usize = 1;
 
-// The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^9 =
-// 512, there is 5.12uS per sample, corresponding to a sampling frequency of 195.3125 KHz.
-const SAMPLE_TICKS_LOG2: u8 = 9;
-const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
+// The number of 100MHz timer ticks between each sample. Currently set to 12.80 us
+// corresponding to a 78.125 kHz sampling rate.
+const SAMPLE_TICKS: u32 = (2 << 10) + (2 << 8);
 
 const DEFAULT_AOM_FREQUENCY: f32 = 80_000_000.0;
 
@@ -206,6 +208,8 @@ impl Default for Settings {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
+    use stabilizer::hardware::pounder;
+
     use super::*;
 
     #[monotonic(binds = SysTick, default = true, priority = 2)]
@@ -328,7 +332,7 @@ mod app {
         let process::SharedResources {
             settings,
             telemetry,
-            mut pounder,
+            pounder,
         } = c.shared;
 
         let process::LocalResources {
@@ -339,7 +343,7 @@ mod app {
             phase_offsets,
         } = c.local;
 
-        (settings, telemetry).lock(|settings, telemetry| {
+        (settings, telemetry, pounder).lock(|settings, telemetry, pounder| {
             let digital_inputs =
                 [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
             telemetry.digital_inputs = digital_inputs;
@@ -350,12 +354,15 @@ mod app {
             (adc0, adc1).lock(|adc0, adc1| {
                 let adc_samples = [adc0, adc1];
                 let mut phase_offset_codes = [[0u16; BATCH_SIZE]; 2];
+                let mut dds_profile = pounder.dds_output.builder();
 
                 // Preserve instruction and data ordering w.r.t. DMA flag access.
                 fence(Ordering::SeqCst);
 
-                for (channel_idx, phase_offset) in
-                    phase_offsets.iter_mut().enumerate()
+                for (channel_idx, (phase_offset, dds_channel)) in phase_offsets
+                    .iter_mut()
+                    .zip([pounder::Channel::Out0, pounder::Channel::Out1])
+                    .enumerate()
                 {
                     for (dma_idx, ai) in
                         adc_samples[channel_idx].iter().enumerate()
@@ -374,17 +381,26 @@ mod app {
                         *phase_offset = (*phase_offset
                             + phase_to_pow(iir_out).unwrap_or(0u16))
                             & 0x3FFFu16;
-                        settings.pounder.out_channel[channel_idx]
-                            .dds
-                            .phase_offset =
-                            pow_to_phase(*phase_offset).unwrap_or(0.0);
+
+                        dds_profile
+                            .update_channels(
+                                dds_channel.into(),
+                                None,
+                                Some(*phase_offset),
+                                None,
+                            )
+                            .write();
+                        // settings.pounder.out_channel[channel_idx]
+                        //     .dds
+                        //     .phase_offset =
+                        //     pow_to_phase(*phase_offset).unwrap_or(0.0);
 
                         phase_offset_codes[channel_idx][dma_idx] =
                             *phase_offset;
 
-                        pounder.lock(|pdr| {
-                            pdr.update_dds(settings.pounder, &mut None)
-                        });
+                        // pounder.lock(|pdr| {
+                        //     pdr.update_dds_waveform(settings.pounder)
+                        // });
                     }
                 }
 
@@ -487,7 +503,7 @@ mod app {
                 (
                     settings.afe,
                     settings.telemetry_period,
-                    pounder.get_telemetry(settings.pounder),
+                    pounder.get_telemetry(),
                 )
             });
 

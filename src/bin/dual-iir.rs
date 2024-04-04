@@ -502,9 +502,7 @@ mod app {
                 (
                     settings.afe,
                     settings.telemetry_period,
-                    pounder.as_mut().map(|pdr| {
-                        pdr.get_telemetry(settings.pounder.unwrap())
-                    }),
+                    pounder.as_mut().map(|pdr| pdr.get_telemetry()),
                 )
             });
 

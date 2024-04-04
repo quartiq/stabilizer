@@ -667,7 +667,7 @@ impl setup::PounderDevices {
     pub fn update_dds_clock(
         &mut self,
         new_clock_settings: ClockConfig,
-        mut current_clock_settings: &mut Option<ClockConfig>,
+        current_clock_settings: &mut Option<ClockConfig>,
     ) {
         // Note(unwrap): Short-cut evaluation ensures `current_clock_settings` is `Some`
         if current_clock_settings.is_none()
@@ -730,14 +730,13 @@ impl setup::PounderDevices {
         }
     }
 
-    pub fn get_telemetry(&mut self, config: PounderConfig) -> PounderTelemetry {
+    pub fn get_telemetry(&mut self) -> PounderTelemetry {
         PounderTelemetry {
             temperature: self.pounder.lm75.read_temperature().unwrap(),
             input_power: [
                 self.pounder.measure_power(Channel::In0).unwrap(),
                 self.pounder.measure_power(Channel::In1).unwrap(),
             ],
-            config,
         }
     }
 }
