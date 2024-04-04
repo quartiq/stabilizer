@@ -691,7 +691,7 @@ where
 
         let ring = unsafe {
             DES_RING.write(ethernet::DesRing::new());
-            &mut *DES_RING.as_mut_ptr()
+            DES_RING.assume_init_mut()
         };
 
         // Configure the ethernet controller

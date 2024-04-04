@@ -296,7 +296,7 @@ macro_rules! adc_input {
                     // borrowed, but the current HAL API only supports mutable borrows.
                     let spi_eot_clear = unsafe {
                         SPI_EOT_CLEAR.write([1 << 3]);
-                        &mut *SPI_EOT_CLEAR.as_mut_ptr()
+                        SPI_EOT_CLEAR.assume_init_mut()
                     };
 
                     // Generate DMA events when the timer hits zero (roll-over). This must be before
@@ -340,7 +340,7 @@ macro_rules! adc_input {
                     let spi_start = unsafe {
                         // Write a binary code into the SPI control register to initiate a transfer.
                         SPI_START.write([0x201]);
-                        &mut *SPI_START.as_mut_ptr()
+                        SPI_START.assume_init_mut()
                     };
 
                     // Construct the trigger stream to write from memory to the peripheral.
@@ -378,7 +378,7 @@ macro_rules! adc_input {
 
                     let adc_buf = unsafe {
                         ADC_BUF.write(Default::default());
-                        &mut *ADC_BUF.as_mut_ptr()
+                        ADC_BUF.assume_init_mut()
                     };
                     let adc_bufs = adc_buf[$index].split_at_mut(1);
 
