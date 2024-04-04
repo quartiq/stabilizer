@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-miniconf = "0.9"
-menu = {version = "0.4", features = ["echo"]}
+menu = {git = "https://github.com/rust-embedded-community/menu", branch = "feature/borrowed-context", features = ["echo"]}
 heapless = "0.8"
 embedded-io = "0.6"
+miniconf = { git = "https://github.com/quartiq/miniconf", branch = "mqtt-dont-own-settings" }

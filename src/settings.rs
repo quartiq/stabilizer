@@ -148,8 +148,8 @@ pub struct SerialSettingsPlatform<C, const Y: usize> {
     pub interface:
         serial_settings::BestEffortInterface<crate::hardware::SerialPort>,
 
-    /// The Settings structure.
-    pub settings: C,
+    pub _settings_marker: core::marker::PhantomData<C>,
+
     /// The storage mechanism used to persist settings to between boots.
     pub storage: Flash,
 
@@ -169,7 +169,7 @@ where
         <LockedFlashBank as embedded_storage::nor_flash::ErrorType>::Error,
     >;
 
-    fn save(&mut self, buf: &mut [u8]) -> Result<(), Self::Error> {
+    fn save(&mut self, buf: &mut [u8], settings: &Self::Settings) -> Result<(), Self::Error> {
         for path in Self::Settings::iter_paths::<heapless::String<64>>("/") {
             let mut item = SettingsItem {
                 path: path.unwrap(),
@@ -182,8 +182,7 @@ where
                 output: postcard::ser_flavors::Slice::new(&mut item.data),
             };
 
-            if let Err(e) = self
-                .settings
+            if let Err(e) = settings
                 .serialize_by_key(item.path.split('/').skip(1), &mut serializer)
             {
                 log::warn!("Failed to save `{}` to flash: {e:?}", item.path);
@@ -267,14 +266,6 @@ where
                 .ok();
             }
         }
-    }
-
-    fn settings(&self) -> &Self::Settings {
-        &self.settings
-    }
-
-    fn settings_mut(&mut self) -> &mut Self::Settings {
-        &mut self.settings
     }
 
     fn interface_mut(&mut self) -> &mut Self::Interface {

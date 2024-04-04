@@ -70,7 +70,7 @@ type Frame = [MaybeUninit<u8>; FRAME_SIZE];
 ///
 /// ## Example
 /// `{"ip": [192, 168,0, 1], "port": 1111}`
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct StreamTarget {
     pub ip: [u8; 4],
     pub port: u16,
