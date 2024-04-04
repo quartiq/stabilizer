@@ -1,5 +1,5 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-runner = "probe-run --chip STM32H743ZITx --speed 30000"
+runner = "probe-rs run --chip STM32H743ZITx --speed 30000"
 # runner = "gdb-multiarch -q -x openocd.gdb"
 rustflags = [
     "-C", "link-arg=-Tlink.x",
