@@ -440,9 +440,9 @@ mod app {
     #[idle(shared=[network, settings, usb])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
-            match (&mut c.shared.network, &mut c.shared.settings).lock(|net, settings| {
-                net.update(&mut settings.dual_iir)
-            }) {
+            match (&mut c.shared.network, &mut c.shared.settings)
+                .lock(|net, settings| net.update(&mut settings.dual_iir))
+            {
                 NetworkState::SettingsChanged(_path) => {
                     settings_update::spawn().unwrap()
                 }
@@ -464,7 +464,9 @@ mod app {
     async fn settings_update(mut c: settings_update::Context) {
         // Copy `settings` into low-latency settings for DSP process
         let new_settings = c.shared.settings.lock(|new| new.dual_iir.clone());
-        c.shared.active_settings.lock(|current| *current = new_settings);
+        c.shared
+            .active_settings
+            .lock(|current| *current = new_settings);
 
         c.local.afes.0.set_gain(new_settings.afe[0]);
         c.local.afes.1.set_gain(new_settings.afe[1]);
@@ -495,10 +497,10 @@ mod app {
             let telemetry: TelemetryBuffer =
                 c.shared.telemetry.lock(|telemetry| *telemetry);
 
-            let (gains, telemetry_period) = c
-                .shared
-                .settings
-                .lock(|settings| (settings.dual_iir.afe, settings.dual_iir.telemetry_period));
+            let (gains, telemetry_period) =
+                c.shared.settings.lock(|settings| {
+                    (settings.dual_iir.afe, settings.dual_iir.telemetry_period)
+                });
 
             c.shared.network.lock(|net| {
                 net.telemetry.publish(&telemetry.finalize(

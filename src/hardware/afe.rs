@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 use core::convert::TryFrom;
 use num_enum::TryFromPrimitive;
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize, TryFromPrimitive)]
+#[derive(
+    Copy, Clone, Debug, PartialEq, Serialize, Deserialize, TryFromPrimitive,
+)]
 #[repr(u8)]
 pub enum Gain {
     G1 = 0b00,

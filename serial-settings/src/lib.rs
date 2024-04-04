@@ -78,7 +78,11 @@ pub trait Platform<const Y: usize>: Sized {
     type Error: core::fmt::Debug;
 
     /// Save the settings to storage
-    fn save(&mut self, buffer: &mut [u8], settings: &Self::Settings) -> Result<(), Self::Error>;
+    fn save(
+        &mut self,
+        buffer: &mut [u8],
+        settings: &Self::Settings,
+    ) -> Result<(), Self::Error>;
 
     /// Execute a platform specific command.
     fn cmd(&mut self, cmd: &str);
@@ -118,8 +122,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             match path {
                 Err(e) => writeln!(interface, "Failed to get path: {e}"),
                 Ok(path) => {
-                    match settings.get_json(&path, interface.buffer)
-                    {
+                    match settings.get_json(&path, interface.buffer) {
                         Err(e) => {
                             writeln!(interface, "Failed to read {path}: {e}")
                                 .unwrap();
@@ -173,8 +176,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 Ok(len) => len,
             };
 
-            if let Err(e) = settings.set_json(key, &interface.buffer[..len])
-            {
+            if let Err(e) = settings.set_json(key, &interface.buffer[..len]) {
                 writeln!(interface, "Failed to update {key}: {e:?}").unwrap();
                 return;
             }
@@ -354,11 +356,11 @@ impl<'a, P: Platform<Y>, const Y: usize> Runner<'a, P, Y> {
         Ok(Self(menu::Runner::new(
             Interface::menu(),
             line_buf,
-            Interface{
+            Interface {
                 platform,
                 buffer: serialize_buf,
             },
-            settings
+            settings,
         )))
     }
 

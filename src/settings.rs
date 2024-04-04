@@ -169,7 +169,11 @@ where
         <LockedFlashBank as embedded_storage::nor_flash::ErrorType>::Error,
     >;
 
-    fn save(&mut self, buf: &mut [u8], settings: &Self::Settings) -> Result<(), Self::Error> {
+    fn save(
+        &mut self,
+        buf: &mut [u8],
+        settings: &Self::Settings,
+    ) -> Result<(), Self::Error> {
         for path in Self::Settings::iter_paths::<heapless::String<64>>("/") {
             let mut item = SettingsItem {
                 path: path.unwrap(),
