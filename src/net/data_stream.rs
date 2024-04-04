@@ -22,6 +22,8 @@
 //! # Example
 //! A sample Python script is available in `scripts/stream_throughput.py` to demonstrate reception
 //! of livestreamed data.
+#![allow(static_mut_refs)]
+
 use core::mem::MaybeUninit;
 use heapless::{
     pool::{Box, Init, Pool, Uninit},

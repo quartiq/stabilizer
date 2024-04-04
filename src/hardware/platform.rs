@@ -1,3 +1,5 @@
+#![allow(static_mut_refs)]
+
 /// Flag used to indicate that a reboot to DFU is requested.
 const DFU_REBOOT_FLAG: u32 = 0xDEAD_BEEF;
 
