@@ -1,15 +1,17 @@
 /// Flag used to indicate that a reboot to DFU is requested.
 const DFU_REBOOT_FLAG: u32 = 0xDEAD_BEEF;
 
+extern "C" {
+    static mut _bootflag: u8;
+}
+
 /// Indicate a reboot to DFU is requested.
 pub fn start_dfu_reboot() {
-    extern "C" {
-        static mut _bootflag: u8;
-    }
-
     unsafe {
-        let start_ptr = &mut _bootflag as *mut u8;
-        core::ptr::write_unaligned(start_ptr.cast::<u32>(), DFU_REBOOT_FLAG);
+        core::ptr::write_unaligned(
+            core::ptr::addr_of_mut!(_bootflag).cast(),
+            DFU_REBOOT_FLAG,
+        );
     }
 
     cortex_m::peripheral::SCB::sys_reset();
@@ -17,18 +19,12 @@ pub fn start_dfu_reboot() {
 
 /// Check if the DFU reboot flag is set, indicating a reboot to DFU is requested.
 pub fn dfu_bootflag() -> bool {
-    // Obtain panic region start and end from linker symbol _panic_dump_start and _panic_dump_end
-    extern "C" {
-        static mut _bootflag: u8;
-    }
-
     unsafe {
-        let start_ptr = &mut _bootflag as *mut u8;
-        let set = DFU_REBOOT_FLAG
-            == core::ptr::read_unaligned(start_ptr.cast::<u32>());
+        let start_ptr = core::ptr::addr_of_mut!(_bootflag).cast();
+        let set = DFU_REBOOT_FLAG == core::ptr::read_unaligned(start_ptr);
 
         // Clear the boot flag after checking it to ensure it doesn't stick between reboots.
-        core::ptr::write_unaligned(start_ptr.cast::<u32>(), 0);
+        core::ptr::write_unaligned(start_ptr, 0);
         set
     }
 }
