@@ -18,6 +18,7 @@ pub enum Channel {
     ONE = 1,
 }
 
+/// Convert `fnc::Channel` to `pounder::Channel`s (in, out)
 impl Into<(pounder::Channel, pounder::Channel)> for Channel {
     fn into(self) -> (pounder::Channel, pounder::Channel) {
         match self {
@@ -27,6 +28,7 @@ impl Into<(pounder::Channel, pounder::Channel)> for Channel {
     }
 }
 
+#[derive(Debug)]
 pub enum Error {
     DdsInUnset,
     DdsOutUnset,
@@ -92,17 +94,18 @@ impl PounderFncSettings {
             aom_frequency: DEFAULT_AOM_FREQUENCY,
             amplitude_dds_out: 1.0,
             amplitude_dds_in: 1.0,
-            attenuation_out: 0.5,
-            attenuation_in: 0.5,
+            attenuation_out: 31.5,
+            attenuation_in: 31.5,
             channel,
         }
     }
 
-    pub fn update_dds(self, pounder: &mut PounderDevices) -> Result<(), Error> {
-        let (dds_in, dds_out) = self.channel.into();
-
-        let mut dds = pounder.dds_output.builder();
-
+    /// Get the dds frequency and amplitude words for an fnc settings update
+    ///
+    /// Returns:
+    /// Result<(ftw_in, acr_in, ftw_out, acr_out), Error>
+    ///
+    pub fn get_dds_words(self) -> Result<(u32, u32, u32, u32), Error> {
         let ftw_in = frequency_to_ftw(
             2.0 * self.aom_frequency,
             DDS_SYSTEM_CLK.to_Hz() as f32,
@@ -110,18 +113,29 @@ impl PounderFncSettings {
         .map_err(|_| Error::DdsInUnset)?;
         let acr_in = amplitude_to_acr(self.amplitude_dds_in)
             .map_err(|_| Error::DdsInUnset)?;
+        let ftw_out =
+            frequency_to_ftw(self.aom_frequency, DDS_SYSTEM_CLK.to_Hz() as f32)
+                .map_err(|_| Error::DdsOutUnset)?;
+        let acr_out = amplitude_to_acr(self.amplitude_dds_out)
+            .map_err(|_| Error::DdsOutUnset)?;
+
+        Ok((ftw_in, acr_in, ftw_out, acr_out))
+    }
+
+    pub fn set_all_dds(
+        self,
+        pounder: &mut PounderDevices,
+    ) -> Result<(), Error> {
+        let (dds_in, dds_out) = self.channel.into();
+        let (ftw_in, acr_in, ftw_out, acr_out) = self.get_dds_words()?;
+
+        let mut dds = pounder.dds_output.builder();
 
         dds.update_channels(dds_in.into(), Some(ftw_in), None, Some(acr_in));
         pounder
             .pounder
             .set_attenuation(dds_in, self.attenuation_in)
             .map_err(|_| Error::AttenuationInUnset)?;
-
-        let ftw_out =
-            frequency_to_ftw(self.aom_frequency, DDS_SYSTEM_CLK.to_Hz() as f32)
-                .map_err(|_| Error::DdsOutUnset)?;
-        let acr_out = amplitude_to_acr(self.amplitude_dds_out)
-            .map_err(|_| Error::DdsOutUnset)?;
 
         dds.update_channels(dds_out.into(), Some(ftw_out), None, Some(acr_out));
         pounder

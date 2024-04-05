@@ -591,6 +591,16 @@ impl PounderDevices {
     pub fn temperature(&mut self) -> Result<f32, Error> {
         self.lm75.read_temperature().map_err(|_| Error::I2c)
     }
+
+    pub fn get_telemetry(&mut self) -> PounderTelemetry {
+        PounderTelemetry {
+            temperature: self.lm75.read_temperature().unwrap(),
+            input_power: [
+                self.measure_power(Channel::In0).unwrap(),
+                self.measure_power(Channel::In1).unwrap(),
+            ],
+        }
+    }
 }
 
 impl attenuators::AttenuatorInterface for PounderDevices {
@@ -731,12 +741,6 @@ impl setup::PounderDevices {
     }
 
     pub fn get_telemetry(&mut self) -> PounderTelemetry {
-        PounderTelemetry {
-            temperature: self.pounder.lm75.read_temperature().unwrap(),
-            input_power: [
-                self.pounder.measure_power(Channel::In0).unwrap(),
-                self.pounder.measure_power(Channel::In1).unwrap(),
-            ],
-        }
+        self.pounder.get_telemetry()
     }
 }

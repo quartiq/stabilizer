@@ -50,7 +50,7 @@ use stabilizer::{
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         hal,
-        setup::PounderDevices as Pounder,
+        pounder::attenuators::AttenuatorInterface,
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SerialTerminal, SystemTimer, Systick,
         UsbDevice, AFE0, AFE1,
@@ -76,7 +76,7 @@ const BATCH_SIZE: usize = 1;
 
 // The number of 100MHz timer ticks between each sample. Currently set to 5.12 us
 // corresponding to a 195.3 kHz sampling rate.
-const SAMPLE_TICKS: u32 = 2 << 9;
+const SAMPLE_TICKS: u32 = 2 << 10;
 
 #[derive(Clone, Copy, Debug, Tree)]
 pub struct Settings {
@@ -201,7 +201,8 @@ mod app {
         network: NetworkUsers<Settings, Telemetry, 3>,
         settings: Settings,
         telemetry: TelemetryBuffer,
-        pounder: Pounder,
+        pounder: pounder::PounderDevices,
+        dds: pounder::dds_output::DdsOutput,
     }
 
     #[local]
@@ -237,7 +238,7 @@ mod app {
             pounder.expect("Fibre noise cancellation requires a Pounder");
 
         application_settings.pounder.iter().for_each(|p| {
-            p.update_dds(&mut pounder)
+            p.set_all_dds(&mut pounder)
                 .unwrap_or_else(|_| log::warn!("Failed to update Pounder DDS"));
         });
 
@@ -259,7 +260,8 @@ mod app {
             network,
             settings: application_settings,
             telemetry: TelemetryBuffer::default(),
-            pounder,
+            dds: pounder.dds_output,
+            pounder: pounder.pounder,
         };
 
         let mut local = Local {
@@ -310,13 +312,13 @@ mod app {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, iir_state, generator, phase_offsets], shared=[settings, telemetry, pounder], priority=3)]
+    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, iir_state, generator, phase_offsets], shared=[settings, telemetry, dds], priority=3)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
             settings,
             telemetry,
-            pounder,
+            dds,
         } = c.shared;
 
         let process::LocalResources {
@@ -327,7 +329,7 @@ mod app {
             phase_offsets,
         } = c.local;
 
-        (settings, telemetry, pounder).lock(|settings, telemetry, pounder| {
+        (settings, telemetry, dds).lock(|settings, telemetry, dds| {
             let digital_inputs =
                 [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
             telemetry.digital_inputs = digital_inputs;
@@ -335,10 +337,11 @@ mod app {
             let hold = settings.force_hold
                 || (digital_inputs[1] && settings.allow_hold);
 
+            let mut dds_profile = dds.builder();
+            let mut phase_offset_codes = [[0u16; BATCH_SIZE]; 2];
+
             (adc0, adc1).lock(|adc0, adc1| {
                 let adc_samples = [adc0, adc1];
-                let mut phase_offset_codes = [[0u16; BATCH_SIZE]; 2];
-                let mut dds_profile = pounder.dds_output.builder();
 
                 // Preserve instruction and data ordering w.r.t. DMA flag access.
                 fence(Ordering::SeqCst);
@@ -441,24 +444,61 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, pounder])]
+    /// Update the settings of the application.
+    #[task(priority = 1, local=[afes], shared=[network, settings, pounder, dds])]
     fn settings_update(mut c: settings_update::Context) {
-        log::info!("Updating settings");
         let incoming_settings =
             c.shared.network.lock(|net| *net.miniconf.settings());
 
         c.local.afes.0.set_gain(incoming_settings.afe[0]);
         c.local.afes.1.set_gain(incoming_settings.afe[1]);
 
-        // Update Pounder configurations
-        (c.shared.pounder).lock(|pounder| {
-            incoming_settings.pounder.iter().for_each(|p| {
-                p.update_dds(pounder).unwrap_or_else(|_| {
-                    log::warn!("Failed to update Pounder DDS")
+        // Testing shows that DDS and attenuation updates can be VERY slow. The duration
+        // of each lock below should be minimized to allow interruptions by the process
+        // task so as to avoid a DMA overflow.
+        for pounder_setting in incoming_settings.pounder.iter() {
+            // DDS update.
+            let (ftw_in, acr_in, ftw_out, acr_out) =
+                pounder_setting.get_dds_words().unwrap_or_else(|err| {
+                    log::warn!("Failed to update Pounder DDS: {:#?}", err);
+                    (0, 0, 0, 0)
                 });
-            });
-        });
+            let (in_ch, out_ch) = pounder_setting.channel.into();
 
+            c.shared.dds.lock(|dds| {
+                let mut dds_builder = dds.builder();
+                dds_builder.update_channels(
+                    in_ch.into(),
+                    Some(ftw_in),
+                    None,
+                    Some(acr_in),
+                );
+                dds_builder
+                    .update_channels(
+                        out_ch.into(),
+                        Some(ftw_out),
+                        None,
+                        Some(acr_out),
+                    )
+                    .write();
+            });
+
+            // Attenuation updates.
+            for (ch, attn) in [in_ch, out_ch].iter().zip(
+                [
+                    pounder_setting.attenuation_in,
+                    pounder_setting.attenuation_out,
+                ]
+                .iter(),
+            ) {
+                c.shared.pounder.lock(|pounder| {
+                    pounder.set_attenuation(*ch, *attn).unwrap_or_else(|_| {
+                        log::warn!("Failed to update Pounder attenuation");
+                        31.5
+                    });
+                });
+            }
+        }
         let target = incoming_settings.stream_target.into();
         c.shared.network.lock(|net| net.direct_stream(target));
     }
