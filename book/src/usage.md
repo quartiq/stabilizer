@@ -15,6 +15,7 @@ restarts of the MQTT broker.
 
 Stabilizer also supports storing run time settings on the device. Any configurations saved to
 stabilizer via the USB port will be automatically reapplied when Stabilizer reboots.
+MQTT settings retained on the broker or settings published after the device has connected to the broker override the settings saved on Stabilizer.
 
 Settings are specific to a device. Any settings configured for one Stabilizer will not be applied
 to another. Disambiguation of devices is done by using Stabilizer's MQTT identifier, which is
