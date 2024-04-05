@@ -42,15 +42,14 @@ use mutex_trait::prelude::*;
 use idsp::iir;
 
 use ad9959::phase_to_pow;
+
 use stabilizer::{
+    app_utils::fnc::{Channel, PounderFncSettings},
     hardware::{
         self,
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         hal,
-        pounder::{
-            ChannelConfig, ClockConfig, DdsChannelConfig, PounderConfig,
-        },
         setup::PounderDevices as Pounder,
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SerialTerminal, SystemTimer, Systick,
@@ -75,11 +74,9 @@ const IIR_CASCADE_LENGTH: usize = 1;
 // This does not strictly need a DMA, but the right interrupt binding is needed otherwise
 const BATCH_SIZE: usize = 1;
 
-// The number of 100MHz timer ticks between each sample. Currently set to 12.80 us
-// corresponding to a 78.125 kHz sampling rate.
-const SAMPLE_TICKS: u32 = (2 << 10) + (2 << 8);
-
-const DEFAULT_AOM_FREQUENCY: f32 = 80_000_000.0;
+// The number of 100MHz timer ticks between each sample. Currently set to 5.12 us
+// corresponding to a 195.3 kHz sampling rate.
+const SAMPLE_TICKS: u32 = 2 << 9;
 
 #[derive(Clone, Copy, Debug, Tree)]
 pub struct Settings {
@@ -151,8 +148,8 @@ pub struct Settings {
     ///
     /// # Value
     /// See [PounderConfig#miniconf]
-    #[tree(depth(4))]
-    pounder: PounderConfig,
+    #[tree(depth(2))]
+    pounder: [PounderFncSettings; 2],
 }
 
 impl Default for Settings {
@@ -160,26 +157,6 @@ impl Default for Settings {
         let mut i = iir::Biquad::IDENTITY;
         i.set_min(-SCALE);
         i.set_max(SCALE);
-
-        let pounder = PounderConfig {
-            clock: ClockConfig::default(),
-            in_channel: [ChannelConfig {
-                dds: DdsChannelConfig {
-                    frequency: 2. * DEFAULT_AOM_FREQUENCY,
-                    phase_offset: 0.,
-                    amplitude: 1.0,
-                },
-                attenuation: 0.5,
-            }; 2],
-            out_channel: [ChannelConfig {
-                dds: DdsChannelConfig {
-                    frequency: DEFAULT_AOM_FREQUENCY,
-                    phase_offset: 0.,
-                    amplitude: 1.0,
-                },
-                attenuation: 31.5,
-            }; 2],
-        };
 
         Self {
             // Analog frontend programmable gain amplifier gains (G1, G2, G5, G10)
@@ -201,7 +178,10 @@ impl Default for Settings {
             stream_target: StreamTarget::default(),
 
             // Pounder config initialisation
-            pounder,
+            pounder: [
+                PounderFncSettings::new(Channel::ZERO),
+                PounderFncSettings::new(Channel::ONE),
+            ],
         }
     }
 }
@@ -218,7 +198,7 @@ mod app {
     #[shared]
     struct Shared {
         usb: UsbDevice,
-        network: NetworkUsers<Settings, Telemetry, 5>,
+        network: NetworkUsers<Settings, Telemetry, 3>,
         settings: Settings,
         telemetry: TelemetryBuffer,
         pounder: Pounder,
@@ -255,7 +235,11 @@ mod app {
 
         let mut pounder =
             pounder.expect("Fibre noise cancellation requires a Pounder");
-        pounder.update_dds(application_settings.pounder, &mut None);
+
+        application_settings.pounder.iter().for_each(|p| {
+            p.update_dds(&mut pounder)
+                .unwrap_or_else(|_| log::warn!("Failed to update Pounder DDS"));
+        });
 
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
@@ -390,17 +374,9 @@ mod app {
                                 None,
                             )
                             .write();
-                        // settings.pounder.out_channel[channel_idx]
-                        //     .dds
-                        //     .phase_offset =
-                        //     pow_to_phase(*phase_offset).unwrap_or(0.0);
 
                         phase_offset_codes[channel_idx][dma_idx] =
                             *phase_offset;
-
-                        // pounder.lock(|pdr| {
-                        //     pdr.update_dds_waveform(settings.pounder)
-                        // });
                     }
                 }
 
@@ -467,26 +443,20 @@ mod app {
 
     #[task(priority = 1, local=[afes], shared=[network, settings, pounder])]
     fn settings_update(mut c: settings_update::Context) {
+        log::info!("Updating settings");
         let incoming_settings =
             c.shared.network.lock(|net| *net.miniconf.settings());
-        let mut current_clock_settings: Option<ClockConfig> =
-            Some(ClockConfig::default());
-
-        c.shared.settings.lock(|saved_settings| {
-            current_clock_settings = Some(saved_settings.pounder.clock);
-            *saved_settings = incoming_settings;
-        });
 
         c.local.afes.0.set_gain(incoming_settings.afe[0]);
         c.local.afes.1.set_gain(incoming_settings.afe[1]);
 
         // Update Pounder configurations
-        c.shared.pounder.lock(|pounder| {
-            // let mut clocking = current_clock_settings.clock;
-            pounder.update_dds(
-                incoming_settings.pounder,
-                &mut current_clock_settings,
-            );
+        (c.shared.pounder).lock(|pounder| {
+            incoming_settings.pounder.iter().for_each(|p| {
+                p.update_dds(pounder).unwrap_or_else(|_| {
+                    log::warn!("Failed to update Pounder DDS")
+                });
+            });
         });
 
         let target = incoming_settings.stream_target.into();
