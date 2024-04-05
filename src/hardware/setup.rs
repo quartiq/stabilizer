@@ -2,6 +2,7 @@
 //!
 //! This file contains all of the hardware-specific configuration of Stabilizer.
 use bit_field::BitField;
+use core::mem::MaybeUninit;
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{fmt::Write, ptr, slice};
 use stm32h7xx_hal::{
@@ -160,10 +161,9 @@ pub struct PounderDevices {
 
 #[link_section = ".sram3.eth"]
 /// Static storage for the ethernet DMA descriptor ring.
-static mut DES_RING: ethernet::DesRing<
-    { super::TX_DESRING_CNT },
-    { super::RX_DESRING_CNT },
-> = ethernet::DesRing::new();
+static mut DES_RING: MaybeUninit<
+    ethernet::DesRing<{ super::TX_DESRING_CNT }, { super::RX_DESRING_CNT }>,
+> = MaybeUninit::uninit();
 
 /// Setup ITCM and load its code from flash.
 ///
@@ -195,10 +195,13 @@ fn load_itcm() {
         // Ensure ITCM is enabled before loading.
         atomic::fence(Ordering::SeqCst);
 
-        let len =
-            (&__eitcm as *const u32).offset_from(&__sitcm as *const _) as usize;
-        let dst = slice::from_raw_parts_mut(&mut __sitcm as *mut _, len);
-        let src = slice::from_raw_parts(&__siitcm as *const _, len);
+        let sitcm = core::ptr::addr_of_mut!(__sitcm);
+        let eitcm = core::ptr::addr_of_mut!(__eitcm);
+        let siitcm = core::ptr::addr_of_mut!(__siitcm);
+
+        let len = eitcm.offset_from(sitcm) as usize;
+        let dst = slice::from_raw_parts_mut(sitcm, len);
+        let src = slice::from_raw_parts(siitcm, len);
         // Load code into ITCM.
         dst.copy_from_slice(src);
     }
@@ -661,7 +664,7 @@ where
             super::flash::Flash(flash_bank2.unwrap())
         };
 
-        let mut settings = C::new(NetSettings::new(mac_addr.clone()));
+        let mut settings = C::new(NetSettings::new(mac_addr));
         crate::settings::load_from_flash(&mut settings, &mut flash);
         (flash, settings)
     };
@@ -687,6 +690,11 @@ where
             (ref_clk, mdio, mdc, crs_dv, rxd0, rxd1, tx_en, txd0, txd1)
         };
 
+        let ring = unsafe {
+            DES_RING.write(ethernet::DesRing::new());
+            DES_RING.assume_init_mut()
+        };
+
         // Configure the ethernet controller
         let (mut eth_dma, eth_mac) = ethernet::new(
             device.ETHERNET_MAC,
@@ -695,7 +703,7 @@ where
             ethernet_pins,
             // Note(unsafe): We only call this function once to take ownership of the
             // descriptor ring.
-            unsafe { &mut DES_RING },
+            ring,
             mac_addr,
             ccdr.peripheral.ETH1MAC,
             &ccdr.clocks,

@@ -240,7 +240,7 @@ mod app {
 
     #[init]
     fn init(c: init::Context) -> (Shared, Local) {
-        let clock = SystemTimer::new(|| Systick::now().ticks() as u32);
+        let clock = SystemTimer::new(|| Systick::now().ticks());
 
         // Configure the microcontroller
         let (stabilizer, _pounder) = hardware::setup::setup::<Settings, 4>(
@@ -251,13 +251,12 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let settings: Settings = stabilizer.settings;
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
             clock,
             env!("CARGO_BIN_NAME"),
-            &settings.net,
+            &stabilizer.settings.net,
             stabilizer.metadata,
         );
 
@@ -266,21 +265,21 @@ mod app {
         let shared = Shared {
             usb: stabilizer.usb,
             network,
-            active_settings: settings.dual_iir.clone(),
+            active_settings: stabilizer.settings.dual_iir.clone(),
             telemetry: TelemetryBuffer::default(),
             signal_generator: [
                 SignalGenerator::new(
-                    settings.dual_iir.signal_generator[0]
+                    stabilizer.settings.dual_iir.signal_generator[0]
                         .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),
                 SignalGenerator::new(
-                    settings.dual_iir.signal_generator[1]
+                    stabilizer.settings.dual_iir.signal_generator[1]
                         .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),
             ],
-            settings,
+            settings: stabilizer.settings,
         };
 
         let mut local = Local {

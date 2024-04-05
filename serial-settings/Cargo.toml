@@ -10,3 +10,4 @@ menu = {git = "https://github.com/rust-embedded-community/menu", branch = "featu
 heapless = "0.8"
 embedded-io = "0.6"
 miniconf = "0.9"
+yafnv = "0.1"

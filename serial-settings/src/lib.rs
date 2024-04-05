@@ -49,6 +49,7 @@
 #![no_std]
 
 use core::fmt::Write;
+use core::hash::Hasher;
 use embedded_io::{Read, ReadReady};
 use miniconf::{JsonCoreSlash, TreeKey};
 
@@ -123,32 +124,62 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             match path {
                 Err(e) => writeln!(interface, "Failed to get path: {e}"),
                 Ok(path) => {
-                    match settings.get_json(&path, interface.buffer) {
+                    let value = match settings.get_json(&path, interface.buffer)
+                    {
                         Err(e) => {
                             writeln!(interface, "Failed to read {path}: {e}")
                                 .unwrap();
                             continue;
                         }
-                        Ok(len) => write!(
-                            &mut interface.platform.interface_mut(),
-                            "{path}: {}",
+                        Ok(len) => {
                             core::str::from_utf8(&interface.buffer[..len])
                                 .unwrap()
-                        )
-                        .unwrap(),
-                    }
+                        }
+                    };
 
-                    match defaults.get_json(&path, interface.buffer) {
-                        Err(e) => writeln!(
-                            interface,
-                            "[default serialization error: {e}]"
-                        ),
-                        Ok(len) => writeln!(
+                    write!(
+                        &mut interface.platform.interface_mut(),
+                        "{path}: {value}"
+                    )
+                    .unwrap();
+
+                    let value_hash = {
+                        let mut hasher = yafnv::Fnv1aHasher::default();
+                        hasher.write(value.as_bytes());
+                        hasher.finish()
+                    };
+
+                    let default_value =
+                        match defaults.get_json(&path, interface.buffer) {
+                            Err(e) => {
+                                writeln!(
+                                    interface,
+                                    "[default serialization error: {e}]"
+                                )
+                                .unwrap();
+                                continue;
+                            }
+                            Ok(len) => {
+                                core::str::from_utf8(&interface.buffer[..len])
+                                    .unwrap()
+                            }
+                        };
+
+                    let default_hash = {
+                        let mut hasher = yafnv::Fnv1aHasher::default();
+                        hasher.write(default_value.as_bytes());
+                        hasher.finish()
+                    };
+                    if default_hash != value_hash {
+                        writeln!(
                             &mut interface.platform.interface_mut(),
-                            " [default: {}]",
-                            core::str::from_utf8(&interface.buffer[..len])
-                                .unwrap()
-                        ),
+                            " [default: {default_value}]"
+                        )
+                    } else {
+                        writeln!(
+                            &mut interface.platform.interface_mut(),
+                            " [default]"
+                        )
                     }
                 }
             }

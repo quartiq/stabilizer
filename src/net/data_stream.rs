@@ -53,11 +53,6 @@ const FRAME_SIZE: usize = 1500 - 40 - 8;
 // allocated frame buffer should fit in the queue.
 const FRAME_QUEUE_SIZE: usize = FRAME_COUNT * 2;
 
-// Static storage used for a heapless::Pool of frame buffers.
-static mut FRAME_DATA: [u8; core::mem::size_of::<u8>()
-    * FRAME_SIZE
-    * FRAME_COUNT] = [0; core::mem::size_of::<u8>() * FRAME_SIZE * FRAME_COUNT];
-
 type Frame = [MaybeUninit<u8>; FRAME_SIZE];
 
 /// Represents the destination for the UDP stream to send data to.
@@ -131,8 +126,9 @@ pub fn setup_streaming(
 
     let frame_pool = cortex_m::singleton!(: Pool<Frame> = Pool::new()).unwrap();
 
-    // Note(unsafe): We guarantee that FRAME_DATA is only accessed once in this function.
-    let memory = unsafe { &mut FRAME_DATA };
+    let memory = cortex_m::singleton!(FRAME_DATA: [u8; core::mem::size_of::<u8>() * FRAME_SIZE * FRAME_COUNT] =
+    [0; core::mem::size_of::<u8>() * FRAME_SIZE * FRAME_COUNT]).unwrap();
+
     frame_pool.grow(memory);
 
     let generator = FrameGenerator::new(producer, frame_pool);

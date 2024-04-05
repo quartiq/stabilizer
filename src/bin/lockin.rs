@@ -277,7 +277,7 @@ mod app {
 
     #[init]
     fn init(c: init::Context) -> (Shared, Local) {
-        let clock = SystemTimer::new(|| Systick::now().ticks() as u32);
+        let clock = SystemTimer::new(|| Systick::now().ticks());
 
         // Configure the microcontroller
         let (mut stabilizer, _pounder) = hardware::setup::setup::<Settings, 3>(
