@@ -8,7 +8,7 @@
 # Miniconf Run-time Settings
 Stabilizer supports run-time settings configuration using MQTT or the USB port.
 
-Settings can be stored either in the MQTT broker so that they are automatically applied whenever
+Settings can be stored in the MQTT broker so that they are automatically applied whenever
 Stabilizer reboots and connects. This is referred to as "retained" settings. Broker implementations
 may optionally store these retained settings as well such that they will be reapplied between
 restarts of the MQTT broker.
