@@ -9,4 +9,4 @@ edition = "2021"
 menu = {git = "https://github.com/rust-embedded-community/menu", branch = "feature/borrowed-context", features = ["echo"]}
 heapless = "0.8"
 embedded-io = "0.6"
-miniconf = { git = "https://github.com/quartiq/miniconf", branch = "mqtt-dont-own-settings" }
+miniconf = "0.9"

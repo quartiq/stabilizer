@@ -106,7 +106,7 @@ impl serial_settings::Settings<4> for Settings {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Tree, Serialize, Deserialize)]
+#[derive(Clone, Debug, Tree, Serialize, Deserialize)]
 pub struct DualIir {
     /// Configure the Analog Front End (AFE) gain.
     ///
@@ -243,7 +243,7 @@ mod app {
         let clock = SystemTimer::new(|| Systick::now().ticks() as u32);
 
         // Configure the microcontroller
-        let (stabilizer, _pounder) = hardware::setup::setup(
+        let (stabilizer, _pounder) = hardware::setup::setup::<Settings, 4>(
             c.core,
             c.device,
             clock,
@@ -266,7 +266,7 @@ mod app {
         let shared = Shared {
             usb: stabilizer.usb,
             network,
-            active_settings: settings.dual_iir,
+            active_settings: settings.dual_iir.clone(),
             telemetry: TelemetryBuffer::default(),
             signal_generator: [
                 SignalGenerator::new(
@@ -462,33 +462,36 @@ mod app {
 
     #[task(priority = 1, local=[afes], shared=[network, settings, active_settings, signal_generator])]
     async fn settings_update(mut c: settings_update::Context) {
-        // Copy `settings` into low-latency settings for DSP process
-        let new_settings = c.shared.settings.lock(|new| new.dual_iir.clone());
-        c.shared
-            .active_settings
-            .lock(|current| *current = new_settings);
+        c.shared.settings.lock(|settings| {
+            c.local.afes.0.set_gain(settings.dual_iir.afe[0]);
+            c.local.afes.1.set_gain(settings.dual_iir.afe[1]);
 
-        c.local.afes.0.set_gain(new_settings.afe[0]);
-        c.local.afes.1.set_gain(new_settings.afe[1]);
-
-        // Update the signal generators
-        for (i, &config) in new_settings.signal_generator.iter().enumerate() {
-            match config.try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE) {
-                Ok(config) => {
-                    c.shared
-                        .signal_generator
-                        .lock(|generator| generator[i].update_waveform(config));
+            // Update the signal generators
+            for (i, &config) in
+                settings.dual_iir.signal_generator.iter().enumerate()
+            {
+                match config.try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
+                {
+                    Ok(config) => {
+                        c.shared.signal_generator.lock(|generator| {
+                            generator[i].update_waveform(config)
+                        });
+                    }
+                    Err(err) => log::error!(
+                        "Failed to update signal generation on DAC{}: {:?}",
+                        i,
+                        err
+                    ),
                 }
-                Err(err) => log::error!(
-                    "Failed to update signal generation on DAC{}: {:?}",
-                    i,
-                    err
-                ),
             }
-        }
 
-        let target = new_settings.stream_target.into();
-        c.shared.network.lock(|net| net.direct_stream(target));
+            let target = settings.dual_iir.stream_target.into();
+            c.shared.network.lock(|net| net.direct_stream(target));
+
+            c.shared
+                .active_settings
+                .lock(|current| *current = settings.dual_iir.clone());
+        });
     }
 
     #[task(priority = 1, shared=[network, settings, telemetry], local=[cpu_temp_sensor])]
@@ -514,7 +517,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, shared=[usb, settings, active_settings], local=[usb_terminal])]
+    #[task(priority = 1, shared=[usb, settings], local=[usb_terminal])]
     async fn usb(mut c: usb::Context) {
         loop {
             // Handle the USB serial terminal.
@@ -527,13 +530,9 @@ mod app {
             });
 
             c.shared.settings.lock(|settings| {
-                c.local.usb_terminal.process(settings).unwrap();
-
-                c.shared.active_settings.lock(|active| {
-                    if active != &settings.dual_iir {
-                        settings_update::spawn().unwrap()
-                    }
-                })
+                if c.local.usb_terminal.process(settings).unwrap() {
+                    settings_update::spawn().unwrap()
+                }
             });
 
             Systick::delay(10.millis()).await;

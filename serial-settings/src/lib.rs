@@ -94,6 +94,7 @@ pub trait Platform<const Y: usize>: Sized {
 struct Interface<'a, P: Platform<Y>, const Y: usize> {
     platform: P,
     buffer: &'a mut [u8],
+    updated: bool,
 }
 
 impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
@@ -181,9 +182,11 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 return;
             }
 
+            interface.updated = true;
             writeln!(interface, "{key} cleared to default").unwrap();
         } else {
             settings.reset();
+            interface.updated = true;
             writeln!(interface, "All settings cleared").unwrap();
         }
 
@@ -236,15 +239,18 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         // TODO: Validate it first?
         match settings.set_json(key, value.as_bytes())
         {
-            Ok(_) => match interface.platform.save(interface.buffer, settings) {
-                Ok(_) => {
-                    writeln!(
-                            interface,
-                            "Settings saved. Reboot device (`platform reboot`) to apply."
-                        )
-                }
-                Err(e) => {
-                    writeln!(interface, "Failed to save settings: {e:?}")
+            Ok(_) => {
+                interface.updated = true;
+                match interface.platform.save(interface.buffer, settings) {
+                    Ok(_) => {
+                        writeln!(
+                                interface,
+                                "Settings saved. Reboot device (`platform reboot`) to apply."
+                            )
+                    }
+                    Err(e) => {
+                        writeln!(interface, "Failed to save settings: {e:?}")
+                    }
                 }
             },
             Err(e) => {
@@ -359,6 +365,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Runner<'a, P, Y> {
             Interface {
                 platform,
                 buffer: serialize_buf,
+                updated: false,
             },
             settings,
         )))
@@ -370,10 +377,15 @@ impl<'a, P: Platform<Y>, const Y: usize> Runner<'a, P, Y> {
     }
 
     /// Must be called periodically to process user input.
+    ///
+    /// # Returns
+    /// A boolean indicating true if the settings were modified.
     pub fn process(
         &mut self,
         settings: &mut P::Settings,
-    ) -> Result<(), <P::Interface as embedded_io::ErrorType>::Error> {
+    ) -> Result<bool, <P::Interface as embedded_io::ErrorType>::Error> {
+        self.0.interface.updated = false;
+
         while self.interface_mut().read_ready()? {
             let mut buffer = [0u8; 64];
             let count = self.interface_mut().read(&mut buffer)?;
@@ -381,6 +393,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Runner<'a, P, Y> {
                 self.0.input_byte(value, settings);
             }
         }
-        Ok(())
+
+        Ok(self.0.interface.updated)
     }
 }

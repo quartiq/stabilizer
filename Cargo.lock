@@ -557,7 +557,7 @@ source = "git+https://github.com/rust-embedded-community/menu?branch=feature/bor
 [[package]]
 name = "miniconf"
 version = "0.9.0"
-source = "git+https://github.com/quartiq/miniconf?branch=mqtt-dont-own-settings#9627c6bd1244d38c4f5abe3b13e44ef274d9b5ae"
+source = "git+https://github.com/quartiq/miniconf#d6ef3973008ae818f21e1fbd2f8cd1c1d79dfe58"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
@@ -573,7 +573,7 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.9.0"
-source = "git+https://github.com/quartiq/miniconf?branch=mqtt-dont-own-settings#9627c6bd1244d38c4f5abe3b13e44ef274d9b5ae"
+source = "git+https://github.com/quartiq/miniconf#d6ef3973008ae818f21e1fbd2f8cd1c1d79dfe58"
 dependencies = [
  "proc-macro2",
  "quote",

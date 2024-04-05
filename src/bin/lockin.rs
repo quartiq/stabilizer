@@ -105,7 +105,7 @@ impl serial_settings::Settings<3> for Settings {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 enum Conf {
     /// Output the lockin magnitude.
     Magnitude,
@@ -131,7 +131,7 @@ enum LockinMode {
     External,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Tree)]
+#[derive(Clone, Debug, Tree)]
 pub struct Lockin {
     /// Configure the Analog Front End (AFE) gain.
     ///
@@ -280,7 +280,7 @@ mod app {
         let clock = SystemTimer::new(|| Systick::now().ticks() as u32);
 
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) = hardware::setup::setup(
+        let (mut stabilizer, _pounder) = hardware::setup::setup::<Settings, 3>(
             c.core,
             c.device,
             clock,
@@ -288,14 +288,12 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let settings: Settings = stabilizer.settings;
-
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
             clock,
             env!("CARGO_BIN_NAME"),
-            &settings.net,
+            &stabilizer.settings.net,
             stabilizer.metadata,
         );
 
@@ -305,8 +303,8 @@ mod app {
             network,
             usb: stabilizer.usb,
             telemetry: TelemetryBuffer::default(),
-            active_settings: settings.lockin,
-            settings: settings,
+            active_settings: stabilizer.settings.lockin.clone(),
+            settings: stabilizer.settings,
         };
 
         let signal_config = signal_generator::Config {
@@ -519,17 +517,17 @@ mod app {
 
     #[task(priority = 1, local=[afes], shared=[network, settings, active_settings])]
     async fn settings_update(mut c: settings_update::Context) {
-        // Copy `settings` into low-latency settings for DSP process
-        let new_settings = c.shared.settings.lock(|new| new.lockin.clone());
-        c.shared
-            .active_settings
-            .lock(|current| *current = new_settings);
+        c.shared.settings.lock(|settings| {
+            c.local.afes.0.set_gain(settings.lockin.afe[0]);
+            c.local.afes.1.set_gain(settings.lockin.afe[1]);
 
-        c.local.afes.0.set_gain(new_settings.afe[0]);
-        c.local.afes.1.set_gain(new_settings.afe[1]);
+            let target = settings.lockin.stream_target.into();
+            c.shared.network.lock(|net| net.direct_stream(target));
 
-        let target = new_settings.stream_target.into();
-        c.shared.network.lock(|net| net.direct_stream(target));
+            c.shared
+                .active_settings
+                .lock(|current| *current = settings.lockin.clone());
+        });
     }
 
     #[task(priority = 1, local=[digital_inputs, cpu_temp_sensor], shared=[network, settings, telemetry])]
@@ -561,7 +559,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, shared=[usb, settings, active_settings], local=[usb_terminal])]
+    #[task(priority = 1, shared=[usb, settings], local=[usb_terminal])]
     async fn usb(mut c: usb::Context) {
         loop {
             // Handle the USB serial terminal.
@@ -574,13 +572,9 @@ mod app {
             });
 
             c.shared.settings.lock(|settings| {
-                c.local.usb_terminal.process(settings).unwrap();
-
-                c.shared.active_settings.lock(|active| {
-                    if active != &settings.lockin {
-                        settings_update::spawn().unwrap()
-                    }
-                })
+                if c.local.usb_terminal.process(settings).unwrap() {
+                    settings_update::spawn().unwrap()
+                }
             });
 
             Systick::delay(10.millis()).await;
