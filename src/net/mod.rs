@@ -123,7 +123,6 @@ where
             stack_manager.acquire_stack(),
             &prefix,
             clock,
-            S::default(),
             miniconf::minimq::ConfigBuilder::new(
                 named_broker,
                 &mut store.settings,
@@ -191,7 +190,7 @@ where
     /// # Returns
     /// An indication if any of the network users indicated a state change.
     /// The SettingsChanged option contains the path of the settings that changed.
-    pub fn update(&mut self) -> NetworkState {
+    pub fn update(&mut self, settings: &mut S) -> NetworkState {
         // Update the MQTT clients.
         self.telemetry.update();
 
@@ -208,9 +207,8 @@ where
 
         // `settings_path` has to be at least as large as `miniconf::mqtt_client::MAX_TOPIC_LENGTH`.
         let mut settings_path: String<128> = String::new();
-        let res = self.miniconf.handled_update(|path, old, new| {
+        let res = self.miniconf.handled_update(settings, |path, _old, _new| {
             settings_path = path.into();
-            *old = new.clone();
             Result::<(), &'static str>::Ok(())
         });
         match res {

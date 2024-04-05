@@ -18,6 +18,8 @@ console.
 ### Changed
 * Broker is no longer configured at compile time, but is maintained in device memory
 * MSRV bumped to v1.66
+* The static IP of stabilizer can no longer be configured at compilation time, but now uses device
+memory storage instead. It is now configured via the USB port.
 * The IIR (biquad) filter used for PID action has changed its serialization format.
   See also the `iir_coefficients` Python CLI implementation.
 * Bumped MSRV 1.66.0 -> 1.66.1

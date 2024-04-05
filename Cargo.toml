@@ -70,7 +70,7 @@ minimq = "0.8.0"
 usb-device = "0.3.2"
 usbd-serial = "0.2"
 # Keep this synced with the miniconf version in py/setup.py
-miniconf = "0.9.0"
+miniconf = "0.9"
 tca9539 = "0.2"
 smoltcp-nal = { version = "0.4.1", features = ["shared-stack"]}
 bbqueue = "0.5"
@@ -89,6 +89,9 @@ features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
 [patch.crates-io.usbd-serial]
 git = "https://github.com/rust-embedded-community/usbd-serial"
 rev = "ccff77578925942e40e0a2c7b6d397ad164fdedb"
+
+[patch.crates-io.miniconf]
+git = "https://github.com/quartiq/miniconf"
 
 [features]
 nightly = []

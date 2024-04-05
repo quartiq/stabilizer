@@ -147,6 +147,7 @@ pub struct StabilizerDevices<
     pub usb_serial: SerialTerminal<C, Y>,
     pub usb: UsbDevice,
     pub metadata: &'static ApplicationMetadata,
+    pub settings: C,
 }
 
 /// The available Pounder-specific hardware interfaces.
@@ -657,7 +658,7 @@ where
     ));
     log::info!("EUI48: {}", mac_addr);
 
-    let (flash, settings) = {
+    let (flash, mut settings) = {
         let mut flash = {
             let (_, flash_bank2) = device.FLASH.split();
             super::flash::Flash(flash_bank2.unwrap())
@@ -1165,11 +1166,12 @@ where
                     usb_serial,
                 ),
                 storage: flash,
-                settings,
                 metadata,
+                _settings_marker: core::marker::PhantomData,
             },
             input_buffer,
             serialize_buffer,
+            &mut settings,
         )
         .unwrap()
     };
@@ -1190,6 +1192,7 @@ where
         eem_gpio,
         usb: usb_device,
         metadata,
+        settings,
     };
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());

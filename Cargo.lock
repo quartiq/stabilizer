@@ -420,6 +420,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
 dependencies = [
  "hash32 0.3.1",
+ "serde",
  "stable_deref_trait",
 ]
 
@@ -551,17 +552,15 @@ dependencies = [
 [[package]]
 name = "menu"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5208bd660042c7760f40d960ba0b1a9dc7a9c90775bea4c4637c3b666d2b53d"
+source = "git+https://github.com/rust-embedded-community/menu?rev=7ba884993fea57c3661d0f9d7c3cdca639a48701#7ba884993fea57c3661d0f9d7c3cdca639a48701"
 
 [[package]]
 name = "miniconf"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9df2d7bdba3acb28460c347b21e1e88d869f2716ebe060eb6a79f7b76b57de72"
+source = "git+https://github.com/quartiq/miniconf#d6ef3973008ae818f21e1fbd2f8cd1c1d79dfe58"
 dependencies = [
  "embedded-io",
- "heapless 0.7.17",
+ "heapless 0.8.0",
  "itoa",
  "log",
  "miniconf_derive",
@@ -574,8 +573,7 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89f46d25f40e41f552d76b8eb9e225fe493ebf978a5c3f42b7599e45cfe6b4e3"
+source = "git+https://github.com/quartiq/miniconf#d6ef3973008ae818f21e1fbd2f8cd1c1d79dfe58"
 dependencies = [
  "proc-macro2",
  "quote",

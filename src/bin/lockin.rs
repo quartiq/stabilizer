@@ -123,7 +123,7 @@ enum Conf {
     Modulation,
 }
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 enum LockinMode {
     /// Utilize an internally generated reference for demodulation
     Internal,
@@ -131,7 +131,7 @@ enum LockinMode {
     External,
 }
 
-#[derive(Copy, Clone, Debug, Tree)]
+#[derive(Clone, Debug, Tree)]
 pub struct Lockin {
     /// Configure the Analog Front End (AFE) gain.
     ///
@@ -254,7 +254,8 @@ mod app {
     struct Shared {
         usb: UsbDevice,
         network: NetworkUsers<Lockin, Telemetry, 2>,
-        settings: Lockin,
+        settings: Settings,
+        active_settings: Lockin,
         telemetry: TelemetryBuffer,
     }
 
@@ -279,7 +280,7 @@ mod app {
         let clock = SystemTimer::new(|| Systick::now().ticks());
 
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) = hardware::setup::setup(
+        let (mut stabilizer, _pounder) = hardware::setup::setup::<Settings, 3>(
             c.core,
             c.device,
             clock,
@@ -287,14 +288,12 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let settings: &Settings = stabilizer.usb_serial.settings();
-
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
             clock,
             env!("CARGO_BIN_NAME"),
-            &settings.net,
+            &stabilizer.settings.net,
             stabilizer.metadata,
         );
 
@@ -304,7 +303,8 @@ mod app {
             network,
             usb: stabilizer.usb,
             telemetry: TelemetryBuffer::default(),
-            settings: settings.lockin,
+            active_settings: stabilizer.settings.lockin.clone(),
+            settings: stabilizer.settings,
         };
 
         let signal_config = signal_generator::Config {
@@ -371,11 +371,11 @@ mod app {
     /// This is an implementation of a externally (DI0) referenced PLL lockin on the ADC0 signal.
     /// It outputs either I/Q or power/phase on DAC0/DAC1. Data is normalized to full scale.
     /// PLL bandwidth, filter bandwidth, slope, and x/y or power/phase post-filters are available.
-    #[task(binds=DMA1_STR4, shared=[settings, telemetry], local=[adcs, dacs, lockin, timestamper, pll, generator, signal_generator], priority=3)]
+    #[task(binds=DMA1_STR4, shared=[active_settings, telemetry], local=[adcs, dacs, lockin, timestamper, pll, generator, signal_generator], priority=3)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
-            settings,
+            active_settings,
             telemetry,
             ..
         } = c.shared;
@@ -391,7 +391,7 @@ mod app {
             ..
         } = c.local;
 
-        (settings, telemetry).lock(|settings, telemetry| {
+        (active_settings, telemetry).lock(|settings, telemetry| {
             let (reference_phase, reference_frequency) =
                 match settings.lockin_mode {
                     LockinMode::External => {
@@ -492,10 +492,12 @@ mod app {
         });
     }
 
-    #[idle(shared=[network, usb])]
+    #[idle(shared=[settings, network, usb])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
-            match c.shared.network.lock(|net| net.update()) {
+            match (&mut c.shared.network, &mut c.shared.settings)
+                .lock(|net, settings| net.update(&mut settings.lockin))
+            {
                 NetworkState::SettingsChanged(_path) => {
                     settings_update::spawn().unwrap()
                 }
@@ -513,16 +515,19 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings])]
+    #[task(priority = 1, local=[afes], shared=[network, settings, active_settings])]
     async fn settings_update(mut c: settings_update::Context) {
-        let settings = c.shared.network.lock(|net| *net.miniconf.settings());
-        c.shared.settings.lock(|current| *current = settings);
+        c.shared.settings.lock(|settings| {
+            c.local.afes.0.set_gain(settings.lockin.afe[0]);
+            c.local.afes.1.set_gain(settings.lockin.afe[1]);
 
-        c.local.afes.0.set_gain(settings.afe[0]);
-        c.local.afes.1.set_gain(settings.afe[1]);
+            let target = settings.lockin.stream_target.into();
+            c.shared.network.lock(|net| net.direct_stream(target));
 
-        let target = settings.stream_target.into();
-        c.shared.network.lock(|net| net.direct_stream(target));
+            c.shared
+                .active_settings
+                .lock(|current| *current = settings.lockin.clone());
+        });
     }
 
     #[task(priority = 1, local=[digital_inputs, cpu_temp_sensor], shared=[network, settings, telemetry])]
@@ -536,10 +541,10 @@ mod app {
                 c.local.digital_inputs.1.is_high(),
             ];
 
-            let (gains, telemetry_period) = c
-                .shared
-                .settings
-                .lock(|settings| (settings.afe, settings.telemetry_period));
+            let (gains, telemetry_period) =
+                c.shared.settings.lock(|settings| {
+                    (settings.lockin.afe, settings.lockin.telemetry_period)
+                });
 
             c.shared.network.lock(|net| {
                 net.telemetry.publish(&telemetry.finalize(
@@ -554,7 +559,7 @@ mod app {
         }
     }
 
-    #[task(priority = 1, shared=[usb], local=[usb_terminal])]
+    #[task(priority = 1, shared=[usb, settings], local=[usb_terminal])]
     async fn usb(mut c: usb::Context) {
         loop {
             // Handle the USB serial terminal.
@@ -566,9 +571,12 @@ mod app {
                     .inner_mut()]);
             });
 
-            c.local.usb_terminal.process().unwrap();
+            c.shared.settings.lock(|settings| {
+                if c.local.usb_terminal.process(settings).unwrap() {
+                    settings_update::spawn().unwrap()
+                }
+            });
 
-            // Schedule to run this task every 10 milliseconds.
             Systick::delay(10.millis()).await;
         }
     }
