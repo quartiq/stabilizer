@@ -69,14 +69,17 @@ const SCALE: f32 = i16::MAX as _;
 const IIR_CASCADE_LENGTH: usize = 1;
 
 // The number of samples in each batch process
-// The Pounder dds can only be updated once per batch, else the QSPI stalls.
-// Disabling the second channel would allow for a batch size of 2.
+//
+// It is possible to build a new ProfileBuilder for each buffered input, but it
+// reduces the sampling rate. With a common ProfileBuilder, the buffer size is then
+// limited to 1 for a bi-channel application else the QSPI stalls.
+//
 // This does not strictly need a DMA, but the right interrupt binding is needed otherwise
 const BATCH_SIZE: usize = 1;
 
 // The number of 100MHz timer ticks between each sample. Currently set to 5.12 us
 // corresponding to a 195.3 kHz sampling rate.
-const SAMPLE_TICKS: u32 = 2 << 10;
+const SAMPLE_TICKS: u32 = (2 << 8) + (2 << 6);
 
 #[derive(Clone, Copy, Debug, Tree)]
 pub struct Settings {
