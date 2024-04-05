@@ -39,7 +39,7 @@
 //! ```
 //!
 //! # Design
-//! Settings are specified in a [`Miniconf::Tree`] settings tree and are transferred over the
+//! Settings are specified in a [`miniconf::Tree`] settings tree and are transferred over the
 //! serial interface using JSON encoding. This means that things like strings must be encased in
 //! qutoes.
 //!
