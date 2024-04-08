@@ -254,7 +254,11 @@ mod app {
     struct Shared {
         usb: UsbDevice,
         network: NetworkUsers<Lockin, Telemetry, 2>,
-        settings: Settings,
+        settings: serial_settings::Context<
+            'static,
+            stabilizer::settings::SettingsManager<Settings, 3>,
+            3,
+        >,
         active_settings: Lockin,
         telemetry: TelemetryBuffer,
     }
@@ -293,7 +297,7 @@ mod app {
             stabilizer.net.phy,
             clock,
             env!("CARGO_BIN_NAME"),
-            &stabilizer.settings.net,
+            &stabilizer.settings.platform().settings.net,
             stabilizer.metadata,
         );
 
@@ -303,7 +307,12 @@ mod app {
             network,
             usb: stabilizer.usb,
             telemetry: TelemetryBuffer::default(),
-            active_settings: stabilizer.settings.lockin.clone(),
+            active_settings: stabilizer
+                .settings
+                .platform()
+                .settings
+                .lockin
+                .clone(),
             settings: stabilizer.settings,
         };
 
@@ -495,9 +504,11 @@ mod app {
     #[idle(shared=[settings, network, usb])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
-            match (&mut c.shared.network, &mut c.shared.settings)
-                .lock(|net, settings| net.update(&mut settings.lockin))
-            {
+            match (&mut c.shared.network, &mut c.shared.settings).lock(
+                |net, settings| {
+                    net.update(&mut settings.platform_mut().settings.lockin)
+                },
+            ) {
                 NetworkState::SettingsChanged(_path) => {
                     settings_update::spawn().unwrap()
                 }
@@ -518,6 +529,8 @@ mod app {
     #[task(priority = 1, local=[afes], shared=[network, settings, active_settings])]
     async fn settings_update(mut c: settings_update::Context) {
         c.shared.settings.lock(|settings| {
+            let settings_platform = settings.platform();
+            let settings: &Settings = &settings_platform.settings;
             c.local.afes.0.set_gain(settings.lockin.afe[0]);
             c.local.afes.1.set_gain(settings.lockin.afe[1]);
 
@@ -543,7 +556,11 @@ mod app {
 
             let (gains, telemetry_period) =
                 c.shared.settings.lock(|settings| {
-                    (settings.lockin.afe, settings.lockin.telemetry_period)
+                    let settings_platform = settings.platform();
+                    (
+                        settings_platform.settings.lockin.afe,
+                        settings_platform.settings.lockin.telemetry_period,
+                    )
                 });
 
             c.shared.network.lock(|net| {
@@ -563,19 +580,18 @@ mod app {
     async fn usb(mut c: usb::Context) {
         loop {
             // Handle the USB serial terminal.
-            c.shared.usb.lock(|usb| {
-                usb.poll(&mut [c
-                    .local
-                    .usb_terminal
-                    .interface_mut()
-                    .inner_mut()]);
-            });
+            (&mut c.shared.usb, &mut c.shared.settings).lock(
+                |usb, settings| {
+                    usb.poll(&mut [settings
+                        .platform_mut()
+                        .interface
+                        .inner_mut()]);
 
-            c.shared.settings.lock(|settings| {
-                if c.local.usb_terminal.process(settings).unwrap() {
-                    settings_update::spawn().unwrap()
-                }
-            });
+                    if c.local.usb_terminal.process(settings).unwrap() {
+                        settings_update::spawn().unwrap()
+                    }
+                },
+            );
 
             Systick::delay(10.millis()).await;
         }

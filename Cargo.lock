@@ -552,7 +552,10 @@ dependencies = [
 [[package]]
 name = "menu"
 version = "0.4.0"
-source = "git+https://github.com/rust-embedded-community/menu?rev=7ba884993fea57c3661d0f9d7c3cdca639a48701#7ba884993fea57c3661d0f9d7c3cdca639a48701"
+source = "git+https://github.com/rust-embedded-community/menu?branch=feature/borrowed-context#65af81bb990ea2afa1022dfbfd09d11ad3334eb9"
+dependencies = [
+ "embedded-io",
+]
 
 [[package]]
 name = "miniconf"

@@ -147,7 +147,11 @@ pub struct StabilizerDevices<
     pub usb_serial: SerialTerminal<C, Y>,
     pub usb: UsbDevice,
     pub metadata: &'static ApplicationMetadata,
-    pub settings: C,
+    pub settings: serial_settings::Context<
+        'static,
+        crate::settings::SettingsManager<C, Y>,
+        Y,
+    >,
 }
 
 /// The available Pounder-specific hardware interfaces.
@@ -658,7 +662,7 @@ where
     ));
     log::info!("EUI48: {}", mac_addr);
 
-    let (flash, mut settings) = {
+    let (flash, settings) = {
         let mut flash = {
             let (_, flash_bank2) = device.FLASH.split();
             super::flash::Flash(flash_bank2.unwrap())
@@ -1154,26 +1158,26 @@ where
         (usb_device, serial)
     };
 
-    let usb_terminal = {
+    let (usb_terminal, settings_context) = {
         let input_buffer =
             cortex_m::singleton!(: [u8; 256] = [0u8; 256]).unwrap();
         let serialize_buffer =
             cortex_m::singleton!(: [u8; 512] = [0u8; 512]).unwrap();
 
-        serial_settings::Runner::new(
-            crate::settings::SerialSettingsPlatform {
+        let mut context = serial_settings::Context::new(
+            crate::settings::SettingsManager {
                 interface: serial_settings::BestEffortInterface::new(
                     usb_serial,
                 ),
                 storage: flash,
                 metadata,
-                _settings_marker: core::marker::PhantomData,
+                settings,
             },
-            input_buffer,
             serialize_buffer,
-            &mut settings,
-        )
-        .unwrap()
+        );
+        let runner =
+            serial_settings::Runner::new(input_buffer, &mut context).unwrap();
+        (runner, context)
     };
 
     let stabilizer = StabilizerDevices {
@@ -1192,7 +1196,7 @@ where
         eem_gpio,
         usb: usb_device,
         metadata,
-        settings,
+        settings: settings_context,
     };
 
     // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());

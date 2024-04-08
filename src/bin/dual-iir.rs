@@ -30,9 +30,8 @@
 
 use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
-use serde::{Deserialize, Serialize};
-
 use rtic_monotonics::Monotonic;
+use serde::{Deserialize, Serialize};
 
 use fugit::ExtU32;
 use mutex_trait::prelude::*;
@@ -219,7 +218,11 @@ mod app {
         usb: UsbDevice,
         network: NetworkUsers<DualIir, Telemetry, 3>,
 
-        settings: Settings,
+        settings: serial_settings::Context<
+            'static,
+            stabilizer::settings::SettingsManager<Settings, 4>,
+            4,
+        >,
         active_settings: DualIir,
         telemetry: TelemetryBuffer,
         signal_generator: [SignalGenerator; 2],
@@ -243,7 +246,7 @@ mod app {
         let clock = SystemTimer::new(|| Systick::now().ticks());
 
         // Configure the microcontroller
-        let (stabilizer, _pounder) = hardware::setup::setup::<Settings, 4>(
+        let (stabilizer, _pounder) = hardware::setup::setup(
             c.core,
             c.device,
             clock,
@@ -251,12 +254,15 @@ mod app {
             SAMPLE_TICKS,
         );
 
+        let settings_platform = stabilizer.settings.platform();
+        let settings: &Settings = &settings_platform.settings;
+
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
             stabilizer.net.phy,
             clock,
             env!("CARGO_BIN_NAME"),
-            &stabilizer.settings.net,
+            &stabilizer.settings.platform().settings.net,
             stabilizer.metadata,
         );
 
@@ -265,16 +271,16 @@ mod app {
         let shared = Shared {
             usb: stabilizer.usb,
             network,
-            active_settings: stabilizer.settings.dual_iir.clone(),
+            active_settings: settings.dual_iir.clone(),
             telemetry: TelemetryBuffer::default(),
             signal_generator: [
                 SignalGenerator::new(
-                    stabilizer.settings.dual_iir.signal_generator[0]
+                    settings.dual_iir.signal_generator[0]
                         .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),
                 SignalGenerator::new(
-                    stabilizer.settings.dual_iir.signal_generator[1]
+                    settings.dual_iir.signal_generator[1]
                         .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),
@@ -439,9 +445,11 @@ mod app {
     #[idle(shared=[network, settings, usb])]
     fn idle(mut c: idle::Context) -> ! {
         loop {
-            match (&mut c.shared.network, &mut c.shared.settings)
-                .lock(|net, settings| net.update(&mut settings.dual_iir))
-            {
+            match (&mut c.shared.network, &mut c.shared.settings).lock(
+                |net, settings| {
+                    net.update(&mut settings.platform_mut().settings.dual_iir)
+                },
+            ) {
                 NetworkState::SettingsChanged(_path) => {
                     settings_update::spawn().unwrap()
                 }
@@ -462,6 +470,8 @@ mod app {
     #[task(priority = 1, local=[afes], shared=[network, settings, active_settings, signal_generator])]
     async fn settings_update(mut c: settings_update::Context) {
         c.shared.settings.lock(|settings| {
+            let settings_platform = settings.platform();
+            let settings: &Settings = &settings_platform.settings;
             c.local.afes.0.set_gain(settings.dual_iir.afe[0]);
             c.local.afes.1.set_gain(settings.dual_iir.afe[1]);
 
@@ -501,7 +511,11 @@ mod app {
 
             let (gains, telemetry_period) =
                 c.shared.settings.lock(|settings| {
-                    (settings.dual_iir.afe, settings.dual_iir.telemetry_period)
+                    let settings_platform = settings.platform();
+                    (
+                        settings_platform.settings.dual_iir.afe,
+                        settings_platform.settings.dual_iir.telemetry_period,
+                    )
                 });
 
             c.shared.network.lock(|net| {
@@ -520,19 +534,18 @@ mod app {
     async fn usb(mut c: usb::Context) {
         loop {
             // Handle the USB serial terminal.
-            c.shared.usb.lock(|usb| {
-                usb.poll(&mut [c
-                    .local
-                    .usb_terminal
-                    .interface_mut()
-                    .inner_mut()]);
-            });
+            (&mut c.shared.usb, &mut c.shared.settings).lock(
+                |usb, settings| {
+                    usb.poll(&mut [settings
+                        .platform_mut()
+                        .interface
+                        .inner_mut()]);
 
-            c.shared.settings.lock(|settings| {
-                if c.local.usb_terminal.process(settings).unwrap() {
-                    settings_update::spawn().unwrap()
-                }
-            });
+                    if c.local.usb_terminal.process(settings).unwrap() {
+                        settings_update::spawn().unwrap()
+                    }
+                },
+            );
 
             Systick::delay(10.millis()).await;
         }

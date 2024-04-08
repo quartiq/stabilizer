@@ -28,15 +28,19 @@ where
     }
 }
 
-impl<T> core::fmt::Write for BestEffortInterface<T>
+impl<T> embedded_io::Write for BestEffortInterface<T>
 where
     T: embedded_io::Write + embedded_io::WriteReady,
 {
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
         if let Ok(true) = self.0.write_ready() {
-            self.0.write(s.as_bytes()).ok();
+            self.0.write(buf).ok();
         }
-        Ok(())
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        self.0.flush()
     }
 }
 

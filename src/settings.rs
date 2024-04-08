@@ -23,7 +23,8 @@
 //! 3. Unknown/unneeded settings values in flash can be actively ignored, facilitating simple flash
 //!    storage sharing.
 use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
-use core::fmt::Write;
+use core::fmt::Write as CoreWrite;
+use embedded_io::Write;
 use miniconf::Tree;
 use postcard::ser_flavors::Flavor;
 use stm32h7xx_hal::flash::LockedFlashBank;
@@ -143,12 +144,12 @@ impl<F> From<postcard::Error> for Error<F> {
     }
 }
 
-pub struct SerialSettingsPlatform<C, const Y: usize> {
+pub struct SettingsManager<C, const Y: usize> {
     /// The interface to read/write data to/from serially (via text) to the user.
     pub interface:
         serial_settings::BestEffortInterface<crate::hardware::SerialPort>,
 
-    pub _settings_marker: core::marker::PhantomData<C>,
+    pub settings: C,
 
     /// The storage mechanism used to persist settings to between boots.
     pub storage: Flash,
@@ -157,8 +158,7 @@ pub struct SerialSettingsPlatform<C, const Y: usize> {
     pub metadata: &'static ApplicationMetadata,
 }
 
-impl<C, const Y: usize> serial_settings::Platform<Y>
-    for SerialSettingsPlatform<C, Y>
+impl<C, const Y: usize> serial_settings::Platform<Y> for SettingsManager<C, Y>
 where
     C: serial_settings::Settings<Y>,
 {
@@ -169,11 +169,7 @@ where
         <LockedFlashBank as embedded_storage::nor_flash::ErrorType>::Error,
     >;
 
-    fn save(
-        &mut self,
-        buf: &mut [u8],
-        settings: &Self::Settings,
-    ) -> Result<(), Self::Error> {
+    fn save(&mut self, buf: &mut [u8]) -> Result<(), Self::Error> {
         for path in Self::Settings::iter_paths::<heapless::String<64>>("/") {
             let mut item = SettingsItem {
                 path: path.unwrap(),
@@ -186,7 +182,8 @@ where
                 output: postcard::ser_flavors::Slice::new(&mut item.data),
             };
 
-            if let Err(e) = settings
+            if let Err(e) = self
+                .settings
                 .serialize_by_key(item.path.split('/').skip(1), &mut serializer)
             {
                 log::warn!("Failed to save `{}` to flash: {e:?}", item.path);
@@ -274,5 +271,13 @@ where
 
     fn interface_mut(&mut self) -> &mut Self::Interface {
         &mut self.interface
+    }
+
+    fn settings(&self) -> &Self::Settings {
+        &self.settings
+    }
+
+    fn settings_mut(&mut self) -> &mut Self::Settings {
+        &mut self.settings
     }
 }

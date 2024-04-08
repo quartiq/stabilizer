@@ -91,11 +91,8 @@ pub type SerialPort = usbd_serial::SerialPort<
     &'static mut setup::SerialBufferStore,
 >;
 
-pub type SerialTerminal<C, const Y: usize> = serial_settings::Runner<
-    'static,
-    crate::settings::SerialSettingsPlatform<C, Y>,
-    Y,
->;
+pub type SerialTerminal<C, const Y: usize> =
+    serial_settings::Runner<'static, crate::settings::SettingsManager<C, Y>, Y>;
 
 pub enum HardwareVersion {
     Rev1_0,
