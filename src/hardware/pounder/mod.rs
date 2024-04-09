@@ -3,7 +3,9 @@ use core::borrow::BorrowMut;
 use self::attenuators::AttenuatorInterface;
 
 use super::hal;
-use crate::hardware::{setup, shared_adc::AdcChannel, I2c1Proxy};
+use crate::hardware::{
+    design_parameters, setup, shared_adc::AdcChannel, I2c1Proxy,
+};
 use crate::net::telemetry::PounderTelemetry;
 use ad9959::{
     amplitude_to_acr, frequency_to_ftw, phase_to_pow, validate_clocking,
@@ -13,7 +15,6 @@ use enum_iterator::Sequence;
 use miniconf::Tree;
 use rf_power::PowerMeasurementInterface;
 use serde::{Deserialize, Serialize};
-use stm32h7xx_hal::time::MegaHertz;
 
 pub mod attenuators;
 pub mod dds_output;
@@ -206,7 +207,8 @@ impl Default for ClockConfig {
     fn default() -> Self {
         Self {
             multiplier: 5,
-            reference_clock_frequency: MegaHertz::MHz(100).to_Hz() as f32,
+            reference_clock_frequency: design_parameters::DDS_REF_CLK.to_Hz()
+                as f32,
             external_clock: false,
         }
     }

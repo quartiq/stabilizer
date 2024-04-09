@@ -41,11 +41,20 @@ pub struct PounderFncSettings {
     /// Specifies the centre frequency of the fnc double-pass AOM in hertz
     ///
     /// # Path
-    /// `aom_frequency`
+    /// `frequency_dds_out`
     ///
     /// # Value
     /// A positive 32-bit float in the range [1 MHz, 200 Mhz]
-    pub aom_frequency: f32,
+    pub frequency_dds_out: f32,
+
+    /// Specifies the centre frequency of the fnc double-pass AOM in hertz
+    ///
+    /// # Path
+    /// `frequency_dds_in`
+    ///
+    /// # Value
+    /// A positive 32-bit float in the range [1 MHz, 200 Mhz]
+    pub frequency_dds_in: f32,
 
     /// Specifies the amplitude of the dds output driving the aom relative to max (10 dBm)
     ///
@@ -88,15 +97,25 @@ pub struct PounderFncSettings {
     pub channel: Channel,
 }
 
+impl Default for PounderFncSettings {
+    fn default() -> Self {
+        Self {
+            frequency_dds_out: DEFAULT_AOM_FREQUENCY,
+            frequency_dds_in: 2.0 * DEFAULT_AOM_FREQUENCY,
+            amplitude_dds_out: 0.1,
+            amplitude_dds_in: 0.1,
+            attenuation_out: 31.5,
+            attenuation_in: 31.5,
+            channel: Channel::ZERO,
+        }
+    }
+}
+
 impl PounderFncSettings {
     pub fn new(channel: Channel) -> Self {
         Self {
-            aom_frequency: DEFAULT_AOM_FREQUENCY,
-            amplitude_dds_out: 1.0,
-            amplitude_dds_in: 1.0,
-            attenuation_out: 31.5,
-            attenuation_in: 31.5,
             channel,
+            ..Default::default()
         }
     }
 
@@ -107,15 +126,17 @@ impl PounderFncSettings {
     ///
     pub fn get_dds_words(self) -> Result<(u32, u32, u32, u32), Error> {
         let ftw_in = frequency_to_ftw(
-            2.0 * self.aom_frequency,
+            self.frequency_dds_in,
             DDS_SYSTEM_CLK.to_Hz() as f32,
         )
         .map_err(|_| Error::DdsInUnset)?;
         let acr_in = amplitude_to_acr(self.amplitude_dds_in)
             .map_err(|_| Error::DdsInUnset)?;
-        let ftw_out =
-            frequency_to_ftw(self.aom_frequency, DDS_SYSTEM_CLK.to_Hz() as f32)
-                .map_err(|_| Error::DdsOutUnset)?;
+        let ftw_out = frequency_to_ftw(
+            self.frequency_dds_out,
+            DDS_SYSTEM_CLK.to_Hz() as f32,
+        )
+        .map_err(|_| Error::DdsOutUnset)?;
         let acr_out = amplitude_to_acr(self.amplitude_dds_out)
             .map_err(|_| Error::DdsOutUnset)?;
 

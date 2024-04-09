@@ -50,7 +50,7 @@ use stabilizer::{
         adc::{Adc0Input, Adc1Input, AdcCode},
         afe::Gain,
         hal,
-        pounder::attenuators::AttenuatorInterface,
+        pounder::{attenuators::AttenuatorInterface, ClockConfig},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SerialTerminal, SystemTimer, Systick,
         UsbDevice, AFE0, AFE1,
@@ -79,7 +79,7 @@ const BATCH_SIZE: usize = 1;
 
 // The number of 100MHz timer ticks between each sample. Currently set to 5.12 us
 // corresponding to a 195.3 kHz sampling rate.
-const SAMPLE_TICKS: u32 = (2 << 8) + (2 << 6);
+const SAMPLE_TICKS: u32 = 2 << 9;
 
 #[derive(Clone, Copy, Debug, Tree)]
 pub struct Settings {
@@ -153,6 +153,16 @@ pub struct Settings {
     /// See [PounderConfig#miniconf]
     #[tree(depth(2))]
     pounder: [PounderFncSettings; 2],
+
+    /// Specifies the DDS clock configuration for the Pounder
+    ///
+    /// # Path
+    /// `dds_ref_clock`
+    ///
+    /// # Value
+    /// See [ClockConfig#miniconf]
+    #[tree]
+    dds_ref_clock: ClockConfig,
 }
 
 impl Default for Settings {
@@ -185,6 +195,8 @@ impl Default for Settings {
                 PounderFncSettings::new(Channel::ZERO),
                 PounderFncSettings::new(Channel::ONE),
             ],
+
+            dds_ref_clock: ClockConfig::default(),
         }
     }
 }
@@ -453,9 +465,51 @@ mod app {
         let incoming_settings =
             c.shared.network.lock(|net| *net.miniconf.settings());
 
+        let existing_settings = c.shared.settings.lock(|settings| *settings);
+
+        // Update DDS reference clock if changed.
+        if incoming_settings.dds_ref_clock != existing_settings.dds_ref_clock {
+            match ad9959::validate_clocking(
+                incoming_settings.dds_ref_clock.reference_clock_frequency,
+                incoming_settings.dds_ref_clock.multiplier,
+            ) {
+                Ok(_frequency) => {
+                    c.shared.pounder.lock(|pounder| {
+                        pounder
+                            .set_ext_clk(
+                                incoming_settings.dds_ref_clock.external_clock,
+                            )
+                            .unwrap();
+                    });
+
+                    c.shared.dds.lock(|dds| {
+                        dds.builder()
+                            .set_system_clock(
+                                incoming_settings
+                                    .dds_ref_clock
+                                    .reference_clock_frequency,
+                                incoming_settings.dds_ref_clock.multiplier,
+                            )
+                            .unwrap()
+                            .write();
+                    });
+
+                    c.shared.settings.lock(|settings| {
+                        settings.dds_ref_clock =
+                            incoming_settings.dds_ref_clock;
+                    });
+                }
+                Err(err) => {
+                    log::error!("Invalid AD9959 clocking parameters: {:?}", err)
+                }
+            }
+        }
+
+        // Update AFE gains.
         c.local.afes.0.set_gain(incoming_settings.afe[0]);
         c.local.afes.1.set_gain(incoming_settings.afe[1]);
 
+        // Update DDS outputs and waveforms.
         // Testing shows that DDS and attenuation updates can be VERY slow. The duration
         // of each lock below should be minimized to allow interruptions by the process
         // task so as to avoid a DMA overflow.
@@ -502,6 +556,7 @@ mod app {
                 });
             }
         }
+
         let target = incoming_settings.stream_target.into();
         c.shared.network.lock(|net| net.direct_stream(target));
     }
