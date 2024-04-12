@@ -36,10 +36,10 @@ console.
 * `idsp` crate update to 0.10: `lockin` now uses a double second order lowpass.
 * The `batch_size` field in the the UDP stream frame now contains the number of batches
   not the number of samples per batch. It has been renamed to `batches`.
- * All MQTT clients upgraded and APIs updated.
- * MQTT broker may now be specified via DNS hostnames
- * `hitl/streaming.py` no longer requires a prefix
- * Streaming now supports UDP multicast addresses
+* All MQTT clients upgraded and APIs updated.
+* MQTT broker may now be specified via DNS hostnames
+* `hitl/streaming.py` no longer requires a prefix
+* Streaming now supports UDP multicast addresses
 
 ## [v0.8.1](https://github.com/quartiq/stabilizer/compare/v0.8.0...v0.8.1) - 2022-11-14
 
