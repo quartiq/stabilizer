@@ -52,7 +52,7 @@ pub enum UpdateState {
 }
 
 pub enum NetworkState {
-    SettingsChanged(String<128>),
+    SettingsChanged,
     Updated,
     NoChange,
 }
@@ -203,14 +203,9 @@ where
             UpdateState::Updated => NetworkState::Updated,
         };
 
-        // `settings_path` has to be at least as large as `miniconf::mqtt_client::MAX_TOPIC_LENGTH`.
-        let mut settings_path: String<128> = String::new();
-        let res = self.miniconf.handled_update(settings, |path, _old, _new| {
-            settings_path = path.into();
-            Result::<(), &'static str>::Ok(())
-        });
+        let res = self.miniconf.update(settings);
         match res {
-            Ok(true) => NetworkState::SettingsChanged(settings_path),
+            Ok(true) => NetworkState::SettingsChanged,
             _ => poll_result,
         }
     }

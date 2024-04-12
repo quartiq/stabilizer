@@ -77,10 +77,10 @@ const SAMPLE_PERIOD: f32 =
 
 #[derive(Clone, Debug, Tree)]
 pub struct Settings {
-    #[tree(depth(3))]
+    #[tree(depth = 3)]
     pub dual_iir: DualIir,
 
-    #[tree(depth(1))]
+    #[tree(depth = 1)]
     pub net: NetSettings,
 }
 
@@ -117,7 +117,7 @@ pub struct DualIir {
     ///
     /// # Value
     /// Any of the variants of [Gain] enclosed in double quotes.
-    #[tree]
+    #[tree(depth = 1)]
     afe: [Gain; 2],
 
     /// Configure the IIR filter parameters.
@@ -129,7 +129,7 @@ pub struct DualIir {
     /// * `<m>` specifies which cascade to configure. `<m>` := [0, 1], depending on [IIR_CASCADE_LENGTH]
     ///
     /// See [iir::Biquad]
-    #[tree(depth(2))]
+    #[tree(depth = 2)]
     iir_ch: [[iir::Biquad<f32>; IIR_CASCADE_LENGTH]; 2],
 
     /// Specified true if DI1 should be used as a "hold" input.
@@ -177,7 +177,7 @@ pub struct DualIir {
     ///
     /// # Value
     /// See [signal_generator::BasicConfig#miniconf]
-    #[tree(depth(2))]
+    #[tree(depth = 2)]
     signal_generator: [signal_generator::BasicConfig; 2],
 }
 
@@ -442,7 +442,7 @@ mod app {
             match (&mut c.shared.network, &mut c.shared.settings)
                 .lock(|net, settings| net.update(&mut settings.dual_iir))
             {
-                NetworkState::SettingsChanged(_path) => {
+                NetworkState::SettingsChanged => {
                     settings_update::spawn().unwrap()
                 }
                 NetworkState::Updated => {}
