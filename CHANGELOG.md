@@ -16,16 +16,14 @@ Booster
 console.
 
 ### Changed
-* Broker is no longer configured at compile time, but is maintained in device memory
-* MSRV bumped to v1.66
-* The static IP of stabilizer can no longer be configured at compilation time, but now uses device
-memory storage instead. It is now configured via the USB port.
+* Broker and static IP/DHCP are no longer configured at compile time,
+  but is maintained in device flash and can be changed via the USB port.
+* MSRV bumped to v1.74.1
 * The IIR (biquad) filter used for PID action has changed its serialization format.
   See also the `iir_coefficients` Python CLI implementation.
-* Bumped MSRV 1.66.0 -> 1.66.1
 
 ### Fixed
-* Fixed an issue where the device would rarely not enumerate on Windows
+* Fixed an issue where the device would sometimes not enumerate on Windows
 
 ## [0.9.0](https://github.com/quartiq/stabilizer/compare/v0.8.1...v0.9.0)
 

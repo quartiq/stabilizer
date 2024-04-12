@@ -16,7 +16,7 @@ readme = "README.md"
 documentation = "https://docs.rs/stabilizer/"
 edition = "2021"
 # keep MSRV in sync in ci.yaml and Cargo.toml
-rust-version = "1.66.1"
+rust-version = "1.74.1"
 exclude = [
 	".gitignore",
 	"doc/",
