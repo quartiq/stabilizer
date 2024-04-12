@@ -16,8 +16,7 @@ readme = "README.md"
 documentation = "https://docs.rs/stabilizer/"
 edition = "2021"
 # keep MSRV in sync in ci.yaml and Cargo.toml
-rust-version = "1.66.1"
-build = "build.rs"
+rust-version = "1.74.1"
 exclude = [
 	".gitignore",
 	"doc/",
@@ -71,8 +70,9 @@ usb-device = "0.3.2"
 usbd-serial = "0.2"
 # Keep this synced with the miniconf version in py/setup.py
 miniconf = "0.9"
+miniconf_mqtt = "0.9"
 tca9539 = "0.2"
-smoltcp-nal = { version = "0.4.1", features = ["shared-stack"]}
+smoltcp-nal = { version = "0.4", features = ["shared-stack"], git = "https://github.com/quartiq/smoltcp-nal.git", branch = "main" }
 bbqueue = "0.5"
 postcard = "1"
 bit_field = "0.10.2"
@@ -81,9 +81,9 @@ bit_field = "0.10.2"
 built = { version = "0.7", features = ["git2"], default-features = false }
 
 [dependencies.stm32h7xx-hal]
-version = "0.15.1"
-git = "https://github.com/stm32-rs/stm32h7xx-hal.git"
-branch = "master"
+version = "0.16.0"
+#git = "https://github.com/stm32-rs/stm32h7xx-hal.git"
+#branch = "master"
 features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
 
 [patch.crates-io.usbd-serial]
@@ -91,6 +91,9 @@ git = "https://github.com/rust-embedded-community/usbd-serial"
 rev = "ccff77578925942e40e0a2c7b6d397ad164fdedb"
 
 [patch.crates-io.miniconf]
+git = "https://github.com/quartiq/miniconf"
+
+[patch.crates-io.miniconf_mqtt]
 git = "https://github.com/quartiq/miniconf"
 
 [features]

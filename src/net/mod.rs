@@ -25,6 +25,7 @@ use telemetry::TelemetryClient;
 use core::fmt::Write;
 use heapless::String;
 use miniconf::JsonCoreSlash;
+use miniconf_mqtt::minimq;
 use serde::Serialize;
 use smoltcp_nal::embedded_nal::SocketAddr;
 
@@ -62,12 +63,12 @@ where
     for<'de> S: Default + JsonCoreSlash<'de, Y> + Clone,
     T: Serialize,
 {
-    pub miniconf: miniconf::MqttClient<
+    pub miniconf: miniconf_mqtt::MqttClient<
         'static,
         S,
         NetworkReference,
         SystemTimer,
-        miniconf::minimq::broker::NamedBroker<NetworkReference>,
+        minimq::broker::NamedBroker<NetworkReference>,
         Y,
     >,
     pub processor: NetworkProcessor,
@@ -114,21 +115,18 @@ where
             cortex_m::singleton!(: MqttStorage = MqttStorage::default())
                 .unwrap();
 
-        let named_broker = miniconf::minimq::broker::NamedBroker::new(
+        let named_broker = minimq::broker::NamedBroker::new(
             &net_settings.broker,
             stack_manager.acquire_stack(),
         )
         .unwrap();
-        let settings = miniconf::MqttClient::new(
+        let settings = miniconf_mqtt::MqttClient::new(
             stack_manager.acquire_stack(),
             &prefix,
             clock,
-            miniconf::minimq::ConfigBuilder::new(
-                named_broker,
-                &mut store.settings,
-            )
-            .client_id(&get_client_id(&net_settings.id, "settings"))
-            .unwrap(),
+            minimq::ConfigBuilder::new(named_broker, &mut store.settings)
+                .client_id(&get_client_id(&net_settings.id, "settings"))
+                .unwrap(),
         )
         .unwrap();
 
