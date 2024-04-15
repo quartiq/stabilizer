@@ -76,10 +76,10 @@ const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 
 #[derive(Clone, Debug, Tree)]
 pub struct Settings {
-    #[tree(depth(2))]
+    #[tree(depth = 2)]
     pub lockin: Lockin,
 
-    #[tree(depth(1))]
+    #[tree(depth = 1)]
     pub net: NetSettings,
 }
 
@@ -142,7 +142,7 @@ pub struct Lockin {
     ///
     /// # Value
     /// Any of the variants of [Gain] enclosed in double quotes.
-    #[tree]
+    #[tree(depth = 1)]
     afe: [Gain; 2],
 
     /// Specifies the operational mode of the lockin.
@@ -202,7 +202,7 @@ pub struct Lockin {
     ///
     /// # Value
     /// One of the variants of [Conf] enclosed in double quotes.
-    #[tree]
+    #[tree(depth = 1)]
     output_conf: [Conf; 2],
 
     /// Specifies the telemetry output period in seconds.
@@ -498,7 +498,7 @@ mod app {
             match (&mut c.shared.network, &mut c.shared.settings)
                 .lock(|net, settings| net.update(&mut settings.lockin))
             {
-                NetworkState::SettingsChanged(_path) => {
+                NetworkState::SettingsChanged => {
                     settings_update::spawn().unwrap()
                 }
                 NetworkState::Updated => {}
