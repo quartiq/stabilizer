@@ -294,7 +294,7 @@ def _main():
 
     async def configure():
         logger.info("Connecting to broker")
-        interface = await miniconf.Miniconf.create(prefix, args.broker)
+        interface = await miniconf.Miniconf.create(args.broker, prefix)
 
         # Set the filter coefficients.
         # Note: In the future, we will need to Handle higher-order cascades.
