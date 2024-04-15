@@ -85,7 +85,7 @@ def main():
         """ The actual testing being completed. """
         prefix = args.prefix
         if not args.prefix:
-            devices = await miniconf.discover(args.broker, 'dt/sinara/dual-iir/+', 1)
+            devices = await miniconf.discover(args.broker, 'dt/sinara/dual-iir/+')
             if not devices:
                 raise Exception('No Stabilizer (Dual-iir) devices found')
             assert len(devices) == 1, \
@@ -93,9 +93,9 @@ def main():
 
             prefix = devices.pop()
 
-        tele = await Telemetry.create(prefix, args.broker)
+        tele = await Telemetry.create(args.broker, prefix)
 
-        stabilizer = await miniconf.Miniconf.create(prefix, args.broker)
+        stabilizer = await miniconf.Miniconf.create(args.broker, prefix)
 
         # Disable IIR holds and configure the telemetry rate.
         await stabilizer.set('/allow_hold', False)

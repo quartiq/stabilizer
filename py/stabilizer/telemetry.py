@@ -22,7 +22,7 @@ class Telemetry:
     When the queue is full the oldest messages will be dropped.
     """
     @classmethod
-    async def create(cls, prefix, broker, maxsize=1):
+    async def create(cls, broker, prefix, maxsize=1):
         """
         Connect to the MQTT broker at `broker` and start listening for Stabilizer
         telemetry messages under the prefix `prefix`.
