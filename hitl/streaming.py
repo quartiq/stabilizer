@@ -30,7 +30,7 @@ async def _main():
 
     prefix = args.prefix
     if not args.prefix:
-        devices = await miniconf.discover(args.broker, 'dt/sinara/dual-iir/+', 1)
+        devices = await miniconf.discover(args.broker, 'dt/sinara/dual-iir/+')
         if not devices:
             raise Exception('No Stabilizer (Dual-iir) devices found')
         assert len(devices) == 1, \
@@ -40,7 +40,7 @@ async def _main():
 
     logging.basicConfig(level=logging.INFO)
 
-    conf = await miniconf.Miniconf.create(prefix, args.broker)
+    conf = await miniconf.Miniconf.create(args.broker, prefix)
 
     stream_target = [int(x) for x in args.ip.split('.')]
     if ipaddress.ip_address(args.ip).is_unspecified:
