@@ -19,9 +19,7 @@ pub trait AttenuatorInterface {
         channel: Channel,
         attenuation: f32,
     ) -> Result<f32, Error> {
-        if !(0.0..=31.5).contains(&attenuation) {
-            return Err(Error::Bounds);
-        }
+        let attenuation = Self::validate(attenuation)?;
 
         // Calculate the attenuation code to program into the attenuator. The attenuator uses a
         // code where the LSB is 0.5 dB.
@@ -80,4 +78,12 @@ pub trait AttenuatorInterface {
         &mut self,
         channels: &mut [u8; 4],
     ) -> Result<(), Error>;
+
+    fn validate(attenuation: f32) -> Result<f32, Error> {
+        if !(0.0..=31.5).contains(&attenuation) {
+            Err(Error::Bounds)
+        } else {
+            Ok(attenuation)
+        }
+    }
 }
