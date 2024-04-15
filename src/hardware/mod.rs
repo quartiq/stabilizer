@@ -165,6 +165,12 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 
     panic_persist::report_panic_info(info);
 
+    // Reboot
+    #[cfg(feature = "panic-reboot")]
+    // TODO: Figure out how to log this
+    cortex_m::peripheral::SCB::sys_reset();
+
+    #[cfg(not(feature = "panic-reboot"))]
     // Abort
     asm::udf();
     // Halt

@@ -93,6 +93,7 @@ rev = "096742c1c480f6f63c1a936a3c23ede7993c624d"
 [features]
 nightly = []
 pounder_v1_0 = []
+panic-reboot = []
 
 [profile.dev]
 codegen-units = 1
