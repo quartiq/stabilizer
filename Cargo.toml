@@ -92,11 +92,11 @@ rev = "ccff77578925942e40e0a2c7b6d397ad164fdedb"
 
 [patch.crates-io.miniconf]
 git = "https://github.com/quartiq/miniconf"
-rev = "15c2bb9"
+rev = "2807f2c"
 
 [patch.crates-io.miniconf_mqtt]
 git = "https://github.com/quartiq/miniconf"
-rev = "15c2bb9"
+rev = "2807f2c"
 
 [features]
 nightly = []
