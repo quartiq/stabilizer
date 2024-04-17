@@ -79,7 +79,7 @@ const BATCH_SIZE: usize = 1;
 
 // The number of 100MHz timer ticks between each sample. Currently set to 5.12 us
 // corresponding to a 195.3 kHz sampling rate.
-const SAMPLE_TICKS: u32 = 2 << 9;
+const SAMPLE_TICKS: u32 = 320;
 
 #[derive(Clone, Copy, Debug, Tree)]
 pub struct Settings {
@@ -464,46 +464,9 @@ mod app {
     fn settings_update(mut c: settings_update::Context) {
         let incoming_settings =
             c.shared.network.lock(|net| *net.miniconf.settings());
-
-        let existing_settings = c.shared.settings.lock(|settings| *settings);
-
-        // Update DDS reference clock if changed.
-        if incoming_settings.dds_ref_clock != existing_settings.dds_ref_clock {
-            match ad9959::validate_clocking(
-                incoming_settings.dds_ref_clock.reference_clock_frequency,
-                incoming_settings.dds_ref_clock.multiplier,
-            ) {
-                Ok(_frequency) => {
-                    c.shared.pounder.lock(|pounder| {
-                        pounder
-                            .set_ext_clk(
-                                incoming_settings.dds_ref_clock.external_clock,
-                            )
-                            .unwrap();
-                    });
-
-                    c.shared.dds.lock(|dds| {
-                        dds.builder()
-                            .set_system_clock(
-                                incoming_settings
-                                    .dds_ref_clock
-                                    .reference_clock_frequency,
-                                incoming_settings.dds_ref_clock.multiplier,
-                            )
-                            .unwrap()
-                            .write();
-                    });
-
-                    c.shared.settings.lock(|settings| {
-                        settings.dds_ref_clock =
-                            incoming_settings.dds_ref_clock;
-                    });
-                }
-                Err(err) => {
-                    log::error!("Invalid AD9959 clocking parameters: {:?}", err)
-                }
-            }
-        }
+        c.shared
+            .settings
+            .lock(|current| *current = incoming_settings);
 
         // Update AFE gains.
         c.local.afes.0.set_gain(incoming_settings.afe[0]);
