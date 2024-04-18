@@ -533,7 +533,7 @@ source = "git+https://github.com/rust-embedded-community/menu?rev=7ba884993fea57
 [[package]]
 name = "miniconf"
 version = "0.9.0"
-source = "git+https://github.com/quartiq/miniconf?rev=0a8898f#0a8898fa5b01bb1a8ba869972c65837b5753f9be"
+source = "git+https://github.com/quartiq/miniconf?rev=231981d#231981dd2769779c818ce54e5322e2fb966f69f3"
 dependencies = [
  "itoa",
  "miniconf_derive",
@@ -544,7 +544,7 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.9.0"
-source = "git+https://github.com/quartiq/miniconf?rev=0a8898f#0a8898fa5b01bb1a8ba869972c65837b5753f9be"
+source = "git+https://github.com/quartiq/miniconf?rev=231981d#231981dd2769779c818ce54e5322e2fb966f69f3"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -555,7 +555,7 @@ dependencies = [
 [[package]]
 name = "miniconf_mqtt"
 version = "0.9.0"
-source = "git+https://github.com/quartiq/miniconf?rev=0a8898f#0a8898fa5b01bb1a8ba869972c65837b5753f9be"
+source = "git+https://github.com/quartiq/miniconf?rev=231981d#231981dd2769779c818ce54e5322e2fb966f69f3"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
