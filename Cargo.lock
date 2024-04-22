@@ -533,9 +533,9 @@ source = "git+https://github.com/rust-embedded-community/menu?rev=7ba884993fea57
 
 [[package]]
 name = "miniconf"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f30e189d0a710224386fc161aff7db9750667628c859024d33295c0dc0eac190"
+checksum = "789a2e5c8e8c084ea980c6026e7464d11e6563930e89cfd0caf4b90933c36e4a"
 dependencies = [
  "itoa",
  "miniconf_derive",
@@ -545,9 +545,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_derive"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37e50d40b671b4f4543d785846019fd4c4f6c44393a6e7c0613b87d666a0cf37"
+checksum = "b616d58e8fd11b6450b098f73306259ac6e42984244aa910b0edbbe8df078166"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -557,9 +557,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_mqtt"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "076ba43221314d436030c6f121617deca0b293fe12ec1aa198de2b0bab1c96ac"
+checksum = "b346cb1f739a7f2383c9fac107863fbca95301a54b80ef9275969898d1872e69"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
