@@ -22,7 +22,7 @@
 //!   list
 //!   get <item>
 //!   set <item> <value>
-//!   clear
+//!   clear [ <item> ]
 //!   platform <cmd>
 //!   help [ <command> ]
 //!
@@ -97,7 +97,7 @@ pub trait Platform<const Y: usize>: Sized {
     /// # Arguments
     /// * `buffer` The element serialization buffer.
     /// * `key` The name of the setting to be cleared. If `None`, all settings are cleared.
-    fn clear(&mut self, _buffer: &mut [u8], _key: Option<&str>);
+    fn clear(&mut self, buffer: &mut [u8], key: Option<&str>);
 
     /// Return a mutable reference to the `Interface`.
     fn interface_mut(&mut self) -> &mut Self::Interface;
