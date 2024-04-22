@@ -532,8 +532,9 @@ source = "git+https://github.com/rust-embedded-community/menu?rev=7ba884993fea57
 
 [[package]]
 name = "miniconf"
-version = "0.9.0"
-source = "git+https://github.com/quartiq/miniconf?rev=231981d#231981dd2769779c818ce54e5322e2fb966f69f3"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f30e189d0a710224386fc161aff7db9750667628c859024d33295c0dc0eac190"
 dependencies = [
  "itoa",
  "miniconf_derive",
@@ -543,8 +544,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_derive"
-version = "0.9.0"
-source = "git+https://github.com/quartiq/miniconf?rev=231981d#231981dd2769779c818ce54e5322e2fb966f69f3"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37e50d40b671b4f4543d785846019fd4c4f6c44393a6e7c0613b87d666a0cf37"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -554,8 +556,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_mqtt"
-version = "0.9.0"
-source = "git+https://github.com/quartiq/miniconf?rev=231981d#231981dd2769779c818ce54e5322e2fb966f69f3"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "076ba43221314d436030c6f121617deca0b293fe12ec1aa198de2b0bab1c96ac"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
@@ -1093,7 +1096,7 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.4.1"
-source = "git+https://github.com/quartiq/smoltcp-nal.git?branch=main#3e3373ef65f28a5f28c48c42bd8d4d370408e1f9"
+source = "git+https://github.com/quartiq/smoltcp-nal.git?rev=3e3373e#3e3373ef65f28a5f28c48c42bd8d4d370408e1f9"
 dependencies = [
  "embedded-nal",
  "embedded-time",

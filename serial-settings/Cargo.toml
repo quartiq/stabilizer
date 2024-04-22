@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-miniconf = "0.9"
+miniconf = "0.10"
 
 menu = {git = "https://github.com/rust-embedded-community/menu", rev = "7ba884993fea57c3661d0f9d7c3cdca639a48701", features = ["echo"]}
 heapless = "0.8"
