@@ -196,6 +196,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "embassy-futures"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f878075b9794c1e4ac788c95b728f26aa6366d32eeb10c7051389f898f7d067"
+
+[[package]]
 name = "embedded-dma"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -242,6 +248,15 @@ name = "embedded-storage"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a21dea9854beb860f3062d10228ce9b976da520a73474aed3171ec276bc0c032"
+
+[[package]]
+name = "embedded-storage-async"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1763775e2323b7d5f0aa6090657f5e21cfa02ede71f5dc40eead06d64dcd15cc"
+dependencies = [
+ "embedded-storage",
+]
 
 [[package]]
 name = "embedded-time"
@@ -995,11 +1010,11 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "sequential-storage"
-version = "0.6.2"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc9294c2c7c725835fa69d5a144a29078159360bdc53593e5e977abf8d200f46"
+checksum = "6a4436f77b36958b8092ddea907a21d371dda9b5cd6fbe7036fba2a8479b8ace"
 dependencies = [
- "embedded-storage",
+ "embedded-storage-async",
 ]
 
 [[package]]
@@ -1121,9 +1136,11 @@ dependencies = [
  "built",
  "cortex-m",
  "cortex-m-rt",
+ "embassy-futures",
  "embedded-hal 0.2.7",
  "embedded-io",
  "embedded-storage",
+ "embedded-storage-async",
  "enum-iterator",
  "fugit",
  "heapless 0.7.17",

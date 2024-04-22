@@ -28,6 +28,8 @@ use miniconf::Tree;
 use postcard::ser_flavors::Flavor;
 use stm32h7xx_hal::flash::LockedFlashBank;
 
+use embedded_storage_async::nor_flash::NorFlash;
+
 /// Settings that are used for configuring the network interface to Stabilizer.
 #[derive(Clone, Debug, Tree)]
 pub struct NetSettings {
@@ -80,11 +82,14 @@ pub fn load_from_flash<
         let path = path.unwrap();
 
         // Try to fetch the setting from flash.
-        let item = match sequential_storage::map::fetch_item::<SettingsItem, _>(
-            storage,
-            storage.range(),
-            &mut buffer,
-            path.clone(),
+        let item = match embassy_futures::block_on(
+            sequential_storage::map::fetch_item::<SettingsItem, _>(
+                storage,
+                storage.range(),
+                sequential_storage::cache::NoCache::new(),
+                &mut buffer,
+                path.clone(),
+            ),
         ) {
             Err(e) => {
                 log::warn!("Failed to fetch `{path}` from flash: {e:?}");
@@ -200,23 +205,28 @@ where
 
             // Check if the settings has changed from what's currently in flash (or if it doesn't
             // yet exist).
-            if sequential_storage::map::fetch_item::<SettingsItem, _>(
+            if embassy_futures::block_on(sequential_storage::map::fetch_item::<
+                SettingsItem,
+                _,
+            >(
                 &mut self.storage,
                 range.clone(),
+                sequential_storage::cache::NoCache::new(),
                 buf,
                 item.path.clone(),
-            )
+            ))
             .unwrap()
             .map(|old| old.data != item.data)
             .unwrap_or(true)
             {
                 log::info!("Storing `{}` to flash", item.path);
-                sequential_storage::map::store_item(
+                embassy_futures::block_on(sequential_storage::map::store_item(
                     &mut self.storage,
                     range,
+                    sequential_storage::cache::NoCache::new(),
                     buf,
-                    item,
-                )
+                    &item,
+                ))
                 .unwrap();
             }
         }
@@ -274,5 +284,28 @@ where
 
     fn interface_mut(&mut self) -> &mut Self::Interface {
         &mut self.interface
+    }
+
+    fn clear(&mut self, buf: &mut [u8], key: Option<&str>) {
+        let range = self.storage.range();
+        if let Some(key) = key {
+            embassy_futures::block_on(sequential_storage::map::remove_item::<
+                SettingsItem,
+                _,
+            >(
+                &mut self.storage,
+                range,
+                sequential_storage::cache::NoCache::new(),
+                buf,
+                heapless::String::from(key),
+            ))
+            .unwrap()
+        } else {
+            // Erase the whole flash range.
+            embassy_futures::block_on(
+                self.storage.erase(range.start, range.end),
+            )
+            .unwrap();
+        }
     }
 }
