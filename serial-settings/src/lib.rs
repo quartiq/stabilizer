@@ -97,7 +97,7 @@ pub trait Platform<const Y: usize>: Sized {
     /// # Arguments
     /// * `buffer` The element serialization buffer.
     /// * `key` The name of the setting to be cleared. If `None`, all settings are cleared.
-    fn clear(&mut self, _buffer: &mut [u8], _key: Option<&str>) {}
+    fn clear(&mut self, _buffer: &mut [u8], _key: Option<&str>);
 
     /// Return a mutable reference to the `Interface`.
     fn interface_mut(&mut self) -> &mut Self::Interface;
@@ -205,7 +205,9 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         settings: &mut P::Settings,
         interface: &mut Self,
     ) {
-        if let Some(key) = menu::argument_finder(item, args, "item").unwrap() {
+        let key = menu::argument_finder(item, args, "item").unwrap();
+
+        if let Some(key) = key {
             let mut defaults = settings.clone();
             defaults.reset();
 
@@ -224,16 +226,15 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 return;
             }
 
-            interface.platform.clear(interface.buffer, Some(key));
-
             interface.updated = true;
             writeln!(interface, "{key} cleared to default").unwrap();
         } else {
             settings.reset();
-            interface.platform.clear(interface.buffer, None);
             interface.updated = true;
             writeln!(interface, "All settings cleared").unwrap();
         }
+
+        interface.platform.clear(interface.buffer, key);
     }
 
     fn handle_get(
