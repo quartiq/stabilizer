@@ -11,7 +11,7 @@
 //! required immediately before transmission. This ensures that any slower computation required
 //! for unit conversion can be off-loaded to lower priority tasks.
 use crate::hardware::metadata::ApplicationMetadata;
-use heapless::{String, Vec};
+use heapless::String;
 use minimq::{DeferredPublication, Publication};
 use serde::Serialize;
 
@@ -22,7 +22,7 @@ use crate::hardware::{adc::AdcCode, afe::Gain, dac::DacCode, SystemTimer};
 const DEFAULT_METADATA: &str = "{\"message\":\"Truncated: See USB terminal\"}";
 
 /// The telemetry client for reporting telemetry data over MQTT.
-pub struct TelemetryClient<T: Serialize> {
+pub struct TelemetryClient {
     mqtt: minimq::Minimq<
         'static,
         NetworkReference,
@@ -31,7 +31,6 @@ pub struct TelemetryClient<T: Serialize> {
     >,
     prefix: String<128>,
     meta_published: bool,
-    _telemetry: core::marker::PhantomData<T>,
     metadata: &'static ApplicationMetadata,
 }
 
@@ -104,7 +103,7 @@ impl TelemetryBuffer {
     }
 }
 
-impl<T: Serialize> TelemetryClient<T> {
+impl TelemetryClient {
     /// Construct a new telemetry client.
     ///
     /// # Args
@@ -127,7 +126,6 @@ impl<T: Serialize> TelemetryClient<T> {
             mqtt,
             meta_published: false,
             prefix: String::from(prefix),
-            _telemetry: core::marker::PhantomData,
             metadata,
         }
     }
@@ -140,20 +138,19 @@ impl<T: Serialize> TelemetryClient<T> {
     ///
     /// # Args
     /// * `telemetry` - The telemetry to report
-    pub fn publish(&mut self, telemetry: &T) {
+    pub fn publish<T: Serialize>(&mut self, telemetry: &T) {
         let mut topic = self.prefix.clone();
         topic.push_str("/telemetry").unwrap();
-
-        let telemetry: Vec<u8, 512> =
-            serde_json_core::to_vec(telemetry).unwrap();
 
         self.mqtt
             .client()
             .publish(
-                minimq::Publication::<&[u8]>::new(&telemetry)
-                    .topic(&topic)
-                    .finish()
-                    .unwrap(),
+                minimq::DeferredPublication::new(|buf| {
+                    serde_json_core::to_slice(telemetry, buf)
+                })
+                .topic(&topic)
+                .finish()
+                .unwrap(),
             )
             .map_err(|e| log::error!("Telemetry publishing error: {:?}", e))
             .ok();
