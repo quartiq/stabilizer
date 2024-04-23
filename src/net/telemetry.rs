@@ -11,7 +11,7 @@
 //! required immediately before transmission. This ensures that any slower computation required
 //! for unit conversion can be off-loaded to lower priority tasks.
 use crate::hardware::metadata::ApplicationMetadata;
-use heapless::{String, Vec};
+use heapless::String;
 use minimq::{DeferredPublication, Publication};
 use serde::Serialize;
 
@@ -142,16 +142,15 @@ impl TelemetryClient {
         let mut topic = self.prefix.clone();
         topic.push_str("/telemetry").unwrap();
 
-        let telemetry: Vec<u8, 512> =
-            serde_json_core::to_vec(telemetry).unwrap();
-
         self.mqtt
             .client()
             .publish(
-                minimq::Publication::<&[u8]>::new(&telemetry)
-                    .topic(&topic)
-                    .finish()
-                    .unwrap(),
+                minimq::DeferredPublication::new(|buf| {
+                    serde_json_core::to_slice(telemetry, buf)
+                })
+                .topic(&topic)
+                .finish()
+                .unwrap(),
             )
             .map_err(|e| log::error!("Telemetry publishing error: {:?}", e))
             .ok();
