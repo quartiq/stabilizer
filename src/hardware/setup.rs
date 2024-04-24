@@ -690,10 +690,7 @@ where
             (ref_clk, mdio, mdc, crs_dv, rxd0, rxd1, tx_en, txd0, txd1)
         };
 
-        let ring = unsafe {
-            DES_RING.write(ethernet::DesRing::new());
-            DES_RING.assume_init_mut()
-        };
+        let ring = unsafe { DES_RING.write(ethernet::DesRing::new()) };
 
         // Configure the ethernet controller
         let (mut eth_dma, eth_mac) = ethernet::new(
