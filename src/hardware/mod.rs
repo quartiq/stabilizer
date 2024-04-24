@@ -87,8 +87,8 @@ pub type I2c1Proxy =
 pub type SerialPort = usbd_serial::SerialPort<
     'static,
     crate::hardware::UsbBus,
-    &'static mut setup::SerialBufferStore,
-    &'static mut setup::SerialBufferStore,
+    &'static mut [u8],
+    &'static mut [u8],
 >;
 
 pub type SerialTerminal<C, const Y: usize> = serial_settings::Runner<

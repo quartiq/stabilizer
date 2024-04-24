@@ -5,6 +5,7 @@ use bit_field::BitField;
 use core::mem::MaybeUninit;
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{fmt::Write, ptr, slice};
+use heapless::String;
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
@@ -22,33 +23,12 @@ use super::{
     platform, pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc,
     timers, DigitalInput0, DigitalInput1, EemDigitalInput0, EemDigitalInput1,
     EemDigitalOutput0, EemDigitalOutput1, EthernetPhy, HardwareVersion,
-    NetworkStack, SerialTerminal, SystemTimer, Systick, UsbBus, UsbDevice,
-    AFE0, AFE1,
+    NetworkStack, SerialTerminal, SystemTimer, Systick, UsbDevice, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
 const NUM_UDP_SOCKETS: usize = 1;
 const NUM_SOCKETS: usize = NUM_UDP_SOCKETS + NUM_TCP_SOCKETS;
-
-pub struct SerialBufferStore([u8; 1024]);
-
-impl Default for SerialBufferStore {
-    fn default() -> Self {
-        Self([0u8; 1024])
-    }
-}
-
-impl core::borrow::Borrow<[u8]> for &mut SerialBufferStore {
-    fn borrow(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-impl core::borrow::BorrowMut<[u8]> for &mut SerialBufferStore {
-    fn borrow_mut(&mut self) -> &mut [u8] {
-        &mut self.0
-    }
-}
 
 pub struct NetStorage {
     pub ip_addrs: [smoltcp::wire::IpCidr; 1],
@@ -1080,14 +1060,9 @@ where
     };
 
     let (usb_device, usb_serial) = {
-        let usb_bus = cortex_m::singleton!(: Option<usb_device::bus::UsbBusAllocator<UsbBus>> = None).unwrap();
-        let endpoint_memory =
-            cortex_m::singleton!(: [u32; 1024] = [0; 1024]).unwrap();
-
-        //let usb_id = gpioa.pa10.into_alternate::<8>();
+        let _usb_id = gpioa.pa10.into_alternate::<10>();
         let usb_n = gpioa.pa11.into_alternate();
         let usb_p = gpioa.pa12.into_alternate();
-
         let usb = stm32h7xx_hal::usb_hs::USB2::new(
             device.OTG2_HS_GLOBAL,
             device.OTG2_HS_DEVICE,
@@ -1098,52 +1073,43 @@ where
             &ccdr.clocks,
         );
 
-        // Generate a device serial number from the MAC address.
-        let serial_number =
-            cortex_m::singleton!(: Option<heapless::String<17>> = None)
-                .unwrap();
-        {
-            let mut serial_string: heapless::String<17> =
-                heapless::String::new();
-            let octets = mac_addr.0;
-
-            write!(
-                serial_string,
-                "{:02x}-{:02x}-{:02x}-{:02x}-{:02x}-{:02x}",
-                octets[0],
-                octets[1],
-                octets[2],
-                octets[3],
-                octets[4],
-                octets[5]
-            )
-            .unwrap();
-            serial_number.replace(serial_string);
-        }
-
-        usb_bus.replace(stm32h7xx_hal::usb_hs::UsbBus::new(
+        let endpoint_memory =
+            cortex_m::singleton!(: Option<&'static mut [u32]> = None).unwrap();
+        endpoint_memory.replace(
+            &mut cortex_m::singleton!(: [u32; 1024] = [0; 1024]).unwrap()[..],
+        );
+        let usb_bus = cortex_m::singleton!(: usb_device::bus::UsbBusAllocator<super::UsbBus> =
+        stm32h7xx_hal::usb_hs::UsbBus::new(
             usb,
-            &mut endpoint_memory[..],
-        ));
+            endpoint_memory.take().unwrap(),
+        ))
+        .unwrap();
 
-        let rx_buffer = cortex_m::singleton!(: SerialBufferStore = SerialBufferStore::default()).unwrap();
-        let tx_buffer = cortex_m::singleton!(: SerialBufferStore = SerialBufferStore::default()).unwrap();
+        let read_store = cortex_m::singleton!(: [u8; 128] = [0; 128]).unwrap();
+        let write_store =
+            cortex_m::singleton!(: [u8; 1024] = [0; 1024]).unwrap();
+        let serial = usbd_serial::SerialPort::new_with_store(
+            usb_bus,
+            &mut read_store[..],
+            &mut write_store[..],
+        );
 
-        let serial = {
-            usbd_serial::SerialPort::new_with_store(
-                usb_bus.as_ref().unwrap(),
-                rx_buffer,
-                tx_buffer,
-            )
-        };
+        // Generate a device serial number from the MAC address.
+        let serial_number = cortex_m::singleton!(: String<17> = {
+            let mut s = String::new();
+            write!(s, "{mac_addr}").unwrap();
+            s
+        })
+        .unwrap();
+
         let usb_device = usb_device::device::UsbDeviceBuilder::new(
-            usb_bus.as_ref().unwrap(),
+            usb_bus,
             usb_device::device::UsbVidPid(0x1209, 0x392F),
         )
         .strings(&[usb_device::device::StringDescriptors::default()
             .manufacturer("ARTIQ/Sinara")
             .product("Stabilizer")
-            .serial_number(serial_number.as_ref().unwrap())])
+            .serial_number(serial_number)])
         .unwrap()
         .device_class(usbd_serial::USB_CLASS_CDC)
         .build();
@@ -1153,7 +1119,7 @@ where
 
     let usb_terminal = {
         let input_buffer =
-            cortex_m::singleton!(: [u8; 256] = [0u8; 256]).unwrap();
+            cortex_m::singleton!(: [u8; 128] = [0u8; 128]).unwrap();
         let serialize_buffer =
             cortex_m::singleton!(: [u8; 512] = [0u8; 512]).unwrap();
 
