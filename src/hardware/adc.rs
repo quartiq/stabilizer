@@ -295,8 +295,7 @@ macro_rules! adc_input {
                     // never actually modified. It technically only needs to be immutably
                     // borrowed, but the current HAL API only supports mutable borrows.
                     let spi_eot_clear = unsafe {
-                        SPI_EOT_CLEAR.write([1 << 3]);
-                        SPI_EOT_CLEAR.assume_init_mut()
+                        SPI_EOT_CLEAR.write([1 << 3])
                     };
 
                     // Generate DMA events when the timer hits zero (roll-over). This must be before
@@ -334,13 +333,12 @@ macro_rules! adc_input {
 
                     // Note(unsafe): This word is initialized once per ADC initialization to verify
                     // it is initialized properly.
-                        // Note(unsafe): Because this is a Memory->Peripheral transfer, this data is never
-                        // actually modified. It technically only needs to be immutably borrowed, but the
-                        // current HAL API only supports mutable borrows.
+                    // Note(unsafe): Because this is a Memory->Peripheral transfer, this data is never
+                    // actually modified. It technically only needs to be immutably borrowed, but the
+                    // current HAL API only supports mutable borrows.
+                    // Write a binary code into the SPI control register to initiate a transfer.
                     let spi_start = unsafe {
-                        // Write a binary code into the SPI control register to initiate a transfer.
-                        SPI_START.write([0x201]);
-                        SPI_START.assume_init_mut()
+                        SPI_START.write([0x201])
                     };
 
                     // Construct the trigger stream to write from memory to the peripheral.
@@ -377,8 +375,7 @@ macro_rules! adc_input {
                     spi.listen(hal::spi::Event::Error);
 
                     let adc_buf = unsafe {
-                        ADC_BUF.write(Default::default());
-                        ADC_BUF.assume_init_mut()
+                        ADC_BUF.write(Default::default())
                     };
                     let adc_bufs = adc_buf[$index].split_at_mut(1);
 

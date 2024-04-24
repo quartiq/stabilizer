@@ -218,7 +218,6 @@ mod app {
     struct Shared {
         usb: UsbDevice,
         network: NetworkUsers<DualIir, 3>,
-
         settings: Settings,
         active_settings: DualIir,
         telemetry: TelemetryBuffer,
