@@ -229,11 +229,10 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "embedded-nal"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "447416d161ba378782c13e82b11b267d6d2104b4913679a7c5640e7e94f96ea7"
+checksum = "b8a943fad5ed3d3f8a00f1e80f6bba371f1e7f0df28ec38477535eb318dc19cc"
 dependencies = [
- "heapless 0.7.17",
  "nb 1.1.0",
  "no-std-net",
 ]
@@ -255,18 +254,18 @@ dependencies = [
 
 [[package]]
 name = "enum-iterator"
-version = "2.0.1"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e0b48d2b80ff6b002339547442496ea29d66a8c66ce8e1a6bd8c58b9cec7cf3"
+checksum = "c280b9e6b3ae19e152d8e31cf47f18389781e119d4013a2a2bb0180e5facc635"
 dependencies = [
  "enum-iterator-derive",
 ]
 
 [[package]]
 name = "enum-iterator-derive"
-version = "1.3.1"
+version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c19cbb53d33b57ac4df1f0af6b92c38c107cded663c4aea9fae1189dcfc17cf5"
+checksum = "a1ab991c1362ac86c61ab6f556cff143daa22e5a15e4e189df818b2fd19fe65b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -391,7 +390,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
 dependencies = [
  "hash32 0.3.1",
- "serde",
  "stable_deref_trait",
 ]
 
@@ -533,9 +531,9 @@ source = "git+https://github.com/rust-embedded-community/menu?rev=7ba884993fea57
 
 [[package]]
 name = "miniconf"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "789a2e5c8e8c084ea980c6026e7464d11e6563930e89cfd0caf4b90933c36e4a"
+checksum = "eb5c0319f66b92ee813d7f90b25018673a5e41148caf28951ad0bb9110627b37"
 dependencies = [
  "itoa",
  "miniconf_derive",
@@ -545,9 +543,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_derive"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b616d58e8fd11b6450b098f73306259ac6e42984244aa910b0edbbe8df078166"
+checksum = "47bdb0160aff6c513c43d8ec1188491aedc875eb5cd34abc6cc3d02aab208a5e"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -557,9 +555,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_mqtt"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b346cb1f739a7f2383c9fac107863fbca95301a54b80ef9275969898d1872e69"
+checksum = "a1ab8296f329390df0d4542fd83a42985fefffbbf7fe69dd21f88f2c0c91f5f8"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
@@ -572,9 +570,9 @@ dependencies = [
 
 [[package]]
 name = "minimq"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b561c2c86a3509f7c514f546fb24755753a30fdcf67cce8d5f2f38688483cd31"
+checksum = "2c63955f174d014ef627e6f21dda747c24a294be94234e91ae30a9b2173784e1"
 dependencies = [
  "bit_field",
  "embedded-nal",
@@ -1102,8 +1100,9 @@ dependencies = [
 
 [[package]]
 name = "smoltcp-nal"
-version = "0.4.1"
-source = "git+https://github.com/quartiq/smoltcp-nal.git?rev=3e3373e#3e3373ef65f28a5f28c48c42bd8d4d370408e1f9"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3ac46812539eefac6ffe76393317b6dd4851fef6f31621cce27e9924d586570"
 dependencies = [
  "embedded-nal",
  "embedded-time",
