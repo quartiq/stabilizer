@@ -69,7 +69,7 @@ minimq = "0.9.0"
 usb-device = "0.3.2"
 usbd-serial = "0.2"
 # Keep this synced with the miniconf version in py/setup.py
-miniconf = { version = "0.11", features = ["json-core", "derive"] }
+miniconf = { version = "0.11", features = ["json-core", "derive", "postcard"] }
 miniconf_mqtt = "0.11"
 tca9539 = "0.2"
 smoltcp-nal = { version = "0.5", features = ["shared-stack"] }

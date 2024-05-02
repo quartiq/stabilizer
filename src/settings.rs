@@ -24,7 +24,7 @@
 //!    storage sharing.
 use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
 use core::fmt::Write;
-use miniconf::Tree;
+use miniconf::{Tree, Postcard};
 use postcard::ser_flavors::Flavor;
 use stm32h7xx_hal::flash::LockedFlashBank;
 
