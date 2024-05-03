@@ -24,8 +24,7 @@
 //!    storage sharing.
 use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
 use core::fmt::Write;
-use miniconf::{Tree, Postcard};
-use postcard::ser_flavors::Flavor;
+use miniconf::{Postcard, Tree};
 use stm32h7xx_hal::flash::LockedFlashBank;
 
 /// Settings that are used for configuring the network interface to Stabilizer.
@@ -96,11 +95,9 @@ pub fn load_from_flash<
 
         log::info!("Loading initial `{path}` from flash");
 
-        let mut deserializer = postcard::Deserializer::from_flavor(
-            postcard::de_flavors::Slice::new(&item.data),
-        );
-        if let Err(e) = structure
-            .deserialize_by_key(path.split('/').skip(1), &mut deserializer)
+        let flavor = postcard::de_flavors::Slice::new(&item.data);
+        if let Err(e) =
+            structure.set_postcard_by_key(path.split('/').skip(1), flavor)
         {
             log::warn!("Failed to deserialize `{path}` from flash: {e:?}");
         }
@@ -182,18 +179,20 @@ where
 
             item.data.resize(item.data.capacity(), 0).unwrap();
 
-            let mut serializer = postcard::Serializer {
-                output: postcard::ser_flavors::Slice::new(&mut item.data),
-            };
+            let flavor = postcard::ser_flavors::Slice::new(&mut item.data);
 
-            if let Err(e) = settings
-                .serialize_by_key(item.path.split('/').skip(1), &mut serializer)
+            let len = match settings
+                .get_postcard_by_key(item.path.split('/').skip(1), flavor)
             {
-                log::warn!("Failed to save `{}` to flash: {e:?}", item.path);
-                continue;
-            }
-
-            let len = serializer.output.finalize()?.len();
+                Err(e) => {
+                    log::warn!(
+                        "Failed to save `{}` to flash: {e:?}",
+                        item.path
+                    );
+                    continue;
+                }
+                Ok(slice) => slice.len(),
+            };
             item.data.truncate(len);
 
             let range = self.storage.range();
