@@ -514,13 +514,13 @@ checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
 
 [[package]]
 name = "mcp230xx"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c5a338372c83c3eff68c07a23fe00dff2b2c9195583a2d464292919bc27de04"
+checksum = "68c07dd8a414e6055de2c7fd750c37fde0fd7844720b9198c3fcf11671050509"
 dependencies = [
  "bit_field",
  "embedded-hal 0.2.7",
- "num_enum 0.5.11",
+ "num_enum",
  "paste",
 ]
 
@@ -579,7 +579,7 @@ dependencies = [
  "embedded-nal",
  "embedded-time",
  "heapless 0.7.17",
- "num_enum 0.7.2",
+ "num_enum",
  "serde",
  "smlang",
  "varint-rs",
@@ -702,31 +702,11 @@ dependencies = [
 
 [[package]]
 name = "num_enum"
-version = "0.5.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f646caf906c20226733ed5b1374287eb97e3c2a5c227ce668c1f2ce20ae57c9"
-dependencies = [
- "num_enum_derive 0.5.11",
-]
-
-[[package]]
-name = "num_enum"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02339744ee7253741199f897151b38e72257d13802d4ee837285cc2990a90845"
 dependencies = [
- "num_enum_derive 0.7.2",
-]
-
-[[package]]
-name = "num_enum_derive"
-version = "0.5.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcbff9bc912032c62bf65ef1d5aea88983b420f4f839db1e9b0c281a25c9c799"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
+ "num_enum_derive",
 ]
 
 [[package]]
@@ -1147,7 +1127,7 @@ dependencies = [
  "minimq",
  "mono-clock",
  "mutex-trait",
- "num_enum 0.7.2",
+ "num_enum",
  "panic-persist",
  "paste",
  "postcard",
@@ -1263,13 +1243,13 @@ dependencies = [
 
 [[package]]
 name = "tca9539"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05458b00a3a73c5b64c0de8f2a5182f6d51eb1aeb54c638e585092d26fc9a971"
+checksum = "7b1f6d512d01017b7e056a40a4a8e6f06649ecd92832ac69d9ec24306edfbf5d"
 dependencies = [
  "bit_field",
  "embedded-hal 0.2.7",
- "num_enum 0.5.11",
+ "num_enum",
 ]
 
 [[package]]
