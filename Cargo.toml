@@ -57,7 +57,6 @@ mcp230xx = "1.0"
 mutex-trait = "0.2"
 fugit = "0.3"
 rtt-logger = "0.2"
-systick-monotonic = "1.0"
 mono-clock = "0.1"
 spin = { version = "0.9", default-features = false, features = ["spin_mutex"]}
 shared-bus = { version = "0.3", features = ["cortex-m"] }
@@ -73,7 +72,6 @@ miniconf = { version = "0.11", features = ["json-core", "derive", "postcard"] }
 miniconf_mqtt = "0.11"
 tca9539 = "0.2"
 smoltcp-nal = { version = "0.5", features = ["shared-stack"] }
-bbqueue = "0.5"
 postcard = "1"
 bit_field = "0.10.2"
 

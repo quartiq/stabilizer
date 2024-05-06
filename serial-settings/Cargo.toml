@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 miniconf = {version = "0.11", features = ["json-core"]}
 
-menu = {git = "https://github.com/rust-embedded-community/menu", rev = "7ba884993fea57c3661d0f9d7c3cdca639a48701", features = ["echo"]}
+menu = {version = "0.5", features = ["echo"]}
 heapless = "0.8"
 embedded-io = "0.6"
 yafnv = "0.1"

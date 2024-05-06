@@ -103,8 +103,8 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         _menu: &menu::Menu<Self, P::Settings>,
         item: &menu::Item<Self, P::Settings>,
         args: &[&str],
-        _settings: &mut P::Settings,
         interface: &mut Self,
+        _settings: &mut P::Settings,
     ) {
         let key = menu::argument_finder(item, args, "cmd").unwrap().unwrap();
         interface.platform.cmd(key)
@@ -114,8 +114,8 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         _menu: &menu::Menu<Self, P::Settings>,
         _item: &menu::Item<Self, P::Settings>,
         _args: &[&str],
-        settings: &mut P::Settings,
         interface: &mut Self,
+        settings: &mut P::Settings,
     ) {
         let mut defaults = settings.clone();
         defaults.reset();
@@ -191,8 +191,8 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         _menu: &menu::Menu<Self, P::Settings>,
         item: &menu::Item<Self, P::Settings>,
         args: &[&str],
-        settings: &mut P::Settings,
         interface: &mut Self,
+        settings: &mut P::Settings,
     ) {
         if let Some(key) = menu::argument_finder(item, args, "item").unwrap() {
             let mut defaults = settings.clone();
@@ -236,8 +236,8 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         _menu: &menu::Menu<Self, P::Settings>,
         item: &menu::Item<Self, P::Settings>,
         args: &[&str],
-        settings: &mut P::Settings,
         interface: &mut Self,
+        settings: &mut P::Settings,
     ) {
         let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
         match settings.get_json(key, interface.buffer) {
@@ -259,8 +259,8 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         _menu: &menu::Menu<Self, P::Settings>,
         item: &menu::Item<Self, P::Settings>,
         args: &[&str],
-        settings: &mut P::Settings,
         interface: &mut Self,
+        settings: &mut P::Settings,
     ) {
         let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
         let value =
