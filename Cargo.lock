@@ -101,9 +101,9 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cc"
-version = "1.0.95"
+version = "1.0.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d32a725bc159af97c3e629873bb9f88fb8cf8a4867175f76dc987815ea07c83b"
+checksum = "065a29261d53ba54260972629f9ca6bffa69bac13cd1fed61420f7fa68b9f8bd"
 dependencies = [
  "jobserver",
  "libc",
@@ -229,11 +229,10 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "embedded-nal"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "447416d161ba378782c13e82b11b267d6d2104b4913679a7c5640e7e94f96ea7"
+checksum = "b8a943fad5ed3d3f8a00f1e80f6bba371f1e7f0df28ec38477535eb318dc19cc"
 dependencies = [
- "heapless 0.7.17",
  "nb 1.1.0",
  "no-std-net",
 ]
@@ -255,18 +254,18 @@ dependencies = [
 
 [[package]]
 name = "enum-iterator"
-version = "2.0.1"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e0b48d2b80ff6b002339547442496ea29d66a8c66ce8e1a6bd8c58b9cec7cf3"
+checksum = "c280b9e6b3ae19e152d8e31cf47f18389781e119d4013a2a2bb0180e5facc635"
 dependencies = [
  "enum-iterator-derive",
 ]
 
 [[package]]
 name = "enum-iterator-derive"
-version = "1.3.1"
+version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c19cbb53d33b57ac4df1f0af6b92c38c107cded663c4aea9fae1189dcfc17cf5"
+checksum = "a1ab991c1362ac86c61ab6f556cff143daa22e5a15e4e189df818b2fd19fe65b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -366,9 +365,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.14.3"
+version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "290f1a1d9242c78d09ce40a5e87e7554ee637af1351968159f4952f028f75604"
+checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 
 [[package]]
 name = "heapless"
@@ -391,7 +390,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
 dependencies = [
  "hash32 0.3.1",
- "serde",
  "stable_deref_trait",
 ]
 
@@ -449,9 +447,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.153"
+version = "0.2.154"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c198f91728a82281a64e1f4f9eeb25d82cb32a5de251c6bd1b5154d63a8e7bd"
+checksum = "ae743338b92ff9146ce83992f766a31066a91a8c84a45e0e9f21e7cf6de6d346"
 
 [[package]]
 name = "libgit2-sys"
@@ -494,9 +492,9 @@ dependencies = [
 
 [[package]]
 name = "lock_api"
-version = "0.4.11"
+version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c168f8615b12bc01f9c17e2eb0cc07dcae1940121185446edc3744920e8ef45"
+checksum = "07af8b9cdd281b7915f413fa73f29ebd5d55d0d3f0155584dade1ff18cea1b17"
 dependencies = [
  "autocfg",
  "scopeguard",
@@ -516,13 +514,13 @@ checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
 
 [[package]]
 name = "mcp230xx"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c5a338372c83c3eff68c07a23fe00dff2b2c9195583a2d464292919bc27de04"
+checksum = "68c07dd8a414e6055de2c7fd750c37fde0fd7844720b9198c3fcf11671050509"
 dependencies = [
  "bit_field",
  "embedded-hal 0.2.7",
- "num_enum 0.5.11",
+ "num_enum",
  "paste",
 ]
 
@@ -533,21 +531,22 @@ source = "git+https://github.com/rust-embedded-community/menu?rev=7ba884993fea57
 
 [[package]]
 name = "miniconf"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "789a2e5c8e8c084ea980c6026e7464d11e6563930e89cfd0caf4b90933c36e4a"
+checksum = "eb5c0319f66b92ee813d7f90b25018673a5e41148caf28951ad0bb9110627b37"
 dependencies = [
  "itoa",
  "miniconf_derive",
+ "postcard",
  "serde",
  "serde-json-core",
 ]
 
 [[package]]
 name = "miniconf_derive"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b616d58e8fd11b6450b098f73306259ac6e42984244aa910b0edbbe8df078166"
+checksum = "47bdb0160aff6c513c43d8ec1188491aedc875eb5cd34abc6cc3d02aab208a5e"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -557,9 +556,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_mqtt"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b346cb1f739a7f2383c9fac107863fbca95301a54b80ef9275969898d1872e69"
+checksum = "a1ab8296f329390df0d4542fd83a42985fefffbbf7fe69dd21f88f2c0c91f5f8"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
@@ -572,15 +571,15 @@ dependencies = [
 
 [[package]]
 name = "minimq"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b561c2c86a3509f7c514f546fb24755753a30fdcf67cce8d5f2f38688483cd31"
+checksum = "2c63955f174d014ef627e6f21dda747c24a294be94234e91ae30a9b2173784e1"
 dependencies = [
  "bit_field",
  "embedded-nal",
  "embedded-time",
  "heapless 0.7.17",
- "num_enum 0.7.2",
+ "num_enum",
  "serde",
  "smlang",
  "varint-rs",
@@ -703,31 +702,11 @@ dependencies = [
 
 [[package]]
 name = "num_enum"
-version = "0.5.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f646caf906c20226733ed5b1374287eb97e3c2a5c227ce668c1f2ce20ae57c9"
-dependencies = [
- "num_enum_derive 0.5.11",
-]
-
-[[package]]
-name = "num_enum"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02339744ee7253741199f897151b38e72257d13802d4ee837285cc2990a90845"
 dependencies = [
- "num_enum_derive 0.7.2",
-]
-
-[[package]]
-name = "num_enum_derive"
-version = "0.5.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcbff9bc912032c62bf65ef1d5aea88983b420f4f839db1e9b0c281a25c9c799"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
+ "num_enum_derive",
 ]
 
 [[package]]
@@ -1015,9 +994,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.199"
+version = "1.0.200"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c9f6e76df036c77cd94996771fb40db98187f096dd0b9af39c6c6e452ba966a"
+checksum = "ddc6f9cc94d67c0e21aaf7eda3a010fd3af78ebf6e096aa6e2e13c79749cce4f"
 dependencies = [
  "serde_derive",
 ]
@@ -1035,9 +1014,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.199"
+version = "1.0.200"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11bd257a6541e141e42ca6d24ae26f7714887b47e89aa739099104c7e4d3b7fc"
+checksum = "856f046b9400cee3c8c94ed572ecdb752444c24528c035cd35882aad6f492bcb"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1102,8 +1081,9 @@ dependencies = [
 
 [[package]]
 name = "smoltcp-nal"
-version = "0.4.1"
-source = "git+https://github.com/quartiq/smoltcp-nal.git?rev=3e3373e#3e3373ef65f28a5f28c48c42bd8d4d370408e1f9"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3ac46812539eefac6ffe76393317b6dd4851fef6f31621cce27e9924d586570"
 dependencies = [
  "embedded-nal",
  "embedded-time",
@@ -1147,7 +1127,7 @@ dependencies = [
  "minimq",
  "mono-clock",
  "mutex-trait",
- "num_enum 0.7.2",
+ "num_enum",
  "panic-persist",
  "paste",
  "postcard",
@@ -1263,13 +1243,13 @@ dependencies = [
 
 [[package]]
 name = "tca9539"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05458b00a3a73c5b64c0de8f2a5182f6d51eb1aeb54c638e585092d26fc9a971"
+checksum = "7b1f6d512d01017b7e056a40a4a8e6f06649ecd92832ac69d9ec24306edfbf5d"
 dependencies = [
  "bit_field",
  "embedded-hal 0.2.7",
- "num_enum 0.5.11",
+ "num_enum",
 ]
 
 [[package]]
@@ -1388,9 +1368,9 @@ dependencies = [
 
 [[package]]
 name = "yafnv"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "804f6944df20b02a525b3cb607bcd90b43b6ef77c8943958781190847a052b70"
+checksum = "6f5275807899aee4397711bf8372d9db5e3397fbbccb9219ceb769c3a949ce74"
 dependencies = [
  "num-traits",
 ]

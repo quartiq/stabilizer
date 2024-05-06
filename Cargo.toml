@@ -52,7 +52,7 @@ num_enum = { version = "0.7.2", default-features = false }
 paste = "1"
 idsp = "0.15.1"
 ad9959 = { path = "ad9959", version = "0.2.1" }
-serial-settings = {path = "serial-settings"}
+serial-settings = { version = "0.1", path = "serial-settings" }
 mcp230xx = "1.0"
 mutex-trait = "0.2"
 fugit = "0.3"
@@ -62,17 +62,17 @@ mono-clock = "0.1"
 spin = { version = "0.9", default-features = false, features = ["spin_mutex"]}
 shared-bus = { version = "0.3", features = ["cortex-m"] }
 lm75 = "0.2"
-enum-iterator = "2.0.1"
+enum-iterator = "2.1.0"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
-minimq = "0.8.0"
+minimq = "0.9.0"
 usb-device = "0.3.2"
 usbd-serial = "0.2"
 # Keep this synced with the miniconf version in py/setup.py
-miniconf = { version = "0.10", features = ["json-core"] }
-miniconf_mqtt = "0.10"
+miniconf = { version = "0.11", features = ["json-core", "derive", "postcard"] }
+miniconf_mqtt = "0.11"
 tca9539 = "0.2"
-smoltcp-nal = { version = "0.4", features = ["shared-stack"], git = "https://github.com/quartiq/smoltcp-nal.git", rev = "3e3373e" }
+smoltcp-nal = { version = "0.5", features = ["shared-stack"] }
 bbqueue = "0.5"
 postcard = "1"
 bit_field = "0.10.2"
