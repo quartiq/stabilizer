@@ -23,9 +23,9 @@ dependencies = [
 
 [[package]]
 name = "autocfg"
-version = "1.2.0"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1fdabc7756949593fe60f30ec81974b613357de856987752631dea1e3394c80"
+checksum = "0c4b4d0bd25bd0b74681c0ad21497610ce1b7c91b1022cd21c80c6fbdd9476b0"
 
 [[package]]
 name = "bare-metal"
@@ -41,12 +41,6 @@ name = "bare-metal"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fe8f5a8a398345e52358e18ff07cc17a568fbca5c6f73873d3a62056309603"
-
-[[package]]
-name = "bbqueue"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd3baa8859d1a4c7411039a75c0599a4640ef1c9a8fc811e4325b00e6cfe0a55"
 
 [[package]]
 name = "bit_field"
@@ -526,8 +520,9 @@ dependencies = [
 
 [[package]]
 name = "menu"
-version = "0.4.0"
-source = "git+https://github.com/rust-embedded-community/menu?rev=7ba884993fea57c3661d0f9d7c3cdca639a48701#7ba884993fea57c3661d0f9d7c3cdca639a48701"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce98110899b3b97775dd181d9088ebee9abcb6804bb7ead4e9450c1f5419562d"
 
 [[package]]
 name = "miniconf"
@@ -670,9 +665,9 @@ dependencies = [
 
 [[package]]
 name = "num-iter"
-version = "0.1.44"
+version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d869c01cc0c455284163fd0092f1f93835385ccab5a98a0dcc497b2f8bf055a9"
+checksum = "1429034a0490724d0075ebb2bc9e875d6503c3cf69e235a8941aa757d83ef5bf"
 dependencies = [
  "autocfg",
  "num-integer",
@@ -692,9 +687,9 @@ dependencies = [
 
 [[package]]
 name = "num-traits"
-version = "0.2.18"
+version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da0df0e5185db44f69b44f26786fe401b6c293d1907744beaa7fa62b2e5a517a"
+checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
  "libm",
@@ -880,12 +875,6 @@ dependencies = [
  "quote",
  "syn 2.0.60",
 ]
-
-[[package]]
-name = "rtic-monotonic"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb8b0b822d1a366470b9cea83a1d4e788392db763539dc4ba022bcc787fece82"
 
 [[package]]
 name = "rtic-monotonics"
@@ -1107,7 +1096,6 @@ name = "stabilizer"
 version = "0.9.0"
 dependencies = [
  "ad9959",
- "bbqueue",
  "bit_field",
  "built",
  "cortex-m",
@@ -1145,7 +1133,6 @@ dependencies = [
  "smoltcp-nal",
  "spin",
  "stm32h7xx-hal",
- "systick-monotonic",
  "tca9539",
  "usb-device",
  "usbd-serial",
@@ -1228,17 +1215,6 @@ dependencies = [
  "embedded-hal 0.2.7",
  "usb-device",
  "vcell",
-]
-
-[[package]]
-name = "systick-monotonic"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67fb822d5c615a0ae3a4795ee5b1d06381c7faf488d861c0a4fa8e6a88d5ff84"
-dependencies = [
- "cortex-m",
- "fugit",
- "rtic-monotonic",
 ]
 
 [[package]]
