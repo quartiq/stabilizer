@@ -24,28 +24,32 @@
 //!    storage sharing.
 use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
 use core::fmt::Write;
-use miniconf::{Postcard, Tree};
+use heapless::{String, Vec};
+use miniconf::{JsonCoreSlash, Postcard, Tree};
+use sequential_storage::map;
+use serial_settings::{BestEffortInterface, Platform, Settings};
+use smoltcp_nal::smoltcp::wire::EthernetAddress;
 use stm32h7xx_hal::flash::LockedFlashBank;
 
 /// Settings that are used for configuring the network interface to Stabilizer.
 #[derive(Clone, Debug, Tree)]
 pub struct NetSettings {
     /// The broker domain name (or IP address) to use for MQTT connections.
-    pub broker: heapless::String<255>,
+    pub broker: String<255>,
 
     /// The MQTT ID to use upon connection with a broker.
-    pub id: heapless::String<23>,
+    pub id: String<23>,
 
     /// An optional static IP address to use. An unspecified IP address (or malformed address) will
     /// use DHCP.
-    pub ip: heapless::String<15>,
+    pub ip: String<15>,
     #[tree(skip)]
     /// The MAC address of Stabilizer, which is used to reinitialize the ID to default settings.
-    pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
+    pub mac: EthernetAddress,
 }
 
 impl NetSettings {
-    pub fn new(mac: smoltcp_nal::smoltcp::wire::EthernetAddress) -> Self {
+    pub fn new(mac: EthernetAddress) -> Self {
         let mut id = heapless::String::new();
         write!(&mut id, "{mac}").unwrap();
 
@@ -66,20 +70,17 @@ pub trait AppSettings {
     fn net(&self) -> &NetSettings;
 }
 
-pub fn load_from_flash<
-    T: for<'d> miniconf::JsonCoreSlash<'d, Y>,
-    const Y: usize,
->(
+pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
     structure: &mut T,
     storage: &mut Flash,
 ) {
     // Loop over flash and read settings
     let mut buffer = [0u8; 512];
-    for path in T::iter_paths::<heapless::String<64>>("/") {
+    for path in T::iter_paths::<String<64>>("/") {
         let path = path.unwrap();
 
         // Try to fetch the setting from flash.
-        let item = match sequential_storage::map::fetch_item::<SettingsItem, _>(
+        let item = match map::fetch_item::<SettingsItem, _>(
             storage,
             storage.range(),
             &mut buffer,
@@ -107,12 +108,12 @@ pub fn load_from_flash<
 #[derive(Default, serde::Serialize, serde::Deserialize)]
 pub struct SettingsItem {
     // We only make these owned vec/string to get around lifetime limitations.
-    pub path: heapless::String<64>,
-    pub data: heapless::Vec<u8, 256>,
+    pub path: String<64>,
+    pub data: Vec<u8, 256>,
 }
 
-impl sequential_storage::map::StorageItem for SettingsItem {
-    type Key = heapless::String<64>;
+impl map::StorageItem for SettingsItem {
+    type Key = String<64>;
     type Error = postcard::Error;
 
     fn serialize_into(&self, buffer: &mut [u8]) -> Result<usize, Self::Error> {
@@ -142,8 +143,7 @@ impl<F> From<postcard::Error> for Error<F> {
 
 pub struct SerialSettingsPlatform<C, const Y: usize> {
     /// The interface to read/write data to/from serially (via text) to the user.
-    pub interface:
-        serial_settings::BestEffortInterface<crate::hardware::SerialPort>,
+    pub interface: BestEffortInterface<crate::hardware::SerialPort>,
 
     pub _settings_marker: core::marker::PhantomData<C>,
 
@@ -154,13 +154,11 @@ pub struct SerialSettingsPlatform<C, const Y: usize> {
     pub metadata: &'static ApplicationMetadata,
 }
 
-impl<C, const Y: usize> serial_settings::Platform<Y>
-    for SerialSettingsPlatform<C, Y>
+impl<C, const Y: usize> Platform<Y> for SerialSettingsPlatform<C, Y>
 where
-    C: serial_settings::Settings<Y>,
+    C: Settings<Y>,
 {
-    type Interface =
-        serial_settings::BestEffortInterface<crate::hardware::SerialPort>;
+    type Interface = BestEffortInterface<crate::hardware::SerialPort>;
     type Settings = C;
     type Error = Error<
         <LockedFlashBank as embedded_storage::nor_flash::ErrorType>::Error,
@@ -171,7 +169,7 @@ where
         buf: &mut [u8],
         settings: &Self::Settings,
     ) -> Result<(), Self::Error> {
-        for path in Self::Settings::iter_paths::<heapless::String<64>>("/") {
+        for path in Self::Settings::iter_paths::<String<64>>("/") {
             let mut item = SettingsItem {
                 path: path.unwrap(),
                 ..Default::default()
@@ -199,7 +197,7 @@ where
 
             // Check if the settings has changed from what's currently in flash (or if it doesn't
             // yet exist).
-            if sequential_storage::map::fetch_item::<SettingsItem, _>(
+            if map::fetch_item::<SettingsItem, _>(
                 &mut self.storage,
                 range.clone(),
                 buf,
@@ -210,13 +208,7 @@ where
             .unwrap_or(true)
             {
                 log::info!("Storing `{}` to flash", item.path);
-                sequential_storage::map::store_item(
-                    &mut self.storage,
-                    range,
-                    buf,
-                    item,
-                )
-                .unwrap();
+                map::store_item(&mut self.storage, range, buf, item).unwrap();
             }
         }
 
