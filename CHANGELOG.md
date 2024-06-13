@@ -18,7 +18,7 @@ console.
 ### Changed
 * Broker and static IP/DHCP are no longer configured at compile time,
   but is maintained in device flash and can be changed via the USB port.
-* MSRV bumped to v1.74.1
+* MSRV removed. Stabilizer uses latest stable rust.
 * The IIR (biquad) filter used for PID action has changed its serialization format.
   See also the `iir_coefficients` Python CLI implementation.
 
