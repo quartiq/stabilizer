@@ -52,8 +52,7 @@ jobs:
     continue-on-error: ${{ matrix.continue-on-error }}
     strategy:
       matrix:
-        # keep MSRV in sync in ci.yaml and Cargo.toml
-        toolchain: [stable, '1.74.1']
+        toolchain: [stable]
         features: ['']
         continue-on-error: [false]
         include:

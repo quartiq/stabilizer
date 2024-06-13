@@ -306,8 +306,7 @@ where
     // Before being able to call any code in ITCM, load that code from flash.
     load_itcm();
 
-    let mono_token = rtic_monotonics::create_systick_token!();
-    Systick::start(core.SYST, ccdr.clocks.sysclk().to_Hz(), mono_token);
+    Systick::start(core.SYST, ccdr.clocks.sysclk().to_Hz());
 
     // After ITCM loading.
     core.SCB.enable_icache();

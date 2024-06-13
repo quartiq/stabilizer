@@ -51,6 +51,7 @@
 use core::fmt::Write;
 use core::hash::Hasher;
 use embedded_io::{Read, ReadReady};
+use heapless::String;
 use miniconf::{JsonCoreSlash, TreeKey};
 
 mod interface;
@@ -120,7 +121,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         let mut defaults = settings.clone();
         defaults.reset();
 
-        for path in P::Settings::iter_paths::<heapless::String<64>>("/") {
+        for path in P::Settings::iter_paths::<String<64>>("/") {
             match path {
                 Err(e) => writeln!(interface, "Failed to get path: {e}"),
                 Ok(path) => {
