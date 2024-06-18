@@ -261,8 +261,8 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
 
     fn handle_save(
         _menu: &menu::Menu<Self, P::Settings>,
-        _item: &menu::Item<Self, P::Settings>,
-        _args: &[&str],
+        item: &menu::Item<Self, P::Settings>,
+        args: &[&str],
         interface: &mut Self,
         settings: &mut P::Settings,
     ) {
