@@ -22,7 +22,8 @@
 //!   list
 //!   get <item>
 //!   set <item> <value>
-//!   clear
+//!   save [item]
+//!   clear [item]
 //!   platform <cmd>
 //!   help [ <command> ]
 //!
@@ -83,6 +84,7 @@ pub trait Platform<const Y: usize>: Sized {
     fn save(
         &mut self,
         buffer: &mut [u8],
+        key: Option<&str>,
         settings: &Self::Settings,
     ) -> Result<(), Self::Error>;
 
@@ -195,7 +197,8 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         interface: &mut Self,
         settings: &mut P::Settings,
     ) {
-        if let Some(key) = menu::argument_finder(item, args, "item").unwrap() {
+        let maybe_key = menu::argument_finder(item, args, "item").unwrap();
+        if let Some(key) = maybe_key {
             let mut defaults = settings.clone();
             defaults.reset();
 
@@ -222,9 +225,9 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             writeln!(interface, "All settings cleared").unwrap();
         }
 
-        match interface.platform.save(interface.buffer, settings) {
+        match interface.platform.save(interface.buffer, maybe_key, settings) {
             Ok(_) => {
-                writeln!(interface, "Settings saved. Reboot device (`platform reboot`) to apply.")
+                writeln!(interface, "Settings saved. You may need to reboot for the settings to be applied")
             }
             Err(e) => {
                 writeln!(interface, "Failed to clear settings: {e:?}")
@@ -256,6 +259,25 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         .unwrap();
     }
 
+    fn handle_save(
+        _menu: &menu::Menu<Self, P::Settings>,
+        item: &menu::Item<Self, P::Settings>,
+        args: &[&str],
+        interface: &mut Self,
+        settings: &mut P::Settings,
+    ) {
+        match interface.platform.save(interface.buffer, menu::argument_finder(item, args, "item").unwrap(), settings) {
+            Ok(_) => writeln!(
+                interface,
+                "Settings saved. You may need to reboot for the settings to be applied"
+            )
+            .unwrap(),
+            Err(e) => {
+                writeln!(interface, "Failed to save settings: {e:?}").unwrap()
+            }
+        }
+    }
+
     fn handle_set(
         _menu: &menu::Menu<Self, P::Settings>,
         item: &menu::Item<Self, P::Settings>,
@@ -268,22 +290,14 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             menu::argument_finder(item, args, "value").unwrap().unwrap();
 
         // Now, write the new value into memory.
-        // TODO: Validate it first?
         match settings.set_json(key, value.as_bytes())
         {
             Ok(_) => {
                 interface.updated = true;
-                match interface.platform.save(interface.buffer, settings) {
-                    Ok(_) => {
-                        writeln!(
-                                interface,
-                                "Settings saved. Reboot device (`platform reboot`) to apply."
-                            )
-                    }
-                    Err(e) => {
-                        writeln!(interface, "Failed to save settings: {e:?}")
-                    }
-                }
+                writeln!(
+                        interface,
+                        "Settings updated. You may need to reboot for the setting to be applied"
+                    )
             },
             Err(e) => {
                 writeln!(interface, "Failed to update {key}: {e:?}")
@@ -327,6 +341,19 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                         menu::Parameter::Mandatory {
                             parameter_name: "value",
                             help: Some("Specifies the value to be written. Values must be JSON-encoded"),
+                        },
+                    ]
+                },
+            },
+            &menu::Item {
+                command: "save",
+                help: Some("Save settings to the device."),
+                item_type: menu::ItemType::Callback {
+                    function: Self::handle_save,
+                    parameters: &[
+                        menu::Parameter::Optional {
+                            parameter_name: "item",
+                            help: Some("The name of the setting to clear."),
                         },
                     ]
                 },

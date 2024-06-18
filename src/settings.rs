@@ -167,11 +167,12 @@ where
     fn save(
         &mut self,
         buf: &mut [u8],
+        key: Option<&str>,
         settings: &Self::Settings,
     ) -> Result<(), Self::Error> {
-        for path in Self::Settings::iter_paths::<String<64>>("/") {
+        let mut save_setting = |path| -> Result<(), Self::Error> {
             let mut item = SettingsItem {
-                path: path.unwrap(),
+                path,
                 ..Default::default()
             };
 
@@ -187,7 +188,7 @@ where
                         "Failed to save `{}` to flash: {e:?}",
                         item.path
                     );
-                    continue;
+                    return Ok(());
                 }
                 Ok(slice) => slice.len(),
             };
@@ -209,6 +210,17 @@ where
             {
                 log::info!("Storing `{}` to flash", item.path);
                 map::store_item(&mut self.storage, range, buf, item).unwrap();
+            }
+
+            Ok(())
+        };
+
+        if let Some(key) = key {
+            save_setting(heapless::String::from(key))?;
+        } else {
+            for path in Self::Settings::iter_paths::<heapless::String<64>>("/")
+            {
+                save_setting(path.unwrap())?;
             }
         }
 
