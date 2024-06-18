@@ -167,15 +167,24 @@ where
     fn save(
         &mut self,
         buf: &mut [u8],
+        key: Option<&str>,
         settings: &Self::Settings,
     ) -> Result<(), Self::Error> {
-        for path in Self::Settings::iter_paths::<String<64>>("/") {
-            let mut item = SettingsItem {
-                path: path.unwrap(),
-                ..Default::default()
+        let mut save_setting = |path| -> Result<(), Self::Error> {
+            let path = SettingsKey(path);
+            let mut data = heapless::Vec::new();
+            data.resize(data.capacity(), 0).unwrap();
+
+            let mut serializer = postcard::Serializer {
+                output: postcard::ser_flavors::Slice::new(&mut data),
             };
 
-            item.data.resize(item.data.capacity(), 0).unwrap();
+            if let Err(e) = settings
+                .serialize_by_key(path.0.split('/').skip(1), &mut serializer)
+            {
+                log::warn!("Failed to save `{}` to flash: {e:?}", path.0);
+                return Ok(());
+            }
 
             let flavor = postcard::ser_flavors::Slice::new(&mut item.data);
 
@@ -209,6 +218,17 @@ where
             {
                 log::info!("Storing `{}` to flash", item.path);
                 map::store_item(&mut self.storage, range, buf, item).unwrap();
+            }
+
+            Ok(())
+        };
+
+        if let Some(key) = key {
+            save_setting(heapless::String::from(key))?;
+        } else {
+            for path in Self::Settings::iter_paths::<heapless::String<64>>("/")
+            {
+                save_setting(path.unwrap())?;
             }
         }
 
