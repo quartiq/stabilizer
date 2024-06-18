@@ -22,8 +22,8 @@
 //!   list
 //!   get <item>
 //!   set <item> <value>
-//!   save
-//!   clear
+//!   save [item]
+//!   clear [item]
 //!   platform <cmd>
 //!   help [ <command> ]
 //!
@@ -266,7 +266,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         interface: &mut Self,
         settings: &mut P::Settings,
     ) {
-        match interface.platform.save(interface.buffer, None, settings) {
+        match interface.platform.save(interface.buffer, menu::argument_finder(item, args, "item").unwrap(), settings) {
             Ok(_) => writeln!(
                 interface,
                 "Settings saved. You may need to reboot for the settings to be applied"
@@ -347,10 +347,15 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             },
             &menu::Item {
                 command: "save",
-                help: Some("Save all current settings to the device."),
+                help: Some("Save settings to the device."),
                 item_type: menu::ItemType::Callback {
                     function: Self::handle_save,
-                    parameters: &[],
+                    parameters: &[
+                        menu::Parameter::Optional {
+                            parameter_name: "item",
+                            help: Some("The name of the setting to clear."),
+                        },
+                    ]
                 },
             },
             &menu::Item {
