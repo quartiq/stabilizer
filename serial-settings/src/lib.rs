@@ -197,7 +197,8 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         interface: &mut Self,
         settings: &mut P::Settings,
     ) {
-        if let Some(key) = menu::argument_finder(item, args, "item").unwrap() {
+        let maybe_key = menu::argument_finder(item, args, "item").unwrap();
+        if let Some(key) = maybe_key {
             let mut defaults = settings.clone();
             defaults.reset();
 
@@ -224,7 +225,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             writeln!(interface, "All settings cleared").unwrap();
         }
 
-        match interface.platform.save(interface.buffer, settings) {
+        match interface.platform.save(interface.buffer, maybe_key, settings) {
             Ok(_) => {
                 writeln!(interface, "Settings saved. You may need to reboot for the settings to be applied")
             }
