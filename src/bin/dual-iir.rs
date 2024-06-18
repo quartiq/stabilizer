@@ -54,7 +54,7 @@ use stabilizer::{
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Tree,
-        telemetry::{Telemetry, TelemetryBuffer},
+        telemetry::TelemetryBuffer,
         NetworkState, NetworkUsers,
     },
     settings::NetSettings,
@@ -217,8 +217,7 @@ mod app {
     #[shared]
     struct Shared {
         usb: UsbDevice,
-        network: NetworkUsers<DualIir, Telemetry, 3>,
-
+        network: NetworkUsers<DualIir, 3>,
         settings: Settings,
         active_settings: DualIir,
         telemetry: TelemetryBuffer,

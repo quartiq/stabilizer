@@ -26,7 +26,6 @@ use core::fmt::Write;
 use heapless::String;
 use miniconf::JsonCoreSlash;
 use miniconf_mqtt::minimq;
-use serde::Serialize;
 use smoltcp_nal::embedded_nal::SocketAddr;
 
 pub type NetworkReference =
@@ -58,10 +57,9 @@ pub enum NetworkState {
 }
 
 /// A structure of Stabilizer's default network users.
-pub struct NetworkUsers<S, T, const Y: usize>
+pub struct NetworkUsers<S, const Y: usize>
 where
     for<'de> S: Default + JsonCoreSlash<'de, Y> + Clone,
-    T: Serialize,
 {
     pub miniconf: miniconf_mqtt::MqttClient<
         'static,
@@ -74,13 +72,12 @@ where
     pub processor: NetworkProcessor,
     stream: DataStream,
     generator: Option<FrameGenerator>,
-    pub telemetry: TelemetryClient<T>,
+    pub telemetry: TelemetryClient,
 }
 
-impl<S, T, const Y: usize> NetworkUsers<S, T, Y>
+impl<S, const Y: usize> NetworkUsers<S, Y>
 where
     for<'de> S: Default + JsonCoreSlash<'de, Y> + Clone,
-    T: Serialize,
 {
     /// Construct Stabilizer's default network users.
     ///

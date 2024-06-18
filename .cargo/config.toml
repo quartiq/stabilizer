@@ -1,10 +1,13 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-runner = "probe-rs run --chip STM32H743ZITx --speed 30000"
+runner = "probe-rs run --chip STM32H743ZITx --log-file /dev/null"
 # runner = "gdb-multiarch -q -x openocd.gdb"
 rustflags = [
     "-C", "link-arg=-Tlink.x",
     "-C", "link-arg=--nmagic",
     "-C", "target-cpu=cortex-m7",
+    # "-C", "target-feature=+fp-armv8d16",
+    # fp-armv8d16 is unstable and not a rustc feature but accurate
+    # fp-armv8 is unstable and a rustc feature but incorrect
 ]
 
 [build]

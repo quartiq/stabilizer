@@ -15,8 +15,6 @@ repository = "https://github.com/quartiq/stabilizer"
 readme = "README.md"
 documentation = "https://docs.rs/stabilizer/"
 edition = "2021"
-# keep MSRV in sync in ci.yaml and Cargo.toml
-rust-version = "1.74.1"
 exclude = [
 	".gitignore",
 	"doc/",
@@ -47,34 +45,32 @@ serde = { version = "1.0", features = ["derive"], default-features = false }
 serde-json-core = "0.5"
 heapless = { version = "0.7.16", features = ["serde"] }
 rtic = { version = "2.1", features = ["thumbv7-backend"] }
-rtic-monotonics = { version = "1.0", features = ["cortex-m-systick"] }
+rtic-monotonics = { version = "2.0", features = ["cortex-m-systick"] }
 embedded-hal = "0.2.7"
 num_enum = { version = "0.7.2", default-features = false }
 paste = "1"
 idsp = "0.15.1"
 ad9959 = { path = "ad9959", version = "0.2.1" }
-serial-settings = {path = "serial-settings"}
+serial-settings = { version = "0.1", path = "serial-settings" }
 mcp230xx = "1.0"
 mutex-trait = "0.2"
 fugit = "0.3"
 rtt-logger = "0.2"
-systick-monotonic = "1.0"
 mono-clock = "0.1"
 spin = { version = "0.9", default-features = false, features = ["spin_mutex"]}
 shared-bus = { version = "0.3", features = ["cortex-m"] }
 lm75 = "0.2"
-enum-iterator = "2.0.1"
+enum-iterator = "2.1.0"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
-minimq = "0.8.0"
+minimq = "0.9.0"
 usb-device = "0.3.2"
 usbd-serial = "0.2"
 # Keep this synced with the miniconf version in py/setup.py
-miniconf = "0.9"
-miniconf_mqtt = "0.9"
+miniconf = { version = "0.11", features = ["json-core", "derive", "postcard"] }
+miniconf_mqtt = "0.11"
 tca9539 = "0.2"
-smoltcp-nal = { version = "0.4", features = ["shared-stack"], git = "https://github.com/quartiq/smoltcp-nal.git", branch = "main" }
-bbqueue = "0.5"
+smoltcp-nal = { version = "0.5", features = ["shared-stack"] }
 postcard = "1"
 bit_field = "0.10.2"
 embassy-futures = { version = "0.1", default-features = false }
@@ -84,21 +80,7 @@ built = { version = "0.7", features = ["git2"], default-features = false }
 
 [dependencies.stm32h7xx-hal]
 version = "0.16.0"
-#git = "https://github.com/stm32-rs/stm32h7xx-hal.git"
-#branch = "master"
 features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
-
-[patch.crates-io.usbd-serial]
-git = "https://github.com/rust-embedded-community/usbd-serial"
-rev = "ccff77578925942e40e0a2c7b6d397ad164fdedb"
-
-[patch.crates-io.miniconf]
-git = "https://github.com/quartiq/miniconf"
-rev = "15c2bb9"
-
-[patch.crates-io.miniconf_mqtt]
-git = "https://github.com/quartiq/miniconf"
-rev = "15c2bb9"
 
 [features]
 nightly = []

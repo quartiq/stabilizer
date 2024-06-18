@@ -24,30 +24,33 @@
 //!    storage sharing.
 use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
 use core::fmt::Write;
-use miniconf::Tree;
+use heapless::{String, Vec};
+use miniconf::{JsonCoreSlash, Tree};
 use postcard::ser_flavors::Flavor;
+use serial_settings::{BestEffortInterface, Platform, Settings};
+use smoltcp_nal::smoltcp::wire::EthernetAddress;
 use stm32h7xx_hal::flash::LockedFlashBank;
 
 /// Settings that are used for configuring the network interface to Stabilizer.
 #[derive(Clone, Debug, Tree)]
 pub struct NetSettings {
     /// The broker domain name (or IP address) to use for MQTT connections.
-    pub broker: heapless::String<255>,
+    pub broker: String<255>,
 
     /// The MQTT ID to use upon connection with a broker.
-    pub id: heapless::String<23>,
+    pub id: String<23>,
 
     /// An optional static IP address to use. An unspecified IP address (or malformed address) will
     /// use DHCP.
-    pub ip: heapless::String<15>,
+    pub ip: String<15>,
     #[tree(skip)]
     /// The MAC address of Stabilizer, which is used to reinitialize the ID to default settings.
-    pub mac: smoltcp_nal::smoltcp::wire::EthernetAddress,
+    pub mac: EthernetAddress,
 }
 
 impl NetSettings {
-    pub fn new(mac: smoltcp_nal::smoltcp::wire::EthernetAddress) -> Self {
-        let mut id = heapless::String::new();
+    pub fn new(mac: EthernetAddress) -> Self {
+        let mut id = String::new();
         write!(&mut id, "{mac}").unwrap();
 
         Self {
@@ -67,16 +70,13 @@ pub trait AppSettings {
     fn net(&self) -> &NetSettings;
 }
 
-pub fn load_from_flash<
-    T: for<'d> miniconf::JsonCoreSlash<'d, Y>,
-    const Y: usize,
->(
+pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
     structure: &mut T,
     storage: &mut Flash,
 ) {
     // Loop over flash and read settings
     let mut buffer = [0u8; 512];
-    for path in T::iter_paths::<heapless::String<64>>("/") {
+    for path in T::iter_paths::<String<64>>("/") {
         let path = path.unwrap();
 
         // Try to fetch the setting from flash.
@@ -113,7 +113,7 @@ pub fn load_from_flash<
 #[derive(
     Default, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq,
 )]
-pub struct SettingsKey(heapless::String<64>);
+pub struct SettingsKey(String<64>);
 
 impl sequential_storage::map::Key for SettingsKey {
     fn serialize_into(
@@ -143,7 +143,7 @@ impl sequential_storage::map::Key for SettingsKey {
 #[derive(
     Default, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq,
 )]
-pub struct SettingsItem(heapless::Vec<u8, 256>);
+pub struct SettingsItem(Vec<u8, 256>);
 
 impl<'a> sequential_storage::map::Value<'a> for SettingsItem {
     fn serialize_into(
@@ -180,8 +180,7 @@ impl<F> From<postcard::Error> for Error<F> {
 
 pub struct SerialSettingsPlatform<C, const Y: usize> {
     /// The interface to read/write data to/from serially (via text) to the user.
-    pub interface:
-        serial_settings::BestEffortInterface<crate::hardware::SerialPort>,
+    pub interface: BestEffortInterface<crate::hardware::SerialPort>,
 
     pub _settings_marker: core::marker::PhantomData<C>,
 
@@ -192,13 +191,11 @@ pub struct SerialSettingsPlatform<C, const Y: usize> {
     pub metadata: &'static ApplicationMetadata,
 }
 
-impl<C, const Y: usize> serial_settings::Platform<Y>
-    for SerialSettingsPlatform<C, Y>
+impl<C, const Y: usize> Platform<Y> for SerialSettingsPlatform<C, Y>
 where
-    C: serial_settings::Settings<Y>,
+    C: Settings<Y>,
 {
-    type Interface =
-        serial_settings::BestEffortInterface<crate::hardware::SerialPort>;
+    type Interface = BestEffortInterface<crate::hardware::SerialPort>;
     type Settings = C;
     type Error = Error<
         <LockedFlashBank as embedded_storage::nor_flash::ErrorType>::Error,
@@ -210,10 +207,9 @@ where
         key: Option<&str>,
         settings: &Self::Settings,
     ) -> Result<(), Self::Error> {
-
         let mut save_setting = |path| -> Result<(), Self::Error> {
             let path = SettingsKey(path);
-            let mut data = heapless::Vec::new();
+            let mut data = Vec::new();
             data.resize(data.capacity(), 0).unwrap();
 
             let mut serializer = postcard::Serializer {
@@ -265,11 +261,9 @@ where
         };
 
         if let Some(key) = key {
-            save_setting(heapless::String::from(key))?;
-        }
-        else
-        {
-            for path in Self::Settings::iter_paths::<heapless::String<64>>("/") {
+            save_setting(String::from(key))?;
+        } else {
+            for path in Self::Settings::iter_paths::<String<64>>("/") {
                 save_setting(path.unwrap())?;
             }
         }
@@ -340,7 +334,7 @@ where
                 range,
                 &mut sequential_storage::cache::NoCache::new(),
                 buf,
-                SettingsKey(heapless::String::from(key)),
+                SettingsKey(String::from(key)),
             ))
             .unwrap()
         } else {

@@ -57,7 +57,7 @@ use stabilizer::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         miniconf::Tree,
         serde::{Deserialize, Serialize},
-        telemetry::{Telemetry, TelemetryBuffer},
+        telemetry::TelemetryBuffer,
         NetworkState, NetworkUsers,
     },
     settings::NetSettings,
@@ -253,7 +253,7 @@ mod app {
     #[shared]
     struct Shared {
         usb: UsbDevice,
-        network: NetworkUsers<Lockin, Telemetry, 2>,
+        network: NetworkUsers<Lockin, 2>,
         settings: Settings,
         active_settings: Lockin,
         telemetry: TelemetryBuffer,
