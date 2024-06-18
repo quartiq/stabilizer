@@ -226,7 +226,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
 
         match interface.platform.save(interface.buffer, settings) {
             Ok(_) => {
-                writeln!(interface, "Settings saved. Reboot device (`platform reboot`) to apply.")
+                writeln!(interface, "Settings saved. You may need to reboot for the settings to be applied")
             }
             Err(e) => {
                 writeln!(interface, "Failed to clear settings: {e:?}")
@@ -268,7 +268,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         match interface.platform.save(interface.buffer, None, settings) {
             Ok(_) => writeln!(
                 interface,
-                "Settings saved. Reboot device (`platform reboot`) to apply."
+                "Settings saved. You may need to reboot for the settings to be applied"
             )
             .unwrap(),
             Err(e) => {
@@ -289,7 +289,6 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             menu::argument_finder(item, args, "value").unwrap().unwrap();
 
         // Now, write the new value into memory.
-        // TODO: Validate it first?
         match settings.set_json(key, value.as_bytes())
         {
             Ok(_) => {
@@ -298,7 +297,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                     Ok(_) => {
                         writeln!(
                                 interface,
-                                "Settings saved. Reboot device (`platform reboot`) to apply."
+                                "Settings saved. You may need to reboot for the settings to be applied"
                             )
                     }
                     Err(e) => {
