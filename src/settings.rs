@@ -97,6 +97,12 @@ pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
             _ => continue,
         };
 
+        // An empty vector may be saved to flash to "erase" a setting, since the H7 doesn't support
+        // multi-write NOR flash. If we see an empty vector, ignore this entry.
+        if item.0.is_empty() {
+            continue;
+        }
+
         log::info!("Loading initial `{path}` from flash");
 
         let mut deserializer = postcard::Deserializer::from_flavor(
@@ -324,30 +330,54 @@ where
     }
 
     fn clear(&mut self, buf: &mut [u8], key: Option<&str>) {
-        let range = self.storage.range();
-        if let Some(key) = key {
-            embassy_futures::block_on(sequential_storage::map::remove_item::<
-                SettingsKey,
-                _,
-            >(
-                &mut self.storage,
-                range,
-                &mut sequential_storage::cache::NoCache::new(),
-                buf,
-                SettingsKey(String::from(key)),
-            ))
-            .unwrap()
-        } else {
-            // Erase the whole flash range.
-            embassy_futures::block_on(
-                sequential_storage::map::remove_all_items::<SettingsKey, _>(
+        let mut erase_setting = |path| -> Result<(), Self::Error> {
+            let path = SettingsKey(path);
+            let range = self.storage.range();
+
+            // Check if there's an entry for this item in our flash map. The item might be a
+            // sentinel value indicating "erased". Because we can't write flash memory twice, we
+            // instead append a sentry "erased" value to the map where the serialized value is
+            // empty.
+            let maybe_item = embassy_futures::block_on(
+                sequential_storage::map::fetch_item::<
+                    SettingsKey,
+                    SettingsItem,
+                    _,
+                >(
+                    &mut self.storage,
+                    range.clone(),
+                    &mut sequential_storage::cache::NoCache::new(),
+                    buf,
+                    path.clone(),
+                ),
+            )
+            .unwrap();
+
+            // An entry may exist in the map with no data as a sentinel that this path was
+            // previously erased. If we find this, there's no need to store a duplicate "item is
+            // erased" sentinel in flash. We only need to logically erase the path from the map if
+            // it existed there in the first place.
+            if matches!(maybe_item, Some(item) if !item.0.is_empty()) {
+                embassy_futures::block_on(sequential_storage::map::store_item(
                     &mut self.storage,
                     range,
                     &mut sequential_storage::cache::NoCache::new(),
                     buf,
-                ),
-            )
-            .unwrap()
+                    path,
+                    &SettingsItem(Vec::new()),
+                ))
+                .unwrap();
+            }
+
+            Ok(())
+        };
+
+        if let Some(key) = key {
+            erase_setting(key.into()).unwrap();
+        } else {
+            for path in Self::Settings::iter_paths::<String<64>>("/") {
+                erase_setting(path.unwrap()).unwrap();
+            }
         }
     }
 }

@@ -84,7 +84,3 @@ impl embedded_storage_async::nor_flash::NorFlash for Flash {
         bank.write(offset, bytes)
     }
 }
-
-// Note: While this is supported, multiple writes to the same word can trigger ECC errors due to
-// incorrect writes.
-impl embedded_storage_async::nor_flash::MultiwriteNorFlash for Flash {}
