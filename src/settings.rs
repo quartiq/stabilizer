@@ -171,20 +171,12 @@ where
         settings: &Self::Settings,
     ) -> Result<(), Self::Error> {
         let mut save_setting = |path| -> Result<(), Self::Error> {
-            let path = SettingsKey(path);
-            let mut data = heapless::Vec::new();
-            data.resize(data.capacity(), 0).unwrap();
-
-            let mut serializer = postcard::Serializer {
-                output: postcard::ser_flavors::Slice::new(&mut data),
+            let mut item = SettingsItem {
+                path,
+                ..Default::default()
             };
 
-            if let Err(e) = settings
-                .serialize_by_key(path.0.split('/').skip(1), &mut serializer)
-            {
-                log::warn!("Failed to save `{}` to flash: {e:?}", path.0);
-                return Ok(());
-            }
+            item.data.resize(item.data.capacity(), 0).unwrap();
 
             let flavor = postcard::ser_flavors::Slice::new(&mut item.data);
 
@@ -196,7 +188,7 @@ where
                         "Failed to save `{}` to flash: {e:?}",
                         item.path
                     );
-                    continue;
+                    return Ok(());
                 }
                 Ok(slice) => slice.len(),
             };
