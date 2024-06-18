@@ -207,10 +207,12 @@ where
     fn save(
         &mut self,
         buf: &mut [u8],
+        key: Option<&str>,
         settings: &Self::Settings,
     ) -> Result<(), Self::Error> {
-        for path in Self::Settings::iter_paths::<heapless::String<64>>("/") {
-            let path = SettingsKey(path.unwrap());
+
+        let mut save_setting = |path| -> Result<(), Self::Error> {
+            let path = SettingsKey(path);
             let mut data = heapless::Vec::new();
             data.resize(data.capacity(), 0).unwrap();
 
@@ -222,7 +224,7 @@ where
                 .serialize_by_key(path.0.split('/').skip(1), &mut serializer)
             {
                 log::warn!("Failed to save `{}` to flash: {e:?}", path.0);
-                continue;
+                return Ok(());
             }
 
             let len = serializer.output.finalize()?.len();
@@ -257,6 +259,18 @@ where
                     &SettingsItem(data),
                 ))
                 .unwrap();
+            }
+
+            Ok(())
+        };
+
+        if let Some(key) = key {
+            save_setting(heapless::String::from(key))?;
+        }
+        else
+        {
+            for path in Self::Settings::iter_paths::<heapless::String<64>>("/") {
+                save_setting(path.unwrap())?;
             }
         }
 

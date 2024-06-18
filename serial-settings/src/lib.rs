@@ -22,6 +22,7 @@
 //!   list
 //!   get <item>
 //!   set <item> <value>
+//!   save
 //!   clear [ <item> ]
 //!   platform <cmd>
 //!   help [ <command> ]
@@ -82,6 +83,7 @@ pub trait Platform<const Y: usize>: Sized {
     fn save(
         &mut self,
         buffer: &mut [u8],
+        key: Option<&str>,
         settings: &Self::Settings,
     ) -> Result<(), Self::Error>;
 
@@ -260,6 +262,26 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         .unwrap();
     }
 
+    fn handle_save(
+        _menu: &menu::Menu<Self, P::Settings>,
+        _item: &menu::Item<Self, P::Settings>,
+        _args: &[&str],
+        interface: &mut Self,
+        settings: &mut P::Settings,
+    ) {
+        match interface.platform.save(interface.buffer, None, settings) {
+            Ok(_) => {
+                writeln!(
+                        interface,
+                        "Settings saved. Reboot device (`platform reboot`) to apply."
+                    ).unwrap()
+            }
+            Err(e) => {
+                writeln!(interface, "Failed to save settings: {e:?}").unwrap()
+            }
+        }
+    }
+
     fn handle_set(
         _menu: &menu::Menu<Self, P::Settings>,
         item: &menu::Item<Self, P::Settings>,
@@ -277,7 +299,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         {
             Ok(_) => {
                 interface.updated = true;
-                match interface.platform.save(interface.buffer, settings) {
+                match interface.platform.save(interface.buffer, Some(key), settings) {
                     Ok(_) => {
                         writeln!(
                                 interface,
@@ -333,6 +355,14 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                             help: Some("Specifies the value to be written. Values must be JSON-encoded"),
                         },
                     ]
+                },
+            },
+            &menu::Item {
+                command: "save",
+                help: Some("Save all current settings to the device."),
+                item_type: menu::ItemType::Callback {
+                    function: Self::handle_save,
+                    parameters: &[],
                 },
             },
             &menu::Item {

@@ -1011,8 +1011,8 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "sequential-storage"
-version = "2.0.0"
-source = "git+https://github.com/quartiq/sequential-storage?branch=feature/remove-all-items#8fffc9137194e533f23c5009adacdc5ee450c4d7"
+version = "2.0.2"
+source = "git+https://github.com/quartiq/sequential-storage?branch=feature/remove-all-items#8826bda8364861df1f0c108b74f0ab34a9b4be54"
 dependencies = [
  "embedded-storage-async",
 ]

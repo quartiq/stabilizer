@@ -35,7 +35,7 @@ members = ["ad9959", "serial-settings"]
 
 [dependencies]
 panic-persist = { version = "0.3", features = ["utf8", "custom-panic-handler"] }
-sequential-storage = {git = "https://github.com/quartiq/sequential-storage", branch = "feature/remove-all-items"}
+sequential-storage = { git = "https://github.com/quartiq/sequential-storage", branch = "feature/remove-all-items" }
 embedded-io = "0.6"
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"
