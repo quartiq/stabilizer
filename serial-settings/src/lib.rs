@@ -294,17 +294,10 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         {
             Ok(_) => {
                 interface.updated = true;
-                match interface.platform.save(interface.buffer, Some(key), settings) {
-                    Ok(_) => {
-                        writeln!(
-                                interface,
-                                "Settings saved. You may need to reboot for the settings to be applied"
-                            )
-                    }
-                    Err(e) => {
-                        writeln!(interface, "Failed to save settings: {e:?}")
-                    }
-                }
+                writeln!(
+                        interface,
+                        "Settings updated. You may need to reboot for the setting to be applied"
+                    )
             },
             Err(e) => {
                 writeln!(interface, "Failed to update {key}: {e:?}")
