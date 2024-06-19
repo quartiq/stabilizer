@@ -25,8 +25,7 @@
 use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
 use core::fmt::Write;
 use heapless::{String, Vec};
-use miniconf::{JsonCoreSlash, Tree};
-use postcard::ser_flavors::Flavor;
+use miniconf::{JsonCoreSlash, Postcard, Tree};
 use serial_settings::{BestEffortInterface, Platform, Settings};
 use smoltcp_nal::smoltcp::wire::EthernetAddress;
 use stm32h7xx_hal::flash::LockedFlashBank;
@@ -105,11 +104,9 @@ pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
 
         log::info!("Loading initial `{path}` from flash");
 
-        let mut deserializer = postcard::Deserializer::from_flavor(
-            postcard::de_flavors::Slice::new(&item.0),
-        );
-        if let Err(e) = structure
-            .deserialize_by_key(path.split('/').skip(1), &mut deserializer)
+        let flavor = postcard::de_flavors::Slice::new(&item.0);
+        if let Err(e) =
+            structure.set_postcard_by_key(path.split('/').skip(1), flavor)
         {
             log::warn!("Failed to deserialize `{path}` from flash: {e:?}");
         }
@@ -215,21 +212,20 @@ where
     ) -> Result<(), Self::Error> {
         let mut save_setting = |path| -> Result<(), Self::Error> {
             let path = SettingsKey(path);
+
             let mut data = Vec::new();
             data.resize(data.capacity(), 0).unwrap();
+            let flavor = postcard::ser_flavors::Slice::new(&mut data);
 
-            let mut serializer = postcard::Serializer {
-                output: postcard::ser_flavors::Slice::new(&mut data),
-            };
-
-            if let Err(e) = settings
-                .serialize_by_key(path.0.split('/').skip(1), &mut serializer)
+            let len = match settings
+                .get_postcard_by_key(path.0.split('/').skip(1), flavor)
             {
-                log::warn!("Failed to save `{}` to flash: {e:?}", path.0);
-                return Ok(());
-            }
-
-            let len = serializer.output.finalize()?.len();
+                Err(e) => {
+                    log::warn!("Failed to save `{}` to flash: {e:?}", path.0);
+                    return Ok(());
+                }
+                Ok(slice) => slice.len(),
+            };
             data.truncate(len);
 
             let range = self.storage.range();
