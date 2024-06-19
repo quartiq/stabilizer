@@ -435,6 +435,14 @@ impl<'a, P: Platform<Y>, const Y: usize> Runner<'a, P, Y> {
         self.0.interface.platform.interface_mut()
     }
 
+    pub fn platform_mut(&mut self) -> &mut P {
+        &mut self.0.interface.platform
+    }
+
+    pub fn platform(&mut self) -> &P {
+        &self.0.interface.platform
+    }
+
     /// Must be called periodically to process user input.
     ///
     /// # Returns
