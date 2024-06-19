@@ -153,19 +153,23 @@ impl<'a> sequential_storage::map::Value<'a> for SettingsItem {
         &self,
         buffer: &mut [u8],
     ) -> Result<usize, sequential_storage::map::SerializationError> {
-        Ok(postcard::to_slice(self, buffer)
-            .map_err(|_| {
-                sequential_storage::map::SerializationError::BufferTooSmall
-            })?
-            .len())
+        if buffer.len() < self.0.len() {
+            return Err(
+                sequential_storage::map::SerializationError::BufferTooSmall,
+            );
+        }
+
+        buffer[..self.0.len()].copy_from_slice(&self.0);
+        Ok(self.0.len())
     }
 
     fn deserialize_from(
         buffer: &'a [u8],
     ) -> Result<Self, sequential_storage::map::SerializationError> {
-        postcard::from_bytes(buffer).map_err(|_| {
+        let vec = Vec::from_slice(buffer).map_err(|_| {
             sequential_storage::map::SerializationError::BufferTooSmall
-        })
+        })?;
+        Ok(Self(vec))
     }
 }
 
