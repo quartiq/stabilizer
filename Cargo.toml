@@ -33,9 +33,10 @@ members = ["ad9959", "serial-settings"]
 
 [dependencies]
 panic-persist = { version = "0.3", features = ["utf8", "custom-panic-handler"] }
-sequential-storage = "0.6"
+sequential-storage = "2"
 embedded-io = "0.6"
 embedded-storage = "0.3"
+embedded-storage-async = "0.4"
 cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }
 cortex-m-rt = { version = "0.7", features = ["device"] }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
@@ -72,6 +73,7 @@ tca9539 = "0.2"
 smoltcp-nal = { version = "0.5", features = ["shared-stack"] }
 postcard = "1"
 bit_field = "0.10.2"
+embassy-futures = { version = "0.1", default-features = false }
 
 [build-dependencies]
 built = { version = "0.7", features = ["git2"], default-features = false }

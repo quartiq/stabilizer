@@ -91,6 +91,17 @@ pub trait Platform<const Y: usize>: Sized {
     /// Execute a platform specific command.
     fn cmd(&mut self, cmd: &str);
 
+    /// Handle clearing a settings key.
+    ///
+    /// # Note
+    /// The run-time setting will have already been updated when this is called. This is intended
+    /// to remove settings from permanent storage if necessary.
+    ///
+    /// # Arguments
+    /// * `buffer` The element serialization buffer.
+    /// * `key` The name of the setting to be cleared. If `None`, all settings are cleared.
+    fn clear(&mut self, buffer: &mut [u8], key: Option<&str>);
+
     /// Return a mutable reference to the `Interface`.
     fn interface_mut(&mut self) -> &mut Self::Interface;
 }
@@ -225,15 +236,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             writeln!(interface, "All settings cleared").unwrap();
         }
 
-        match interface.platform.save(interface.buffer, maybe_key, settings) {
-            Ok(_) => {
-                writeln!(interface, "Settings saved. You may need to reboot for the settings to be applied")
-            }
-            Err(e) => {
-                writeln!(interface, "Failed to clear settings: {e:?}")
-            }
-        }
-        .unwrap();
+        interface.platform.clear(interface.buffer, maybe_key);
     }
 
     fn handle_get(

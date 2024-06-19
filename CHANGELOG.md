@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 Booster
 * Panic information is now persisted after reboot and available via telemetry and the USB serial
 console.
+* Device operational settings can now be modified, stored and cleared from device flash using the
+  USB serial console. Run-time settings are unique to each application, but network settings are
+  unified for all applications (i.e. lockin, dual-iir, etc.)
 
 ### Changed
 * Broker and static IP/DHCP are no longer configured at compile time,
