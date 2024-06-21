@@ -521,8 +521,9 @@ mod app {
             c.local.afes.0.set_gain(settings.lockin.afe[0]);
             c.local.afes.1.set_gain(settings.lockin.afe[1]);
 
-            let target = settings.lockin.stream_target.into();
-            c.shared.network.lock(|net| net.direct_stream(target));
+            c.shared
+                .network
+                .lock(|net| net.direct_stream(settings.lockin.stream_target));
 
             c.shared
                 .active_settings
