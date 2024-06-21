@@ -81,7 +81,7 @@ impl Serialize for StreamTarget {
         &self,
         serializer: S,
     ) -> Result<S::Ok, S::Error> {
-        let mut display: String<20> = String::new();
+        let mut display: String<30> = String::new();
         write!(&mut display, "{}", self.0).unwrap();
         serializer.serialize_str(&display)
     }
