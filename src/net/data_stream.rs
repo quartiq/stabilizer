@@ -60,13 +60,13 @@ type Frame = [MaybeUninit<u8>; FRAME_SIZE];
 /// Represents the destination for the UDP stream to send data to.
 ///
 /// # Miniconf
-/// `{"ip": <addr>, "port": <port>}`
+/// `<addr>:<port>`
 ///
-/// * `<addr>` is an array of 4 bytes. E.g. `[192, 168, 0, 1]`
+/// * `<addr>` is an IPv4 address. E.g. `192.168.0.1`
 /// * `<port>` is any unsigned 16-bit value.
 ///
 /// ## Example
-/// `{"ip": [192, 168,0, 1], "port": 1111}`
+/// `192.168.0.1:1234`
 #[derive(Copy, Clone, Debug, DeserializeFromStr, PartialEq, Eq)]
 pub struct StreamTarget(pub SocketAddr);
 

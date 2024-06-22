@@ -76,9 +76,6 @@ bit_field = "0.10.2"
 embassy-futures = { version = "0.1", default-features = false }
 serde_with = { version = "3.8", default-features = false, features = ["macros"] }
 
-[patch.crates-io.smoltcp-nal]
-git = "https://github.com/quartiq/smoltcp-nal"
-
 [build-dependencies]
 built = { version = "0.7", features = ["git2"], default-features = false }
 
