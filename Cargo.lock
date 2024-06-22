@@ -1176,6 +1176,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_with"
+version = "3.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ad483d2ab0149d5a5ebcd9972a3852711e0153d863bf5a5d0391d28883c4a20"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "serde_with_macros",
+]
+
+[[package]]
+name = "serde_with_macros"
+version = "3.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65569b702f41443e8bc8bbb1c5779bd0450bbe723b56198980e80ec45780bce2"
+dependencies = [
+ "darling",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.66",
+]
+
+[[package]]
 name = "serial-settings"
 version = "0.1.0"
 dependencies = [
@@ -1239,9 +1262,9 @@ dependencies = [
 
 [[package]]
 name = "smoltcp-nal"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3ac46812539eefac6ffe76393317b6dd4851fef6f31621cce27e9924d586570"
+checksum = "975f15c4c77e7798c236b542032891f0cafe5f2e103debe59d069d50a645ed8a"
 dependencies = [
  "embedded-nal",
  "embedded-time",
@@ -1299,6 +1322,7 @@ dependencies = [
  "sequential-storage",
  "serde",
  "serde-json-core",
+ "serde_with",
  "serial-settings",
  "shared-bus",
  "smoltcp-nal",

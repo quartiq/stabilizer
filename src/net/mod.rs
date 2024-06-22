@@ -18,7 +18,7 @@ use crate::hardware::{
     SystemTimer,
 };
 use crate::settings::NetSettings;
-use data_stream::{DataStream, FrameGenerator};
+use data_stream::{DataStream, FrameGenerator, StreamTarget};
 use network_processor::NetworkProcessor;
 use telemetry::TelemetryClient;
 
@@ -26,7 +26,6 @@ use core::fmt::Write;
 use heapless::String;
 use miniconf::JsonCoreSlash;
 use miniconf_mqtt::minimq;
-use smoltcp_nal::embedded_nal::SocketAddr;
 
 pub type NetworkReference =
     smoltcp_nal::shared::NetworkStackProxy<'static, NetworkStack>;
@@ -174,7 +173,7 @@ where
     ///
     /// # Args
     /// * `remote` - The destination for the streamed data.
-    pub fn direct_stream(&mut self, remote: SocketAddr) {
+    pub fn direct_stream(&mut self, remote: StreamTarget) {
         if self.generator.is_none() {
             self.stream.set_remote(remote);
         }

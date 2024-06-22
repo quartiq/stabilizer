@@ -22,14 +22,16 @@
 //! # Example
 //! A sample Python script is available in `scripts/stream_throughput.py` to demonstrate reception
 //! of livestreamed data.
-use core::mem::MaybeUninit;
+use core::{fmt::Write, mem::MaybeUninit};
 use heapless::{
     pool::{Box, Init, Pool, Uninit},
     spsc::{Consumer, Producer, Queue},
+    String,
 };
 use num_enum::IntoPrimitive;
-use serde::{Deserialize, Serialize};
-use smoltcp_nal::embedded_nal::{IpAddr, Ipv4Addr, SocketAddr, UdpClientStack};
+use serde::Serialize;
+use serde_with::DeserializeFromStr;
+use smoltcp_nal::embedded_nal::{nb, SocketAddr, UdpClientStack};
 
 use super::NetworkReference;
 
@@ -58,17 +60,47 @@ type Frame = [MaybeUninit<u8>; FRAME_SIZE];
 /// Represents the destination for the UDP stream to send data to.
 ///
 /// # Miniconf
-/// `{"ip": <addr>, "port": <port>}`
+/// `<addr>:<port>`
 ///
-/// * `<addr>` is an array of 4 bytes. E.g. `[192, 168, 0, 1]`
+/// * `<addr>` is an IPv4 address. E.g. `192.168.0.1`
 /// * `<port>` is any unsigned 16-bit value.
 ///
 /// ## Example
-/// `{"ip": [192, 168,0, 1], "port": 1111}`
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, Default)]
-pub struct StreamTarget {
-    pub ip: [u8; 4],
-    pub port: u16,
+/// `192.168.0.1:1234`
+#[derive(Copy, Clone, Debug, DeserializeFromStr, PartialEq, Eq)]
+pub struct StreamTarget(pub SocketAddr);
+
+impl Default for StreamTarget {
+    fn default() -> Self {
+        Self("0.0.0.0:0".parse().unwrap())
+    }
+}
+
+impl Serialize for StreamTarget {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let mut display: String<30> = String::new();
+        write!(&mut display, "{}", self.0).unwrap();
+        serializer.serialize_str(&display)
+    }
+}
+
+impl core::str::FromStr for StreamTarget {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let addr = SocketAddr::from_str(s)
+            .map_err(|_| "Invalid socket address format")?;
+        Ok(Self(addr))
+    }
+}
+
+impl core::fmt::Display for StreamTarget {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0.fmt(f)
+    }
 }
 
 /// Specifies the format of streamed data
@@ -90,20 +122,6 @@ pub enum StreamFormat {
     /// Streamed data in FLS (fiber length stabilization) format. See the FLS application for
     /// detailed definition.
     Fls = 2,
-}
-
-impl From<StreamTarget> for SocketAddr {
-    fn from(target: StreamTarget) -> SocketAddr {
-        SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::new(
-                target.ip[0],
-                target.ip[1],
-                target.ip[2],
-                target.ip[3],
-            )),
-            target.port,
-        )
-    }
 }
 
 /// Configure streaming on a device.
@@ -273,7 +291,7 @@ pub struct DataStream {
     socket: Option<<NetworkReference as UdpClientStack>::UdpSocket>,
     queue: Consumer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
     frame_pool: &'static Pool<Frame>,
-    remote: SocketAddr,
+    remote: StreamTarget,
 }
 
 impl DataStream {
@@ -291,7 +309,7 @@ impl DataStream {
         Self {
             stack,
             socket: None,
-            remote: StreamTarget::default().into(),
+            remote: StreamTarget::default(),
             queue: consumer,
             frame_pool,
         }
@@ -309,19 +327,21 @@ impl DataStream {
     fn open(&mut self) -> Result<(), ()> {
         // If there is already a socket of if remote address is unspecified,
         // do not open a new socket.
-        if self.socket.is_some() || self.remote.ip().is_unspecified() {
+        if self.socket.is_some() || self.remote.0.ip().is_unspecified() {
             return Err(());
         }
 
-        log::info!("Opening stream");
-
         let mut socket = self.stack.socket().or(Err(()))?;
 
-        // Note(unwrap): We only connect with a new socket, so it is guaranteed to not already be
-        // bound.
-        self.stack.connect(&mut socket, self.remote).unwrap();
+        // We may fail to connect if we don't have an IP address yet.
+        if self.stack.connect(&mut socket, self.remote.0).is_err() {
+            self.stack.close(socket).unwrap();
+            return Err(());
+        }
 
         self.socket.replace(socket);
+
+        log::info!("Opening stream");
 
         Ok(())
     }
@@ -330,7 +350,7 @@ impl DataStream {
     ///
     /// # Args
     /// * `remote` - The destination to send stream data to.
-    pub fn set_remote(&mut self, remote: SocketAddr) {
+    pub fn set_remote(&mut self, remote: StreamTarget) {
         // Close socket to be reopened if the remote has changed.
         if remote != self.remote {
             self.close();
@@ -360,7 +380,27 @@ impl DataStream {
                             core::mem::size_of_val(buf),
                         )
                     };
-                    self.stack.send(handle, data).ok();
+
+                    // If we fail to send, it can only be because the socket got closed on us (i.e.
+                    // address update due to DHCP). If this happens, reopen the socket.
+                    match self.stack.send(handle, data) {
+                        Ok(_) => {},
+
+                        // Our IP address may have changedm so handle reopening the UDP stream.
+                        Err(nb::Error::Other(smoltcp_nal::NetworkError::UdpWriteFailure(smoltcp_nal::smoltcp::socket::udp::SendError::Unaddressable))) => {
+                            log::warn!( "IP address updated during stream. Reopening socket");
+                            let socket = self.socket.take().unwrap();
+                            self.stack.close(socket).unwrap();
+                        }
+
+                        // The buffer should clear up once ICMP resolves the IP address, so ignore
+                        // this error.
+                        Err(nb::Error::Other(smoltcp_nal::NetworkError::UdpWriteFailure(smoltcp_nal::smoltcp::socket::udp::SendError::BufferFull))) => {}
+
+                        Err(other) => {
+                            log::warn!("Unexpected UDP error during data stream: {other:?}");
+                        }
+                    }
                     self.frame_pool.free(frame.buffer)
                 }
             }

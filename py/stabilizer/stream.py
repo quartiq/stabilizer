@@ -30,10 +30,9 @@ def get_local_ip(remote):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         sock.connect((remote, 1883))
-        address = sock.getsockname()[0]
+        return sock.getsockname()[0]
     finally:
         sock.close()
-    return list(map(int, address.split(".")))
 
 
 class AdcDac:

@@ -483,8 +483,9 @@ mod app {
                 }
             }
 
-            let target = settings.dual_iir.stream_target.into();
-            c.shared.network.lock(|net| net.direct_stream(target));
+            c.shared
+                .network
+                .lock(|net| net.direct_stream(settings.dual_iir.stream_target));
 
             c.shared
                 .active_settings
