@@ -24,6 +24,7 @@ console.
 * MSRV removed. Stabilizer uses latest stable rust.
 * The IIR (biquad) filter used for PID action has changed its serialization format.
   See also the `iir_coefficients` Python CLI implementation.
+* The stream target is now configures as a `1.2.3.4:4321` string
 
 ### Fixed
 * Fixed an issue where the device would sometimes not enumerate on Windows

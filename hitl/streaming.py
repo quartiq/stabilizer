@@ -42,16 +42,12 @@ async def _main():
 
     conf = await miniconf.Miniconf.create(args.broker, prefix)
 
-    stream_target = [int(x) for x in args.ip.split('.')]
     if ipaddress.ip_address(args.ip).is_unspecified:
-        stream_target = get_local_ip(args.broker)
+        args.ip = get_local_ip(args.broker)
 
     logger.info("Starting stream")
     await conf.set(
-        "/stream_target", {
-            "ip": stream_target,
-            "port": args.port
-        }, retain=False)
+        "/stream_target", f"{args.ip}:{args.port}", retain=False)
 
     try:
         logger.info("Testing stream reception")
@@ -64,7 +60,7 @@ async def _main():
     finally:
         logger.info("Stopping stream")
         await conf.set(
-            "/stream_target", {"ip": [0, 0, 0, 0], "port": 0}, retain=False)
+            "/stream_target", "0.0.0.0:0", retain=False)
 
     logger.info("Draining queue")
     await asyncio.sleep(.1)
