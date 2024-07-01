@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error"],"fn":["load_from_flash"],"struct":["NetSettings","SerialSettingsPlatform","SettingsItem","SettingsKey"],"trait":["AppSettings"]};
