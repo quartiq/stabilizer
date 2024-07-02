@@ -25,7 +25,7 @@
 use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
 use core::fmt::Write;
 use heapless::{String, Vec};
-use miniconf::{JsonCoreSlash, Postcard, Tree};
+use miniconf::{JsonCoreSlash, Path, Postcard, Tree};
 use serial_settings::{BestEffortInterface, Platform, Settings};
 use smoltcp_nal::smoltcp::wire::EthernetAddress;
 use stm32h7xx_hal::flash::LockedFlashBank;
@@ -75,8 +75,8 @@ pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
 ) {
     // Loop over flash and read settings
     let mut buffer = [0u8; 512];
-    for path in T::iter_paths::<String<64>>("/") {
-        let path = path.unwrap();
+    for path in T::nodes::<Path<String<64>, '/'>>() {
+        let (path, _node) = path.unwrap();
 
         // Try to fetch the setting from flash.
         let item = match embassy_futures::block_on(
@@ -85,11 +85,14 @@ pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
                 storage.range(),
                 &mut sequential_storage::cache::NoCache::new(),
                 &mut buffer,
-                SettingsKey(path.clone()),
+                SettingsKey(path.0.clone()),
             ),
         ) {
             Err(e) => {
-                log::warn!("Failed to fetch `{path}` from flash: {e:?}");
+                log::warn!(
+                    "Failed to fetch `{}` from flash: {e:?}",
+                    path.as_str()
+                );
                 continue;
             }
             Ok(Some(item)) => item,
@@ -102,13 +105,14 @@ pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
             continue;
         }
 
-        log::info!("Loading initial `{path}` from flash");
+        log::info!("Loading initial `{}` from flash", path.as_str());
 
         let flavor = postcard::de_flavors::Slice::new(&item.0);
-        if let Err(e) =
-            structure.set_postcard_by_key(path.split('/').skip(1), flavor)
-        {
-            log::warn!("Failed to deserialize `{path}` from flash: {e:?}");
+        if let Err(e) = structure.set_postcard_by_key(&path, flavor) {
+            log::warn!(
+                "Failed to deserialize `{}` from flash: {e:?}",
+                path.as_str()
+            );
         }
     }
 }
@@ -269,8 +273,8 @@ where
         if let Some(key) = key {
             save_setting(String::from(key))?;
         } else {
-            for path in Self::Settings::iter_paths::<String<64>>("/") {
-                save_setting(path.unwrap())?;
+            for path in Self::Settings::nodes::<Path<String<64>, '/'>>() {
+                save_setting(path.unwrap().0.into_inner())?;
             }
         }
 
@@ -375,8 +379,8 @@ where
         if let Some(key) = key {
             erase_setting(key.into()).unwrap();
         } else {
-            for path in Self::Settings::iter_paths::<String<64>>("/") {
-                erase_setting(path.unwrap()).unwrap();
+            for path in Self::Settings::nodes::<Path<String<64>, '/'>>() {
+                erase_setting(path.unwrap().0.into_inner()).unwrap();
             }
         }
     }

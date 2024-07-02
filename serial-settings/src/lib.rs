@@ -53,7 +53,7 @@ use core::fmt::Write;
 use core::hash::Hasher;
 use embedded_io::{Read, ReadReady};
 use heapless::String;
-use miniconf::{JsonCoreSlash, TreeKey};
+use miniconf::{JsonCoreSlash, Path, TreeKey};
 
 mod interface;
 
@@ -134,15 +134,23 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         let mut defaults = settings.clone();
         defaults.reset();
 
-        for path in P::Settings::iter_paths::<String<64>>("/") {
+        for path in P::Settings::nodes::<Path<String<64>, '/'>>() {
             match path {
-                Err(e) => writeln!(interface, "Failed to get path: {e}"),
-                Ok(path) => {
-                    let value = match settings.get_json(&path, interface.buffer)
+                Err(depth) => writeln!(
+                    interface,
+                    "Failed to get path: no space at depth {depth}"
+                ),
+                Ok((path, _node)) => {
+                    let value = match settings
+                        .get_json_by_key(&path, interface.buffer)
                     {
                         Err(e) => {
-                            writeln!(interface, "Failed to read {path}: {e}")
-                                .unwrap();
+                            writeln!(
+                                interface,
+                                "Failed to read {}: {e}",
+                                path.as_str()
+                            )
+                            .unwrap();
                             continue;
                         }
                         Ok(len) => {
@@ -153,7 +161,8 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
 
                     write!(
                         &mut interface.platform.interface_mut(),
-                        "{path}: {value}"
+                        "{}: {value}",
+                        path.as_str(),
                     )
                     .unwrap();
 
@@ -163,21 +172,22 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                         hasher.finish()
                     };
 
-                    let default_value =
-                        match defaults.get_json(&path, interface.buffer) {
-                            Err(e) => {
-                                writeln!(
-                                    interface,
-                                    "[default serialization error: {e}]"
-                                )
-                                .unwrap();
-                                continue;
-                            }
-                            Ok(len) => {
-                                core::str::from_utf8(&interface.buffer[..len])
-                                    .unwrap()
-                            }
-                        };
+                    let default_value = match defaults
+                        .get_json_by_key(&path, interface.buffer)
+                    {
+                        Err(e) => {
+                            writeln!(
+                                interface,
+                                "[default serialization error: {e}]"
+                            )
+                            .unwrap();
+                            continue;
+                        }
+                        Ok(len) => {
+                            core::str::from_utf8(&interface.buffer[..len])
+                                .unwrap()
+                        }
+                    };
 
                     let default_hash = {
                         let mut hasher = yafnv::Fnv1aHasher::default();
