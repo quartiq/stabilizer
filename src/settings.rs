@@ -155,18 +155,18 @@ impl<'a> sequential_storage::map::Value<'a> for SettingsItem {
         &self,
         buffer: &mut [u8],
     ) -> Result<usize, SerializationError> {
-        if buffer.len() < self.0.len() {
-            return Err(SerializationError::BufferTooSmall);
+        if let Some(buf) = buffer.get_mut(..self.0.len()) {
+            buf.copy_from_slice(&self.0);
+            Ok(self.0.len())
+        } else {
+            Err(SerializationError::BufferTooSmall)
         }
-
-        buffer[..self.0.len()].copy_from_slice(&self.0);
-        Ok(self.0.len())
     }
 
     fn deserialize_from(buffer: &'a [u8]) -> Result<Self, SerializationError> {
-        let vec = Vec::from_slice(buffer)
-            .map_err(|_| SerializationError::BufferTooSmall)?;
-        Ok(Self(vec))
+        Vec::from_slice(buffer)
+            .map_err(|_| SerializationError::BufferTooSmall)
+            .map(Self)
     }
 }
 
@@ -211,7 +211,7 @@ where
         key: Option<&str>,
         settings: &Self::Settings,
     ) -> Result<(), Self::Error> {
-        let mut save_setting = |path| -> Result<(), Self::Error> {
+        let mut save_setting = |path| {
             let path = SettingsKey(path);
 
             let mut data = Vec::new();
@@ -224,7 +224,7 @@ where
                         "Failed to save `{}` to flash: {e:?}",
                         path.0.as_str()
                     );
-                    return Ok(());
+                    return Ok::<_, Self::Error>(());
                 }
                 Ok(slice) => slice.len(),
             };
@@ -324,7 +324,7 @@ where
     }
 
     fn clear(&mut self, buf: &mut [u8], key: Option<&str>) {
-        let mut erase_setting = |path| -> Result<(), Self::Error> {
+        let mut erase_setting = |path| {
             let path = SettingsKey(path);
             let range = self.storage.range();
 
@@ -357,7 +357,7 @@ where
                 .unwrap();
             }
 
-            Ok(())
+            Ok::<_, Self::Error>(())
         };
 
         if let Some(key) = key {
