@@ -50,7 +50,6 @@
 #![no_std]
 
 use core::fmt::Write;
-use core::hash::Hasher;
 use embedded_io::{Read, ReadReady};
 use heapless::String;
 use miniconf::{JsonCoreSlash, Path, TreeKey};
@@ -166,11 +165,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                     )
                     .unwrap();
 
-                    let value_hash = {
-                        let mut hasher = yafnv::Fnv1aHasher::default();
-                        hasher.write(value.as_bytes());
-                        hasher.finish()
-                    };
+                    let value_hash: u64 = yafnv::fnv1a(value);
 
                     let default_value = match defaults
                         .get_json_by_key(&path, interface.buffer)
@@ -189,11 +184,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                         }
                     };
 
-                    let default_hash = {
-                        let mut hasher = yafnv::Fnv1aHasher::default();
-                        hasher.write(default_value.as_bytes());
-                        hasher.finish()
-                    };
+                    let default_hash: u64 = yafnv::fnv1a(default_value);
                     if default_hash != value_hash {
                         writeln!(
                             &mut interface.platform.interface_mut(),

@@ -10,4 +10,4 @@ miniconf = { version = "0.11", features = ["json-core"], path = "../../miniconf/
 menu = { version = "0.5", features = ["echo"] }
 heapless = "0.8"
 embedded-io = "0.6"
-yafnv = "1.0"
+yafnv = "2.0"
