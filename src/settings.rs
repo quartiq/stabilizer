@@ -25,6 +25,7 @@
 use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
 use core::fmt::Write;
 use embassy_futures::block_on;
+use embedded_io::Write as EioWrite;
 use heapless::{String, Vec};
 use miniconf::{JsonCoreSlash, Path, Postcard, Tree};
 use sequential_storage::{

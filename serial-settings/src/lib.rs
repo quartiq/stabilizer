@@ -49,8 +49,7 @@
 //! can be changed if needed.
 #![no_std]
 
-use core::fmt::Write;
-use embedded_io::{Read, ReadReady};
+use embedded_io::{ErrorType, Read, ReadReady, Write};
 use heapless::String;
 use miniconf::{JsonCoreSlash, Path, TreeKey};
 
@@ -71,7 +70,7 @@ pub trait Platform<const Y: usize>: Sized {
     /// This type specifies the interface to the user, for example, a USB CDC-ACM serial port.
     type Interface: embedded_io::Read
         + embedded_io::ReadReady
-        + core::fmt::Write;
+        + embedded_io::Write;
 
     /// Specifies the settings that are used on the device.
     type Settings: Settings<Y>;
@@ -159,7 +158,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                     };
 
                     write!(
-                        &mut interface.platform.interface_mut(),
+                        interface.platform.interface_mut(),
                         "{}: {value}",
                         path.as_str(),
                     )
@@ -187,12 +186,12 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                     let default_hash: u64 = yafnv::fnv1a(default_value);
                     if default_hash != value_hash {
                         writeln!(
-                            &mut interface.platform.interface_mut(),
+                            interface.platform.interface_mut(),
                             " [default: {default_value}]"
                         )
                     } else {
                         writeln!(
-                            &mut interface.platform.interface_mut(),
+                            interface.platform.interface_mut(),
                             " [default]"
                         )
                     }
@@ -254,7 +253,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             }
             Ok(len) => {
                 writeln!(
-                    &mut interface.platform.interface_mut(),
+                    interface.platform.interface_mut(),
                     "{key}: {}",
                     core::str::from_utf8(&interface.buffer[..len]).unwrap()
                 )
@@ -397,7 +396,24 @@ impl<'a, P: Platform<Y>, const Y: usize> core::fmt::Write
     for Interface<'a, P, Y>
 {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        self.platform.interface_mut().write_str(s)
+        self.platform
+            .interface_mut()
+            .write_all(s.as_bytes())
+            .or(Err(core::fmt::Error))
+    }
+}
+
+impl<'a, P: Platform<Y>, const Y: usize> ErrorType for Interface<'a, P, Y> {
+    type Error = <P::Interface as ErrorType>::Error;
+}
+
+impl<'a, P: Platform<Y>, const Y: usize> Write for Interface<'a, P, Y> {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        self.platform.interface_mut().write(buf)
+    }
+
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        self.platform.interface_mut().flush()
     }
 }
 
