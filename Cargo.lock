@@ -1039,14 +1039,14 @@ dependencies = [
 
 [[package]]
 name = "rtic-monotonics"
-version = "2.0.1"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64cbd4936c91785e1ae482a65d54edafbc729d4fa708e9578cfa64d4842c3d56"
+checksum = "4e17f88319061d17d3b99997263397b176e3260177e2b4ff4ffed0078d97894c"
 dependencies = [
- "atomic-polyfill",
  "cfg-if",
  "cortex-m",
  "fugit",
+ "portable-atomic",
  "rtic-time",
 ]
 
