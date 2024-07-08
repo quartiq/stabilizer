@@ -1554,9 +1554,9 @@ checksum = "1e9df38ee2d2c3c5948ea468a8406ff0db0b29ae1ffde1bcf20ef305bcc95c51"
 
 [[package]]
 name = "yafnv"
-version = "1.0.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42a163032c49aec712809692a0b0b49842b0bc49b05d79d9c6dff41ccd93aa1b"
+checksum = "66aad9090f952997c6570d94039d80b5b5e26d182c5f39ef7b05d64535fb5f88"
 dependencies = [
  "num-traits",
 ]
