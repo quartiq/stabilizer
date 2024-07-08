@@ -160,6 +160,8 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           checkName: HITL Run Status
           ref: ${{ github.event.pull_request.head.sha }}
+          # The HITL can be backlogged by multiple queues, where each takes ~5 minutes to complete.
+          timeoutSeconds: 3600
 
       - name: "Check HITL Status"
         if: steps.status.outputs.conclusion != 'success'
