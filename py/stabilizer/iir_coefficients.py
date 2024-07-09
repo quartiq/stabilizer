@@ -220,12 +220,6 @@ def pid_coefficients(args):
 
 
 def _main():
-    import os, sys
-    if sys.platform.lower() == "win32" or os.name.lower() == "nt":
-        from asyncio import set_event_loop_policy, WindowsSelectorEventLoopPolicy
-
-        set_event_loop_policy(WindowsSelectorEventLoopPolicy())
-
     parser = argparse.ArgumentParser(
         description="Configure Stabilizer dual-iir filter parameters."
                     "Note: This script assumes an AFE input gain of 1.")
@@ -318,4 +312,11 @@ def _main():
 
 
 if __name__ == "__main__":
+    import os
+    import sys
+    if sys.platform.lower() == "win32" or os.name.lower() == "nt":
+        from asyncio import set_event_loop_policy, WindowsSelectorEventLoopPolicy
+
+        set_event_loop_policy(WindowsSelectorEventLoopPolicy())
+
     _main()
