@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-miniconf = { version = "0.11", features = ["json-core"], path = "../../miniconf/miniconf" }
+miniconf = { version = "0.12", features = ["json-core"] }
 menu = { version = "0.5", features = ["echo"] }
 heapless = "0.8"
 embedded-io = "0.6"
