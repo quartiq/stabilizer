@@ -9,6 +9,7 @@ import asyncio
 import sys
 import logging
 import json
+import os
 
 from miniconf import Client, Miniconf, MQTTv5, discover, MiniconfException
 from stabilizer import voltage_to_machine_units

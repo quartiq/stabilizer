@@ -5,6 +5,8 @@ import asyncio
 import logging
 import ipaddress
 import argparse
+import sys
+import os
 
 import miniconf
 from stabilizer.stream import measure, StabilizerStream, get_local_ip

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[license]
+text = "MIT"
+
+[project]
+name = "stabilizer"
+# Note: keep this in sync with Cargo.toml
+version = "0.9.0"
+description = "Utilities for configuring Stabilizer"
+authors = [
+    { name = "Robert Jördens", email = "rj@quartiq.de" },
+    { name = "Ryan Summers", email = "ryan.summers@vertigo-designs.com" },
+]
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "miniconf-mqtt@git+https://github.com/quartiq/miniconf@mqtt-rs-rework#subdirectory=py/miniconf-mqtt",
+]
+
+[project.urls]
+Homepage = "https://github.com/quartiq/stabilizer"
+Repository = "https://github.com/quartiq/stabilizer"
