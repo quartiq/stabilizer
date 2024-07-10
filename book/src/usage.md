@@ -36,7 +36,7 @@ python -m venv --system-site-packages vpy
 
 Next, install prerequisite packages
 ```
-python -m pip install -e py
+python -m pip install py
 ```
 
 To use `miniconf`, execute it as follows:
