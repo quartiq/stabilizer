@@ -105,7 +105,7 @@ where
         let processor =
             NetworkProcessor::new(stack_manager.acquire_stack(), phy);
 
-        let prefix = get_device_prefix(app, &net_settings.id);
+        let prefix = cortex_m::singleton!(: String<128> = get_device_prefix(app, &net_settings.id)).unwrap();
 
         let store =
             cortex_m::singleton!(: MqttStorage = MqttStorage::default())
@@ -118,7 +118,7 @@ where
         .unwrap();
         let settings = miniconf_mqtt::MqttClient::new(
             stack_manager.acquire_stack(),
-            &prefix,
+            prefix.as_str(),
             clock,
             minimq::ConfigBuilder::new(named_broker, &mut store.settings)
                 .client_id(&get_client_id(&net_settings.id, "settings"))
@@ -142,7 +142,7 @@ where
                 .unwrap(),
         );
 
-        let telemetry = TelemetryClient::new(mqtt, &prefix, metadata);
+        let telemetry = TelemetryClient::new(mqtt, prefix, metadata);
 
         let (generator, stream) =
             data_stream::setup_streaming(stack_manager.acquire_stack());

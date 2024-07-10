@@ -29,7 +29,7 @@ pub struct TelemetryClient {
         SystemTimer,
         minimq::broker::NamedBroker<NetworkReference>,
     >,
-    prefix: String<128>,
+    prefix: &'static str,
     meta_published: bool,
     metadata: &'static ApplicationMetadata,
 }
@@ -119,13 +119,13 @@ impl TelemetryClient {
             SystemTimer,
             minimq::broker::NamedBroker<NetworkReference>,
         >,
-        prefix: &str,
+        prefix: &'static str,
         metadata: &'static ApplicationMetadata,
     ) -> Self {
         Self {
             mqtt,
             meta_published: false,
-            prefix: String::from(prefix),
+            prefix,
             metadata,
         }
     }
@@ -139,7 +139,7 @@ impl TelemetryClient {
     /// # Args
     /// * `telemetry` - The telemetry to report
     pub fn publish<T: Serialize>(&mut self, telemetry: &T) {
-        let mut topic = self.prefix.clone();
+        let mut topic: String<128> = self.prefix.into();
         topic.push_str("/telemetry").unwrap();
 
         self.mqtt
@@ -189,7 +189,7 @@ impl TelemetryClient {
                 ..
             } = self;
 
-            let mut topic = self.prefix.clone();
+            let mut topic: String<128> = self.prefix.into();
             topic.push_str("/meta").unwrap();
 
             if mqtt
