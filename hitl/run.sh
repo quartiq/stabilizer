@@ -14,11 +14,12 @@ set -eux
 PREFIX=dt/sinara/dual-iir/04-91-62-d9-7e-5f
 
 # Set up python for testing
-python3 -m venv --system-site-packages vpy
-. vpy/bin/activate
+python3 -m venv --system-site-packages .venv
+. .venv/bin/activate
 
 # Install Miniconf utilities for configuring stabilizer.
-python3 -m pip install -e py
+python3 -m pip install -U setuptools pip
+python3 -m pip install py/
 
 probe-rs download --chip STM32H743ZITx --log-file /dev/null --probe 0483:3754:004C003D3137510D33333639 target/thumbv7em-none-eabihf/release/dual-iir 
 probe-rs reset --chip STM32H743ZITx --log-file /dev/null --probe 0483:3754:004C003D3137510D33333639 --connect-under-reset
@@ -33,8 +34,8 @@ sleep 30
 ping -c 5 -w 20 stabilizer-hitl
 
 # Test the MQTT interface. This uses the default broker "mqtt"
-python3 -m miniconf $PREFIX --list
-python3 -m miniconf $PREFIX /afe/0='"G2"'
+python3 -m miniconf $PREFIX '?'
+python3 -m miniconf $PREFIX '/afe/0="G2"'
 python3 -m stabilizer.iir_coefficients -p $PREFIX -c 0 -v pid --Ki 10 --Kp 1
 
 # Test the ADC/DACs connected via loopback.

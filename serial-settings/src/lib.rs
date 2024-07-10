@@ -49,11 +49,9 @@
 //! can be changed if needed.
 #![no_std]
 
-use core::fmt::Write;
-use core::hash::Hasher;
-use embedded_io::{Read, ReadReady};
+use embedded_io::{ErrorType, Read, ReadReady, Write};
 use heapless::String;
-use miniconf::{JsonCoreSlash, TreeKey};
+use miniconf::{JsonCoreSlash, Path, TreeKey};
 
 mod interface;
 
@@ -72,7 +70,7 @@ pub trait Platform<const Y: usize>: Sized {
     /// This type specifies the interface to the user, for example, a USB CDC-ACM serial port.
     type Interface: embedded_io::Read
         + embedded_io::ReadReady
-        + core::fmt::Write;
+        + embedded_io::Write;
 
     /// Specifies the settings that are used on the device.
     type Settings: Settings<Y>;
@@ -134,15 +132,23 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         let mut defaults = settings.clone();
         defaults.reset();
 
-        for path in P::Settings::iter_paths::<String<64>>("/") {
+        for path in P::Settings::nodes::<Path<String<64>, '/'>>() {
             match path {
-                Err(e) => writeln!(interface, "Failed to get path: {e}"),
-                Ok(path) => {
-                    let value = match settings.get_json(&path, interface.buffer)
+                Err(depth) => writeln!(
+                    interface,
+                    "Failed to get path: no space at depth {depth}"
+                ),
+                Ok((path, _node)) => {
+                    let value = match settings
+                        .get_json_by_key(&path, interface.buffer)
                     {
                         Err(e) => {
-                            writeln!(interface, "Failed to read {path}: {e}")
-                                .unwrap();
+                            writeln!(
+                                interface,
+                                "Failed to read {}: {e}",
+                                path.as_str()
+                            )
+                            .unwrap();
                             continue;
                         }
                         Ok(len) => {
@@ -152,46 +158,40 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                     };
 
                     write!(
-                        &mut interface.platform.interface_mut(),
-                        "{path}: {value}"
+                        interface.platform.interface_mut(),
+                        "{}: {value}",
+                        path.as_str(),
                     )
                     .unwrap();
 
-                    let value_hash = {
-                        let mut hasher = yafnv::Fnv1aHasher::default();
-                        hasher.write(value.as_bytes());
-                        hasher.finish()
+                    let value_hash: u64 = yafnv::fnv1a(value);
+
+                    let default_value = match defaults
+                        .get_json_by_key(&path, interface.buffer)
+                    {
+                        Err(e) => {
+                            writeln!(
+                                interface,
+                                "[default serialization error: {e}]"
+                            )
+                            .unwrap();
+                            continue;
+                        }
+                        Ok(len) => {
+                            core::str::from_utf8(&interface.buffer[..len])
+                                .unwrap()
+                        }
                     };
 
-                    let default_value =
-                        match defaults.get_json(&path, interface.buffer) {
-                            Err(e) => {
-                                writeln!(
-                                    interface,
-                                    "[default serialization error: {e}]"
-                                )
-                                .unwrap();
-                                continue;
-                            }
-                            Ok(len) => {
-                                core::str::from_utf8(&interface.buffer[..len])
-                                    .unwrap()
-                            }
-                        };
-
-                    let default_hash = {
-                        let mut hasher = yafnv::Fnv1aHasher::default();
-                        hasher.write(default_value.as_bytes());
-                        hasher.finish()
-                    };
+                    let default_hash: u64 = yafnv::fnv1a(default_value);
                     if default_hash != value_hash {
                         writeln!(
-                            &mut interface.platform.interface_mut(),
+                            interface.platform.interface_mut(),
                             " [default: {default_value}]"
                         )
                     } else {
                         writeln!(
-                            &mut interface.platform.interface_mut(),
+                            interface.platform.interface_mut(),
                             " [default]"
                         )
                     }
@@ -253,7 +253,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             }
             Ok(len) => {
                 writeln!(
-                    &mut interface.platform.interface_mut(),
+                    interface.platform.interface_mut(),
                     "{key}: {}",
                     core::str::from_utf8(&interface.buffer[..len]).unwrap()
                 )
@@ -396,7 +396,24 @@ impl<'a, P: Platform<Y>, const Y: usize> core::fmt::Write
     for Interface<'a, P, Y>
 {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        self.platform.interface_mut().write_str(s)
+        self.platform
+            .interface_mut()
+            .write_all(s.as_bytes())
+            .or(Err(core::fmt::Error))
+    }
+}
+
+impl<'a, P: Platform<Y>, const Y: usize> ErrorType for Interface<'a, P, Y> {
+    type Error = <P::Interface as ErrorType>::Error;
+}
+
+impl<'a, P: Platform<Y>, const Y: usize> Write for Interface<'a, P, Y> {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        self.platform.interface_mut().write(buf)
+    }
+
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        self.platform.interface_mut().flush()
     }
 }
 

@@ -24,8 +24,14 @@
 //!    storage sharing.
 use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
 use core::fmt::Write;
+use embassy_futures::block_on;
+use embedded_io::Write as EioWrite;
 use heapless::{String, Vec};
-use miniconf::{JsonCoreSlash, Postcard, Tree};
+use miniconf::{JsonCoreSlash, Path, Postcard, Tree};
+use sequential_storage::{
+    cache::NoCache,
+    map::{fetch_item, store_item, SerializationError},
+};
 use serial_settings::{BestEffortInterface, Platform, Settings};
 use smoltcp_nal::smoltcp::wire::EthernetAddress;
 use stm32h7xx_hal::flash::LockedFlashBank;
@@ -75,21 +81,22 @@ pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
 ) {
     // Loop over flash and read settings
     let mut buffer = [0u8; 512];
-    for path in T::iter_paths::<String<64>>("/") {
-        let path = path.unwrap();
+    for path in T::nodes::<Path<String<64>, '/'>>() {
+        let (path, _node) = path.unwrap();
 
         // Try to fetch the setting from flash.
-        let item = match embassy_futures::block_on(
-            sequential_storage::map::fetch_item::<SettingsKey, SettingsItem, _>(
-                storage,
-                storage.range(),
-                &mut sequential_storage::cache::NoCache::new(),
-                &mut buffer,
-                SettingsKey(path.clone()),
-            ),
-        ) {
+        let item: SettingsItem = match block_on(fetch_item(
+            storage,
+            storage.range(),
+            &mut NoCache::new(),
+            &mut buffer,
+            SettingsKey(path.clone()),
+        )) {
             Err(e) => {
-                log::warn!("Failed to fetch `{path}` from flash: {e:?}");
+                log::warn!(
+                    "Failed to fetch `{}` from flash: {e:?}",
+                    path.as_str()
+                );
                 continue;
             }
             Ok(Some(item)) => item,
@@ -102,13 +109,14 @@ pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
             continue;
         }
 
-        log::info!("Loading initial `{path}` from flash");
+        log::info!("Loading initial `{}` from flash", path.as_str());
 
         let flavor = postcard::de_flavors::Slice::new(&item.0);
-        if let Err(e) =
-            structure.set_postcard_by_key(path.split('/').skip(1), flavor)
-        {
-            log::warn!("Failed to deserialize `{path}` from flash: {e:?}");
+        if let Err(e) = structure.set_postcard_by_key(&path, flavor) {
+            log::warn!(
+                "Failed to deserialize `{}` from flash: {e:?}",
+                path.as_str()
+            );
         }
     }
 }
@@ -116,29 +124,24 @@ pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
 #[derive(
     Default, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq,
 )]
-pub struct SettingsKey(String<64>);
+pub struct SettingsKey(Path<String<64>, '/'>);
 
 impl sequential_storage::map::Key for SettingsKey {
     fn serialize_into(
         &self,
         buffer: &mut [u8],
-    ) -> Result<usize, sequential_storage::map::SerializationError> {
+    ) -> Result<usize, SerializationError> {
         Ok(postcard::to_slice(self, buffer)
-            .map_err(|_| {
-                sequential_storage::map::SerializationError::BufferTooSmall
-            })?
+            .map_err(|_| SerializationError::BufferTooSmall)?
             .len())
     }
 
     fn deserialize_from(
         buffer: &[u8],
-    ) -> Result<(Self, usize), sequential_storage::map::SerializationError>
-    {
+    ) -> Result<(Self, usize), SerializationError> {
         let original_length = buffer.len();
-        let (result, remainder) =
-            postcard::take_from_bytes(buffer).map_err(|_| {
-                sequential_storage::map::SerializationError::BufferTooSmall
-            })?;
+        let (result, remainder) = postcard::take_from_bytes(buffer)
+            .map_err(|_| SerializationError::BufferTooSmall)?;
         Ok((result, original_length - remainder.len()))
     }
 }
@@ -152,24 +155,19 @@ impl<'a> sequential_storage::map::Value<'a> for SettingsItem {
     fn serialize_into(
         &self,
         buffer: &mut [u8],
-    ) -> Result<usize, sequential_storage::map::SerializationError> {
-        if buffer.len() < self.0.len() {
-            return Err(
-                sequential_storage::map::SerializationError::BufferTooSmall,
-            );
+    ) -> Result<usize, SerializationError> {
+        if let Some(buf) = buffer.get_mut(..self.0.len()) {
+            buf.copy_from_slice(&self.0);
+            Ok(self.0.len())
+        } else {
+            Err(SerializationError::BufferTooSmall)
         }
-
-        buffer[..self.0.len()].copy_from_slice(&self.0);
-        Ok(self.0.len())
     }
 
-    fn deserialize_from(
-        buffer: &'a [u8],
-    ) -> Result<Self, sequential_storage::map::SerializationError> {
-        let vec = Vec::from_slice(buffer).map_err(|_| {
-            sequential_storage::map::SerializationError::BufferTooSmall
-        })?;
-        Ok(Self(vec))
+    fn deserialize_from(buffer: &'a [u8]) -> Result<Self, SerializationError> {
+        Vec::from_slice(buffer)
+            .map_err(|_| SerializationError::BufferTooSmall)
+            .map(Self)
     }
 }
 
@@ -214,19 +212,20 @@ where
         key: Option<&str>,
         settings: &Self::Settings,
     ) -> Result<(), Self::Error> {
-        let mut save_setting = |path| -> Result<(), Self::Error> {
+        let mut save_setting = |path| {
             let path = SettingsKey(path);
 
             let mut data = Vec::new();
             data.resize(data.capacity(), 0).unwrap();
             let flavor = postcard::ser_flavors::Slice::new(&mut data);
 
-            let len = match settings
-                .get_postcard_by_key(path.0.split('/').skip(1), flavor)
-            {
+            let len = match settings.get_postcard_by_key(&path.0, flavor) {
                 Err(e) => {
-                    log::warn!("Failed to save `{}` to flash: {e:?}", path.0);
-                    return Ok(());
+                    log::warn!(
+                        "Failed to save `{}` to flash: {e:?}",
+                        path.0.as_str()
+                    );
+                    return Ok::<_, Self::Error>(());
                 }
                 Ok(slice) => slice.len(),
             };
@@ -236,26 +235,22 @@ where
 
             // Check if the settings has changed from what's currently in flash (or if it doesn't
             // yet exist).
-            if embassy_futures::block_on(sequential_storage::map::fetch_item::<
-                SettingsKey,
-                SettingsItem,
-                _,
-            >(
+            if block_on(fetch_item(
                 &mut self.storage,
                 range.clone(),
-                &mut sequential_storage::cache::NoCache::new(),
+                &mut NoCache::new(),
                 buf,
                 path.clone(),
             ))
             .unwrap()
-            .map(|old| old.0 != data)
+            .map(|old: SettingsItem| old.0 != data)
             .unwrap_or(true)
             {
-                log::info!("Storing `{}` to flash", path.0);
-                embassy_futures::block_on(sequential_storage::map::store_item(
+                log::info!("Storing `{}` to flash", path.0.as_str());
+                block_on(store_item(
                     &mut self.storage,
                     range,
-                    &mut sequential_storage::cache::NoCache::new(),
+                    &mut NoCache::new(),
                     buf,
                     path,
                     &SettingsItem(data),
@@ -267,10 +262,10 @@ where
         };
 
         if let Some(key) = key {
-            save_setting(String::from(key))?;
+            save_setting(String::from(key).into())?;
         } else {
-            for path in Self::Settings::iter_paths::<String<64>>("/") {
-                save_setting(path.unwrap())?;
+            for path in Self::Settings::nodes() {
+                save_setting(path.unwrap().0)?;
             }
         }
 
@@ -330,7 +325,7 @@ where
     }
 
     fn clear(&mut self, buf: &mut [u8], key: Option<&str>) {
-        let mut erase_setting = |path| -> Result<(), Self::Error> {
+        let mut erase_setting = |path| {
             let path = SettingsKey(path);
             let range = self.storage.range();
 
@@ -338,19 +333,13 @@ where
             // sentinel value indicating "erased". Because we can't write flash memory twice, we
             // instead append a sentry "erased" value to the map where the serialized value is
             // empty.
-            let maybe_item = embassy_futures::block_on(
-                sequential_storage::map::fetch_item::<
-                    SettingsKey,
-                    SettingsItem,
-                    _,
-                >(
-                    &mut self.storage,
-                    range.clone(),
-                    &mut sequential_storage::cache::NoCache::new(),
-                    buf,
-                    path.clone(),
-                ),
-            )
+            let maybe_item: Option<SettingsItem> = block_on(fetch_item(
+                &mut self.storage,
+                range.clone(),
+                &mut NoCache::new(),
+                buf,
+                path.clone(),
+            ))
             .unwrap();
 
             // An entry may exist in the map with no data as a sentinel that this path was
@@ -358,10 +347,10 @@ where
             // erased" sentinel in flash. We only need to logically erase the path from the map if
             // it existed there in the first place.
             if matches!(maybe_item, Some(item) if !item.0.is_empty()) {
-                embassy_futures::block_on(sequential_storage::map::store_item(
+                block_on(store_item(
                     &mut self.storage,
                     range,
-                    &mut sequential_storage::cache::NoCache::new(),
+                    &mut NoCache::new(),
                     buf,
                     path,
                     &SettingsItem(Vec::new()),
@@ -369,14 +358,14 @@ where
                 .unwrap();
             }
 
-            Ok(())
+            Ok::<_, Self::Error>(())
         };
 
         if let Some(key) = key {
-            erase_setting(key.into()).unwrap();
+            erase_setting(String::from(key).into()).unwrap();
         } else {
-            for path in Self::Settings::iter_paths::<String<64>>("/") {
-                erase_setting(path.unwrap()).unwrap();
+            for path in Self::Settings::nodes() {
+                erase_setting(path.unwrap().0).unwrap();
             }
         }
     }
