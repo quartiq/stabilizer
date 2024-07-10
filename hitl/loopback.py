@@ -68,11 +68,11 @@ async def test_loopback(stabilizer, telemetry_queue, set_point, gain=1, channel=
     await stabilizer.set("/signal_generator/0/amplitude", 0)
 
     # Wait for telemetry to update.
-    await anext(telemetry_queue)
+    await telemetry_queue.__anext__()
 
     # Verify the ADCs are receiving the setpoint voltage.
     tolerance = max(0.05 * set_point, MINIMUM_VOLTAGE_ERROR)
-    latest_values = json.loads((await anext(telemetry_queue)).payload)
+    latest_values = json.loads((await telemetry_queue.__anext__()).payload)
     print(f"Latest telemtry: {latest_values}")
 
     assert abs(latest_values["adcs"][channel] - set_point) < tolerance
