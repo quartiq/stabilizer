@@ -18,7 +18,7 @@ python3 -m venv --system-site-packages .venv
 . .venv/bin/activate
 
 # Install Miniconf utilities for configuring stabilizer.
-python3 -m pip install -U setuptools
+python3 -m pip install -U setuptools pip
 python3 -m pip install py/
 
 probe-rs download --chip STM32H743ZITx --log-file /dev/null --probe 0483:3754:004C003D3137510D33333639 target/thumbv7em-none-eabihf/release/dual-iir 
