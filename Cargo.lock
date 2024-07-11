@@ -419,6 +419,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
 dependencies = [
  "hash32 0.3.1",
+ "serde",
  "stable_deref_trait",
 ]
 
@@ -1320,7 +1321,7 @@ dependencies = [
  "embedded-storage-async",
  "enum-iterator",
  "fugit",
- "heapless 0.7.17",
+ "heapless 0.8.0",
  "idsp",
  "lm75",
  "log",

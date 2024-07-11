@@ -59,8 +59,8 @@ impl NetSettings {
         write!(&mut id, "{mac}").unwrap();
 
         Self {
-            broker: "mqtt".into(),
-            ip: "0.0.0.0".into(),
+            broker: "mqtt".try_into().unwrap(),
+            ip: "0.0.0.0".try_into().unwrap(),
             id,
             mac,
         }
@@ -262,7 +262,7 @@ where
         };
 
         if let Some(key) = key {
-            save_setting(String::from(key).into())?;
+            save_setting(String::try_from(key).unwrap().into())?;
         } else {
             for path in Self::Settings::nodes() {
                 save_setting(path.unwrap().0)?;
@@ -362,7 +362,7 @@ where
         };
 
         if let Some(key) = key {
-            erase_setting(String::from(key).into()).unwrap();
+            erase_setting(String::try_from(key).unwrap().into()).unwrap();
         } else {
             for path in Self::Settings::nodes() {
                 erase_setting(path.unwrap().0).unwrap();
