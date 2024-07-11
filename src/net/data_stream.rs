@@ -57,7 +57,7 @@ const FRAME_SIZE: usize = 1500 - 40 - 8;
 
 // The size of the frame queue must be at least as large as the number of frame buffers. Every
 // allocated frame buffer should fit in the queue.
-const FRAME_QUEUE_SIZE: usize = FRAME_COUNT * 2;
+const FRAME_QUEUE_SIZE: usize = FRAME_COUNT;
 
 type Frame = [MaybeUninit<u8>; FRAME_SIZE];
 
