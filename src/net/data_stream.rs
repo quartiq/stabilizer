@@ -159,7 +159,7 @@ pub fn setup_streaming(
         FRAME_POOL.manage(block);
     }
 
-    let generator = FrameGenerator::new(producer, &FRAME_POOL);
+    let generator = FrameGenerator::new(producer);
 
     let stream = DataStream::new(stack, consumer);
 
@@ -219,20 +219,15 @@ impl StreamFrame {
 /// The data generator for a stream.
 pub struct FrameGenerator {
     queue: Producer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
-    pool: &'static FRAME_POOL,
     current_frame: Option<StreamFrame>,
     sequence_number: u32,
     format: u8,
 }
 
 impl FrameGenerator {
-    fn new(
-        queue: Producer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
-        pool: &'static FRAME_POOL,
-    ) -> Self {
+    fn new(queue: Producer<'static, StreamFrame, FRAME_QUEUE_SIZE>) -> Self {
         Self {
             queue,
-            pool,
             format: StreamFormat::Unknown.into(),
             current_frame: None,
             sequence_number: 0,
@@ -265,7 +260,7 @@ impl FrameGenerator {
 
         if self.current_frame.is_none() {
             if let Ok(buffer) =
-                self.pool.alloc([MaybeUninit::uninit(); FRAME_SIZE])
+                FRAME_POOL.alloc([MaybeUninit::uninit(); FRAME_SIZE])
             {
                 self.current_frame.replace(StreamFrame::new(
                     buffer,
