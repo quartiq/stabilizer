@@ -139,7 +139,7 @@ impl TelemetryClient {
     /// # Args
     /// * `telemetry` - The telemetry to report
     pub fn publish<T: Serialize>(&mut self, telemetry: &T) {
-        let mut topic: String<128> = self.prefix.into();
+        let mut topic: String<128> = self.prefix.try_into().unwrap();
         topic.push_str("/telemetry").unwrap();
 
         self.mqtt
@@ -189,7 +189,7 @@ impl TelemetryClient {
                 ..
             } = self;
 
-            let mut topic: String<128> = self.prefix.into();
+            let mut topic: String<128> = self.prefix.try_into().unwrap();
             topic.push_str("/meta").unwrap();
 
             if mqtt
