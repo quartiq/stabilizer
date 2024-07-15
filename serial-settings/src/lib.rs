@@ -51,7 +51,7 @@
 
 use embedded_io::{ErrorType, Read, ReadReady, Write};
 use heapless::String;
-use miniconf::{JsonCoreSlash, Path, Traversal, TreeKey};
+use miniconf::{JsonCoreSlash, Path, Postcard, Traversal, TreeKey};
 
 mod interface;
 
@@ -66,45 +66,39 @@ pub trait Settings<const Y: usize>:
     fn reset(&mut self) {}
 }
 
-pub trait Platform<const Y: usize>: Sized {
+pub trait Platform<const Y: usize> {
     /// This type specifies the interface to the user, for example, a USB CDC-ACM serial port.
     type Interface: embedded_io::Read
         + embedded_io::ReadReady
         + embedded_io::Write;
 
-    /// Specifies the settings that are used on the device.
-    type Settings: Settings<Y>;
-
     /// `save()` Error type
     type Error: core::fmt::Debug;
 
-    /// Save the setting to storage
-    fn save(
+    type Settings: Settings<Y>;
+
+    fn fetch<'a>(
         &mut self,
-        buffer: &mut [u8],
-        key: &str,
-        settings: &Self::Settings,
+        buf: &'a mut [u8],
+        key: &[u8],
+    ) -> Result<Option<&'a [u8]>, Self::Error>;
+
+    /// Save the setting to storage
+    fn store(
+        &mut self,
+        buf: &mut [u8],
+        key: &[u8],
+        value: &[u8],
     ) -> Result<(), Self::Error>;
 
     /// Execute a platform specific command.
     fn cmd(&mut self, cmd: &str);
 
-    /// Handle clearing a settings key.
-    ///
-    /// # Note
-    /// The run-time setting will have already been updated when this is called. This is intended
-    /// to remove settings from permanent storage if necessary.
-    ///
-    /// # Arguments
-    /// * `buffer` The element serialization buffer.
-    /// * `key` The name of the setting to be cleared.
-    fn clear(&mut self, buffer: &mut [u8], key: &str);
-
     /// Return a mutable reference to the `Interface`.
     fn interface_mut(&mut self) -> &mut Self::Interface;
 }
 
-struct Interface<'a, P: Platform<Y>, const Y: usize> {
+struct Interface<'a, P, const Y: usize> {
     platform: P,
     buffer: &'a mut [u8],
     updated: bool,
@@ -128,41 +122,33 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         settings: &mut P::Settings,
         mut func: F,
     ) where
-        F: FnMut(
-            &Path<String<64>, '/'>,
-            &mut Self,
-            &mut P::Settings,
-        ) -> Result<(), ()>,
+        F: FnMut(&Path<String<64>, '/'>, &mut Self, &mut P::Settings),
     {
         let mut iter = P::Settings::nodes::<Path<String<64>, '/'>>();
         if let Some(key) = key {
             match iter.root(&Path::<_, '/'>::from(key)) {
                 Ok(it) => iter = it,
                 Err(e) => {
-                    writeln!(interface, "Failed to list keys: {e}").unwrap();
+                    writeln!(interface, "Failed to locate `{key}`: {e}")
+                        .unwrap();
                     return;
                 }
             };
         }
 
         for key in iter {
-            let key = match key {
+            match key {
                 Ok((key, node)) => {
                     assert!(node.is_leaf());
-                    key
+                    func(&key, interface, settings)
                 }
                 Err(depth) => {
                     writeln!(
                         interface,
-                        "Failed to get path: no space at depth {depth}"
+                        "Failed to build path: no space at depth {depth}"
                     )
                     .unwrap();
-                    return;
                 }
-            };
-            match func(&key, interface, settings) {
-                Ok(()) => {}
-                Err(()) => break,
             }
         }
     }
@@ -182,67 +168,63 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             interface,
             settings,
             |key, interface, settings| {
-                let value = match settings
+                let check: u32 = match settings
                     .get_json_by_key(key, interface.buffer)
                 {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
-                        return Ok(());
+                        return;
                     }
                     Err(e) => {
                         writeln!(
                             interface,
-                            "Failed to read {}: {e}",
+                            "Failed to get `{}`: {e}",
                             key.as_str()
                         )
                         .unwrap();
-                        return Ok(());
+                        return;
                     }
                     Ok(len) => {
-                        core::str::from_utf8(&interface.buffer[..len]).unwrap()
+                        write!(
+                            interface.platform.interface_mut(),
+                            "{}: {}",
+                            key.as_str(),
+                            core::str::from_utf8(&interface.buffer[..len])
+                                .unwrap()
+                        )
+                        .unwrap();
+                        yafnv::fnv1a(&interface.buffer[..len])
                     }
                 };
 
-                write!(
-                    interface.platform.interface_mut(),
-                    "{}: {value}",
-                    key.as_str(),
-                )
-                .unwrap();
-
-                let value_hash: u64 = yafnv::fnv1a(value);
-
-                let default_value = match defaults
-                    .get_json_by_key(key, interface.buffer)
-                {
+                match defaults.get_json_by_key(key, interface.buffer) {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
-                        writeln!(interface, "[default: absent]").unwrap();
-                        return Ok(());
+                        writeln!(interface, "[default: absent]")
                     }
                     Err(e) => {
                         writeln!(
                             interface,
                             "[default serialization error: {e}]"
                         )
-                        .unwrap();
-                        return Ok(());
                     }
                     Ok(len) => {
-                        core::str::from_utf8(&interface.buffer[..len]).unwrap()
+                        if yafnv::fnv1a::<u32, _>(&interface.buffer[..len])
+                            != check
+                        {
+                            writeln!(
+                                interface.platform.interface_mut(),
+                                " [default: {}]",
+                                core::str::from_utf8(&interface.buffer[..len])
+                                    .unwrap()
+                            )
+                        } else {
+                            writeln!(
+                                interface.platform.interface_mut(),
+                                " [default]"
+                            )
+                        }
                     }
-                };
-
-                let default_hash: u64 = yafnv::fnv1a(default_value);
-                if default_hash != value_hash {
-                    writeln!(
-                        interface.platform.interface_mut(),
-                        " [default: {default_value}]"
-                    )
-                    .unwrap();
-                } else {
-                    writeln!(interface.platform.interface_mut(), " [default]")
-                        .unwrap();
                 }
-                Ok(())
+                .unwrap();
             },
         );
     }
@@ -259,10 +241,10 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         defaults.reset();
         Self::iter_root(key, interface, settings, |key, interface, settings| {
             let len = match defaults.get_json_by_key(key, interface.buffer) {
+                Ok(len) => len,
                 Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
-                    writeln!(interface, "{} default is absent", key.as_str())
-                        .unwrap();
-                    return Ok(());
+                    log::warn!("Default absent: `{}`", key.as_str());
+                    return;
                 }
                 Err(e) => {
                     writeln!(
@@ -271,14 +253,13 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                         key.as_str()
                     )
                     .unwrap();
-                    return Ok(());
+                    return;
                 }
-                Ok(len) => len,
             };
 
             match settings.set_json_by_key(key, &interface.buffer[..len]) {
                 Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
-                    return Ok(());
+                    return;
                 }
                 Err(e) => {
                     writeln!(
@@ -287,15 +268,14 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                         key.as_str()
                     )
                     .unwrap();
-                    return Ok(());
+                    return;
                 }
                 Ok(_len) => {}
             }
 
-            interface.platform.clear(interface.buffer, key);
+            //interface.platform.clear(interface.buffer, key);
             interface.updated = true;
             writeln!(interface, "{} cleared", key.as_str()).unwrap();
-            Ok(())
         })
     }
 
@@ -314,18 +294,85 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             interface,
             settings,
             |key, interface, settings| {
-                match interface.platform.save(interface.buffer, key, settings) {
-                    Ok(_) => {
-                        writeln!(interface, "{} saved", key.as_str()).unwrap()
+                let slic = postcard::ser_flavors::Slice::new(interface.buffer);
+                let mut check = match defaults.get_postcard_by_key(key, slic) {
+                    Ok(slic) => yafnv::fnv1a::<u32, _>(slic),
+                    Err(miniconf::Error::Traversal(Traversal::Absent(
+                        _depth,
+                    ))) => {
+                        log::warn!("Default absent: `{}`", key.as_str());
+                        return;
                     }
+                    Err(e) => {
+                        writeln!(
+                            interface,
+                            "Failed to get `{}` default: {e:?}",
+                            key.as_str()
+                        )
+                        .unwrap();
+                        return;
+                    }
+                };
+                match interface.platform.fetch(interface.buffer, key.as_bytes())
+                {
+                    Ok(None) => {}
+                    Ok(Some(stored)) => {
+                        let stored = yafnv::fnv1a::<u32, _>(stored);
+                        if stored != check {
+                            log::debug!(
+                                "Stored differs from default: `{}`",
+                                key.as_str()
+                            );
+                            check = stored;
+                        } else {
+                            log::debug!(
+                                "Stored matches default: `{}`",
+                                key.as_str()
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        writeln!(
+                            interface,
+                            "Could not load `{}`: {e:?}",
+                            key.as_str()
+                        )
+                        .unwrap();
+                    }
+                }
+                let slic = postcard::ser_flavors::Slice::new(interface.buffer);
+                let value = match settings.get_postcard_by_key(key, slic) {
+                    Ok(value) => value,
+                    Err(miniconf::Error::Traversal(Traversal::Absent(
+                        _depth,
+                    ))) => {
+                        return;
+                    }
+                    Err(e) => {
+                        writeln!(
+                            interface,
+                            "Could not get {}: {e:?}",
+                            key.as_str()
+                        )
+                        .unwrap();
+                        return;
+                    }
+                };
+                if yafnv::fnv1a::<u32, _>(&value) == check {
+                    log::debug!("Not saving default {}", key.as_str());
+                    return;
+                }
+                let len = value.len();
+                let (value, rest) = interface.buffer.split_at_mut(len);
+                match interface.platform.store(rest, key.as_bytes(), value) {
+                    Ok(_) => writeln!(interface, "{} saved", key.as_str()),
                     Err(e) => writeln!(
                         interface,
                         "Failed to save {}: {e:?}",
                         key.as_str()
-                    )
-                    .unwrap(),
+                    ),
                 }
-                Ok(())
+                .unwrap();
             },
         );
         writeln!(
@@ -347,19 +394,16 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             menu::argument_finder(item, args, "value").unwrap().unwrap();
 
         // Now, write the new value into memory.
-        match settings.set_json(key, value.as_bytes())
-        {
+        match settings.set_json(key, value.as_bytes()) {
             Ok(_) => {
                 interface.updated = true;
-                writeln!(
-                        interface,
-                        "Settings updated. You may need to reboot for the setting to be applied"
-                    )
-            },
-            Err(e) => {
-                writeln!(interface, "Failed to update {key}: {e:?}")
+                writeln!(interface, "Set. May require reboot to activate.")
             }
-        }.unwrap();
+            Err(e) => {
+                writeln!(interface, "Failed to set {key}: {e:?}")
+            }
+        }
+        .unwrap();
     }
 
     fn menu() -> menu::Menu<'a, Self, P::Settings> {

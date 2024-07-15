@@ -1205,8 +1205,10 @@ version = "0.1.0"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
+ "log",
  "menu",
  "miniconf",
+ "postcard",
  "yafnv",
 ]
 
