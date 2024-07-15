@@ -122,83 +122,122 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         interface.platform.cmd(key)
     }
 
+    fn iter_root<F>(
+        key: Option<&str>,
+        interface: &mut Self,
+        settings: &mut P::Settings,
+        mut func: F,
+    ) where
+        F: FnMut(
+            &Path<String<64>, '/'>,
+            &mut Self,
+            &mut P::Settings,
+        ) -> Result<(), ()>,
+    {
+        let mut iter = P::Settings::nodes::<Path<String<64>, '/'>>();
+        if let Some(key) = key {
+            match iter.root(&Path::<_, '/'>::from(key)) {
+                Ok(it) => iter = it,
+                Err(e) => {
+                    writeln!(interface, "Failed to list keys: {e}").unwrap();
+                    return;
+                }
+            };
+        }
+
+        for key in iter {
+            let key = match key {
+                Ok((key, node)) => {
+                    assert!(node.is_leaf());
+                    key
+                }
+                Err(depth) => {
+                    writeln!(
+                        interface,
+                        "Failed to get path: no space at depth {depth}"
+                    )
+                    .unwrap();
+                    return;
+                }
+            };
+            match func(&key, interface, settings) {
+                Ok(()) => {}
+                Err(()) => break,
+            }
+        }
+    }
+
     fn handle_list(
         _menu: &menu::Menu<Self, P::Settings>,
-        _item: &menu::Item<Self, P::Settings>,
-        _args: &[&str],
+        item: &menu::Item<Self, P::Settings>,
+        args: &[&str],
         interface: &mut Self,
         settings: &mut P::Settings,
     ) {
         let mut defaults = settings.clone();
         defaults.reset();
+        let key = menu::argument_finder(item, args, "item").unwrap();
+        Self::iter_root(
+            key,
+            interface,
+            settings,
+            |path, interface, settings| {
+                let value = match settings
+                    .get_json_by_key(path, interface.buffer)
+                {
+                    Err(e) => {
+                        writeln!(
+                            interface,
+                            "Failed to read {}: {e}",
+                            path.as_str()
+                        )
+                        .unwrap();
+                        return Ok(());
+                    }
+                    Ok(len) => {
+                        core::str::from_utf8(&interface.buffer[..len]).unwrap()
+                    }
+                };
 
-        for path in P::Settings::nodes::<Path<String<64>, '/'>>() {
-            match path {
-                Err(depth) => writeln!(
-                    interface,
-                    "Failed to get path: no space at depth {depth}"
-                ),
-                Ok((path, _node)) => {
-                    let value = match settings
-                        .get_json_by_key(&path, interface.buffer)
-                    {
-                        Err(e) => {
-                            writeln!(
-                                interface,
-                                "Failed to read {}: {e}",
-                                path.as_str()
-                            )
-                            .unwrap();
-                            continue;
-                        }
-                        Ok(len) => {
-                            core::str::from_utf8(&interface.buffer[..len])
-                                .unwrap()
-                        }
-                    };
+                write!(
+                    interface.platform.interface_mut(),
+                    "{}: {value}",
+                    path.as_str(),
+                )
+                .unwrap();
 
-                    write!(
+                let value_hash: u64 = yafnv::fnv1a(value);
+
+                let default_value = match defaults
+                    .get_json_by_key(path, interface.buffer)
+                {
+                    Err(e) => {
+                        writeln!(
+                            interface,
+                            "[default serialization error: {e}]"
+                        )
+                        .unwrap();
+                        return Ok(());
+                    }
+                    Ok(len) => {
+                        core::str::from_utf8(&interface.buffer[..len]).unwrap()
+                    }
+                };
+
+                let default_hash: u64 = yafnv::fnv1a(default_value);
+                if default_hash != value_hash {
+                    writeln!(
                         interface.platform.interface_mut(),
-                        "{}: {value}",
-                        path.as_str(),
+                        " [default: {default_value}]"
                     )
                     .unwrap();
-
-                    let value_hash: u64 = yafnv::fnv1a(value);
-
-                    let default_value = match defaults
-                        .get_json_by_key(&path, interface.buffer)
-                    {
-                        Err(e) => {
-                            writeln!(
-                                interface,
-                                "[default serialization error: {e}]"
-                            )
-                            .unwrap();
-                            continue;
-                        }
-                        Ok(len) => {
-                            core::str::from_utf8(&interface.buffer[..len])
-                                .unwrap()
-                        }
-                    };
-
-                    let default_hash: u64 = yafnv::fnv1a(default_value);
-                    if default_hash != value_hash {
-                        writeln!(
-                            interface.platform.interface_mut(),
-                            " [default: {default_value}]"
-                        )
-                    } else {
-                        writeln!(
-                            interface.platform.interface_mut(),
-                            " [default]"
-                        )
-                    }
+                } else {
+                    writeln!(interface.platform.interface_mut(), " [default]")
+                        .unwrap();
                 }
-            }
-            .unwrap()
-        }
+                Ok(())
+            },
+        );
     }
 
     fn handle_clear(
@@ -213,23 +252,39 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             let mut defaults = settings.clone();
             defaults.reset();
 
-            let len = match defaults.get_json(key, interface.buffer) {
-                Err(e) => {
-                    writeln!(interface, "Failed to clear `{key}`: {e:?}")
-                        .unwrap();
-                    return;
-                }
+            Self::iter_root(
+                Some(key),
+                interface,
+                settings,
+                |path, interface, settings| {
+                    let len = match defaults
+                        .get_json_by_key(path, interface.buffer)
+                    {
+                        Err(e) => {
+                            writeln!(
+                                interface,
+                                "Failed to clear `{key}`: {e:?}"
+                            )
+                            .unwrap();
+                            return Ok(());
+                        }
 
-                Ok(len) => len,
-            };
+                        Ok(len) => len,
+                    };
 
-            if let Err(e) = settings.set_json(key, &interface.buffer[..len]) {
-                writeln!(interface, "Failed to update {key}: {e:?}").unwrap();
-                return;
-            }
+                    if let Err(e) =
+                        settings.set_json(key, &interface.buffer[..len])
+                    {
+                        writeln!(interface, "Failed to update {key}: {e:?}")
+                            .unwrap();
+                        return Ok(());
+                    }
 
-            interface.updated = true;
-            writeln!(interface, "{key} cleared to default").unwrap();
+                    interface.updated = true;
+                    writeln!(interface, "{key} cleared to default").unwrap();
+                    Ok(())
+                },
+            );
         } else {
             settings.reset();
             interface.updated = true;
@@ -246,20 +301,24 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         interface: &mut Self,
         settings: &mut P::Settings,
     ) {
-        let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
-        match settings.get_json(key, interface.buffer) {
-            Err(e) => {
-                writeln!(interface, "Failed to read {key}: {e}")
+        let key = menu::argument_finder(item, args, "item").unwrap();
+        Self::iter_root(key, interface, settings, |key, interface, settings| {
+            match settings.get_json_by_key(key, interface.buffer) {
+                Err(e) => {
+                    writeln!(interface, "Failed to read {}: {e}", &key.0)
+                }
+                Ok(len) => {
+                    writeln!(
+                        interface.platform.interface_mut(),
+                        "{}: {}",
+                        &key.0,
+                        core::str::from_utf8(&interface.buffer[..len]).unwrap()
+                    )
+                }
             }
-            Ok(len) => {
-                writeln!(
-                    interface.platform.interface_mut(),
-                    "{key}: {}",
-                    core::str::from_utf8(&interface.buffer[..len]).unwrap()
-                )
-            }
-        }
-        .unwrap();
+            .unwrap();
+            Ok(())
+        })
     }
 
     fn handle_save(
@@ -317,7 +376,10 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 help: Some("List all available settings and their current values."),
                 item_type: menu::ItemType::Callback {
                     function: Self::handle_list,
-                    parameters: &[],
+                    parameters: &[menu::Parameter::Optional {
+                        parameter_name: "item",
+                        help: Some("The path below which to list settings."),
+                    },],
                 },
             },
             &menu::Item {
@@ -325,7 +387,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 help: Some("Read a setting_from the device."),
                 item_type: menu::ItemType::Callback {
                     function: Self::handle_get,
-                    parameters: &[menu::Parameter::Mandatory {
+                    parameters: &[menu::Parameter::Optional {
                         parameter_name: "item",
                         help: Some("The name of the setting to read."),
                     }]
