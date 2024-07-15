@@ -75,52 +75,6 @@ pub trait AppSettings {
     fn net(&self) -> &NetSettings;
 }
 
-pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
-    structure: &mut T,
-    storage: &mut Flash,
-) {
-    // Loop over flash and read settings
-    let mut buffer = [0u8; 512];
-    for path in T::nodes::<Path<String<64>, '/'>>() {
-        let (path, _node) = path.unwrap();
-
-        // Try to fetch the setting from flash.
-        let value: &[u8] = match block_on(fetch_item(
-            storage,
-            storage.range(),
-            &mut NoCache::new(),
-            &mut buffer,
-            SettingsKey(Vec::try_from(path.as_bytes()).unwrap()),
-        )) {
-            Err(e) => {
-                log::warn!(
-                    "Failed to fetch `{}` from flash: {e:?}",
-                    path.as_str()
-                );
-                continue;
-            }
-            Ok(Some(value)) => value,
-            Ok(None) => continue,
-        };
-
-        // An empty vector may be saved to flash to "erase" a setting, since the H7 doesn't support
-        // multi-write NOR flash. If we see an empty vector, ignore this entry.
-        if value.is_empty() {
-            continue;
-        }
-
-        log::info!("Loading initial `{}` from flash", path.as_str());
-
-        let flavor = postcard::de_flavors::Slice::new(value);
-        if let Err(e) = structure.set_postcard_by_key(&path, flavor) {
-            log::warn!(
-                "Failed to deserialize `{}` from flash: {e:?}",
-                path.as_str()
-            );
-        }
-    }
-}
-
 #[derive(
     Default, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq,
 )]
@@ -157,6 +111,54 @@ pub struct SerialSettingsPlatform<C, const Y: usize> {
 
     /// Metadata associated with the application
     pub metadata: &'static ApplicationMetadata,
+}
+
+impl<C, const Y: usize> SerialSettingsPlatform<C, Y>
+where
+    C: for<'d> JsonCoreSlash<'d, Y>,
+{
+    pub fn load(structure: &mut C, storage: &mut Flash) {
+        // Loop over flash and read settings
+        let mut buffer = [0u8; 512];
+        for path in C::nodes::<Path<String<64>, '/'>>() {
+            let (path, _node) = path.unwrap();
+
+            // Try to fetch the setting from flash.
+            let value: &[u8] = match block_on(fetch_item(
+                storage,
+                storage.range(),
+                &mut NoCache::new(),
+                &mut buffer,
+                SettingsKey(Vec::try_from(path.as_bytes()).unwrap()),
+            )) {
+                Err(e) => {
+                    log::warn!(
+                        "Failed to fetch `{}` from flash: {e:?}",
+                        path.as_str()
+                    );
+                    continue;
+                }
+                Ok(Some(value)) => value,
+                Ok(None) => continue,
+            };
+
+            // An empty vector may be saved to flash to "erase" a setting, since the H7 doesn't support
+            // multi-write NOR flash. If we see an empty vector, ignore this entry.
+            if value.is_empty() {
+                continue;
+            }
+
+            log::info!("Loading initial `{}` from flash", path.as_str());
+
+            let flavor = postcard::de_flavors::Slice::new(value);
+            if let Err(e) = structure.set_postcard_by_key(&path, flavor) {
+                log::warn!(
+                    "Failed to deserialize `{}` from flash: {e:?}",
+                    path.as_str()
+                );
+            }
+        }
+    }
 }
 
 impl<C, const Y: usize> Platform<Y> for SerialSettingsPlatform<C, Y>
