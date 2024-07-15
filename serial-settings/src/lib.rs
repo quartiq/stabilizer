@@ -167,7 +167,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         }
     }
 
-    fn handle_list(
+    fn handle_get(
         _menu: &menu::Menu<Self, P::Settings>,
         item: &menu::Item<Self, P::Settings>,
         args: &[&str],
@@ -176,20 +176,20 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
     ) {
         let mut defaults = settings.clone();
         defaults.reset();
-        let key = menu::argument_finder(item, args, "item").unwrap();
+        let key = menu::argument_finder(item, args, "path").unwrap();
         Self::iter_root(
             key,
             interface,
             settings,
-            |path, interface, settings| {
+            |key, interface, settings| {
                 let value = match settings
-                    .get_json_by_key(path, interface.buffer)
+                    .get_json_by_key(key, interface.buffer)
                 {
                     Err(e) => {
                         writeln!(
                             interface,
                             "Failed to read {}: {e}",
-                            path.as_str()
+                            key.as_str()
                         )
                         .unwrap();
                         return Ok(());
@@ -202,14 +202,14 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 write!(
                     interface.platform.interface_mut(),
                     "{}: {value}",
-                    path.as_str(),
+                    key.as_str(),
                 )
                 .unwrap();
 
                 let value_hash: u64 = yafnv::fnv1a(value);
 
                 let default_value = match defaults
-                    .get_json_by_key(path, interface.buffer)
+                    .get_json_by_key(key, interface.buffer)
                 {
                     Err(e) => {
                         writeln!(
@@ -247,7 +247,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         interface: &mut Self,
         settings: &mut P::Settings,
     ) {
-        let maybe_key = menu::argument_finder(item, args, "item").unwrap();
+        let maybe_key = menu::argument_finder(item, args, "path").unwrap();
         if let Some(key) = maybe_key {
             let mut defaults = settings.clone();
             defaults.reset();
@@ -256,69 +256,47 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 Some(key),
                 interface,
                 settings,
-                |path, interface, settings| {
-                    let len = match defaults
-                        .get_json_by_key(path, interface.buffer)
-                    {
-                        Err(e) => {
-                            writeln!(
-                                interface,
-                                "Failed to clear `{key}`: {e:?}"
-                            )
-                            .unwrap();
-                            return Ok(());
-                        }
+                |key, interface, settings| {
+                    let len =
+                        match defaults.get_json_by_key(key, interface.buffer) {
+                            Err(e) => {
+                                writeln!(
+                                    interface,
+                                    "Failed to clear `{}`: {e:?}",
+                                    key.as_str()
+                                )
+                                .unwrap();
+                                return Ok(());
+                            }
 
-                        Ok(len) => len,
-                    };
+                            Ok(len) => len,
+                        };
 
                     if let Err(e) =
-                        settings.set_json(key, &interface.buffer[..len])
+                        settings.set_json_by_key(key, &interface.buffer[..len])
                     {
-                        writeln!(interface, "Failed to update {key}: {e:?}")
-                            .unwrap();
+                        writeln!(
+                            interface,
+                            "Failed to update {}: {e:?}",
+                            key.as_str()
+                        )
+                        .unwrap();
                         return Ok(());
                     }
 
+                    interface.platform.clear(interface.buffer, Some(key));
                     interface.updated = true;
-                    writeln!(interface, "{key} cleared to default").unwrap();
+                    writeln!(interface, "{} cleared to default", key.as_str())
+                        .unwrap();
                     Ok(())
                 },
             );
         } else {
             settings.reset();
+            interface.platform.clear(interface.buffer, None);
             interface.updated = true;
             writeln!(interface, "All settings cleared").unwrap();
         }
-
-        interface.platform.clear(interface.buffer, maybe_key);
-    }
-
-    fn handle_get(
-        _menu: &menu::Menu<Self, P::Settings>,
-        item: &menu::Item<Self, P::Settings>,
-        args: &[&str],
-        interface: &mut Self,
-        settings: &mut P::Settings,
-    ) {
-        let key = menu::argument_finder(item, args, "item").unwrap();
-        Self::iter_root(key, interface, settings, |key, interface, settings| {
-            match settings.get_json_by_key(key, interface.buffer) {
-                Err(e) => {
-                    writeln!(interface, "Failed to read {}: {e}", &key.0)
-                }
-                Ok(len) => {
-                    writeln!(
-                        interface.platform.interface_mut(),
-                        "{}: {}",
-                        &key.0,
-                        core::str::from_utf8(&interface.buffer[..len]).unwrap()
-                    )
-                }
-            }
-            .unwrap();
-            Ok(())
-        })
     }
 
     fn handle_save(
@@ -328,7 +306,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         interface: &mut Self,
         settings: &mut P::Settings,
     ) {
-        match interface.platform.save(interface.buffer, menu::argument_finder(item, args, "item").unwrap(), settings) {
+        match interface.platform.save(interface.buffer, menu::argument_finder(item, args, "path").unwrap(), settings) {
             Ok(_) => writeln!(
                 interface,
                 "Settings saved. You may need to reboot for the settings to be applied"
@@ -347,7 +325,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         interface: &mut Self,
         settings: &mut P::Settings,
     ) {
-        let key = menu::argument_finder(item, args, "item").unwrap().unwrap();
+        let key = menu::argument_finder(item, args, "path").unwrap().unwrap();
         let value =
             menu::argument_finder(item, args, "value").unwrap().unwrap();
 
@@ -372,36 +350,25 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         label: "settings",
         items: &[
             &menu::Item {
-                command: "list",
-                help: Some("List all available settings and their current values."),
-                item_type: menu::ItemType::Callback {
-                    function: Self::handle_list,
-                    parameters: &[menu::Parameter::Optional {
-                        parameter_name: "item",
-                        help: Some("The path below which to list settings."),
-                    },],
-                },
-            },
-            &menu::Item {
                 command: "get",
-                help: Some("Read a setting_from the device."),
+                help: Some("List paths and read settings values"),
                 item_type: menu::ItemType::Callback {
                     function: Self::handle_get,
                     parameters: &[menu::Parameter::Optional {
-                        parameter_name: "item",
-                        help: Some("The name of the setting to read."),
+                        parameter_name: "path",
+                        help: Some("The path of the setting to list/read"),
                     }]
                 },
             },
             &menu::Item {
                 command: "set",
-                help: Some("Update a a setting in the device."),
+                help: Some("Update a setting"),
                 item_type: menu::ItemType::Callback {
                     function: Self::handle_set,
                     parameters: &[
                         menu::Parameter::Mandatory {
-                            parameter_name: "item",
-                            help: Some("The name of the setting to write."),
+                            parameter_name: "path",
+                            help: Some("The path of the setting to set"),
                         },
                         menu::Parameter::Mandatory {
                             parameter_name: "value",
@@ -412,26 +379,26 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             },
             &menu::Item {
                 command: "save",
-                help: Some("Save settings to the device."),
+                help: Some("Save settings to memory"),
                 item_type: menu::ItemType::Callback {
                     function: Self::handle_save,
                     parameters: &[
                         menu::Parameter::Optional {
-                            parameter_name: "item",
-                            help: Some("The name of the setting to clear."),
+                            parameter_name: "path",
+                            help: Some("The path of the setting to save"),
                         },
                     ]
                 },
             },
             &menu::Item {
                 command: "clear",
-                help: Some("Clear the device settings to default values."),
+                help: Some("Clear settings to default values"),
                 item_type: menu::ItemType::Callback {
                     function: Self::handle_clear,
                     parameters: &[
                         menu::Parameter::Optional {
-                            parameter_name: "item",
-                            help: Some("The name of the setting to clear."),
+                            parameter_name: "path",
+                            help: Some("The path of the setting to clear"),
                         },
                     ]
                 },
