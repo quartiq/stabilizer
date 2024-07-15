@@ -51,7 +51,7 @@
 
 use embedded_io::{ErrorType, Read, ReadReady, Write};
 use heapless::String;
-use miniconf::{JsonCoreSlash, Path, TreeKey};
+use miniconf::{JsonCoreSlash, Path, Traversal, TreeKey};
 
 mod interface;
 
@@ -78,11 +78,11 @@ pub trait Platform<const Y: usize>: Sized {
     /// `save()` Error type
     type Error: core::fmt::Debug;
 
-    /// Save the settings to storage
+    /// Save the setting to storage
     fn save(
         &mut self,
         buffer: &mut [u8],
-        key: Option<&str>,
+        key: &str,
         settings: &Self::Settings,
     ) -> Result<(), Self::Error>;
 
@@ -97,8 +97,8 @@ pub trait Platform<const Y: usize>: Sized {
     ///
     /// # Arguments
     /// * `buffer` The element serialization buffer.
-    /// * `key` The name of the setting to be cleared. If `None`, all settings are cleared.
-    fn clear(&mut self, buffer: &mut [u8], key: Option<&str>);
+    /// * `key` The name of the setting to be cleared.
+    fn clear(&mut self, buffer: &mut [u8], key: &str);
 
     /// Return a mutable reference to the `Interface`.
     fn interface_mut(&mut self) -> &mut Self::Interface;
@@ -185,6 +185,9 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 let value = match settings
                     .get_json_by_key(key, interface.buffer)
                 {
+                    Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
+                        return Ok(());
+                    }
                     Err(e) => {
                         writeln!(
                             interface,
@@ -211,6 +214,10 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 let default_value = match defaults
                     .get_json_by_key(key, interface.buffer)
                 {
+                    Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
+                        writeln!(interface, "[default: absent]").unwrap();
+                        return Ok(());
+                    }
                     Err(e) => {
                         writeln!(
                             interface,
@@ -247,56 +254,49 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         interface: &mut Self,
         settings: &mut P::Settings,
     ) {
-        let maybe_key = menu::argument_finder(item, args, "path").unwrap();
-        if let Some(key) = maybe_key {
-            let mut defaults = settings.clone();
-            defaults.reset();
-
-            Self::iter_root(
-                Some(key),
-                interface,
-                settings,
-                |key, interface, settings| {
-                    let len =
-                        match defaults.get_json_by_key(key, interface.buffer) {
-                            Err(e) => {
-                                writeln!(
-                                    interface,
-                                    "Failed to clear `{}`: {e:?}",
-                                    key.as_str()
-                                )
-                                .unwrap();
-                                return Ok(());
-                            }
-
-                            Ok(len) => len,
-                        };
-
-                    if let Err(e) =
-                        settings.set_json_by_key(key, &interface.buffer[..len])
-                    {
-                        writeln!(
-                            interface,
-                            "Failed to update {}: {e:?}",
-                            key.as_str()
-                        )
+        let key = menu::argument_finder(item, args, "path").unwrap();
+        let mut defaults = settings.clone();
+        defaults.reset();
+        Self::iter_root(key, interface, settings, |key, interface, settings| {
+            let len = match defaults.get_json_by_key(key, interface.buffer) {
+                Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
+                    writeln!(interface, "{} default is absent", key.as_str())
                         .unwrap();
-                        return Ok(());
-                    }
+                    return Ok(());
+                }
+                Err(e) => {
+                    writeln!(
+                        interface,
+                        "Failed to get default `{}`: {e:?}",
+                        key.as_str()
+                    )
+                    .unwrap();
+                    return Ok(());
+                }
+                Ok(len) => len,
+            };
 
-                    interface.platform.clear(interface.buffer, Some(key));
-                    interface.updated = true;
-                    writeln!(interface, "{} cleared to default", key.as_str())
-                        .unwrap();
-                    Ok(())
-                },
-            );
-        } else {
-            settings.reset();
-            interface.platform.clear(interface.buffer, None);
+            match settings.set_json_by_key(key, &interface.buffer[..len]) {
+                Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
+                    return Ok(());
+                }
+                Err(e) => {
+                    writeln!(
+                        interface,
+                        "Failed to update {}: {e:?}",
+                        key.as_str()
+                    )
+                    .unwrap();
+                    return Ok(());
+                }
+                Ok(_len) => {}
+            }
+
+            interface.platform.clear(interface.buffer, key);
             interface.updated = true;
-            writeln!(interface, "All settings cleared").unwrap();
-        }
+            writeln!(interface, "{} cleared", key.as_str()).unwrap();
+            Ok(())
+        })
     }
 
     fn handle_save(
@@ -306,16 +306,33 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         interface: &mut Self,
         settings: &mut P::Settings,
     ) {
-        match interface.platform.save(interface.buffer, menu::argument_finder(item, args, "path").unwrap(), settings) {
-            Ok(_) => writeln!(
-                interface,
-                "Settings saved. You may need to reboot for the settings to be applied"
-            )
-            .unwrap(),
-            Err(e) => {
-                writeln!(interface, "Failed to save settings: {e:?}").unwrap()
-            }
-        }
+        let key = menu::argument_finder(item, args, "path").unwrap();
+        let mut defaults = settings.clone();
+        defaults.reset();
+        Self::iter_root(
+            key,
+            interface,
+            settings,
+            |key, interface, settings| {
+                match interface.platform.save(interface.buffer, key, settings) {
+                    Ok(_) => {
+                        writeln!(interface, "{} saved", key.as_str()).unwrap()
+                    }
+                    Err(e) => writeln!(
+                        interface,
+                        "Failed to save {}: {e:?}",
+                        key.as_str()
+                    )
+                    .unwrap(),
+                }
+                Ok(())
+            },
+        );
+        writeln!(
+            interface,
+            "Saved settings may require reboot to become active"
+        )
+        .unwrap();
     }
 
     fn handle_set(
