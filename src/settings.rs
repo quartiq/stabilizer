@@ -85,7 +85,7 @@ pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
         let (path, _node) = path.unwrap();
 
         // Try to fetch the setting from flash.
-        let item: SettingsItem = match block_on(fetch_item(
+        let value: &[u8] = match block_on(fetch_item(
             storage,
             storage.range(),
             &mut NoCache::new(),
@@ -99,19 +99,19 @@ pub fn load_from_flash<T: for<'d> JsonCoreSlash<'d, Y>, const Y: usize>(
                 );
                 continue;
             }
-            Ok(Some(item)) => item,
-            _ => continue,
+            Ok(Some(value)) => value,
+            Ok(None) => continue,
         };
 
         // An empty vector may be saved to flash to "erase" a setting, since the H7 doesn't support
         // multi-write NOR flash. If we see an empty vector, ignore this entry.
-        if item.0.is_empty() {
+        if value.is_empty() {
             continue;
         }
 
         log::info!("Loading initial `{}` from flash", path.as_str());
 
-        let flavor = postcard::de_flavors::Slice::new(item.0);
+        let flavor = postcard::de_flavors::Slice::new(value);
         if let Err(e) = structure.set_postcard_by_key(&path, flavor) {
             log::warn!(
                 "Failed to deserialize `{}` from flash: {e:?}",
@@ -146,41 +146,6 @@ impl sequential_storage::map::Key for SettingsKey {
     }
 }
 
-#[derive(
-    Default, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq,
-)]
-pub struct SettingsItem<'a>(&'a [u8]);
-
-impl<'a> sequential_storage::map::Value<'a> for SettingsItem<'a> {
-    fn serialize_into(
-        &self,
-        buffer: &mut [u8],
-    ) -> Result<usize, SerializationError> {
-        if let Some(buf) = buffer.get_mut(..self.0.len()) {
-            buf.copy_from_slice(self.0);
-            Ok(self.0.len())
-        } else {
-            Err(SerializationError::BufferTooSmall)
-        }
-    }
-
-    fn deserialize_from(buffer: &'a [u8]) -> Result<Self, SerializationError> {
-        Ok(Self(buffer))
-    }
-}
-
-#[derive(Debug)]
-pub enum Error<F> {
-    Postcard(postcard::Error),
-    Flash(F),
-}
-
-impl<F> From<postcard::Error> for Error<F> {
-    fn from(e: postcard::Error) -> Self {
-        Self::Postcard(e)
-    }
-}
-
 pub struct SerialSettingsPlatform<C, const Y: usize> {
     /// The interface to read/write data to/from serially (via text) to the user.
     pub interface: BestEffortInterface<crate::hardware::SerialPort>,
@@ -210,15 +175,14 @@ where
         key: &[u8],
     ) -> Result<Option<&'a [u8]>, Self::Error> {
         let range = self.storage.range();
-        let key = SettingsKey(Vec::try_from(key).unwrap());
-        let maybe_item: Option<SettingsItem> = block_on(fetch_item(
+        block_on(fetch_item(
             &mut self.storage,
             range,
             &mut NoCache::new(),
             buf,
-            key,
-        ))?;
-        Ok(maybe_item.map(|v| v.0))
+            SettingsKey(Vec::try_from(key).unwrap()),
+        ))
+        .map(|v| v.filter(|v: &&[u8]| !v.is_empty()))
     }
 
     fn store(
@@ -234,100 +198,13 @@ where
             &mut NoCache::new(),
             buf,
             SettingsKey(Vec::try_from(key).unwrap()),
-            &SettingsItem(value),
+            &value,
         ))
     }
 
-    // fn clear(&mut self, buf: &mut [u8], path: &str) {
-    //     let path = SettingsKey(String::try_from(path).unwrap().into());
-    //     let range = self.storage.range();
-
-    //     // Check if there's an entry for this item in our flash map. The item might be a
-    //     // sentinel value indicating "erased". Because we can't write flash memory twice, we
-    //     // instead append a sentry "erased" value to the map where the serialized value is
-    //     // empty.
-    //     let maybe_item: Option<SettingsItem> = block_on(fetch_item(
-    //         &mut self.storage,
-    //         range.clone(),
-    //         &mut NoCache::new(),
-    //         buf,
-    //         path.clone(),
-    //     ))
-    //     .unwrap();
-
-    //     // An entry may exist in the map with no data as a sentinel that this path was
-    //     // previously erased. If we find this, there's no need to store a duplicate "item is
-    //     // erased" sentinel in flash. We only need to logically erase the path from the map if
-    //     // it existed there in the first place.
-    //     if matches!(maybe_item, Some(item) if !item.0.is_empty()) {
-    //         block_on(store_item(
-    //             &mut self.storage,
-    //             range,
-    //             &mut NoCache::new(),
-    //             buf,
-    //             path,
-    //             &SettingsItem(Vec::new()),
-    //         ))
-    //         .unwrap();
-    //     }
-    // }
-
-    // fn save(
-    //     &mut self,
-    //     buf: &mut [u8],
-    //     path: &str,
-    //     settings: &Self::Settings,
-    // ) -> Result<(), Self::Error> {
-    //     let path = SettingsKey(String::try_from(path).unwrap().into());
-
-    //     let mut data = Vec::new();
-    //     data.resize(data.capacity(), 0).unwrap();
-    //     let flavor = postcard::ser_flavors::Slice::new(&mut data);
-
-    //     let len = match settings.get_postcard_by_key(&path.0, flavor) {
-    //         Err(miniconf::Error::Traversal(miniconf::Traversal::Absent(_))) => {
-    //             return Ok(());
-    //         },
-    //         Err(e) => {
-    //             log::warn!(
-    //                 "Failed to save `{}` to flash: {e:?}",
-    //                 path.0.as_str()
-    //             );
-    //             return Ok(());
-    //         }
-    //         Ok(slice) => slice.len(),
-    //     };
-    //     data.truncate(len);
-
-    //     let range = self.storage.range();
-
-    //     // Check if the settings has changed from what's currently in flash (or if it doesn't
-    //     // yet exist).
-    //     if block_on(fetch_item(
-    //         &mut self.storage,
-    //         range.clone(),
-    //         &mut NoCache::new(),
-    //         buf,
-    //         path.clone(),
-    //     ))
-    //     .unwrap()
-    //     .map(|old: SettingsItem| old.0 != data)
-    //     .unwrap_or(true)
-    //     {
-    //         log::info!("Storing `{}` to flash", path.0.as_str());
-    //         block_on(store_item(
-    //             &mut self.storage,
-    //             range,
-    //             &mut NoCache::new(),
-    //             buf,
-    //             path,
-    //             &SettingsItem(data),
-    //         ))
-    //         .unwrap();
-    //     }
-
-    //     Ok(())
-    // }
+    fn clear(&mut self, buf: &mut [u8], key: &[u8]) -> Result<(), Self::Error> {
+        self.store(buf, key, b"")
+    }
 
     fn cmd(&mut self, cmd: &str) {
         match cmd {
