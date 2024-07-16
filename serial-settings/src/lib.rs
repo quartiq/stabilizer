@@ -53,18 +53,24 @@ use heapless::String;
 use miniconf::{JsonCoreSlash, Path, Postcard, Traversal, TreeKey};
 
 mod interface;
-
 pub use interface::BestEffortInterface;
 
 /// Specifies the API required for objects that are used as settings with the serial terminal
 /// interface.
 pub trait Settings<const Y: usize>:
-    for<'a> JsonCoreSlash<'a, Y> + Clone
+    for<'de> JsonCoreSlash<'de, Y> + for<'de> Postcard<'de, Y> + Clone
 {
     /// Reset the settings to their default values.
     fn reset(&mut self) {}
 }
 
+/// Platform support for serial settings.
+///
+/// Covers platform-specific commands, persistent key-value storage and the
+/// Read/Write interface for interaction.
+///
+/// Assuming there are no unit fields in the `Settings`, the empty value can be
+/// used to mark the "cleared" state.
 pub trait Platform<const Y: usize> {
     /// This type specifies the interface to the user, for example, a USB CDC-ACM serial port.
     type Interface: embedded_io::Read
@@ -75,13 +81,14 @@ pub trait Platform<const Y: usize> {
 
     type Settings: Settings<Y>;
 
+    /// Fetch a value from persisten storage
     fn fetch<'a>(
         &mut self,
         buf: &'a mut [u8],
         key: &[u8],
     ) -> Result<Option<&'a [u8]>, Self::Error>;
 
-    /// Store the setting
+    /// Store a value to persistent storage
     fn store(
         &mut self,
         buf: &mut [u8],
@@ -89,6 +96,7 @@ pub trait Platform<const Y: usize> {
         value: &[u8],
     ) -> Result<(), Self::Error>;
 
+    /// Remove a key from storage.
     fn clear(&mut self, buf: &mut [u8], key: &[u8]) -> Result<(), Self::Error>;
 
     /// Execute a platform specific command.
@@ -239,7 +247,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                         write!(interface, " [not stored]"),
                     Ok(Some(stored)) => {
                         let slic = postcard::de_flavors::Slice::new(stored);
-                        // Temporary reload into default for conversion
+                        // Use defaults as scratch space for postcard->json conversion
                         match defaults.set_postcard_by_key(&key, slic) {
                             Err(e) => write!(
                                 interface,
@@ -286,6 +294,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             interface,
             settings,
             |key, interface, settings, defaults| {
+                // Get current value checksum
                 let slic = postcard::ser_flavors::Slice::new(interface.buffer);
                 let check = match settings.get_postcard_by_key(&key, slic) {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
@@ -299,7 +308,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                     Ok(slic) => yafnv::fnv1a::<u32>(slic),
                 };
 
-                // Get default
+                // Get default if different
                 let slic = postcard::ser_flavors::Slice::new(interface.buffer);
                 let slic = match defaults.get_postcard_by_key(&key, slic) {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
@@ -408,8 +417,8 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             |key, interface, settings, defaults| {
                 // Get default value checksum
                 let slic = postcard::ser_flavors::Slice::new(interface.buffer);
-                // Could in theory serialize directly into the hasher
                 let mut check = match defaults.get_postcard_by_key(&key, slic) {
+                    // Could also serialize directly into the hasher for all these checksum calcs
                     Ok(slic) => yafnv::fnv1a::<u32>(slic),
                     Err(miniconf::Error::Traversal(Traversal::Absent(
                         _depth,
@@ -678,7 +687,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Runner<'a, P, Y> {
     ///
     /// # Returns
     /// A boolean indicating true if the settings were modified.
-    pub fn process(
+    pub fn poll(
         &mut self,
         settings: &mut P::Settings,
     ) -> Result<bool, <P::Interface as embedded_io::ErrorType>::Error> {

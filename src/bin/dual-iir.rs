@@ -529,7 +529,7 @@ mod app {
             });
 
             c.shared.settings.lock(|settings| {
-                if c.local.usb_terminal.process(settings).unwrap() {
+                if c.local.usb_terminal.poll(settings).unwrap() {
                     settings_update::spawn().unwrap()
                 }
             });
