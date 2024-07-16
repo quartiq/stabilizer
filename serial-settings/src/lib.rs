@@ -146,7 +146,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         for key in iter {
             match key {
                 Ok((key, node)) => {
-                    assert!(node.is_leaf());
+                    debug_assert!(node.is_leaf());
                     func(&key, interface, settings, &mut defaults)
                 }
                 Err(depth) => {
@@ -290,10 +290,10 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 let slic = match defaults.get_postcard_by_key(key, slic) {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
                         log::warn!(
-                            "Can't clear. Default absent: `{}`",
+                            "Can't clear. Default is absent: `{}`",
                             key.as_str()
                         );
-                        return;
+                        None
                     }
                     Err(e) => {
                         writeln!(
@@ -304,30 +304,37 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                         .unwrap();
                         return;
                     }
-                    Ok(slic) => slic,
+                    Ok(slic) => Some(slic),
                 };
 
                 // Set default
-                let slic = postcard::de_flavors::Slice::new(slic);
-                match settings.set_postcard_by_key(key, slic) {
-                    Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
-                        return;
+                if let Some(slic) = slic {
+                    let slic = postcard::de_flavors::Slice::new(slic);
+                    match settings.set_postcard_by_key(key, slic) {
+                        Err(miniconf::Error::Traversal(Traversal::Absent(
+                            _,
+                        ))) => {
+                            return;
+                        }
+                        Err(e) => {
+                            writeln!(
+                                interface,
+                                "Failed to set {}: {e:?}",
+                                key.as_str()
+                            )
+                            .unwrap();
+                            return;
+                        }
+                        Ok(_rest) => {
+                            interface.updated = true;
+                            writeln!(
+                                interface,
+                                "Cleared current `{}`",
+                                key.as_str()
+                            )
+                            .unwrap()
+                        }
                     }
-                    Err(e) => {
-                        writeln!(
-                            interface,
-                            "Failed to set {}: {e:?}",
-                            key.as_str()
-                        )
-                        .unwrap();
-                        return;
-                    }
-                    Ok(_rest) => writeln!(
-                        interface,
-                        "Cleared current `{}`",
-                        key.as_str()
-                    )
-                    .unwrap(),
                 }
 
                 // Check for stored
@@ -367,11 +374,8 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             },
         );
         interface.updated = true;
-        writeln!(
-            interface,
-            "Stored settings may require reboot to become active"
-        )
-        .unwrap();
+        writeln!(interface, "Some values may require reboot to become active")
+            .unwrap();
     }
 
     fn handle_store(
@@ -389,6 +393,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             |key, interface, settings, defaults| {
                 // Get default value checksum
                 let slic = postcard::ser_flavors::Slice::new(interface.buffer);
+                // Could in theory serialize directly into the hasher
                 let mut check = match defaults.get_postcard_by_key(key, slic) {
                     Ok(slic) => yafnv::fnv1a::<u32>(slic),
                     Err(miniconf::Error::Traversal(Traversal::Absent(
@@ -419,13 +424,13 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                                 "Stored differs from default: `{}`",
                                 key.as_str()
                             );
-                            check = stored;
                         } else {
                             log::debug!(
                                 "Stored matches default: `{}`",
                                 key.as_str()
                             );
                         }
+                        check = stored;
                     }
                     Err(e) => {
                         writeln!(
@@ -459,7 +464,10 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
 
                 // Check for mismatch
                 if yafnv::fnv1a::<u32>(value) == check {
-                    log::debug!("Not saving default/stored `{}`", key.as_str());
+                    log::debug!(
+                        "Not saving matching default/stored `{}`",
+                        key.as_str()
+                    );
                     return;
                 }
                 let len = value.len();
@@ -477,11 +485,8 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 .unwrap();
             },
         );
-        writeln!(
-            interface,
-            "Stored settings may require reboot to become active"
-        )
-        .unwrap();
+        writeln!(interface, "Some values may require reboot to become active")
+            .unwrap();
     }
 
     fn handle_set(
@@ -499,10 +504,13 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         match settings.set_json(key, value.as_bytes()) {
             Ok(_) => {
                 interface.updated = true;
-                writeln!(interface, "Set. May require reboot to activate.")
+                writeln!(
+                    interface,
+                    "Set but not stored. May require store and reboot to activate."
+                )
             }
             Err(e) => {
-                writeln!(interface, "Failed to set {key}: {e:?}")
+                writeln!(interface, "Failed to set `{key}`: {e:?}")
             }
         }
         .unwrap();
@@ -514,54 +522,54 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         items: &[
             &menu::Item {
                 command: "get",
-                help: Some("List paths and read settings values"),
+                help: Some("List paths and read current, default, and stored values"),
                 item_type: menu::ItemType::Callback {
                     function: Self::handle_get,
                     parameters: &[menu::Parameter::Optional {
                         parameter_name: "path",
-                        help: Some("The path of the setting to list/read"),
+                        help: Some("The path of the value or subtree to list/read."),
                     }]
                 },
             },
             &menu::Item {
                 command: "set",
-                help: Some("Update a setting"),
+                help: Some("Update a value"),
                 item_type: menu::ItemType::Callback {
                     function: Self::handle_set,
                     parameters: &[
                         menu::Parameter::Mandatory {
                             parameter_name: "path",
-                            help: Some("The path of the setting to set"),
+                            help: Some("The path to set"),
                         },
                         menu::Parameter::Mandatory {
                             parameter_name: "value",
-                            help: Some("Specifies the value to be written. Values must be JSON-encoded"),
+                            help: Some("The value to be written, JSON-encoded"),
                         },
                     ]
                 },
             },
             &menu::Item {
                 command: "store",
-                help: Some("Store settings in memory"),
+                help: Some("Store values that differ from defaults"),
                 item_type: menu::ItemType::Callback {
                     function: Self::handle_store,
                     parameters: &[
                         menu::Parameter::Optional {
                             parameter_name: "path",
-                            help: Some("The path of the setting to store"),
+                            help: Some("The path of the value or subtree to store."),
                         },
                     ]
                 },
             },
             &menu::Item {
                 command: "clear",
-                help: Some("Clear active and stored settings to default values"),
+                help: Some("Clear active to defaults and remove all stored values"),
                 item_type: menu::ItemType::Callback {
                     function: Self::handle_clear,
                     parameters: &[
                         menu::Parameter::Optional {
                             parameter_name: "path",
-                            help: Some("The path of the setting to clear"),
+                            help: Some("The path of the value or subtree to clear"),
                         },
                     ]
                 },
@@ -609,7 +617,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Write for Interface<'a, P, Y> {
     }
 }
 
-/// The serial settings management object.
+// The Menu runner
 pub struct Runner<'a, P: Platform<Y>, const Y: usize>(
     menu::Runner<'a, Interface<'a, P, Y>, P::Settings>,
 );
@@ -623,7 +631,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Runner<'a, P, Y> {
     /// * `line_buf` - A buffer used for maintaining the serial menu input line. It should be at
     /// least as long as the longest user input.
     /// * `serialize_buf` - A buffer used for serializing and deserializing settings. This buffer
-    /// needs to be at least as big as the entire serialized settings structure.
+    /// needs to be at least as big as twice the biggest serialized setting plus its path.
     pub fn new(
         platform: P,
         line_buf: &'a mut [u8],
