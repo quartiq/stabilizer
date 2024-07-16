@@ -123,13 +123,13 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         mut func: F,
     ) where
         F: FnMut(
-            &Path<String<64>, '/'>,
+            Path<&str, '/'>,
             &mut Self,
             &mut P::Settings,
             &mut P::Settings,
         ),
     {
-        let mut iter = P::Settings::nodes::<Path<String<64>, '/'>>();
+        let mut iter = P::Settings::nodes::<Path<String<128>, '/'>>();
         if let Some(key) = key {
             match iter.root(&Path::<_, '/'>::from(key)) {
                 Ok(it) => iter = it,
@@ -147,7 +147,12 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             match key {
                 Ok((key, node)) => {
                     debug_assert!(node.is_leaf());
-                    func(&key, interface, settings, &mut defaults)
+                    func(
+                        key.as_str().into(),
+                        interface,
+                        settings,
+                        &mut defaults,
+                    )
                 }
                 Err(depth) => {
                     writeln!(
@@ -175,25 +180,21 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             |key, interface, settings, defaults| {
                 // Get current
                 let check = match settings
-                    .get_json_by_key(key, interface.buffer)
+                    .get_json_by_key(&key, interface.buffer)
                 {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
                         return;
                     }
                     Err(e) => {
-                        writeln!(
-                            interface,
-                            "Failed to get `{}`: {e}",
-                            key.as_str()
-                        )
-                        .unwrap();
+                        writeln!(interface, "Failed to get `{}`: {e}", *key)
+                            .unwrap();
                         return;
                     }
                     Ok(len) => {
                         write!(
                             interface.platform.interface_mut(),
                             "{}: {}",
-                            key.as_str(),
+                            *key,
                             core::str::from_utf8(&interface.buffer[..len])
                                 .unwrap()
                         )
@@ -203,7 +204,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 };
 
                 // Get default and compare
-                match defaults.get_json_by_key(key, interface.buffer) {
+                match defaults.get_json_by_key(&key, interface.buffer) {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
                         write!(interface, " [default: absent]")
                     }
@@ -239,13 +240,13 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                     Ok(Some(stored)) => {
                         let slic = postcard::de_flavors::Slice::new(stored);
                         // Temporary reload into default for conversion
-                        match defaults.set_postcard_by_key(key, slic) {
+                        match defaults.set_postcard_by_key(&key, slic) {
                             Err(e) => write!(
                                 interface,
                                 " [stored deserialize error: {e}]"
                             ),
                             Ok(_rest) =>
-                                match defaults.get_json_by_key(key, interface.buffer) {
+                                match defaults.get_json_by_key(&key, interface.buffer) {
                                     Err(e) => write!(
                                         interface,
                                         " [stored serialization error: {e}]"
@@ -286,17 +287,13 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             settings,
             |key, interface, settings, defaults| {
                 let slic = postcard::ser_flavors::Slice::new(interface.buffer);
-                let check = match settings.get_postcard_by_key(key, slic) {
+                let check = match settings.get_postcard_by_key(&key, slic) {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
                         return;
                     }
                     Err(e) => {
-                        writeln!(
-                            interface,
-                            "Failed to get {}: {e:?}",
-                            key.as_str()
-                        )
-                        .unwrap();
+                        writeln!(interface, "Failed to get {}: {e:?}", *key)
+                            .unwrap();
                         return;
                     }
                     Ok(slic) => yafnv::fnv1a::<u32>(slic),
@@ -304,11 +301,11 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
 
                 // Get default
                 let slic = postcard::ser_flavors::Slice::new(interface.buffer);
-                let slic = match defaults.get_postcard_by_key(key, slic) {
+                let slic = match defaults.get_postcard_by_key(&key, slic) {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
                         log::warn!(
                             "Can't clear. Default is absent: `{}`",
-                            key.as_str()
+                            *key
                         );
                         None
                     }
@@ -316,7 +313,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                         writeln!(
                             interface,
                             "Failed to get default `{}`: {e}",
-                            key.as_str()
+                            *key
                         )
                         .unwrap();
                         return;
@@ -333,7 +330,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 // Set default
                 if let Some(slic) = slic {
                     let slic = postcard::de_flavors::Slice::new(slic);
-                    match settings.set_postcard_by_key(key, slic) {
+                    match settings.set_postcard_by_key(&key, slic) {
                         Err(miniconf::Error::Traversal(Traversal::Absent(
                             _,
                         ))) => {
@@ -343,19 +340,15 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                             writeln!(
                                 interface,
                                 "Failed to set {}: {e:?}",
-                                key.as_str()
+                                *key
                             )
                             .unwrap();
                             return;
                         }
                         Ok(_rest) => {
                             interface.updated = true;
-                            writeln!(
-                                interface,
-                                "Cleared current `{}`",
-                                key.as_str()
-                            )
-                            .unwrap()
+                            writeln!(interface, "Cleared current `{}`", *key)
+                                .unwrap()
                         }
                     }
                 }
@@ -367,7 +360,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                         writeln!(
                             interface,
                             "Failed to fetch `{}`: {e:?}",
-                            key.as_str()
+                            *key
                         )
                         .unwrap();
                     }
@@ -378,17 +371,13 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                         .clear(interface.buffer, key.as_bytes())
                     {
                         Ok(()) => {
-                            writeln!(
-                                interface,
-                                "Clear stored `{}`",
-                                key.as_str()
-                            )
+                            writeln!(interface, "Clear stored `{}`", *key)
                         }
                         Err(e) => {
                             writeln!(
                                 interface,
                                 "Failed to clear `{}` from storage: {e:?}",
-                                key.as_str()
+                                *key
                             )
                         }
                     }
@@ -420,19 +409,19 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 // Get default value checksum
                 let slic = postcard::ser_flavors::Slice::new(interface.buffer);
                 // Could in theory serialize directly into the hasher
-                let mut check = match defaults.get_postcard_by_key(key, slic) {
+                let mut check = match defaults.get_postcard_by_key(&key, slic) {
                     Ok(slic) => yafnv::fnv1a::<u32>(slic),
                     Err(miniconf::Error::Traversal(Traversal::Absent(
                         _depth,
                     ))) => {
-                        log::warn!("Default absent: `{}`", key.as_str());
+                        log::warn!("Default absent: `{}`", *key);
                         return;
                     }
                     Err(e) => {
                         writeln!(
                             interface,
                             "Failed to get `{}` default: {e:?}",
-                            key.as_str()
+                            *key
                         )
                         .unwrap();
                         return;
@@ -448,13 +437,10 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                         if stored != check {
                             log::debug!(
                                 "Stored differs from default: `{}`",
-                                key.as_str()
+                                *key
                             );
                         } else {
-                            log::debug!(
-                                "Stored matches default: `{}`",
-                                key.as_str()
-                            );
+                            log::debug!("Stored matches default: `{}`", *key);
                         }
                         check = stored;
                     }
@@ -462,7 +448,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                         writeln!(
                             interface,
                             "Failed to fetch `{}`: {e:?}",
-                            key.as_str()
+                            *key
                         )
                         .unwrap();
                     }
@@ -470,7 +456,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
 
                 // Get value
                 let slic = postcard::ser_flavors::Slice::new(interface.buffer);
-                let value = match settings.get_postcard_by_key(key, slic) {
+                let value = match settings.get_postcard_by_key(&key, slic) {
                     Ok(value) => value,
                     Err(miniconf::Error::Traversal(Traversal::Absent(
                         _depth,
@@ -478,12 +464,8 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                         return;
                     }
                     Err(e) => {
-                        writeln!(
-                            interface,
-                            "Could not get `{}`: {e}",
-                            key.as_str()
-                        )
-                        .unwrap();
+                        writeln!(interface, "Could not get `{}`: {e}", *key)
+                            .unwrap();
                         return;
                     }
                 };
@@ -492,7 +474,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 if yafnv::fnv1a::<u32>(value) == check && !force {
                     log::debug!(
                         "Not saving matching default/stored `{}`",
-                        key.as_str()
+                        *key
                     );
                     return;
                 }
@@ -501,12 +483,10 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
 
                 // Store
                 match interface.platform.store(rest, key.as_bytes(), value) {
-                    Ok(_) => writeln!(interface, "`{}` stored", key.as_str()),
-                    Err(e) => writeln!(
-                        interface,
-                        "Failed to store `{}`: {e:?}",
-                        key.as_str()
-                    ),
+                    Ok(_) => writeln!(interface, "`{}` stored", *key),
+                    Err(e) => {
+                        writeln!(interface, "Failed to store `{}`: {e:?}", *key)
+                    }
                 }
                 .unwrap();
             },
