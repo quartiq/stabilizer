@@ -386,6 +386,9 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         settings: &mut P::Settings,
     ) {
         let key = menu::argument_finder(item, args, "path").unwrap();
+        let force = menu::argument_finder(item, args, "force")
+            .unwrap()
+            .is_some();
         Self::iter_root(
             key,
             interface,
@@ -463,7 +466,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 };
 
                 // Check for mismatch
-                if yafnv::fnv1a::<u32>(value) == check {
+                if yafnv::fnv1a::<u32>(value) == check && !force {
                     log::debug!(
                         "Not saving matching default/stored `{}`",
                         key.as_str()
@@ -554,10 +557,15 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 item_type: menu::ItemType::Callback {
                     function: Self::handle_store,
                     parameters: &[
+                        menu::Parameter::Named {
+                            parameter_name: "force",
+                            help: Some("Also store values that match defaults"),
+                        },
                         menu::Parameter::Optional {
                             parameter_name: "path",
                             help: Some("The path of the value or subtree to store."),
                         },
+
                     ]
                 },
             },
