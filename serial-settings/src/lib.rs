@@ -285,6 +285,23 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             interface,
             settings,
             |key, interface, settings, defaults| {
+                let slic = postcard::ser_flavors::Slice::new(interface.buffer);
+                let check = match settings.get_postcard_by_key(key, slic) {
+                    Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
+                        return;
+                    }
+                    Err(e) => {
+                        writeln!(
+                            interface,
+                            "Failed to get {}: {e:?}",
+                            key.as_str()
+                        )
+                        .unwrap();
+                        return;
+                    }
+                    Ok(slic) => yafnv::fnv1a::<u32>(slic),
+                };
+
                 // Get default
                 let slic = postcard::ser_flavors::Slice::new(interface.buffer);
                 let slic = match defaults.get_postcard_by_key(key, slic) {
@@ -304,7 +321,13 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                         .unwrap();
                         return;
                     }
-                    Ok(slic) => Some(slic),
+                    Ok(slic) => {
+                        if yafnv::fnv1a::<u32>(slic) != check {
+                            Some(slic)
+                        } else {
+                            None
+                        }
+                    }
                 };
 
                 // Set default
