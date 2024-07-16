@@ -36,7 +36,7 @@ where
         if let Ok(true) = self.0.write_ready() {
             self.0.write(buf)
         } else {
-            Ok(0)
+            Ok(buf.len()) // discard!
         }
     }
 
