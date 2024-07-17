@@ -47,7 +47,9 @@
 //! Currently, there is a hardcoded limit of 64-bytes on the settings path. This is arbitrary and
 //! can be changed if needed.
 #![no_std]
+#![allow(async_fn_in_trait)]
 
+use embassy_futures::block_on;
 use embedded_io::{ErrorType, Read, ReadReady, Write};
 use heapless::String;
 use miniconf::{JsonCoreSlash, Path, Postcard, Traversal, TreeKey};
@@ -82,14 +84,14 @@ pub trait Platform<const Y: usize> {
     type Settings: Settings<Y>;
 
     /// Fetch a value from persisten storage
-    fn fetch<'a>(
+    async fn fetch<'a>(
         &mut self,
         buf: &'a mut [u8],
         key: &[u8],
     ) -> Result<Option<&'a [u8]>, Self::Error>;
 
     /// Store a value to persistent storage
-    fn store(
+    async fn store(
         &mut self,
         buf: &mut [u8],
         key: &[u8],
@@ -97,10 +99,14 @@ pub trait Platform<const Y: usize> {
     ) -> Result<(), Self::Error>;
 
     /// Remove a key from storage.
-    fn clear(&mut self, buf: &mut [u8], key: &[u8]) -> Result<(), Self::Error>;
+    async fn clear(
+        &mut self,
+        buf: &mut [u8],
+        key: &[u8],
+    ) -> Result<(), Self::Error>;
 
     /// Execute a platform specific command.
-    fn cmd(&mut self, cmd: &str);
+    async fn cmd(&mut self, cmd: &str);
 
     /// Return a mutable reference to the `Interface`.
     fn interface_mut(&mut self) -> &mut Self::Interface;
@@ -121,7 +127,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
         _settings: &mut P::Settings,
     ) {
         let key = menu::argument_finder(item, args, "cmd").unwrap().unwrap();
-        interface.platform.cmd(key)
+        block_on(interface.platform.cmd(key))
     }
 
     fn iter_root<F>(
@@ -237,14 +243,11 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 .unwrap();
 
                 // Get stored and compare
-                match interface.platform.fetch(interface.buffer, key.as_bytes())
-                {
-                    Err(e) => write!(
-                        interface,
-                        " [fetch error: {e:?}]"
-                    ),
-                    Ok(None) =>
-                        write!(interface, " [not stored]"),
+                match block_on(
+                    interface.platform.fetch(interface.buffer, key.as_bytes()),
+                ) {
+                    Err(e) => write!(interface, " [fetch error: {e:?}]"),
+                    Ok(None) => write!(interface, " [not stored]"),
                     Ok(Some(stored)) => {
                         let slic = postcard::de_flavors::Slice::new(stored);
                         // Use defaults as scratch space for postcard->json conversion
@@ -253,29 +256,35 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                                 interface,
                                 " [stored deserialize error: {e}]"
                             ),
-                            Ok(_rest) =>
-                                match defaults.get_json_by_key(&key, interface.buffer) {
-                                    Err(e) => write!(
-                                        interface,
-                                        " [stored serialization error: {e}]"
-                                    ),
-                                    Ok(len) => {
-                                        if yafnv::fnv1a::<u32>(&interface.buffer[..len]) != check {
+                            Ok(_rest) => match defaults
+                                .get_json_by_key(&key, interface.buffer)
+                            {
+                                Err(e) => write!(
+                                    interface,
+                                    " [stored serialization error: {e}]"
+                                ),
+                                Ok(len) => {
+                                    if yafnv::fnv1a::<u32>(
+                                        &interface.buffer[..len],
+                                    ) != check
+                                    {
                                         write!(
                                             interface.platform.interface_mut(),
                                             " [stored: {}]",
-                                            core::str::from_utf8(&interface.buffer[..len]).unwrap())
-                                        } else {
-                                            write!(
-                                                interface,
-                                                " [stored]"
+                                            core::str::from_utf8(
+                                                &interface.buffer[..len]
                                             )
-                                        }
-                                    },
+                                            .unwrap()
+                                        )
+                                    } else {
+                                        write!(interface, " [stored]")
+                                    }
                                 }
-                            }
+                            },
+                        }
                     }
-                }.unwrap();
+                }
+                .unwrap();
                 writeln!(interface).unwrap();
             },
         );
@@ -363,8 +372,9 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 }
 
                 // Check for stored
-                match interface.platform.fetch(interface.buffer, key.as_bytes())
-                {
+                match block_on(
+                    interface.platform.fetch(interface.buffer, key.as_bytes()),
+                ) {
                     Err(e) => {
                         writeln!(
                             interface,
@@ -375,10 +385,11 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                     }
                     Ok(None) => {}
                     // Clear stored
-                    Ok(Some(_stored)) => match interface
-                        .platform
-                        .clear(interface.buffer, key.as_bytes())
-                    {
+                    Ok(Some(_stored)) => match block_on(
+                        interface
+                            .platform
+                            .clear(interface.buffer, key.as_bytes()),
+                    ) {
                         Ok(()) => {
                             writeln!(interface, "Clear stored `{}`", *key)
                         }
@@ -438,8 +449,9 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 };
 
                 // Get stored value checksum
-                match interface.platform.fetch(interface.buffer, key.as_bytes())
-                {
+                match block_on(
+                    interface.platform.fetch(interface.buffer, key.as_bytes()),
+                ) {
                     Ok(None) => {}
                     Ok(Some(stored)) => {
                         let stored = yafnv::fnv1a::<u32>(stored);
@@ -491,7 +503,11 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 let (value, rest) = interface.buffer.split_at_mut(len);
 
                 // Store
-                match interface.platform.store(rest, key.as_bytes(), value) {
+                match block_on(interface.platform.store(
+                    rest,
+                    key.as_bytes(),
+                    value,
+                )) {
                     Ok(_) => writeln!(interface, "`{}` stored", *key),
                     Err(e) => {
                         writeln!(interface, "Failed to store `{}`: {e:?}", *key)

@@ -13,3 +13,4 @@ embedded-io = "0.6"
 yafnv = "3.0"
 postcard = "1"
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
+embassy-futures = { version = "0.1", default-features = false }
