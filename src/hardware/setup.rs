@@ -644,9 +644,11 @@ where
         };
 
         let mut settings = C::new(NetSettings::new(mac_addr));
-        crate::settings::SerialSettingsPlatform::load(
-            &mut settings,
-            &mut flash,
+        embassy_futures::block_on(
+            crate::settings::SerialSettingsPlatform::load(
+                &mut settings,
+                &mut flash,
+            ),
         );
         (flash, settings)
     };

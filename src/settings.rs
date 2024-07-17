@@ -24,7 +24,6 @@
 //!    storage sharing.
 use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
 use core::fmt::Write;
-use embassy_futures::block_on;
 use embedded_io::Write as EioWrite;
 use heapless::{String, Vec};
 use miniconf::{JsonCoreSlash, Path, Postcard, Tree};
@@ -34,7 +33,6 @@ use sequential_storage::{
 };
 use serial_settings::{BestEffortInterface, Platform, Settings};
 use smoltcp_nal::smoltcp::wire::EthernetAddress;
-use stm32h7xx_hal::flash::LockedFlashBank;
 
 /// Settings that are used for configuring the network interface to Stabilizer.
 #[derive(Clone, Debug, Tree)]
@@ -117,20 +115,22 @@ impl<C, const Y: usize> SerialSettingsPlatform<C, Y>
 where
     C: for<'d> JsonCoreSlash<'d, Y>,
 {
-    pub fn load(structure: &mut C, storage: &mut Flash) {
+    pub async fn load(structure: &mut C, storage: &mut Flash) {
         // Loop over flash and read settings
         let mut buffer = [0u8; 512];
         for path in C::nodes::<Path<String<64>, '/'>>() {
             let (path, _node) = path.unwrap();
 
             // Try to fetch the setting from flash.
-            let value: &[u8] = match block_on(fetch_item(
+            let value: &[u8] = match fetch_item(
                 storage,
                 storage.range(),
                 &mut NoCache::new(),
                 &mut buffer,
                 SettingsKey(Vec::try_from(path.as_bytes()).unwrap()),
-            )) {
+            )
+            .await
+            {
                 Err(e) => {
                     log::warn!(
                         "Failed to fetch `{}` from flash: {e:?}",
@@ -168,47 +168,53 @@ where
     type Interface = BestEffortInterface<crate::hardware::SerialPort>;
     type Settings = C;
     type Error = sequential_storage::Error<
-        <LockedFlashBank as embedded_storage::nor_flash::ErrorType>::Error,
+        <stm32h7xx_hal::flash::LockedFlashBank as embedded_storage::nor_flash::ErrorType>::Error,
     >;
 
-    fn fetch<'a>(
+    async fn fetch<'a>(
         &mut self,
         buf: &'a mut [u8],
         key: &[u8],
     ) -> Result<Option<&'a [u8]>, Self::Error> {
         let range = self.storage.range();
-        block_on(fetch_item(
+        fetch_item(
             &mut self.storage,
             range,
             &mut NoCache::new(),
             buf,
             SettingsKey(Vec::try_from(key).unwrap()),
-        ))
+        )
+        .await
         .map(|v| v.filter(|v: &&[u8]| !v.is_empty()))
     }
 
-    fn store(
+    async fn store(
         &mut self,
         buf: &mut [u8],
         key: &[u8],
         value: &[u8],
     ) -> Result<(), Self::Error> {
         let range = self.storage.range();
-        block_on(store_item(
+        store_item(
             &mut self.storage,
             range,
             &mut NoCache::new(),
             buf,
             SettingsKey(Vec::try_from(key).unwrap()),
             &value,
-        ))
+        )
+        .await
     }
 
-    fn clear(&mut self, buf: &mut [u8], key: &[u8]) -> Result<(), Self::Error> {
-        self.store(buf, key, b"")
+    async fn clear(
+        &mut self,
+        buf: &mut [u8],
+        key: &[u8],
+    ) -> Result<(), Self::Error> {
+        self.store(buf, key, b"").await
     }
 
-    fn cmd(&mut self, cmd: &str) {
+    async fn cmd(&mut self, cmd: &str) {
         match cmd {
             "reboot" => cortex_m::peripheral::SCB::sys_reset(),
             "dfu" => platform::start_dfu_reboot(),
