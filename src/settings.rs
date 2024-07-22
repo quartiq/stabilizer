@@ -78,7 +78,7 @@ pub trait AppSettings {
 #[derive(
     Default, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq,
 )]
-pub struct SettingsKey(Vec<u8, 64>);
+pub struct SettingsKey(Vec<u8, 128>);
 
 impl sequential_storage::map::Key for SettingsKey {
     fn serialize_into(
@@ -120,7 +120,7 @@ where
     pub fn load(structure: &mut C, storage: &mut Flash) {
         // Loop over flash and read settings
         let mut buffer = [0u8; 512];
-        for path in C::nodes::<Path<String<64>, '/'>>() {
+        for path in C::nodes::<Path<String<128>, '/'>>() {
             let (path, _node) = path.unwrap();
 
             // Try to fetch the setting from flash.
@@ -129,7 +129,7 @@ where
                 storage.range(),
                 &mut NoCache::new(),
                 &mut buffer,
-                SettingsKey(Vec::try_from(path.as_bytes()).unwrap()),
+                &SettingsKey(Vec::from_slice(path.as_bytes()).unwrap()),
             )) {
                 Err(e) => {
                     log::warn!(
@@ -182,7 +182,7 @@ where
             range,
             &mut NoCache::new(),
             buf,
-            SettingsKey(Vec::try_from(key).unwrap()),
+            &SettingsKey(Vec::try_from(key).unwrap()),
         ))
         .map(|v| v.filter(|v: &&[u8]| !v.is_empty()))
     }
@@ -199,7 +199,7 @@ where
             range,
             &mut NoCache::new(),
             buf,
-            SettingsKey(Vec::try_from(key).unwrap()),
+            &SettingsKey(Vec::try_from(key).unwrap()),
             &value,
         ))
     }
