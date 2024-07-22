@@ -33,7 +33,7 @@ members = ["ad9959", "serial-settings"]
 
 [dependencies]
 panic-persist = { version = "0.3", features = ["utf8", "custom-panic-handler"] }
-sequential-storage = "2"
+sequential-storage = "3"
 embedded-io = "0.6"
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"
