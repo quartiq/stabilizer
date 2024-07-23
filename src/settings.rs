@@ -129,7 +129,7 @@ where
                 storage.range(),
                 &mut NoCache::new(),
                 &mut buffer,
-                &SettingsKey(Vec::from_slice(path.as_bytes()).unwrap()),
+                &SettingsKey(path.clone().into_inner().into_bytes()),
             )) {
                 Err(e) => {
                     log::warn!(
