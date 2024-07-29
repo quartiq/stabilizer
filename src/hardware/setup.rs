@@ -21,9 +21,10 @@ use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
     eeprom, input_stamper::InputStamper, metadata::ApplicationMetadata,
     platform, pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc,
-    timers, DigitalInput0, DigitalInput1, EemDigitalInput0, EemDigitalInput1,
-    EemDigitalOutput0, EemDigitalOutput1, EthernetPhy, HardwareVersion,
-    NetworkStack, SerialTerminal, SystemTimer, Systick, UsbDevice, AFE0, AFE1,
+    timers, CpuDacOutput1, DigitalInput0, DigitalInput1, EemDigitalInput0,
+    EemDigitalInput1, EemDigitalOutput0, EemDigitalOutput1, EthernetPhy,
+    HardwareVersion, NetworkStack, SerialTerminal, SystemTimer, Systick,
+    UsbDevice, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -118,6 +119,7 @@ pub struct StabilizerDevices<
     pub afes: (AFE0, AFE1),
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
     pub dacs: (dac::Dac0Output, dac::Dac1Output),
+    pub cpu_dac1: CpuDacOutput1,
     pub timestamper: InputStamper,
     pub adc_dac_timer: timers::SamplingTimer,
     pub timestamp_timer: timers::TimestampTimer,
@@ -855,6 +857,12 @@ where
         )
     };
 
+    let cpu_dac1 = {
+        let cpu_dac1 = device.DAC.dac(gpioa.pa4, ccdr.peripheral.DAC12);
+
+        cpu_dac1.calibrate_buffer(&mut delay).enable()
+    };
+
     // Measure the Pounder PGOOD output to detect if pounder is present on Stabilizer.
     let pounder_pgood = gpiob.pb13.into_pull_down_input();
     delay.delay_ms(2u8);
@@ -1145,6 +1153,7 @@ where
         afes,
         adcs,
         dacs,
+        cpu_dac1,
         temperature_sensor: CpuTempSensor::new(
             adc3.create_channel(hal::adc::Temperature::new()),
         ),
