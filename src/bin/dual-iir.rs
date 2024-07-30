@@ -48,8 +48,8 @@ use stabilizer::{
         hal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
-        DigitalInput0, DigitalInput1, SerialTerminal, SystemTimer, Systick,
-        UsbDevice, AFE0, AFE1,
+        CpuDacOutput1, DigitalInput0, DigitalInput1, SerialTerminal,
+        SystemTimer, Systick, UsbDevice, AFE0, AFE1,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -59,6 +59,8 @@ use stabilizer::{
     },
     settings::NetSettings,
 };
+
+use hal::traits::DacOut;
 
 const SCALE: f32 = i16::MAX as _;
 
@@ -119,6 +121,15 @@ pub struct DualIir {
     /// Any of the variants of [Gain] enclosed in double quotes.
     #[tree(depth = 1)]
     afe: [Gain; 2],
+
+    ///Configure the internal DAC output.
+    ///
+    /// # Path
+    /// `cpu_dac1`
+    ///
+    /// # Value
+    /// Any value between 0 and 4095.
+    cpu_dac1: u16,
 
     /// Configure the IIR filter parameters.
     ///
@@ -189,6 +200,8 @@ impl Default for DualIir {
         Self {
             // Analog frontend programmable gain amplifier gains (G1, G2, G5, G10)
             afe: [Gain::G1, Gain::G1],
+            // CPU DAC1 output
+            cpu_dac1: 0,
             // IIR filter tap gains are an array `[b0, b1, b2, a1, a2]` such that the
             // new output is computed as `y0 = a1*y1 + a2*y2 + b0*x0 + b1*x1 + b2*x2`.
             // The array is `iir_state[channel-index][cascade-index][coeff-index]`.
@@ -235,6 +248,7 @@ mod app {
         iir_state: [[[f32; 4]; IIR_CASCADE_LENGTH]; 2],
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
+        cpu_dac1: CpuDacOutput1,
     }
 
     #[init]
@@ -291,6 +305,7 @@ mod app {
             iir_state: [[[0.; 4]; IIR_CASCADE_LENGTH]; 2],
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
+            cpu_dac1: stabilizer.cpu_dac1,
         };
 
         // Enable ADC/DAC events
@@ -458,11 +473,12 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, active_settings, signal_generator])]
+    #[task(priority = 1, local=[afes, cpu_dac1], shared=[network, settings, active_settings, signal_generator])]
     async fn settings_update(mut c: settings_update::Context) {
         c.shared.settings.lock(|settings| {
             c.local.afes.0.set_gain(settings.dual_iir.afe[0]);
             c.local.afes.1.set_gain(settings.dual_iir.afe[1]);
+            c.local.cpu_dac1.set_value(settings.dual_iir.cpu_dac1);
 
             // Update the signal generators
             for (i, &config) in
@@ -492,6 +508,13 @@ mod app {
                 .lock(|current| *current = settings.dual_iir.clone());
         });
     }
+
+    // #[task(priority = 1, local=[cpu_dac1], shared=[network, settings])]
+    // async fn cpu_dac_update(mut c: cpu_dac_update::Context) {
+    //     c.shared.settings.lock(|settings| {
+    //         c.local.cpu_dac1.set_value(settings.dual_iir.cpu_dac1);
+    //     });
+    // }
 
     #[task(priority = 1, shared=[network, settings, telemetry], local=[cpu_temp_sensor])]
     async fn telemetry(mut c: telemetry::Context) {

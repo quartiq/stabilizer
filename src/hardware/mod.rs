@@ -38,7 +38,7 @@ pub type UsbBus = stm32h7xx_hal::usb_hs::UsbBus<stm32h7xx_hal::usb_hs::USB2>;
 pub type UsbDevice = usb_device::device::UsbDevice<'static, UsbBus>;
 
 // Type alias for the cpu_dac output.
-type CpuDacOutput1 =
+pub type CpuDacOutput1 =
     hal::dac::C1<stm32h7xx_hal::pac::DAC, stm32h7xx_hal::dac::Enabled>;
 
 // Type alias for digital input 0 (DI0).

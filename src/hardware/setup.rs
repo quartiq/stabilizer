@@ -857,11 +857,11 @@ where
         )
     };
 
-    let cpu_dac1 = {
-        let cpu_dac1 = device.DAC.dac(gpioa.pa4, ccdr.peripheral.DAC12);
-
-        cpu_dac1.calibrate_buffer(&mut delay).enable()
-    };
+    let cpu_dac1 = device
+        .DAC
+        .dac(gpioa.pa4, ccdr.peripheral.DAC12)
+        .calibrate_buffer(&mut delay)
+        .enable();
 
     // Measure the Pounder PGOOD output to detect if pounder is present on Stabilizer.
     let pounder_pgood = gpiob.pb13.into_pull_down_input();
