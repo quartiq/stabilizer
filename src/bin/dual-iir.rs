@@ -48,8 +48,8 @@ use stabilizer::{
         hal,
         signal_generator::{self, SignalGenerator},
         timers::SamplingTimer,
-        CpuDacOutput1, DigitalInput0, DigitalInput1, SerialTerminal,
-        SystemTimer, Systick, UsbDevice, AFE0, AFE1,
+        CpuDacOutput1, DigitalInput0, DigitalInput1, GpioDacSpi,
+        SerialTerminal, SystemTimer, Systick, UsbDevice, AFE0, AFE1,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -131,6 +131,15 @@ pub struct DualIir {
     /// Any value between 0 and 4095.
     cpu_dac1: u16,
 
+    ///Configure the current_sense frontend offset dac.
+    ///
+    /// # Path
+    /// `frontend_offset`
+    ///
+    /// # Value
+    /// Any value between 0 and 65535.
+    frontend_offset: u16,
+
     /// Configure the IIR filter parameters.
     ///
     /// # Path
@@ -202,6 +211,8 @@ impl Default for DualIir {
             afe: [Gain::G1, Gain::G1],
             // CPU DAC1 output
             cpu_dac1: 0,
+            // Frontend offset DAC
+            frontend_offset: 0,
             // IIR filter tap gains are an array `[b0, b1, b2, a1, a2]` such that the
             // new output is computed as `y0 = a1*y1 + a2*y2 + b0*x0 + b1*x1 + b2*x2`.
             // The array is `iir_state[channel-index][cascade-index][coeff-index]`.
@@ -225,6 +236,8 @@ impl Default for DualIir {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
+    use cortex_m::prelude::_embedded_hal_blocking_spi_Write;
+
     use super::*;
 
     #[shared]
@@ -249,6 +262,7 @@ mod app {
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
         cpu_dac1: CpuDacOutput1,
+        gpio_dac_spi: GpioDacSpi,
     }
 
     #[init]
@@ -256,7 +270,7 @@ mod app {
         let clock = SystemTimer::new(|| Systick::now().ticks());
 
         // Configure the microcontroller
-        let (stabilizer, _pounder) = hardware::setup::setup::<Settings, 4>(
+        let stabilizer = hardware::setup::setup::<Settings, 4>(
             c.core,
             c.device,
             clock,
@@ -306,6 +320,7 @@ mod app {
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
             cpu_dac1: stabilizer.cpu_dac1,
+            gpio_dac_spi: stabilizer.gpio_dac_spi,
         };
 
         // Enable ADC/DAC events
@@ -313,6 +328,11 @@ mod app {
         local.adcs.1.start();
         local.dacs.0.start();
         local.dacs.1.start();
+
+        // // Test the SPI DAC
+        // if let Err(err) = local.gpio_dac_spi.write(&[0x0000]) {
+        //     log::error!("Failed to write to the DAC: {:?}", err);
+        // }
 
         // Spawn a settings update for default settings.
         settings_update::spawn().unwrap();
@@ -473,12 +493,19 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes, cpu_dac1], shared=[network, settings, active_settings, signal_generator])]
+    #[task(priority = 1, local=[afes, cpu_dac1, gpio_dac_spi], shared=[network, settings, active_settings, signal_generator])]
     async fn settings_update(mut c: settings_update::Context) {
         c.shared.settings.lock(|settings| {
             c.local.afes.0.set_gain(settings.dual_iir.afe[0]);
             c.local.afes.1.set_gain(settings.dual_iir.afe[1]);
             c.local.cpu_dac1.set_value(settings.dual_iir.cpu_dac1);
+            if let Err(err) = c
+                .local
+                .gpio_dac_spi
+                .write(&[settings.dual_iir.frontend_offset])
+            {
+                log::error!("Failed to update frontend offset DAC: {:?}", err);
+            }
 
             // Update the signal generators
             for (i, &config) in

@@ -41,6 +41,13 @@ pub type UsbDevice = usb_device::device::UsbDevice<'static, UsbBus>;
 pub type CpuDacOutput1 =
     hal::dac::C1<stm32h7xx_hal::pac::DAC, stm32h7xx_hal::dac::Enabled>;
 
+// Type alias for the ad dac (current_sense) connected to the gpio spi.
+pub type GpioDacSpi = stm32h7xx_hal::spi::Spi<
+    stm32h7xx_hal::pac::SPI1,
+    stm32h7xx_hal::spi::Enabled,
+    u16,
+>;
+
 // Type alias for digital input 0 (DI0).
 pub type DigitalInput0 = hal::gpio::gpiog::PG9<hal::gpio::Input>;
 

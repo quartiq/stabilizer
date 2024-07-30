@@ -10,6 +10,9 @@ pub const ADC_SETUP_TIME: f32 = 220e-9;
 /// The maximum DAC/ADC serial clock line frequency. This is a hardware limit.
 pub const ADC_DAC_SCK_MAX: MegaHertz = MegaHertz::MHz(50);
 
+/// The maximum AD5541 (current_sense's DAC) serial clock line frequency. This is a hardware limit.
+pub const AD5541_DAC_SCK_MAX: MegaHertz = MegaHertz::MHz(25);
+
 /// The optimal counting frequency of the hardware timers used for timestamping and sampling.
 pub const TIMER_FREQUENCY: MegaHertz = MegaHertz::MHz(100);
 pub const TIMER_PERIOD: f32 = 1. / (TIMER_FREQUENCY.to_Hz() as f32);

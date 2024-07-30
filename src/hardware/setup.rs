@@ -20,11 +20,10 @@ use crate::settings::{AppSettings, NetSettings};
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
     eeprom, input_stamper::InputStamper, metadata::ApplicationMetadata,
-    platform, pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc,
-    timers, CpuDacOutput1, DigitalInput0, DigitalInput1, EemDigitalInput0,
-    EemDigitalInput1, EemDigitalOutput0, EemDigitalOutput1, EthernetPhy,
-    HardwareVersion, NetworkStack, SerialTerminal, SystemTimer, Systick,
-    UsbDevice, AFE0, AFE1,
+    platform, shared_adc::SharedAdc, timers, CpuDacOutput1, DigitalInput0,
+    DigitalInput1, EemDigitalInput0, EemDigitalInput1, EemDigitalOutput0,
+    EemDigitalOutput1, EthernetPhy, GpioDacSpi, HardwareVersion, NetworkStack,
+    SerialTerminal, SystemTimer, Systick, UsbDevice, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -119,6 +118,7 @@ pub struct StabilizerDevices<
     pub afes: (AFE0, AFE1),
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
     pub dacs: (dac::Dac0Output, dac::Dac1Output),
+    pub gpio_dac_spi: GpioDacSpi,
     pub cpu_dac1: CpuDacOutput1,
     pub timestamper: InputStamper,
     pub adc_dac_timer: timers::SamplingTimer,
@@ -130,15 +130,6 @@ pub struct StabilizerDevices<
     pub usb: UsbDevice,
     pub metadata: &'static ApplicationMetadata,
     pub settings: C,
-}
-
-/// The available Pounder-specific hardware interfaces.
-pub struct PounderDevices {
-    pub pounder: pounder::PounderDevices,
-    pub dds_output: DdsOutput,
-
-    #[cfg(not(feature = "pounder_v1_0"))]
-    pub timestamper: pounder::timestamp::Timestamper,
 }
 
 #[link_section = ".sram3.eth"]
@@ -207,17 +198,15 @@ fn load_itcm() {
 /// * `sample_ticks` - The number of timer ticks between each sample.
 ///
 /// # Returns
-/// (stabilizer, pounder) where `stabilizer` is a `StabilizerDevices` structure containing all
-/// stabilizer hardware interfaces in a disabled state. `pounder` is an `Option` containing
-/// `Some(devices)` if pounder is detected, where `devices` is a `PounderDevices` structure
-/// containing all of the pounder hardware interfaces in a disabled state.
+/// stabilizer where `stabilizer` is a `StabilizerDevices` structure containing all
+/// stabilizer hardware interfaces in a disabled state.
 pub fn setup<C, const Y: usize>(
     mut core: stm32h7xx_hal::stm32::CorePeripherals,
     device: stm32h7xx_hal::stm32::Peripherals,
     clock: SystemTimer,
     batch_size: usize,
     sample_ticks: u32,
-) -> (StabilizerDevices<C, Y>, Option<PounderDevices>)
+) -> StabilizerDevices<C, Y>
 where
     C: serial_settings::Settings<Y>
         + for<'d> miniconf::JsonCoreSlash<'d, Y>
@@ -321,7 +310,7 @@ where
     let gpiod = device.GPIOD.split(ccdr.peripheral.GPIOD);
     let gpioe = device.GPIOE.split(ccdr.peripheral.GPIOE);
     let gpiof = device.GPIOF.split(ccdr.peripheral.GPIOF);
-    let mut gpiog = device.GPIOG.split(ccdr.peripheral.GPIOG);
+    let gpiog = device.GPIOG.split(ccdr.peripheral.GPIOG);
 
     let dma_streams =
         hal::dma::dma::StreamsTuple::new(device.DMA1, ccdr.peripheral.DMA1);
@@ -573,6 +562,31 @@ where
         (dac0, dac1)
     };
 
+    let gpio_dac_spi = {
+        let mosi = gpiod.pd7.into_alternate().speed(Speed::VeryHigh);
+        let sck = gpiog.pg11.into_alternate().speed(Speed::VeryHigh);
+        let nss = gpiog.pg10.into_alternate().speed(Speed::VeryHigh);
+
+        let config = hal::spi::Config::new(hal::spi::Mode {
+            polarity: hal::spi::Polarity::IdleHigh,
+            phase: hal::spi::Phase::CaptureOnSecondTransition,
+        })
+        .hardware_cs(hal::spi::HardwareCS {
+            mode: hal::spi::HardwareCSMode::WordTransaction,
+            assertion_delay: 0.0,
+            polarity: hal::spi::Polarity::IdleHigh,
+        })
+        .communication_mode(hal::spi::CommunicationMode::Transmitter);
+
+        device.SPI1.spi(
+            (sck, hal::spi::NoMiso, mosi, nss),
+            config,
+            design_parameters::AD5541_DAC_SCK_MAX.convert(),
+            ccdr.peripheral.SPI1,
+            &ccdr.clocks,
+        )
+    };
+
     let afes = {
         // AFE_PWR_ON on hardware revision v1.3.2
         gpioe.pe1.into_push_pull_output().set_high();
@@ -812,7 +826,7 @@ where
     fp_led_2.set_low();
     fp_led_3.set_low();
 
-    let (adc1, adc2, adc3) = {
+    let (_adc1, _adc2, adc3) = {
         let (mut adc1, mut adc2) = hal::adc::adc12(
             device.ADC1,
             device.ADC2,
@@ -862,205 +876,6 @@ where
         .dac(gpioa.pa4, ccdr.peripheral.DAC12)
         .calibrate_buffer(&mut delay)
         .enable();
-
-    // Measure the Pounder PGOOD output to detect if pounder is present on Stabilizer.
-    let pounder_pgood = gpiob.pb13.into_pull_down_input();
-    delay.delay_ms(2u8);
-    let pounder = if pounder_pgood.is_high() {
-        log::info!("Found Pounder");
-
-        let i2c1 = {
-            let sda = gpiob.pb7.into_alternate().set_open_drain();
-            let scl = gpiob.pb8.into_alternate().set_open_drain();
-            let i2c1 = device.I2C1.i2c(
-                (scl, sda),
-                400.kHz(),
-                ccdr.peripheral.I2C1,
-                &ccdr.clocks,
-            );
-
-            shared_bus::new_atomic_check!(hal::i2c::I2c<hal::stm32::I2C1> = i2c1).unwrap()
-        };
-
-        let spi = {
-            let mosi = gpiod.pd7.into_alternate();
-            let miso = gpioa.pa6.into_alternate();
-            let sck = gpiog.pg11.into_alternate();
-
-            let config = hal::spi::Config::new(hal::spi::Mode {
-                polarity: hal::spi::Polarity::IdleHigh,
-                phase: hal::spi::Phase::CaptureOnSecondTransition,
-            });
-
-            // The maximum frequency of this SPI must be limited due to capacitance on the MISO
-            // line causing a long RC decay.
-            device.SPI1.spi(
-                (sck, miso, mosi),
-                config,
-                5.MHz(),
-                ccdr.peripheral.SPI1,
-                &ccdr.clocks,
-            )
-        };
-
-        let pwr0 = adc1.create_channel(gpiof.pf11.into_analog());
-        let pwr1 = adc2.create_channel(gpiof.pf14.into_analog());
-        let aux_adc0 = adc3.create_channel(gpiof.pf3.into_analog());
-        let aux_adc1 = adc3.create_channel(gpiof.pf4.into_analog());
-
-        let pounder_devices = pounder::PounderDevices::new(
-            i2c1.acquire_i2c(),
-            spi,
-            (pwr0, pwr1),
-            (aux_adc0, aux_adc1),
-        )
-        .unwrap();
-
-        let ad9959 = {
-            let qspi_interface = {
-                // Instantiate the QUADSPI pins and peripheral interface.
-                let qspi_pins = {
-                    let _ncs =
-                        gpioc.pc11.into_alternate::<9>().speed(Speed::VeryHigh);
-
-                    let clk = gpiob.pb2.into_alternate().speed(Speed::VeryHigh);
-                    let io0 = gpioe.pe7.into_alternate().speed(Speed::VeryHigh);
-                    let io1 = gpioe.pe8.into_alternate().speed(Speed::VeryHigh);
-                    let io2 = gpioe.pe9.into_alternate().speed(Speed::VeryHigh);
-                    let io3 =
-                        gpioe.pe10.into_alternate().speed(Speed::VeryHigh);
-
-                    (clk, io0, io1, io2, io3)
-                };
-
-                let qspi = device.QUADSPI.bank2(
-                    qspi_pins,
-                    design_parameters::POUNDER_QSPI_FREQUENCY.convert(),
-                    &ccdr.clocks,
-                    ccdr.peripheral.QSPI,
-                );
-
-                pounder::QspiInterface::new(qspi).unwrap()
-            };
-
-            #[cfg(not(feature = "pounder_v1_0"))]
-            let reset_pin = gpiog.pg6.into_push_pull_output();
-            #[cfg(feature = "pounder_v1_0")]
-            let reset_pin = gpioa.pa0.into_push_pull_output();
-
-            let mut io_update = gpiog.pg7.into_push_pull_output();
-
-            // Delay to allow the pounder DDS reference clock to fully start up. The exact startup
-            // time is not specified, but bench testing indicates it usually comes up within
-            // 200-300uS. We do a larger delay to ensure that it comes up and is stable before
-            // using it.
-            delay.delay_ms(10u32);
-
-            let mut ad9959 = ad9959::Ad9959::new(
-                qspi_interface,
-                reset_pin,
-                &mut io_update,
-                &mut delay,
-                ad9959::Mode::FourBitSerial,
-                design_parameters::DDS_REF_CLK.to_Hz() as f32,
-                design_parameters::DDS_MULTIPLIER,
-            )
-            .unwrap();
-
-            ad9959.self_test().unwrap();
-
-            // Return IO_Update
-            gpiog.pg7 = io_update.into_analog();
-
-            ad9959
-        };
-
-        let dds_output = {
-            let io_update_trigger = {
-                let _io_update =
-                    gpiog.pg7.into_alternate::<2>().speed(Speed::VeryHigh);
-
-                // Configure the IO_Update signal for the DDS.
-                let mut hrtimer = pounder::hrtimer::HighResTimerE::new(
-                    device.HRTIM_TIME,
-                    device.HRTIM_MASTER,
-                    device.HRTIM_COMMON,
-                    ccdr.clocks,
-                    ccdr.peripheral.HRTIM,
-                );
-
-                // IO_Update occurs after a fixed delay from the QSPI write. Note that the timer
-                // is triggered after the QSPI write, which can take approximately 120nS, so
-                // there is additional margin.
-                hrtimer.configure_single_shot(
-                    pounder::hrtimer::Channel::Two,
-                    design_parameters::POUNDER_IO_UPDATE_DELAY,
-                    design_parameters::POUNDER_IO_UPDATE_DURATION,
-                );
-
-                // Ensure that we have enough time for an IO-update every batch.
-                let sample_frequency = {
-                    design_parameters::TIMER_FREQUENCY.to_Hz() as f32
-                        / sample_ticks as f32
-                };
-
-                let sample_period = 1.0 / sample_frequency;
-                assert!(
-                    sample_period * batch_size as f32
-                        > design_parameters::POUNDER_IO_UPDATE_DELAY
-                );
-
-                hrtimer
-            };
-
-            let (qspi, config) = ad9959.freeze();
-            DdsOutput::new(qspi, io_update_trigger, config)
-        };
-
-        #[cfg(not(feature = "pounder_v1_0"))]
-        let pounder_stamper = {
-            log::info!("Assuming Pounder v1.1 or later");
-            let etr_pin = gpioa.pa0.into_alternate();
-
-            // The frequency in the constructor is dont-care, as we will modify the period + clock
-            // source manually below.
-            let tim8 =
-                device
-                    .TIM8
-                    .timer(1.kHz(), ccdr.peripheral.TIM8, &ccdr.clocks);
-            let mut timestamp_timer = timers::PounderTimestampTimer::new(tim8);
-
-            // Pounder is configured to generate a 500MHz reference clock, so a 125MHz sync-clock is
-            // output. As a result, dividing the 125MHz sync-clk provides a 31.25MHz tick rate for
-            // the timestamp timer. 31.25MHz corresponds with a 32ns tick rate.
-            // This is less than fCK_INT/3 of the timer as required for oversampling the trigger.
-            timestamp_timer.set_external_clock(timers::Prescaler::Div4);
-            timestamp_timer.start();
-
-            // Set the timer to wrap at the u16 boundary to meet the PLL periodicity.
-            // Scale and wrap before or after the PLL.
-            timestamp_timer.set_period_ticks(u16::MAX);
-            let tim8_channels = timestamp_timer.channels();
-
-            pounder::timestamp::Timestamper::new(
-                timestamp_timer,
-                tim8_channels.ch1,
-                &mut sampling_timer,
-                etr_pin,
-                batch_size,
-            )
-        };
-
-        Some(PounderDevices {
-            pounder: pounder_devices,
-            dds_output,
-
-            #[cfg(not(feature = "pounder_v1_0"))]
-            timestamper: pounder_stamper,
-        })
-    } else {
-        None
-    };
 
     let eem_gpio = EemGpioDevices {
         lvds4: gpiod.pd1.into_floating_input(),
@@ -1153,6 +968,7 @@ where
         afes,
         adcs,
         dacs,
+        gpio_dac_spi,
         cpu_dac1,
         temperature_sensor: CpuTempSensor::new(
             adc3.create_channel(hal::adc::Temperature::new()),
@@ -1174,5 +990,5 @@ where
     // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
     log::info!("setup() complete");
 
-    (stabilizer, pounder)
+    stabilizer
 }

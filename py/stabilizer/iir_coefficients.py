@@ -323,6 +323,9 @@ def _main():
     parser.add_argument(
         "--cpu-dac1", type=int, default=0, help="CPU DAC1 value (%(default)s)"
     )
+    parser.add_argument(
+        "--frontend-offset", type=int, default=0, help="Frontend offset (%(default)s)"
+    )
 
     # Next, add subparsers and their arguments.
     subparsers = parser.add_subparsers(
@@ -381,6 +384,10 @@ def _main():
             await interface.set(
                 path="/cpu_dac1",
                 value=args.cpu_dac1,
+            )
+            await interface.set(
+                path="/frontend_offset",
+                value=args.frontend_offset,
             )
 
     asyncio.run(configure())

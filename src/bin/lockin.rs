@@ -280,7 +280,7 @@ mod app {
         let clock = SystemTimer::new(|| Systick::now().ticks());
 
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) = hardware::setup::setup::<Settings, 3>(
+        let mut stabilizer = hardware::setup::setup::<Settings, 3>(
             c.core,
             c.device,
             clock,
