@@ -10,6 +10,7 @@ import ipaddress
 from collections import namedtuple
 from dataclasses import dataclass
 import matplotlib.pyplot as plt
+from scipy.signal import welch
 
 import numpy as np
 
@@ -214,7 +215,7 @@ async def main():
         "--broker", default="192.168.199.251", help="The MQTT broker address"
     )
     parser.add_argument("--maxsize", type=int, default=1, help="Frame queue size")
-    parser.add_argument("--duration", type=float, default=1.0, help="Test duration")
+    parser.add_argument("--duration", type=float, default=0.0001, help="Test duration")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
@@ -223,17 +224,31 @@ async def main():
     )
     _loss, adc1, adc2, dac1, dac2 = await measure(stream, args.duration)
 
+    print(adc1.shape, adc2.shape, dac1.shape, dac2.shape, "\n")
+
+    # calculate the power spectral density
+    fs = 781.25e3
+    freq, psd = welch(adc1, fs, nperseg=256 * 16)
+    t_s = np.arange(0, adc1.size) / fs
+
     # plot the data
-    fig, axs = plt.subplots(2, 2, sharex=True)
-    axs[0, 0].plot(adc1)
+    fig, axs = plt.subplots(2, 2)
+    axs[0, 0].plot(t_s, adc1)
+    axs[0, 0].set_xlabel("Time [s]")
+    axs[0, 0].set_ylabel("Voltage [V]")
     axs[0, 0].set_title("ADC0")
-    axs[0, 1].plot(adc2)
-    axs[0, 1].set_title("ADC1")
-    axs[1, 0].plot(dac1)
+    axs[0, 1].plot(np.round(freq / 1e3, 2), psd)
+    axs[0, 1].set_yscale("log")
+    axs[0, 1].set_xlabel("Frequency [kHz]")
+    axs[0, 1].set_ylabel("PSD [V**2/Hz]")
+    axs[0, 1].set_title("PSD ADC0")
+    axs[1, 0].plot(t_s, dac1)
+    axs[1, 0].set_xlabel("Time [s]")
+    axs[1, 0].set_ylabel("Voltage [V]")
     axs[1, 0].set_title("DAC0")
-    axs[1, 1].plot(dac2)
-    axs[1, 1].set_title("DAC1")
     plt.show()
+
+    print(f"PSD sum up to 1kH: {np.sum(psd[freq < 10e3])}")
 
 
 if __name__ == "__main__":
