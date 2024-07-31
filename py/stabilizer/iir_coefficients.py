@@ -262,7 +262,7 @@ def _main():
         "--broker",
         "-b",
         type=str,
-        default="mqtt",
+        default="192.168.199.251",
         help="The MQTT broker to use to communicate with " "Stabilizer (%(default)s)",
     )
     parser.add_argument(
@@ -326,6 +326,9 @@ def _main():
     parser.add_argument(
         "--frontend-offset", type=int, default=0, help="Frontend offset (%(default)s)"
     )
+    parser.add_argument(
+        "--stream-target", type=str, default="192.168.199.251:1234", help="Stream target address"
+    )
 
     # Next, add subparsers and their arguments.
     subparsers = parser.add_subparsers(
@@ -388,6 +391,10 @@ def _main():
             await interface.set(
                 path="/frontend_offset",
                 value=args.frontend_offset,
+            )
+            await interface.set(
+                path="/stream_target",
+                value=args.stream_target,
             )
 
     asyncio.run(configure())
