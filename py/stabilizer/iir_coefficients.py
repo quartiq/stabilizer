@@ -14,6 +14,8 @@ import logging
 
 from math import pi, inf
 
+from itertools import product
+
 import miniconf
 
 import stabilizer
@@ -321,26 +323,48 @@ def _main():
         help="The channel output offset (%(default)s V)",
     )
     parser.add_argument(
+        "--iir-cascade-length",
+        type=int,
+        choices=[1, 2],
+        default=1,
+        help="The number of IIR filters in the cascade (%(default)s)",
+    )
+    parser.add_argument(
         "--cpu-dac1", type=int, default=0, help="CPU DAC1 value (%(default)s)"
     )
     parser.add_argument(
         "--frontend-offset", type=int, default=0, help="Frontend offset (%(default)s)"
     )
     parser.add_argument(
-        "--stream-target", type=str, default="192.168.199.251:1234", help="Stream target address"
+        "--stream-target",
+        type=str,
+        default="192.168.199.251:1234",
+        help="Stream target address",
     )
 
     # Next, add subparsers and their arguments.
     subparsers = parser.add_subparsers(
-        help="Filter-specific design parameters", dest="filter_type", required=True
+        help="Filter-specific design parameters", dest="filters_cascade", required=True
     )
 
     filters = get_filters()
 
-    for filter_name, filt in filters.items():
-        subparser = subparsers.add_parser(filter_name, help=filt.help)
-        for arg in filt.arguments:
-            subparser.add_argument(*arg.positionals, **arg.keywords)
+    # Loop through all combinations of filter names of size two
+    filter_names = list(filters.keys())
+    for combo in product(filter_names, repeat=2):
+        combo_name = f"{combo[0]}_{combo[1]}"
+        subparser = subparsers.add_parser(
+            combo_name, help=f"Cascade of {combo[0]} and {combo[1]}"
+        )
+
+        # Add arguments for each filter in the combination
+        for idx, filter_name in enumerate(combo):
+            filt = filters[filter_name]
+            suffix = f"_{idx}"
+            for arg in filt.arguments:
+                # Modify the argument name to include the suffix
+                modified_positionals = [pos + suffix for pos in arg.positionals]
+                subparser.add_argument(*modified_positionals, **arg.keywords)
 
     args = parser.parse_args()
 
@@ -349,14 +373,32 @@ def _main():
         level=logging.WARN - 10 * args.verbose,
     )
 
-    # Calculate the IIR coefficients for the filter.
-    coefficients = filters[args.filter_type].coefficients(args)
+    # Process the filters_cascade to get the two filter types
+    filter_types = args.filters_cascade.split("_")
+
+    # Extract arguments for each filter and calculate coefficients
+    class FilterArgs:
+        def __init__(self, **entries):
+            self.__dict__.update(entries)
+
+    coefficients_list = []
+    for idx, filter_type in enumerate(filter_types):
+        suffix = f"_{idx}"
+        filter_args = {
+            key[: -len(suffix)]: value
+            for key, value in vars(args).items()
+            if key.endswith(suffix)
+        }
+        filter_args["sample_period"] = args.sample_period
+        coefficients = filters[filter_type].coefficients(FilterArgs(**filter_args))
+        coefficients_list.append(coefficients)
 
     # The feed-forward gain of the IIR filter is the summation
     # of the "b" components of the filter.
-    forward_gain = sum(coefficients[:3])
-    if forward_gain == 0 and args.x_offset != 0:
-        logger.warning("Filter has no DC gain but x_offset is non-zero")
+    forward_gains = [sum(coefficients[:3]) for coefficients in coefficients_list]
+    for forward_gain in forward_gains:
+        if forward_gain == 0 and args.x_offset != 0:
+            logger.warning("Filter has no DC gain but x_offset is non-zero")
 
     async def configure():
         async with miniconf.Client(
@@ -373,17 +415,18 @@ def _main():
 
             # Set the filter coefficients.
             # Note: In the future, we will need to Handle higher-order cascades.
-            await interface.set(
-                f"/iir_ch/{args.channel}/0",
-                {
-                    "ba": coefficients,
-                    "u": stabilizer.voltage_to_machine_units(
-                        args.y_offset + forward_gain * args.x_offset
-                    ),
-                    "min": stabilizer.voltage_to_machine_units(args.y_min),
-                    "max": stabilizer.voltage_to_machine_units(args.y_max),
-                },
-            )
+            for cascade_idx in range(args.iir_cascade_length):
+                await interface.set(
+                    f"/iir_ch/{args.channel}/{cascade_idx}",
+                    {
+                        "ba": coefficients_list[cascade_idx],
+                        "u": stabilizer.voltage_to_machine_units(
+                            args.y_offset + forward_gain * args.x_offset
+                        ),
+                        "min": stabilizer.voltage_to_machine_units(args.y_min),
+                        "max": stabilizer.voltage_to_machine_units(args.y_max),
+                    },
+                )
             await interface.set(
                 path="/cpu_dac1",
                 value=args.cpu_dac1,
