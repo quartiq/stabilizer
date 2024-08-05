@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"stabilizer":[["impl&lt;C, const Y: <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.80.0/core/primitive.usize.html\">usize</a>&gt; Platform&lt;Y&gt; for <a class=\"struct\" href=\"stabilizer/settings/struct.SerialSettingsPlatform.html\" title=\"struct stabilizer::settings::SerialSettingsPlatform\">SerialSettingsPlatform</a>&lt;C, Y&gt;<div class=\"where\">where\n    C: Settings&lt;Y&gt;,</div>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
