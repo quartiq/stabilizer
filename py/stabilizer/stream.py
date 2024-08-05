@@ -11,8 +11,11 @@ from collections import namedtuple
 from dataclasses import dataclass
 import matplotlib.pyplot as plt
 from scipy.signal import welch
-
 import numpy as np
+
+import stabilizer
+
+import stabilizer.iir_biquad_filter
 
 # The number of DAC LSB codes per volt on Stabilizer outputs.
 DAC_LSB_PER_VOLT = (1 << 16) / (4.096 * 5)
@@ -227,9 +230,13 @@ async def main():
     print(adc1.shape, adc2.shape, dac1.shape, dac2.shape, "\n")
 
     # calculate the power spectral density
-    fs = 781.25e3
+    fs = 1 / stabilizer.SAMPLE_PERIOD
     freq, psd = welch(adc1, fs, nperseg=256 * 16)
     t_s = np.arange(0, adc1.size) / fs
+
+    iir_biquad_filter = stabilizer.iir_biquad_filter.IirBiquadFilter(
+        "notch", f0=15.625e3, K=1, Q=10
+    )
 
     # plot the data
     fig, axs = plt.subplots(2, 2)
@@ -242,10 +249,14 @@ async def main():
     axs[0, 1].set_xlabel("Frequency [kHz]")
     axs[0, 1].set_ylabel("PSD [V**2/Hz]")
     axs[0, 1].set_title("PSD ADC0")
-    axs[1, 0].plot(t_s, dac1)
+    axs[1, 1].plot(t_s, dac1)
+    axs[1, 1].set_xlabel("Time [s]")
+    axs[1, 1].set_ylabel("Voltage [V]")
+    axs[1, 1].set_title("DAC0")
+    axs[1, 0].plot(t_s, iir_biquad_filter.apply_filter(adc1))
     axs[1, 0].set_xlabel("Time [s]")
     axs[1, 0].set_ylabel("Voltage [V]")
-    axs[1, 0].set_title("DAC0")
+    axs[1, 0].set_title("Filtered ADC0")
     plt.show()
 
     print(f"PSD sum up to 1kH: {np.sum(psd[freq < 10e3])}")
