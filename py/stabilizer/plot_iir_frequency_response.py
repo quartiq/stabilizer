@@ -11,8 +11,7 @@ import stabilizer
 from stabilizer.iir_coefficients import get_filters
 
 # disable warnings about short variable names and similar code
-#pylint: disable=invalid-name, duplicate-code, redefined-builtin
-
+# pylint: disable=invalid-name, duplicate-code, redefined-builtin
 
 
 def _main():
@@ -52,16 +51,22 @@ def _main():
     if forward_gain == 0 and args.x_offset != 0:
         print("Filter has no DC gain but x_offset is non-zero")
 
-    f = np.logspace(-8.5, 0, 1024, endpoint=False)*(.5/args.sample_period)
+    f = np.logspace(-8.5, 0, 1024, endpoint=False) * (0.5 / args.sample_period)
     f, h = signal.freqz(
         coefficients[:3],
         np.r_[1, [-c for c in coefficients[3:]]],
         worN=f,
         fs=1 / args.sample_period,
     )
+
+    if args.filter_type == "notch":
+        min_index = np.argmin(np.absolute(h))
+        min_frequency = f[min_index]
+        print(f"Frequency at which the minimum of h occurs: {min_frequency} Hz")
+
     _, ax = plt.subplots()
     ax.plot(f, 20 * np.log10(np.absolute(h)))
-    ax.set_xscale("log")
+    # ax.set_xscale("log")
     ax.grid()
     ax.set_xlabel("Frequency (Hz)")
     ax.set_ylabel("Magnitude (dB)")
