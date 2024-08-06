@@ -207,6 +207,68 @@ async def measure(stream, duration):
     return loss, adc1, adc2, dac1, dac2
 
 
+async def update_stream(args):
+    fig, axs = plt.subplots(2, 2)
+    plt.ion()  # Turn on interactive mode
+    while True:
+        _transport, stream = await StabilizerStream.open(
+            args.host, args.port, args.broker, args.maxsize
+        )
+        _loss, adc1, adc2, dac1, dac2 = await measure(stream, args.duration)
+
+        # calculate the power spectral density
+        fs = 1 / stabilizer.SAMPLE_PERIOD
+        freq_adc, psd_adc = welch(adc1, fs, nperseg=256 * 8)
+        # freq_dac, psd_dac = welch(dac1, fs, nperseg=256 * 8)
+        t_s = np.arange(0, adc1.size) / fs
+
+        # filter the ADC data
+        filter = stabilizer.iir_biquad_filter.IirBiquadFilter(
+            filter_type="notch", f0=15.5e3, K=1, Q=0.3
+        )
+
+        print(f"PSD sum up to 1kH: {np.sum(psd_adc[freq_adc < 1e3])}")
+        # print frequency at which a max of the PSD occurs
+        print(
+            f"Frequency at which the maximum of the PSD occurs: {freq_adc[np.argmax(psd_adc)]} Hz"
+        )
+
+        # Set fixed y-axis limits
+        dac_ymin, dac_ymax = -10.5, 10.5
+        adc_ymin, adc_ymax = -1.0, 1.0
+        psd_ymin, psd_ymax = 1e-10, 5e-5
+
+        # Update the plots here
+        for ax in axs.flat:
+            ax.clear()
+        axs[0, 0].plot(t_s, adc1)
+        axs[0, 0].set_ylim(adc_ymin, adc_ymax)
+        axs[0, 0].set_xlabel("Time [s]")
+        axs[0, 0].set_ylabel("Voltage [V]")
+        axs[0, 0].set_title("ADC0")
+        axs[0, 1].plot(np.round(freq_adc / 1e3, 2), psd_adc)
+        axs[0, 1].set_ylim(psd_ymin, psd_ymax)
+        axs[0, 1].set_yscale("log")
+        axs[0, 1].set_xscale("log")
+        axs[0, 1].set_xlabel("Frequency [kHz]")
+        axs[0, 1].set_ylabel("PSD [V**2/Hz]")
+        axs[0, 1].set_title("PSD ADC0")
+        axs[1, 0].plot(t_s, dac1)
+        axs[1, 0].set_ylim(dac_ymin, dac_ymax)
+        axs[1, 0].set_xlabel("Time [s]")
+        axs[1, 0].set_ylabel("Voltage [V]")
+        axs[1, 0].set_title("DAC0")
+        axs[1, 1].plot(filter.apply_filter(adc1))
+        axs[1, 1].set_ylim(-0.25, 0.25)
+        axs[1, 1].set_xlabel("Time [s]")
+        axs[1, 1].set_ylabel("Voltage [V]")
+        axs[1, 1].set_title("Software filtered ADC0")
+        plt.draw()
+        plt.pause(0.01)  # Pause to allow the plot to update
+
+        await asyncio.sleep(2)  # Wait for 1 second before the next update
+
+
 async def main():
     """Test CLI"""
     parser = argparse.ArgumentParser(description="Stabilizer streaming demo")
@@ -218,48 +280,10 @@ async def main():
         "--broker", default="192.168.199.251", help="The MQTT broker address"
     )
     parser.add_argument("--maxsize", type=int, default=1, help="Frame queue size")
-    parser.add_argument("--duration", type=float, default=0.0001, help="Test duration")
+    parser.add_argument("--duration", type=float, default=1, help="Test duration")
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
-    _transport, stream = await StabilizerStream.open(
-        args.host, args.port, args.broker, args.maxsize
-    )
-    _loss, adc1, adc2, dac1, dac2 = await measure(stream, args.duration)
-
-    print(adc1.shape, adc2.shape, dac1.shape, dac2.shape, "\n")
-
-    # calculate the power spectral density
-    fs = 1 / stabilizer.SAMPLE_PERIOD
-    freq, psd = welch(adc1, fs, nperseg=256 * 16)
-    t_s = np.arange(0, adc1.size) / fs
-
-    iir_biquad_filter = stabilizer.iir_biquad_filter.IirBiquadFilter(
-        "notch", f0=15.625e3, K=1, Q=10
-    )
-
-    # plot the data
-    fig, axs = plt.subplots(2, 2)
-    axs[0, 0].plot(t_s, adc1)
-    axs[0, 0].set_xlabel("Time [s]")
-    axs[0, 0].set_ylabel("Voltage [V]")
-    axs[0, 0].set_title("ADC0")
-    axs[0, 1].plot(np.round(freq / 1e3, 2), psd)
-    axs[0, 1].set_yscale("log")
-    axs[0, 1].set_xlabel("Frequency [kHz]")
-    axs[0, 1].set_ylabel("PSD [V**2/Hz]")
-    axs[0, 1].set_title("PSD ADC0")
-    axs[1, 1].plot(t_s, dac1)
-    axs[1, 1].set_xlabel("Time [s]")
-    axs[1, 1].set_ylabel("Voltage [V]")
-    axs[1, 1].set_title("DAC0")
-    axs[1, 0].plot(t_s, iir_biquad_filter.apply_filter(adc1))
-    axs[1, 0].set_xlabel("Time [s]")
-    axs[1, 0].set_ylabel("Voltage [V]")
-    axs[1, 0].set_title("Filtered ADC0")
-    plt.show()
-
-    print(f"PSD sum up to 1kH: {np.sum(psd[freq < 10e3])}")
+    await update_stream(args)
 
 
 if __name__ == "__main__":

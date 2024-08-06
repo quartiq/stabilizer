@@ -60,7 +60,7 @@ class IirBiquadFilter:
         """
         b0, b1, b2, a1, a2 = self.coefficients
 
-        y = lfilter([b0, b1, b2], [1, -a1, -a2], x)
+        y = lfilter([b0, b1, b2], [1, a1, a2], x)
         return y
 
 

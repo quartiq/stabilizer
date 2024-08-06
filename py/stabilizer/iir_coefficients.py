@@ -164,7 +164,7 @@ def lowpass_coefficients(args):
     b0 = args.K * (f0_bar / (1 + f0_bar))
     b1 = args.K * f0_bar / (1 + f0_bar)
 
-    return [b0, b1, 0, a1, 0]
+    return [b0, b1, 0, -a1, 0]
 
 
 def highpass_coefficients(args):
@@ -175,7 +175,7 @@ def highpass_coefficients(args):
     b0 = args.K * (f0_bar / (1 + f0_bar))
     b1 = -args.K / (1 + f0_bar)
 
-    return [b0, b1, 0, a1, 0]
+    return [b0, b1, 0, -a1, 0]
 
 
 def allpass_coefficients(args):
@@ -187,7 +187,7 @@ def allpass_coefficients(args):
     b0 = args.K * (1 - f0_bar) / (1 + f0_bar)
     b1 = -args.K
 
-    return [b0, b1, 0, a1, 0]
+    return [b0, b1, 0, -a1, 0]
 
 
 def notch_coefficients(args):
@@ -202,7 +202,7 @@ def notch_coefficients(args):
     b1 = -(2 * args.K * (1 - f0_bar**2)) / denominator
     b2 = args.K * (1 + f0_bar**2) / denominator
 
-    return [b0, b1, b2, a1, a2]
+    return [b0, b1, b2, -a1, -a2]
 
 
 def pid_coefficients(args):
@@ -249,7 +249,7 @@ def pid_coefficients(args):
     b = [i / a[0] for i in b]
     a = [i / a[0] for i in a]
     assert a[0] == 1
-    return b + [-ai for ai in a[1:]]
+    return b + [ai for ai in a[1:]]
 
 
 def _main():
@@ -330,7 +330,7 @@ def _main():
         help="The number of IIR filters in the cascade (%(default)s)",
     )
     parser.add_argument(
-        "--cpu-dac1", type=int, default=0, help="CPU DAC1 value (%(default)s)"
+        "--cpu-dac1", type=int, default=2048, help="CPU DAC1 value (%(default)s)"
     )
     parser.add_argument(
         "--frontend-offset", type=int, default=0, help="Frontend offset (%(default)s)"
@@ -423,6 +423,16 @@ def _main():
                         "u": stabilizer.voltage_to_machine_units(
                             args.y_offset + forward_gains[cascade_idx] * args.x_offset
                         ),
+                        "min": stabilizer.voltage_to_machine_units(args.y_min),
+                        "max": stabilizer.voltage_to_machine_units(args.y_max),
+                    },
+                )
+            if args.iir_cascade_length == 1:
+                await interface.set(
+                    f"/iir_ch/{args.channel}/1",
+                    {
+                        "ba": [1, 0, 0, 0, 0],
+                        "u": stabilizer.voltage_to_machine_units(args.y_offset),
                         "min": stabilizer.voltage_to_machine_units(args.y_min),
                         "max": stabilizer.voltage_to_machine_units(args.y_max),
                     },

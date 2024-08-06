@@ -54,7 +54,7 @@ def _main():
     f = np.logspace(-8.5, 0, 1024, endpoint=False) * (0.5 / args.sample_period)
     f, h = signal.freqz(
         coefficients[:3],
-        np.r_[1, [-c for c in coefficients[3:]]],
+        np.r_[1, [c for c in coefficients[3:]]],
         worN=f,
         fs=1 / args.sample_period,
     )
@@ -66,7 +66,8 @@ def _main():
 
     _, ax = plt.subplots()
     ax.plot(f, 20 * np.log10(np.absolute(h)))
-    # ax.set_xscale("log")
+    ax.set_xlim(100, 1 / args.sample_period / 2)
+    ax.set_xscale("log")
     ax.grid()
     ax.set_xlabel("Frequency (Hz)")
     ax.set_ylabel("Magnitude (dB)")
