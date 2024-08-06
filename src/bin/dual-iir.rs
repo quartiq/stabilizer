@@ -65,7 +65,7 @@ use hal::traits::DacOut;
 const SCALE: f32 = i16::MAX as _;
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
-const IIR_CASCADE_LENGTH: usize = 1;
+const IIR_CASCADE_LENGTH: usize = 2;
 
 // The number of samples in each batch process
 const BATCH_SIZE: usize = 8;
