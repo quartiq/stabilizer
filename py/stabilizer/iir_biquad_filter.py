@@ -9,6 +9,7 @@ import numpy as np
 import argparse
 import stabilizer
 import stabilizer.iir_coefficients as iir_coefficients
+from scipy.signal import lfilter
 
 
 class IirBiquadFilter:
@@ -59,21 +60,11 @@ class IirBiquadFilter:
         """
         b0, b1, b2, a1, a2 = self.coefficients
 
-        y = np.zeros_like(x)
-
-        y[0] = np.clip(b0 * x[0], min_values, max_values)
-        y[1] = np.clip(b0 * x[1] + b1 * x[0] - a1 * y[0], min_values, max_values)
-
-        # Calculate the filtered output
-        for i in range(2, len(x)):
-            y[i] = np.clip(
-                b0 * x[i]
-                + b1 * x[i - 1]
-                + b2 * x[i - 2]
-                - a1 * y[i - 1]
-                - a2 * y[i - 2],
-                min_values,
-                max_values,
-            )
-
+        y = lfilter([b0, b1, b2], [1, -a1, -a2], x)
         return y
+
+
+if __name__ == "__main__":
+    # create filter object
+    filter = IirBiquadFilter("highpass", f0=5, K=10, Q=1)
+    print(filter.coefficients)
