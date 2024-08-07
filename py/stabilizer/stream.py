@@ -219,30 +219,31 @@ async def update_stream(args):
 
         # calculate the power spectral density
         fs = 1 / stabilizer.SAMPLE_PERIOD
-        freq_i, psd_i = welch(adc1 / 40.4, fs, nperseg=50e3)
-        # freq_dac, psd_dac = welch(dac1, fs, nperseg=256 * 8)
+        v_error_to_Ic_noise = 750 / (5 * args.N * 2020)
+        freq_i, psd_i = welch(
+            adc1 * v_error_to_Ic_noise, fs, nperseg=int(float(args.psd_nperseg))
+        )
+        freq_dac, psd_dac = welch(
+            dac1 * v_error_to_Ic_noise, fs, nperseg=int(float(args.psd_nperseg))
+        )
         t_s = np.arange(0, adc1.size) / fs
 
         # filter the ADC data
         filter = stabilizer.iir_biquad_filter.IirBiquadFilter(
-            filter_type="notch", f0=15.5e3, K=1, Q=0.3
+            filter_type="notch", f0=15.625e3, K=1, Q=1
         )
 
-        print(f"PSD sum up to 1kH: {np.sum(psd_i[freq_i < 1e3])}")
         # print frequency at which a max of the PSD occurs
         print(
             f"Frequency at which the maximum of the PSD occurs: {freq_i[np.argmax(psd_i)]} Hz"
         )
 
-        freq_diff = np.diff(freq_i)
-        print("Differences between consecutive frequencies:", freq_diff)
-
         # Noise measurements in ppm
         # Up to 2 Khz
         Inoise = np.sqrt(simpson(y=psd_i[freq_i < 2e3], dx=freq_i[1] - freq_i[0]))
-        ppm_noise = Inoise / 70
+        ppm_noise = Inoise / args.I * 1e6
 
-        print(f"ppm noise up to 2kHz: {ppm_noise}")
+        print(f"Noise up to 2kHz: {ppm_noise} ppm")
 
         # Set fixed y-axis limits
         dac_ymin, dac_ymax = -10.5, 10.5
@@ -252,11 +253,15 @@ async def update_stream(args):
         # Update the plots here
         for ax in axs.flat:
             ax.clear()
+
+        # ADC0
         axs[0, 0].plot(t_s, adc1)
         axs[0, 0].set_ylim(adc_ymin, adc_ymax)
         axs[0, 0].set_xlabel("Time [s]")
         axs[0, 0].set_ylabel("Voltage [V]")
         axs[0, 0].set_title("ADC0")
+
+        # PSD current noise
         axs[0, 1].plot(np.round(freq_i / 1e3, 2), psd_i)
         axs[0, 1].set_ylim(psd_ymin, psd_ymax)
         axs[0, 1].set_yscale("log")
@@ -264,20 +269,43 @@ async def update_stream(args):
         axs[0, 1].set_xlabel("Frequency [kHz]")
         axs[0, 1].set_ylabel("PSD [A**2/Hz]")
         axs[0, 1].set_title("PSD current noise")
+        axs[0, 1].axvline(
+            x=15.625,
+            color="r",
+            linestyle="--",
+            label="Flux excitation frequency + higher harmonics",
+        )
+        axs[0, 1].axvline(x=15.625 * 2, color="r", linestyle="--")
+        axs[0, 1].axvline(x=15.625 * 3, color="r", linestyle="--")
+        axs[0, 1].axvline(x=15.625 * 4, color="r", linestyle="--")
+        axs[0, 1].axvline(x=50e-3, color="b", linestyle="--", label="50 Hz")
+        axs[0, 1].legend()
+
+        # DAC0
         axs[1, 0].plot(t_s, dac1)
         axs[1, 0].set_ylim(dac_ymin, dac_ymax)
         axs[1, 0].set_xlabel("Time [s]")
         axs[1, 0].set_ylabel("Voltage [V]")
         axs[1, 0].set_title("DAC0")
-        axs[1, 1].plot(filter.apply_filter(adc1))
-        axs[1, 1].set_ylim(-0.25, 0.25)
-        axs[1, 1].set_xlabel("Time [s]")
-        axs[1, 1].set_ylabel("Voltage [V]")
-        axs[1, 1].set_title("Software filtered ADC0")
+
+        # PSD DAC0
+        axs[1, 1].plot(np.round(freq_dac / 1e3, 2), psd_dac)
+        axs[1, 1].set_ylim(psd_ymin, psd_ymax)
+        axs[1, 1].set_yscale("log")
+        axs[1, 1].set_xscale("log")
+        axs[1, 1].set_xlabel("Frequency [kHz]")
+        axs[1, 1].set_ylabel("PSD [A**2/Hz]")
+        axs[1, 1].set_title("PSD current noise")
+        axs[1, 1].axvline(
+            x=15.625, color="r", linestyle="--", label="Flux excitation frequency"
+        )
+        axs[1, 1].axvline(x=50e-3, color="b", linestyle="--", label="50 Hz")
+        axs[1, 1].legend()
+
         plt.draw()
         plt.pause(0.01)  # Pause to allow the plot to update
 
-        await asyncio.sleep(100)  # Wait for 1 second before the next update
+        await asyncio.sleep(args.sleep)
 
 
 async def main():
@@ -292,6 +320,24 @@ async def main():
     )
     parser.add_argument("--maxsize", type=int, default=1, help="Frame queue size")
     parser.add_argument("--duration", type=float, default=1, help="Test duration")
+    parser.add_argument(
+        "--psd-nperseg", default=256 * 8, help="Number of samples per segment"
+    )
+    parser.add_argument(
+        "--sleep", type=float, default=1, help="Sleep duration between updates"
+    )
+    parser.add_argument(
+        "--N",
+        type=int,
+        default=1,
+        help="Number of wingings around flux gate sensor. Default is 1.",
+    )
+    parser.add_argument(
+        "--I",
+        type=float,
+        default=200,
+        help="Current through the coil in A. Default is 200 A.",
+    )
     args = parser.parse_args()
 
     await update_stream(args)
