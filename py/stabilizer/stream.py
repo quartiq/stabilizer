@@ -11,6 +11,7 @@ from collections import namedtuple
 from dataclasses import dataclass
 import matplotlib.pyplot as plt
 from scipy.signal import welch
+from scipy.integrate import simpson
 import numpy as np
 
 import stabilizer
@@ -218,7 +219,7 @@ async def update_stream(args):
 
         # calculate the power spectral density
         fs = 1 / stabilizer.SAMPLE_PERIOD
-        freq_adc, psd_adc = welch(adc1, fs, nperseg=256 * 8)
+        freq_i, psd_i = welch(adc1 / 40.4, fs, nperseg=50e3)
         # freq_dac, psd_dac = welch(dac1, fs, nperseg=256 * 8)
         t_s = np.arange(0, adc1.size) / fs
 
@@ -227,16 +228,26 @@ async def update_stream(args):
             filter_type="notch", f0=15.5e3, K=1, Q=0.3
         )
 
-        print(f"PSD sum up to 1kH: {np.sum(psd_adc[freq_adc < 1e3])}")
+        print(f"PSD sum up to 1kH: {np.sum(psd_i[freq_i < 1e3])}")
         # print frequency at which a max of the PSD occurs
         print(
-            f"Frequency at which the maximum of the PSD occurs: {freq_adc[np.argmax(psd_adc)]} Hz"
+            f"Frequency at which the maximum of the PSD occurs: {freq_i[np.argmax(psd_i)]} Hz"
         )
+
+        freq_diff = np.diff(freq_i)
+        print("Differences between consecutive frequencies:", freq_diff)
+
+        # Noise measurements in ppm
+        # Up to 2 Khz
+        Inoise = np.sqrt(simpson(y=psd_i[freq_i < 2e3], dx=freq_i[1] - freq_i[0]))
+        ppm_noise = Inoise / 70
+
+        print(f"ppm noise up to 2kHz: {ppm_noise}")
 
         # Set fixed y-axis limits
         dac_ymin, dac_ymax = -10.5, 10.5
-        adc_ymin, adc_ymax = -1.0, 1.0
-        psd_ymin, psd_ymax = 1e-10, 5e-5
+        adc_ymin, adc_ymax = -5.0, 5.0
+        psd_ymin, psd_ymax = 1e-14, 5e-7
 
         # Update the plots here
         for ax in axs.flat:
@@ -246,13 +257,13 @@ async def update_stream(args):
         axs[0, 0].set_xlabel("Time [s]")
         axs[0, 0].set_ylabel("Voltage [V]")
         axs[0, 0].set_title("ADC0")
-        axs[0, 1].plot(np.round(freq_adc / 1e3, 2), psd_adc)
+        axs[0, 1].plot(np.round(freq_i / 1e3, 2), psd_i)
         axs[0, 1].set_ylim(psd_ymin, psd_ymax)
         axs[0, 1].set_yscale("log")
         axs[0, 1].set_xscale("log")
         axs[0, 1].set_xlabel("Frequency [kHz]")
-        axs[0, 1].set_ylabel("PSD [V**2/Hz]")
-        axs[0, 1].set_title("PSD ADC0")
+        axs[0, 1].set_ylabel("PSD [A**2/Hz]")
+        axs[0, 1].set_title("PSD current noise")
         axs[1, 0].plot(t_s, dac1)
         axs[1, 0].set_ylim(dac_ymin, dac_ymax)
         axs[1, 0].set_xlabel("Time [s]")
@@ -266,7 +277,7 @@ async def update_stream(args):
         plt.draw()
         plt.pause(0.01)  # Pause to allow the plot to update
 
-        await asyncio.sleep(2)  # Wait for 1 second before the next update
+        await asyncio.sleep(100)  # Wait for 1 second before the next update
 
 
 async def main():
