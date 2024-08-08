@@ -330,7 +330,7 @@ def _main():
         help="The number of IIR filters in the cascade (%(default)s)",
     )
     parser.add_argument(
-        "--cpu-dac1", type=int, default=2048, help="CPU DAC1 value (%(default)s)"
+        "--cpu-dac1", type=int, default=4095, help="CPU DAC1 value (%(default)s)"
     )
     parser.add_argument(
         "--frontend-offset", type=int, default=0, help="Frontend offset (%(default)s)"
