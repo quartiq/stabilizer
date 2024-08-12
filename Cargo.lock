@@ -696,7 +696,7 @@ dependencies = [
  "miniconf_derive",
  "postcard",
  "serde",
- "serde-json-core",
+ "serde-json-core 0.5.1",
 ]
 
 [[package]]
@@ -722,7 +722,7 @@ dependencies = [
  "log",
  "miniconf",
  "minimq",
- "serde-json-core",
+ "serde-json-core 0.5.1",
  "smlang 0.7.0",
 ]
 
@@ -1166,6 +1166,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-json-core"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b81787e655bd59cecadc91f7b6b8651330b2be6c33246039a65e5cd6f4e0828"
+dependencies = [
+ "heapless 0.8.0",
+ "ryu",
+ "serde",
+]
+
+[[package]]
 name = "serde_derive"
 version = "1.0.204"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1345,7 +1356,7 @@ dependencies = [
  "rtt-target",
  "sequential-storage",
  "serde",
- "serde-json-core",
+ "serde-json-core 0.6.0",
  "serde_with",
  "serial-settings",
  "shared-bus",
