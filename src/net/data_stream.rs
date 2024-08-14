@@ -116,7 +116,7 @@ pub enum StreamFormat {
     /// Reserved, unused format specifier.
     Unknown = 0,
 
-    /// Streamed data contains ADC0, ADC1, DAC0, and DAC1 sequentially in little-endian format.
+    /// ADC0, ADC1, DAC0, and DAC1 sequentially in little-endian format.
     ///
     /// # Example
     /// With a batch size of 2, the serialization would take the following form:
@@ -125,9 +125,11 @@ pub enum StreamFormat {
     /// ```
     AdcDacData = 1,
 
-    /// Streamed data in FLS (fiber length stabilization) format. See the FLS application for
-    /// detailed definition.
+    /// FLS (fiber length stabilization) format. See the FLS application.
     Fls = 2,
+
+    /// Thermostat-EEM data. See `thermostat-eem` repo and application.
+    ThermostatEem = 3,
 }
 
 /// Configure streaming on a device.

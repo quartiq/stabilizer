@@ -647,11 +647,13 @@ impl<'a, P: Platform<Y>, const Y: usize> Runner<'a, P, Y> {
     ///
     /// # Args
     /// * `platform` - The platform associated with the serial settings, providing the necessary
-    /// context and API to manage device settings.
+    ///   context and API to manage device settings.
+    ///
     /// * `line_buf` - A buffer used for maintaining the serial menu input line. It should be at
-    /// least as long as the longest user input.
+    ///   least as long as the longest user input.
+    ///
     /// * `serialize_buf` - A buffer used for serializing and deserializing settings. This buffer
-    /// needs to be at least as big as twice the biggest serialized setting plus its path.
+    ///   needs to be at least as big as twice the biggest serialized setting plus its path.
     pub fn new(
         platform: P,
         line_buf: &'a mut [u8],
