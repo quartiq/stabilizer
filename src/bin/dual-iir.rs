@@ -22,7 +22,7 @@
 //! ## Telemetry
 //! Refer to [Telemetry] for information about telemetry reported by this application.
 //!
-//! ## Livestreaming
+//! ## Stream
 //! This application streams raw ADC and DAC data over UDP. Refer to
 //! [stabilizer::net::data_stream](../stabilizer/net/data_stream/index.html) for more information.
 #![no_std]
@@ -159,14 +159,14 @@ pub struct DualIir {
     /// Any non-zero value less than 65536.
     telemetry_period: u16,
 
-    /// Specifies the target for data livestreaming.
+    /// Specifies the target for data streaming.
     ///
     /// # Path
-    /// `stream_target`
+    /// `stream`
     ///
     /// # Value
     /// See [StreamTarget#miniconf]
-    stream_target: StreamTarget,
+    stream: StreamTarget,
 
     /// Specifies the config for signal generators to add on to DAC0/DAC1 outputs.
     ///
@@ -205,7 +205,7 @@ impl Default for DualIir {
 
             signal_generator: [signal_generator::BasicConfig::default(); 2],
 
-            stream_target: StreamTarget::default(),
+            stream: StreamTarget::default(),
         }
     }
 }
@@ -485,7 +485,7 @@ mod app {
 
             c.shared
                 .network
-                .lock(|net| net.direct_stream(settings.dual_iir.stream_target));
+                .lock(|net| net.direct_stream(settings.dual_iir.stream));
 
             c.shared
                 .active_settings

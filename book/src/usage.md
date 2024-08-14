@@ -55,16 +55,11 @@ form `dt/sinara/<app>/<mac-address>`, where `<app>` is the name of the applicati
 Settings have a `path` and a `value` being configured. The `value` parameter is JSON-encoded data
 and the `path` value is a path-like string.
 
-As an example, for configuring `dual-iir`'s `stream_target`, the following information would be
-used:
-* `path` = `stream_target`
-* `value` = `{"ip": [192, 168, 0, 1], "port": 4000}`
-
 ```
-python -m miniconf --broker 10.34.16.1 dt/sinara/dual-iir/00-11-22-33-44-55 stream_target='{"ip": [10, 34, 16, 123], "port": 4000}'
-
-Where `10.34.16.1` is the MQTT broker address that matches the one configured in the source code and `10.34.16.123` and `4000` are the desire stream target IP and port.
+python -m miniconf --broker 10.34.16.1 dt/sinara/dual-iir/00-11-22-33-44-55 stream='"10.34.16.123:4000"'
 ```
+
+Where `10.34.16.1` is the MQTT broker address that matches the one used by the application and `10.34.16.123` and `4000` are the desire stream target IP and port.
 
 The prefix can be found for a specific device by looking at the topic on which telemetry that is
 being published. It can also be automatically discovered if there is only one
@@ -111,13 +106,13 @@ digital input states.
 
 Refer to the respective [application documentation](overview.md#applications) for more information on telemetry.
 
-# Livestream
+# Stream
 
-Stabilizer supports livestream capabilities for streaming real-time data over UDP. The livestream is
+Stabilizer supports streaming real-time data over UDP. The stream is
 intended to be a high-bandwidth mechanism to transfer large amounts of data from Stabilizer to a
 host computer for further analysis.
 
-Livestreamed data is sent with "best effort" - it's possible that data may be lost either due to
+Streamed data is sent with "best effort" - it's possible that data may be lost either due to
 network congestion or by Stabilizer.
 
 Refer to the the respective [application documentation](overview.md#applications) for more information.

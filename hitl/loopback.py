@@ -65,7 +65,7 @@ async def test_loopback(stabilizer, telemetry_queue, set_point, gain=1, channel=
     await stabilizer.set(f"/iir_ch/{channel}/0", static_iir_output(set_point))
 
     # Configure signal generators to not affect the test.
-    await stabilizer.set("/signal_generator/0/amplitude", 0)
+    await stabilizer.set("/generator/0/amplitude", 0)
 
     # Wait for telemetry to update.
     await telemetry_queue.__anext__()

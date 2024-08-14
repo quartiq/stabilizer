@@ -1,10 +1,10 @@
 //! Stabilizer data stream capabilities
 //!
 //! # Design
-//! Data streamining utilizes UDP packets to send live data streams at high throughput.
+//! Data streamining utilizes UDP packets to send data streams at high throughput.
 //! Packets are always sent in a best-effort fashion, and data may be dropped.
 //!
-//! Stabilizer organizes livestreamed data into batches within a "Frame" that will be sent as a UDP
+//! Stabilizer organizes streamed data into batches within a "Frame" that will be sent as a UDP
 //! packet. Each frame consits of a header followed by sequential batch serializations. The packet
 //! header is constant for all streaming capabilities, but the serialization format after the header
 //! is application-defined.
@@ -21,7 +21,7 @@
 //!
 //! # Example
 //! A sample Python script is available in `scripts/stream_throughput.py` to demonstrate reception
-//! of livestreamed data.
+//! of streamed data.
 
 #![allow(non_camel_case_types)] // https://github.com/rust-embedded/heapless/issues/411
 

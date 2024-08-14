@@ -2,7 +2,7 @@
 //!
 //! # Design
 //! The stabilizer network architecture supports numerous layers to permit transmission of
-//! telemetry (via MQTT), configuration of run-time settings (via MQTT + Miniconf), and live data
+//! telemetry (via MQTT), configuration of run-time settings (via MQTT + Miniconf), and data
 //! streaming over raw UDP/TCP sockets. This module encompasses the main processing routines
 //! related to Stabilizer networking operations.
 pub use heapless;
@@ -156,7 +156,7 @@ where
         }
     }
 
-    /// Enable live data streaming.
+    /// Enable data streaming.
     ///
     /// # Args
     /// * `format` - A unique u8 code indicating the format of the data.
