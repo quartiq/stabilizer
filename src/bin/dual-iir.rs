@@ -188,7 +188,7 @@ impl Default for DualIir {
         i.set_max(SCALE);
         Self {
             // Analog frontend programmable gain amplifier gains (G1, G2, G5, G10)
-            afe: [Gain::G1, Gain::G1],
+            afe: Default::default(),
             // IIR filter tap gains are an array `[b0, b1, b2, a1, a2]` such that the
             // new output is computed as `y0 = a1*y1 + a2*y2 + b0*x0 + b1*x1 + b2*x2`.
             // The array is `iir_state[channel-index][cascade-index][coeff-index]`.
@@ -203,9 +203,9 @@ impl Default for DualIir {
             // The default telemetry period in seconds.
             telemetry_period: 10,
 
-            signal_generator: [signal_generator::BasicConfig::default(); 2],
+            signal_generator: Default::default(),
 
-            stream: StreamTarget::default(),
+            stream: Default::default(),
         }
     }
 }
@@ -400,7 +400,7 @@ mod app {
                     }
 
                     // Stream the data.
-                    const N: usize = BATCH_SIZE * core::mem::size_of::<i16>();
+                    const N: usize = BATCH_SIZE * size_of::<i16>();
                     generator.add(|buf| {
                         for (data, buf) in adc_samples
                             .iter()
@@ -496,8 +496,7 @@ mod app {
     #[task(priority = 1, shared=[network, settings, telemetry], local=[cpu_temp_sensor])]
     async fn telemetry(mut c: telemetry::Context) {
         loop {
-            let telemetry: TelemetryBuffer =
-                c.shared.telemetry.lock(|telemetry| *telemetry);
+            let telemetry = c.shared.telemetry.lock(|telemetry| *telemetry);
 
             let (gains, telemetry_period) =
                 c.shared.settings.lock(|settings| {

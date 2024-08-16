@@ -381,7 +381,7 @@ impl DataStream {
                     let data = unsafe {
                         core::slice::from_raw_parts(
                             buf.as_ptr() as *const u8,
-                            core::mem::size_of_val(buf),
+                            size_of_val(buf),
                         )
                     };
 

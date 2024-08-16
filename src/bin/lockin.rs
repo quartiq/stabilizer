@@ -460,8 +460,8 @@ mod app {
                 }
 
                 // Stream the data.
-                const N: usize = BATCH_SIZE * core::mem::size_of::<i16>()
-                    / core::mem::size_of::<MaybeUninit<u8>>();
+                const N: usize = BATCH_SIZE * size_of::<i16>()
+                    / size_of::<MaybeUninit<u8>>();
                 generator.add(|buf| {
                     for (data, buf) in adc_samples
                         .iter()
@@ -534,8 +534,7 @@ mod app {
     #[task(priority = 1, local=[digital_inputs, cpu_temp_sensor], shared=[network, settings, telemetry])]
     async fn telemetry(mut c: telemetry::Context) {
         loop {
-            let mut telemetry: TelemetryBuffer =
-                c.shared.telemetry.lock(|telemetry| *telemetry);
+            let mut telemetry = c.shared.telemetry.lock(|telemetry| *telemetry);
 
             telemetry.digital_inputs = [
                 c.local.digital_inputs.0.is_high(),
