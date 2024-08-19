@@ -12,5 +12,5 @@ documentation = "https://docs.rs/ad9959/"
 [dependencies]
 embedded-hal = {version = "0.2.7", features = ["unproven"]}
 bit_field = "0.10.2"
-bytemuck = "1.16.3"
+bytemuck = "1.17.0"
 bitflags = "2.6.0"
