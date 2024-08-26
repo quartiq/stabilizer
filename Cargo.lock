@@ -682,9 +682,9 @@ dependencies = [
 
 [[package]]
 name = "menu"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce98110899b3b97775dd181d9088ebee9abcb6804bb7ead4e9450c1f5419562d"
+checksum = "dce93c0d0e443b0e9f1a5c62801d3f07167882c504cf5104b9b76be61c8cc4ea"
 
 [[package]]
 name = "miniconf"
