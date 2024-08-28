@@ -8,7 +8,7 @@ text = "MIT"
 [project]
 name = "stabilizer"
 # Note: keep this in sync with Cargo.toml
-version = "0.9.0"
+version = "0.10.0"
 description = "Utilities for configuring Stabilizer"
 authors = [
     { name = "Robert Jördens", email = "rj@quartiq.de" },

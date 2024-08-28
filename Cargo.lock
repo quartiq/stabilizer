@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "ad9959"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "bit_field",
  "bitflags 2.6.0",
@@ -1320,7 +1320,7 @@ dependencies = [
 
 [[package]]
 name = "stabilizer"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "ad9959",
  "bit_field",
