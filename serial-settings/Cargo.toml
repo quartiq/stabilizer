@@ -2,8 +2,14 @@
 name = "serial-settings"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "Embedded device settings management over serial terminal and flash"
+authors = [
+	"Robert Jördens <rj@quartiq.de>",
+	"Ryan Summers <ryan.summers@vertigo-designs.com>",
+]
+categories = ["embedded", "no-std", "hardware-support"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/quartiq/stabilizer"
 
 [dependencies]
 miniconf = { version = "0.13", features = ["json-core", "postcard"] }
