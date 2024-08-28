@@ -20,11 +20,11 @@
 //! application.
 //!
 //! ## Telemetry
-//! Refer to [Telemetry] for information about telemetry reported by this application.
+//! Refer to [stabilizer::net::telemetry::Telemetry] for information about telemetry reported by this application.
 //!
 //! ## Stream
 //! This application streams raw ADC and DAC data over UDP. Refer to
-//! [stabilizer::net::data_stream](../stabilizer/net/data_stream/index.html) for more information.
+//! [stabilizer::net::data_stream] for more information.
 #![no_std]
 #![no_main]
 
