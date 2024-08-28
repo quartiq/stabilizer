@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""HITL testing of Stabilizer data livestream capabilities"""
+"""HITL testing of Stabilizer data stream capabilities"""
 
 import asyncio
 import logging
@@ -58,7 +58,7 @@ async def _main():
             args.ip = get_local_ip(args.broker)
 
         logger.info("Starting stream")
-        await conf.set("/stream_target", f"{args.ip}:{args.port}", retain=False)
+        await conf.set("/stream", f"{args.ip}:{args.port}", retain=False)
 
         try:
             logger.info("Testing stream reception")
@@ -70,7 +70,7 @@ async def _main():
                 raise RuntimeError("High frame loss", loss)
         finally:
             logger.info("Stopping stream")
-            await conf.set("/stream_target", "0.0.0.0:0", retain=False)
+            await conf.set("/stream", "0.0.0.0:0", retain=False)
 
         logger.info("Draining queue")
         await asyncio.sleep(0.1)

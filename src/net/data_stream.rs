@@ -1,10 +1,10 @@
 //! Stabilizer data stream capabilities
 //!
 //! # Design
-//! Data streamining utilizes UDP packets to send live data streams at high throughput.
+//! Data streamining utilizes UDP packets to send data streams at high throughput.
 //! Packets are always sent in a best-effort fashion, and data may be dropped.
 //!
-//! Stabilizer organizes livestreamed data into batches within a "Frame" that will be sent as a UDP
+//! Stabilizer organizes streamed data into batches within a "Frame" that will be sent as a UDP
 //! packet. Each frame consits of a header followed by sequential batch serializations. The packet
 //! header is constant for all streaming capabilities, but the serialization format after the header
 //! is application-defined.
@@ -21,7 +21,7 @@
 //!
 //! # Example
 //! A sample Python script is available in `scripts/stream_throughput.py` to demonstrate reception
-//! of livestreamed data.
+//! of streamed data.
 
 #![allow(non_camel_case_types)] // https://github.com/rust-embedded/heapless/issues/411
 
@@ -116,7 +116,7 @@ pub enum StreamFormat {
     /// Reserved, unused format specifier.
     Unknown = 0,
 
-    /// Streamed data contains ADC0, ADC1, DAC0, and DAC1 sequentially in little-endian format.
+    /// ADC0, ADC1, DAC0, and DAC1 sequentially in little-endian format.
     ///
     /// # Example
     /// With a batch size of 2, the serialization would take the following form:
@@ -125,9 +125,11 @@ pub enum StreamFormat {
     /// ```
     AdcDacData = 1,
 
-    /// Streamed data in FLS (fiber length stabilization) format. See the FLS application for
-    /// detailed definition.
+    /// FLS (fiber length stabilization) format. See the FLS application.
     Fls = 2,
+
+    /// Thermostat-EEM data. See `thermostat-eem` repo and application.
+    ThermostatEem = 3,
 }
 
 /// Configure streaming on a device.
@@ -379,7 +381,7 @@ impl DataStream {
                     let data = unsafe {
                         core::slice::from_raw_parts(
                             buf.as_ptr() as *const u8,
-                            core::mem::size_of_val(buf),
+                            size_of_val(buf),
                         )
                     };
 

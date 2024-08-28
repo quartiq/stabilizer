@@ -22,7 +22,7 @@
 //! ## Telemetry
 //! Refer to [Telemetry] for information about telemetry reported by this application.
 //!
-//! ## Livestreaming
+//! ## Stream
 //! This application streams raw ADC and DAC data over UDP. Refer to
 //! [stabilizer::net::data_stream](../stabilizer/net/data_stream/index.html) for more information.
 #![no_std]
@@ -159,26 +159,26 @@ pub struct DualIir {
     /// Any non-zero value less than 65536.
     telemetry_period: u16,
 
-    /// Specifies the target for data livestreaming.
+    /// Specifies the target for data streaming.
     ///
     /// # Path
-    /// `stream_target`
+    /// `stream`
     ///
     /// # Value
     /// See [StreamTarget#miniconf]
-    stream_target: StreamTarget,
+    stream: StreamTarget,
 
     /// Specifies the config for signal generators to add on to DAC0/DAC1 outputs.
     ///
     /// # Path
-    /// `signal_generator/<n>`
+    /// `source/<n>`
     ///
     /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
     ///
     /// # Value
     /// See [signal_generator::BasicConfig#miniconf]
     #[tree(depth = 2)]
-    signal_generator: [signal_generator::BasicConfig; 2],
+    source: [signal_generator::BasicConfig; 2],
 }
 
 impl Default for DualIir {
@@ -188,7 +188,7 @@ impl Default for DualIir {
         i.set_max(SCALE);
         Self {
             // Analog frontend programmable gain amplifier gains (G1, G2, G5, G10)
-            afe: [Gain::G1, Gain::G1],
+            afe: Default::default(),
             // IIR filter tap gains are an array `[b0, b1, b2, a1, a2]` such that the
             // new output is computed as `y0 = a1*y1 + a2*y2 + b0*x0 + b1*x1 + b2*x2`.
             // The array is `iir_state[channel-index][cascade-index][coeff-index]`.
@@ -203,9 +203,9 @@ impl Default for DualIir {
             // The default telemetry period in seconds.
             telemetry_period: 10,
 
-            signal_generator: [signal_generator::BasicConfig::default(); 2],
+            source: Default::default(),
 
-            stream_target: StreamTarget::default(),
+            stream: Default::default(),
         }
     }
 }
@@ -221,7 +221,7 @@ mod app {
         settings: Settings,
         active_settings: DualIir,
         telemetry: TelemetryBuffer,
-        signal_generator: [SignalGenerator; 2],
+        source: [SignalGenerator; 2],
     }
 
     #[local]
@@ -266,14 +266,14 @@ mod app {
             network,
             active_settings: stabilizer.settings.dual_iir.clone(),
             telemetry: TelemetryBuffer::default(),
-            signal_generator: [
+            source: [
                 SignalGenerator::new(
-                    stabilizer.settings.dual_iir.signal_generator[0]
+                    stabilizer.settings.dual_iir.source[0]
                         .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),
                 SignalGenerator::new(
-                    stabilizer.settings.dual_iir.signal_generator[1]
+                    stabilizer.settings.dual_iir.source[1]
                         .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),
@@ -332,13 +332,13 @@ mod app {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[active_settings, signal_generator, telemetry], priority=3)]
+    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[active_settings, source, telemetry], priority=3)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
             active_settings,
             telemetry,
-            signal_generator,
+            source,
             ..
         } = c.shared;
 
@@ -351,8 +351,8 @@ mod app {
             ..
         } = c.local;
 
-        (active_settings, telemetry, signal_generator).lock(
-            |settings, telemetry, signal_generator| {
+        (active_settings, telemetry, source).lock(
+            |settings, telemetry, source| {
                 let digital_inputs =
                     [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
                 telemetry.digital_inputs = digital_inputs;
@@ -371,7 +371,7 @@ mod app {
                         adc_samples[channel]
                             .iter()
                             .zip(dac_samples[channel].iter_mut())
-                            .zip(&mut signal_generator[channel])
+                            .zip(&mut source[channel])
                             .map(|((ai, di), signal)| {
                                 let x = f32::from(*ai as i16);
                                 let y = settings.iir_ch[channel]
@@ -400,7 +400,7 @@ mod app {
                     }
 
                     // Stream the data.
-                    const N: usize = BATCH_SIZE * core::mem::size_of::<i16>();
+                    const N: usize = BATCH_SIZE * size_of::<i16>();
                     generator.add(|buf| {
                         for (data, buf) in adc_samples
                             .iter()
@@ -458,20 +458,18 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, active_settings, signal_generator])]
+    #[task(priority = 1, local=[afes], shared=[network, settings, active_settings, source])]
     async fn settings_update(mut c: settings_update::Context) {
         c.shared.settings.lock(|settings| {
             c.local.afes.0.set_gain(settings.dual_iir.afe[0]);
             c.local.afes.1.set_gain(settings.dual_iir.afe[1]);
 
             // Update the signal generators
-            for (i, &config) in
-                settings.dual_iir.signal_generator.iter().enumerate()
-            {
+            for (i, &config) in settings.dual_iir.source.iter().enumerate() {
                 match config.try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                 {
                     Ok(config) => {
-                        c.shared.signal_generator.lock(|generator| {
+                        c.shared.source.lock(|generator| {
                             generator[i].update_waveform(config)
                         });
                     }
@@ -485,7 +483,7 @@ mod app {
 
             c.shared
                 .network
-                .lock(|net| net.direct_stream(settings.dual_iir.stream_target));
+                .lock(|net| net.direct_stream(settings.dual_iir.stream));
 
             c.shared
                 .active_settings
@@ -496,8 +494,7 @@ mod app {
     #[task(priority = 1, shared=[network, settings, telemetry], local=[cpu_temp_sensor])]
     async fn telemetry(mut c: telemetry::Context) {
         loop {
-            let telemetry: TelemetryBuffer =
-                c.shared.telemetry.lock(|telemetry| *telemetry);
+            let telemetry = c.shared.telemetry.lock(|telemetry| *telemetry);
 
             let (gains, telemetry_period) =
                 c.shared.settings.lock(|settings| {

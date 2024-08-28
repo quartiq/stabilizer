@@ -41,5 +41,5 @@ python3 -m stabilizer.iir_coefficients -p $PREFIX -c 0 -v pid --Ki 10 --Kp 1
 # Test the ADC/DACs connected via loopback.
 python3 hitl/loopback.py $PREFIX
 
-# Test the livestream capabilities
+# Test the stream capabilities
 python3 hitl/streaming.py $PREFIX

@@ -1,6 +1,6 @@
 # Stabilizer Python Utilities
 
-This directory contains common Python utilities for Stabilizer, such as livestream data receivers.
+This directory contains common Python utilities for Stabilizer, such as stream data receivers.
 
 To install this module locally (in editable mode):
 ```

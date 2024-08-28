@@ -21,7 +21,7 @@
 //! ## Telemetry
 //! Refer to [Telemetry] for information about telemetry reported by this application.
 //!
-//! ## Livestreaming
+//! ## Stream
 //! This application streams raw ADC and DAC data over UDP. Refer to
 //! [stabilizer::net::data_stream](../stabilizer/net/data_stream/index.html) for more information.
 #![no_std]
@@ -214,14 +214,14 @@ pub struct Lockin {
     /// Any non-zero value less than 65536.
     telemetry_period: u16,
 
-    /// Specifies the target for data livestreaming.
+    /// Specifies the target for data streaming.
     ///
     /// # Path
-    /// `stream_target`
+    /// `stream`
     ///
     /// # Value
     /// See [StreamTarget#miniconf]
-    stream_target: StreamTarget,
+    stream: StreamTarget,
 }
 
 impl Default for Lockin {
@@ -241,7 +241,7 @@ impl Default for Lockin {
             // The default telemetry period in seconds.
             telemetry_period: 10,
 
-            stream_target: StreamTarget::default(),
+            stream: StreamTarget::default(),
         }
     }
 }
@@ -270,7 +270,7 @@ mod app {
         dacs: (Dac0Output, Dac1Output),
         pll: RPLL,
         lockin: idsp::Lockin<Repeat<2, Lowpass<2>>>,
-        signal_generator: signal_generator::SignalGenerator,
+        source: signal_generator::SignalGenerator,
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
     }
@@ -327,9 +327,7 @@ mod app {
 
             pll: RPLL::new(SAMPLE_TICKS_LOG2 + BATCH_SIZE_LOG2),
             lockin: idsp::Lockin::default(),
-            signal_generator: signal_generator::SignalGenerator::new(
-                signal_config,
-            ),
+            source: signal_generator::SignalGenerator::new(signal_config),
 
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
@@ -371,7 +369,7 @@ mod app {
     /// This is an implementation of a externally (DI0) referenced PLL lockin on the ADC0 signal.
     /// It outputs either I/Q or power/phase on DAC0/DAC1. Data is normalized to full scale.
     /// PLL bandwidth, filter bandwidth, slope, and x/y or power/phase post-filters are available.
-    #[task(binds=DMA1_STR4, shared=[active_settings, telemetry], local=[adcs, dacs, lockin, timestamper, pll, generator, signal_generator], priority=3)]
+    #[task(binds=DMA1_STR4, shared=[active_settings, telemetry], local=[adcs, dacs, lockin, timestamper, pll, generator, source], priority=3)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
@@ -386,7 +384,7 @@ mod app {
             dacs: (dac0, dac1),
             pll,
             lockin,
-            signal_generator,
+            source,
             generator,
             ..
         } = c.local;
@@ -450,9 +448,7 @@ mod app {
                             Conf::InPhase => output.re >> 16,
                             Conf::Quadrature => output.im >> 16,
 
-                            Conf::Modulation => {
-                                signal_generator.next().unwrap() as i32
-                            }
+                            Conf::Modulation => source.next().unwrap() as i32,
                         };
 
                         *sample = DacCode::from(value as i16).0;
@@ -460,8 +456,8 @@ mod app {
                 }
 
                 // Stream the data.
-                const N: usize = BATCH_SIZE * core::mem::size_of::<i16>()
-                    / core::mem::size_of::<MaybeUninit<u8>>();
+                const N: usize = BATCH_SIZE * size_of::<i16>()
+                    / size_of::<MaybeUninit<u8>>();
                 generator.add(|buf| {
                     for (data, buf) in adc_samples
                         .iter()
@@ -523,7 +519,7 @@ mod app {
 
             c.shared
                 .network
-                .lock(|net| net.direct_stream(settings.lockin.stream_target));
+                .lock(|net| net.direct_stream(settings.lockin.stream));
 
             c.shared
                 .active_settings
@@ -534,8 +530,7 @@ mod app {
     #[task(priority = 1, local=[digital_inputs, cpu_temp_sensor], shared=[network, settings, telemetry])]
     async fn telemetry(mut c: telemetry::Context) {
         loop {
-            let mut telemetry: TelemetryBuffer =
-                c.shared.telemetry.lock(|telemetry| *telemetry);
+            let mut telemetry = c.shared.telemetry.lock(|telemetry| *telemetry);
 
             telemetry.digital_inputs = [
                 c.local.digital_inputs.0.is_high(),
