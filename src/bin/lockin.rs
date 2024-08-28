@@ -270,7 +270,7 @@ mod app {
         dacs: (Dac0Output, Dac1Output),
         pll: RPLL,
         lockin: idsp::Lockin<Repeat<2, Lowpass<2>>>,
-        signal_generator: signal_generator::SignalGenerator,
+        source: signal_generator::SignalGenerator,
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
     }
@@ -327,9 +327,7 @@ mod app {
 
             pll: RPLL::new(SAMPLE_TICKS_LOG2 + BATCH_SIZE_LOG2),
             lockin: idsp::Lockin::default(),
-            signal_generator: signal_generator::SignalGenerator::new(
-                signal_config,
-            ),
+            source: signal_generator::SignalGenerator::new(signal_config),
 
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
@@ -371,7 +369,7 @@ mod app {
     /// This is an implementation of a externally (DI0) referenced PLL lockin on the ADC0 signal.
     /// It outputs either I/Q or power/phase on DAC0/DAC1. Data is normalized to full scale.
     /// PLL bandwidth, filter bandwidth, slope, and x/y or power/phase post-filters are available.
-    #[task(binds=DMA1_STR4, shared=[active_settings, telemetry], local=[adcs, dacs, lockin, timestamper, pll, generator, signal_generator], priority=3)]
+    #[task(binds=DMA1_STR4, shared=[active_settings, telemetry], local=[adcs, dacs, lockin, timestamper, pll, generator, source], priority=3)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
@@ -386,7 +384,7 @@ mod app {
             dacs: (dac0, dac1),
             pll,
             lockin,
-            signal_generator,
+            source,
             generator,
             ..
         } = c.local;
@@ -450,9 +448,7 @@ mod app {
                             Conf::InPhase => output.re >> 16,
                             Conf::Quadrature => output.im >> 16,
 
-                            Conf::Modulation => {
-                                signal_generator.next().unwrap() as i32
-                            }
+                            Conf::Modulation => source.next().unwrap() as i32,
                         };
 
                         *sample = DacCode::from(value as i16).0;

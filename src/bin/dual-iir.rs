@@ -171,14 +171,14 @@ pub struct DualIir {
     /// Specifies the config for signal generators to add on to DAC0/DAC1 outputs.
     ///
     /// # Path
-    /// `signal_generator/<n>`
+    /// `source/<n>`
     ///
     /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
     ///
     /// # Value
     /// See [signal_generator::BasicConfig#miniconf]
     #[tree(depth = 2)]
-    signal_generator: [signal_generator::BasicConfig; 2],
+    source: [signal_generator::BasicConfig; 2],
 }
 
 impl Default for DualIir {
@@ -203,7 +203,7 @@ impl Default for DualIir {
             // The default telemetry period in seconds.
             telemetry_period: 10,
 
-            signal_generator: Default::default(),
+            source: Default::default(),
 
             stream: Default::default(),
         }
@@ -221,7 +221,7 @@ mod app {
         settings: Settings,
         active_settings: DualIir,
         telemetry: TelemetryBuffer,
-        signal_generator: [SignalGenerator; 2],
+        source: [SignalGenerator; 2],
     }
 
     #[local]
@@ -266,14 +266,14 @@ mod app {
             network,
             active_settings: stabilizer.settings.dual_iir.clone(),
             telemetry: TelemetryBuffer::default(),
-            signal_generator: [
+            source: [
                 SignalGenerator::new(
-                    stabilizer.settings.dual_iir.signal_generator[0]
+                    stabilizer.settings.dual_iir.source[0]
                         .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),
                 SignalGenerator::new(
-                    stabilizer.settings.dual_iir.signal_generator[1]
+                    stabilizer.settings.dual_iir.source[1]
                         .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                         .unwrap(),
                 ),
@@ -332,13 +332,13 @@ mod app {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[active_settings, signal_generator, telemetry], priority=3)]
+    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[active_settings, source, telemetry], priority=3)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
             active_settings,
             telemetry,
-            signal_generator,
+            source,
             ..
         } = c.shared;
 
@@ -351,8 +351,8 @@ mod app {
             ..
         } = c.local;
 
-        (active_settings, telemetry, signal_generator).lock(
-            |settings, telemetry, signal_generator| {
+        (active_settings, telemetry, source).lock(
+            |settings, telemetry, source| {
                 let digital_inputs =
                     [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
                 telemetry.digital_inputs = digital_inputs;
@@ -371,7 +371,7 @@ mod app {
                         adc_samples[channel]
                             .iter()
                             .zip(dac_samples[channel].iter_mut())
-                            .zip(&mut signal_generator[channel])
+                            .zip(&mut source[channel])
                             .map(|((ai, di), signal)| {
                                 let x = f32::from(*ai as i16);
                                 let y = settings.iir_ch[channel]
@@ -458,20 +458,18 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, active_settings, signal_generator])]
+    #[task(priority = 1, local=[afes], shared=[network, settings, active_settings, source])]
     async fn settings_update(mut c: settings_update::Context) {
         c.shared.settings.lock(|settings| {
             c.local.afes.0.set_gain(settings.dual_iir.afe[0]);
             c.local.afes.1.set_gain(settings.dual_iir.afe[1]);
 
             // Update the signal generators
-            for (i, &config) in
-                settings.dual_iir.signal_generator.iter().enumerate()
-            {
+            for (i, &config) in settings.dual_iir.source.iter().enumerate() {
                 match config.try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
                 {
                     Ok(config) => {
-                        c.shared.signal_generator.lock(|generator| {
+                        c.shared.source.lock(|generator| {
                             generator[i].update_waveform(config)
                         });
                     }
