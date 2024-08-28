@@ -50,7 +50,7 @@ embedded-hal = "0.2.7"
 num_enum = { version = "0.7.3", default-features = false }
 paste = "1"
 idsp = "0.15.1"
-ad9959 = { path = "ad9959", version = "0.2.1" }
+ad9959 = { path = "ad9959", version = "0.2.2" }
 serial-settings = { version = "0.1", path = "serial-settings" }
 mcp230xx = "1.0"
 mutex-trait = "0.2"
