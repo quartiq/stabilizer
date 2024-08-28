@@ -2,8 +2,19 @@
 name = "serial-settings"
 version = "0.1.0"
 edition = "2021"
+readme = "README.md"
+authors = [
+	"Robert Jördens <rj@quartiq.de>",
+	"Ryan Summers <ryan.summers@vertigo-designs.com>",
+]
+description = "Persistent settings management over serial interfaces"
+categories = ["embedded", "no-std", "config", "command-line-interface"]
+license = "MIT OR Apache-2.0"
+keywords = ["ethernet", "stm32h7", "adc", "dac", "physics"]
+repository = "https://github.com/quartiq/stabilizer"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[badges]
+maintenance = { status = "actively-developed" }
 
 [dependencies]
 miniconf = { version = "0.13", features = ["json-core", "postcard"] }
