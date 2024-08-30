@@ -35,7 +35,7 @@ Available settings:
 ## Design
 Settings are specified in a [`miniconf::TreeKey`] settings tree and are transferred over the
 serial interface using JSON encoding. This means that things like strings must be encased in
-qutoes.
+quotes.
 
 ## Limitations
 Currently, there is a hardcoded limit of 128-bytes on the settings path. This is arbitrary and
