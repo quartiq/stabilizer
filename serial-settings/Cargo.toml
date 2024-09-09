@@ -18,7 +18,7 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 miniconf = { version = "0.13", features = ["json-core", "postcard"] }
-menu = { version = "0.5", features = ["echo"] }
+menu = { version = "0.6", features = ["echo"], path = "../../menu" }
 heapless = "0.8"
 embedded-io = "0.6"
 yafnv = "3.0"

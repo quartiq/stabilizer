@@ -592,7 +592,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Write for Interface<'a, P, Y> {
 
 // The Menu runner
 pub struct Runner<'a, P: Platform<Y>, const Y: usize>(
-    menu::Runner<'a, Interface<'a, P, Y>, P::Settings>,
+    menu::Runner<'a, Interface<'a, P, Y>, P::Settings, [u8]>,
 );
 
 impl<'a, P: Platform<Y>, const Y: usize> Runner<'a, P, Y> {
