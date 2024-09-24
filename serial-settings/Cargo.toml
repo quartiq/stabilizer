@@ -17,7 +17,7 @@ repository = "https://github.com/quartiq/stabilizer"
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-miniconf = { version = "0.13", features = ["json-core", "postcard"] }
+miniconf = { version = "0.13", features = ["json-core", "postcard"], git = "http://github.com/quartiq/miniconf.git", branch = "enum" }
 menu = { version = "0.6", features = ["echo"], git = "https://github.com/rust-embedded-community/menu.git", rev = "ac34f7c" }
 heapless = "0.8"
 embedded-io = "0.6"

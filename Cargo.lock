@@ -554,21 +554,19 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "017bf72035f1e4e111f1a62031bcf659fa88d434ddadfa33bb390d616adc63fa"
+source = "git+http://github.com/quartiq/miniconf.git?branch=enum#46b49abba63d054f1c1315df4154fbcd989c6f70"
 dependencies = [
  "itoa",
  "miniconf_derive",
  "postcard",
  "serde",
- "serde-json-core 0.5.1",
+ "serde-json-core",
 ]
 
 [[package]]
 name = "miniconf_derive"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ce5d455e44c19b52e2455f7591d1727a6b361341d60c39de3a3f728edfa6814"
+source = "git+http://github.com/quartiq/miniconf.git?branch=enum#46b49abba63d054f1c1315df4154fbcd989c6f70"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -579,16 +577,15 @@ dependencies = [
 [[package]]
 name = "miniconf_mqtt"
 version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "769da289221885b9bd4a1b49fc60b8a90f03fe9d69c7363aa36d260b46fd9977"
+source = "git+http://github.com/quartiq/miniconf.git?branch=enum#46b49abba63d054f1c1315df4154fbcd989c6f70"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
  "log",
  "miniconf",
  "minimq",
- "serde-json-core 0.5.1",
- "smlang 0.7.0",
+ "serde-json-core",
+ "smlang 0.8.0",
 ]
 
 [[package]]
@@ -1015,17 +1012,6 @@ dependencies = [
 
 [[package]]
 name = "serde-json-core"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c9e1ab533c0bc414c34920ec7e5f097101d126ed5eac1a1aac711222e0bbb33"
-dependencies = [
- "heapless 0.7.17",
- "ryu",
- "serde",
-]
-
-[[package]]
-name = "serde-json-core"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b81787e655bd59cecadc91f7b6b8651330b2be6c33246039a65e5cd6f4e0828"
@@ -1111,11 +1097,11 @@ dependencies = [
 
 [[package]]
 name = "smlang"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "575de1cab77b6c852f1f61227755ca0c500d75d3e87317b67eee3ad110d1d4ca"
+checksum = "1de84f9f80bbe6272174e2bfdb8cf7ce4815b218038a42161c2f21c1d872c215"
 dependencies = [
- "smlang-macros 0.7.0",
+ "smlang-macros 0.8.0",
 ]
 
 [[package]]
@@ -1131,9 +1117,9 @@ dependencies = [
 
 [[package]]
 name = "smlang-macros"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7aa9703a40b34abf1d323658a18b197f30f450358f9fd49fe8f7a687bfe301f4"
+checksum = "231b4425dcc43afc7e18c34e7c6738cd252d42d91d909c948df14107c9ae79f1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1215,7 +1201,7 @@ dependencies = [
  "rtt-target",
  "sequential-storage",
  "serde",
- "serde-json-core 0.6.0",
+ "serde-json-core",
  "serde_with",
  "serial-settings",
  "shared-bus",
