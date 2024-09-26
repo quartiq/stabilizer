@@ -546,15 +546,16 @@ dependencies = [
 [[package]]
 name = "menu"
 version = "0.6.0"
-source = "git+https://github.com/rust-embedded-community/menu.git?rev=ac34f7c#ac34f7ccb91a77cb3bc9b582c0515dad6d66714b"
+source = "git+https://github.com/rust-embedded-community/menu.git#ac34f7ccb91a77cb3bc9b582c0515dad6d66714b"
 dependencies = [
  "embedded-io",
 ]
 
 [[package]]
 name = "miniconf"
-version = "0.13.0"
-source = "git+http://github.com/quartiq/miniconf.git?branch=enum#3e5d60b828bcf5fc909ccd146e1c528534a4018c"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8954fad4aada6a559edc5753c428cde9bc1d317f7672a5898b9943e7be414abc"
 dependencies = [
  "itoa",
  "miniconf_derive",
@@ -565,8 +566,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_derive"
-version = "0.13.0"
-source = "git+http://github.com/quartiq/miniconf.git?branch=enum#3e5d60b828bcf5fc909ccd146e1c528534a4018c"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce0cba49d607e4b2ab1b511d182112d5833397f6bb3f404b666e1be6bf94bd43"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -576,8 +578,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_mqtt"
-version = "0.13.1"
-source = "git+http://github.com/quartiq/miniconf.git?branch=enum#3e5d60b828bcf5fc909ccd146e1c528534a4018c"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b62859f66f4e14fa77ec84605845a6ad9b95447630b05535e529507db35dafc"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
