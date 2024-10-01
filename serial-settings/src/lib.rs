@@ -3,7 +3,10 @@
 
 use embedded_io::{ErrorType, Read, ReadReady, Write};
 use heapless::String;
-use miniconf::{JsonCoreSlash, Path, Postcard, Traversal, TreeKey};
+use miniconf::{
+    json, postcard, Path, Traversal, TreeDeserializeOwned, TreeKey,
+    TreeSerialize,
+};
 
 mod interface;
 pub use interface::BestEffortInterface;
@@ -11,7 +14,7 @@ pub use interface::BestEffortInterface;
 /// Specifies the API required for objects that are used as settings with the serial terminal
 /// interface.
 pub trait Settings<const Y: usize>:
-    for<'de> JsonCoreSlash<'de, Y> + for<'de> Postcard<'de, Y> + Clone
+    TreeSerialize<Y> + TreeDeserializeOwned<Y> + Clone
 {
     /// Reset the settings to their default values.
     fn reset(&mut self) {}
@@ -140,32 +143,37 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             settings,
             |key, interface, settings, defaults| {
                 // Get current
-                let check = match settings
-                    .get_json_by_key(&key, interface.buffer)
-                {
-                    Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
-                        return;
-                    }
-                    Err(e) => {
-                        writeln!(interface, "Failed to get `{}`: {e}", *key)
+                let check =
+                    match json::get_by_key(settings, &key, interface.buffer) {
+                        Err(miniconf::Error::Traversal(Traversal::Absent(
+                            _,
+                        ))) => {
+                            return;
+                        }
+                        Err(e) => {
+                            writeln!(
+                                interface,
+                                "Failed to get `{}`: {e}",
+                                *key
+                            )
                             .unwrap();
-                        return;
-                    }
-                    Ok(len) => {
-                        write!(
-                            interface.platform.interface_mut(),
-                            "{}: {}",
-                            *key,
-                            core::str::from_utf8(&interface.buffer[..len])
-                                .unwrap()
-                        )
-                        .unwrap();
-                        yafnv::fnv1a::<u32>(&interface.buffer[..len])
-                    }
-                };
+                            return;
+                        }
+                        Ok(len) => {
+                            write!(
+                                interface.platform.interface_mut(),
+                                "{}: {}",
+                                *key,
+                                core::str::from_utf8(&interface.buffer[..len])
+                                    .unwrap()
+                            )
+                            .unwrap();
+                            yafnv::fnv1a::<u32>(&interface.buffer[..len])
+                        }
+                    };
 
                 // Get default and compare
-                match defaults.get_json_by_key(&key, interface.buffer) {
+                match json::get_by_key(defaults, &key, interface.buffer) {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
                         write!(interface, " [default: absent]")
                     }
@@ -199,15 +207,15 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                     Ok(None) =>
                         write!(interface, " [not stored]"),
                     Ok(Some(stored)) => {
-                        let slic = postcard::de_flavors::Slice::new(stored);
+                        let slic = ::postcard::de_flavors::Slice::new(stored);
                         // Use defaults as scratch space for postcard->json conversion
-                        match defaults.set_postcard_by_key(&key, slic) {
+                        match postcard::set_by_key(defaults, &key, slic) {
                             Err(e) => write!(
                                 interface,
                                 " [stored deserialize error: {e}]"
                             ),
                             Ok(_rest) =>
-                                match defaults.get_json_by_key(&key, interface.buffer) {
+                                match json::get_by_key(defaults, &key, interface.buffer) {
                                     Err(e) => write!(
                                         interface,
                                         " [stored serialization error: {e}]"
@@ -248,8 +256,9 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             settings,
             |key, interface, settings, defaults| {
                 // Get current value checksum
-                let slic = postcard::ser_flavors::Slice::new(interface.buffer);
-                let check = match settings.get_postcard_by_key(&key, slic) {
+                let slic =
+                    ::postcard::ser_flavors::Slice::new(interface.buffer);
+                let check = match postcard::get_by_key(settings, &key, slic) {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
                         return;
                     }
@@ -262,8 +271,9 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 };
 
                 // Get default if different
-                let slic = postcard::ser_flavors::Slice::new(interface.buffer);
-                let slic = match defaults.get_postcard_by_key(&key, slic) {
+                let slic =
+                    ::postcard::ser_flavors::Slice::new(interface.buffer);
+                let slic = match postcard::get_by_key(defaults, &key, slic) {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
                         log::warn!(
                             "Can't clear. Default is absent: `{}`",
@@ -291,8 +301,8 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
 
                 // Set default
                 if let Some(slic) = slic {
-                    let slic = postcard::de_flavors::Slice::new(slic);
-                    match settings.set_postcard_by_key(&key, slic) {
+                    let slic = ::postcard::de_flavors::Slice::new(slic);
+                    match postcard::set_by_key(settings, &key, slic) {
                         Err(miniconf::Error::Traversal(Traversal::Absent(
                             _,
                         ))) => {
@@ -369,8 +379,10 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             settings,
             |key, interface, settings, defaults| {
                 // Get default value checksum
-                let slic = postcard::ser_flavors::Slice::new(interface.buffer);
-                let mut check = match defaults.get_postcard_by_key(&key, slic) {
+                let slic =
+                    ::postcard::ser_flavors::Slice::new(interface.buffer);
+                let mut check = match postcard::get_by_key(defaults, &key, slic)
+                {
                     // Could also serialize directly into the hasher for all these checksum calcs
                     Ok(slic) => yafnv::fnv1a::<u32>(slic),
                     Err(miniconf::Error::Traversal(Traversal::Absent(
@@ -417,8 +429,9 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 }
 
                 // Get value
-                let slic = postcard::ser_flavors::Slice::new(interface.buffer);
-                let value = match settings.get_postcard_by_key(&key, slic) {
+                let slic =
+                    ::postcard::ser_flavors::Slice::new(interface.buffer);
+                let value = match postcard::get_by_key(settings, &key, slic) {
                     Ok(value) => value,
                     Err(miniconf::Error::Traversal(Traversal::Absent(
                         _depth,
@@ -469,7 +482,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             menu::argument_finder(item, args, "value").unwrap().unwrap();
 
         // Now, write the new value into memory.
-        match settings.set_json(key, value.as_bytes()) {
+        match json::set(settings, key, value.as_bytes()) {
             Ok(_) => {
                 interface.updated = true;
                 writeln!(

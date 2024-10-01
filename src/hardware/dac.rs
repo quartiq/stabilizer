@@ -78,7 +78,7 @@ static mut DAC_BUF: [[SampleBuffer; 2]; 2] =
 
 /// Custom type for referencing DAC output codes.
 /// The internal integer is the raw code written to the DAC output register.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct DacCode(pub u16);
 impl DacCode {
     // The DAC output range in bipolar mode (including the external output op-amp) is +/- 4.096
