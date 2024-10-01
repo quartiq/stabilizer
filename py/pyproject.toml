@@ -18,7 +18,7 @@ dependencies = [
     "numpy",
     "scipy",
     "matplotlib",
-    "miniconf-mqtt@git+https://github.com/quartiq/miniconf@v0.14.0#subdirectory=py/miniconf-mqtt",
+    "miniconf-mqtt@git+https://github.com/quartiq/miniconf@v0.15.0#subdirectory=py/miniconf-mqtt",
 ]
 
 [project.urls]

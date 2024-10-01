@@ -27,7 +27,7 @@ use core::fmt::Write;
 use embassy_futures::block_on;
 use embedded_io::Write as EioWrite;
 use heapless::{String, Vec};
-use miniconf::{JsonCoreSlash, Path, Postcard, Tree};
+use miniconf::{postcard, Path, Tree, TreeDeserializeOwned, TreeSerialize};
 use sequential_storage::{
     cache::NoCache,
     map::{fetch_item, store_item, SerializationError},
@@ -85,7 +85,7 @@ impl sequential_storage::map::Key for SettingsKey {
         &self,
         buffer: &mut [u8],
     ) -> Result<usize, SerializationError> {
-        Ok(postcard::to_slice(self, buffer)
+        Ok(::postcard::to_slice(self, buffer)
             .map_err(|_| SerializationError::BufferTooSmall)?
             .len())
     }
@@ -94,7 +94,7 @@ impl sequential_storage::map::Key for SettingsKey {
         buffer: &[u8],
     ) -> Result<(Self, usize), SerializationError> {
         let original_length = buffer.len();
-        let (result, remainder) = postcard::take_from_bytes(buffer)
+        let (result, remainder) = ::postcard::take_from_bytes(buffer)
             .map_err(|_| SerializationError::BufferTooSmall)?;
         Ok((result, original_length - remainder.len()))
     }
@@ -115,7 +115,7 @@ pub struct SerialSettingsPlatform<C, const Y: usize> {
 
 impl<C, const Y: usize> SerialSettingsPlatform<C, Y>
 where
-    C: for<'d> JsonCoreSlash<'d, Y>,
+    C: TreeDeserializeOwned<Y> + TreeSerialize<Y>,
 {
     pub fn load(structure: &mut C, storage: &mut Flash) {
         // Loop over flash and read settings
@@ -150,8 +150,8 @@ where
 
             log::info!("Loading initial `{}` from flash", path.as_str());
 
-            let flavor = postcard::de_flavors::Slice::new(value);
-            if let Err(e) = structure.set_postcard_by_key(&path, flavor) {
+            let flavor = ::postcard::de_flavors::Slice::new(value);
+            if let Err(e) = postcard::set_by_key(structure, &path, flavor) {
                 log::warn!(
                     "Failed to deserialize `{}` from flash: {e:?}",
                     path.as_str()

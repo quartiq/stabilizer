@@ -24,7 +24,7 @@ use telemetry::TelemetryClient;
 
 use core::fmt::Write;
 use heapless::String;
-use miniconf::JsonCoreSlash;
+use miniconf::{TreeDeserializeOwned, TreeSerialize};
 use miniconf_mqtt::minimq;
 
 pub type NetworkReference =
@@ -58,7 +58,7 @@ pub enum NetworkState {
 /// A structure of Stabilizer's default network users.
 pub struct NetworkUsers<S, const Y: usize>
 where
-    for<'de> S: Default + JsonCoreSlash<'de, Y> + Clone,
+    S: Default + TreeDeserializeOwned<Y> + TreeSerialize<Y> + Clone,
 {
     pub miniconf: miniconf_mqtt::MqttClient<
         'static,
@@ -76,7 +76,7 @@ where
 
 impl<S, const Y: usize> NetworkUsers<S, Y>
 where
-    for<'de> S: Default + JsonCoreSlash<'de, Y> + Clone,
+    S: Default + TreeDeserializeOwned<Y> + TreeSerialize<Y> + Clone,
 {
     /// Construct Stabilizer's default network users.
     ///

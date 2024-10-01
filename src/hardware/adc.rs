@@ -85,7 +85,7 @@ use hal::{
 };
 
 /// A type representing an ADC sample.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct AdcCode(pub u16);
 
 impl AdcCode {

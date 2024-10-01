@@ -40,7 +40,7 @@ pub struct TelemetryClient {
 /// These values can be converted to SI units immediately before reporting to save processing time.
 /// This allows for the DSP process to continually update the values without incurring significant
 /// run-time overhead during conversion to SI units.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct TelemetryBuffer {
     /// The latest input sample on ADC0/ADC1.
     pub adcs: [AdcCode; 2],
@@ -68,16 +68,6 @@ pub struct Telemetry {
 
     /// The CPU temperature in degrees Celsius.
     pub cpu_temp: f32,
-}
-
-impl Default for TelemetryBuffer {
-    fn default() -> Self {
-        Self {
-            adcs: [AdcCode(0), AdcCode(0)],
-            dacs: [DacCode(0), DacCode(0)],
-            digital_inputs: [false, false],
-        }
-    }
 }
 
 impl TelemetryBuffer {

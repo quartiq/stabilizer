@@ -217,9 +217,7 @@ pub fn setup<C, const Y: usize>(
     sample_ticks: u32,
 ) -> (StabilizerDevices<C, Y>, Option<PounderDevices>)
 where
-    C: serial_settings::Settings<Y>
-        + for<'d> miniconf::JsonCoreSlash<'d, Y>
-        + AppSettings,
+    C: serial_settings::Settings<Y> + AppSettings,
 {
     // Set up RTT logging
     {
