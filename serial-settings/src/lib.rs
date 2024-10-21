@@ -95,7 +95,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
     {
         let mut iter = P::Settings::nodes::<Path<String<128>, '/'>>();
         if let Some(key) = key {
-            match iter.root(&Path::<_, '/'>::from(key)) {
+            match iter.root(Path::<_, '/'>::from(key)) {
                 Ok(it) => iter = it,
                 Err(e) => {
                     writeln!(interface, "Failed to locate `{key}`: {e}")
@@ -144,7 +144,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             |key, interface, settings, defaults| {
                 // Get current
                 let check =
-                    match json::get_by_key(settings, &key, interface.buffer) {
+                    match json::get_by_key(settings, key, interface.buffer) {
                         Err(miniconf::Error::Traversal(Traversal::Absent(
                             _,
                         ))) => {
@@ -173,7 +173,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                     };
 
                 // Get default and compare
-                match json::get_by_key(defaults, &key, interface.buffer) {
+                match json::get_by_key(defaults, key, interface.buffer) {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
                         write!(interface, " [default: absent]")
                     }
@@ -209,13 +209,13 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                     Ok(Some(stored)) => {
                         let slic = ::postcard::de_flavors::Slice::new(stored);
                         // Use defaults as scratch space for postcard->json conversion
-                        match postcard::set_by_key(defaults, &key, slic) {
+                        match postcard::set_by_key(defaults, key, slic) {
                             Err(e) => write!(
                                 interface,
                                 " [stored deserialize error: {e}]"
                             ),
                             Ok(_rest) =>
-                                match json::get_by_key(defaults, &key, interface.buffer) {
+                                match json::get_by_key(defaults, key, interface.buffer) {
                                     Err(e) => write!(
                                         interface,
                                         " [stored serialization error: {e}]"
@@ -258,7 +258,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 // Get current value checksum
                 let slic =
                     ::postcard::ser_flavors::Slice::new(interface.buffer);
-                let check = match postcard::get_by_key(settings, &key, slic) {
+                let check = match postcard::get_by_key(settings, key, slic) {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
                         return;
                     }
@@ -273,7 +273,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 // Get default if different
                 let slic =
                     ::postcard::ser_flavors::Slice::new(interface.buffer);
-                let slic = match postcard::get_by_key(defaults, &key, slic) {
+                let slic = match postcard::get_by_key(defaults, key, slic) {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
                         log::warn!(
                             "Can't clear. Default is absent: `{}`",
@@ -302,7 +302,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 // Set default
                 if let Some(slic) = slic {
                     let slic = ::postcard::de_flavors::Slice::new(slic);
-                    match postcard::set_by_key(settings, &key, slic) {
+                    match postcard::set_by_key(settings, key, slic) {
                         Err(miniconf::Error::Traversal(Traversal::Absent(
                             _,
                         ))) => {
@@ -381,7 +381,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 // Get default value checksum
                 let slic =
                     ::postcard::ser_flavors::Slice::new(interface.buffer);
-                let mut check = match postcard::get_by_key(defaults, &key, slic)
+                let mut check = match postcard::get_by_key(defaults, key, slic)
                 {
                     // Could also serialize directly into the hasher for all these checksum calcs
                     Ok(slic) => yafnv::fnv1a::<u32>(slic),
@@ -431,7 +431,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 // Get value
                 let slic =
                     ::postcard::ser_flavors::Slice::new(interface.buffer);
-                let value = match postcard::get_by_key(settings, &key, slic) {
+                let value = match postcard::get_by_key(settings, key, slic) {
                     Ok(value) => value,
                     Err(miniconf::Error::Traversal(Traversal::Absent(
                         _depth,
