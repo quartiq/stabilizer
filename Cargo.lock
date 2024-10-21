@@ -560,9 +560,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf"
-version = "0.16.2"
+version = "0.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8df0b52bbed894b512ea6428a32c57327c8ece321507d9babb5f3dec67222c9d"
+checksum = "baf52da0fbf409a8a008b661e476127fa79b954169af83586cc1ceebb15e5ccb"
 dependencies = [
  "itoa",
  "miniconf_derive",
