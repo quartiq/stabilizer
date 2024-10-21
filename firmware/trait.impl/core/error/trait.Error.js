@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["miniconf",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.82.0/core/error/trait.Error.html\" title=\"trait core::error::Error\">Error</a> for <a class=\"enum\" href=\"miniconf/enum.Traversal.html\" title=\"enum miniconf::Traversal\">Traversal</a>"],["impl&lt;E: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.82.0/core/error/trait.Error.html\" title=\"trait core::error::Error\">Error</a> + 'static&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.82.0/core/error/trait.Error.html\" title=\"trait core::error::Error\">Error</a> for <a class=\"enum\" href=\"miniconf/enum.Error.html\" title=\"enum miniconf::Error\">Error</a>&lt;E&gt;"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[669]}
