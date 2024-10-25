@@ -93,7 +93,7 @@ pub type SerialPort = usbd_serial::SerialPort<
 
 pub type SerialTerminal<C, const Y: usize> = serial_settings::Runner<
     'static,
-    crate::settings::SerialSettingsPlatform<C, Y>,
+    crate::settings::SerialSettingsPlatform<C>,
     Y,
 >;
 
