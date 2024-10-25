@@ -1,4 +1,4 @@
-use miniconf::Tree;
+use miniconf::{Leaf, Tree};
 use rand_core::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use serde::{Deserialize, Serialize};
@@ -23,31 +23,31 @@ pub enum Signal {
 #[derive(Copy, Clone, Debug, Tree, Serialize, Deserialize)]
 pub struct BasicConfig {
     /// The signal type that should be generated. See [Signal] variants.
-    pub signal: Signal,
+    pub signal: Leaf<Signal>,
 
     /// The frequency of the generated signal in Hertz.
-    pub frequency: f32,
+    pub frequency: Leaf<f32>,
 
     /// The normalized symmetry of the signal. At 0% symmetry, the duration of the first half oscillation is minimal.
     /// At 25% symmetry, the first half oscillation lasts for 25% of the signal period. For square wave output this
     /// symmetry is the duty cycle.
-    pub symmetry: f32,
+    pub symmetry: Leaf<f32>,
 
     /// The amplitude of the output signal in volts.
-    pub amplitude: f32,
+    pub amplitude: Leaf<f32>,
 
     /// The phase of the output signal in turns.
-    pub phase: f32,
+    pub phase: Leaf<f32>,
 }
 
 impl Default for BasicConfig {
     fn default() -> Self {
         Self {
-            frequency: 1.0e3,
-            symmetry: 0.5,
-            signal: Signal::Cosine,
-            amplitude: 0.0,
-            phase: 0.0,
+            frequency: 1.0e3.into(),
+            symmetry: 0.5.into(),
+            signal: Signal::Cosine.into(),
+            amplitude: 0.0.into(),
+            phase: 0.0.into(),
         }
     }
 }
@@ -74,14 +74,14 @@ impl BasicConfig {
         sample_period: f32,
         full_scale: f32,
     ) -> Result<Config, Error> {
-        let symmetry_complement = 1.0 - self.symmetry;
+        let symmetry_complement = 1.0 - *self.symmetry;
         // Validate symmetry
-        if self.symmetry < 0.0 || symmetry_complement < 0.0 {
+        if *self.symmetry < 0.0 || symmetry_complement < 0.0 {
             return Err(Error::InvalidSymmetry);
         }
 
         const NYQUIST: f32 = (1u32 << 31) as _;
-        let ftw = self.frequency * sample_period * NYQUIST;
+        let ftw = *self.frequency * sample_period * NYQUIST;
 
         // Validate base frequency tuning word to be below Nyquist.
         if ftw < 0.0 || 2.0 * ftw > NYQUIST {
@@ -91,8 +91,8 @@ impl BasicConfig {
         // Calculate the frequency tuning words.
         // Clip both frequency tuning words to within Nyquist before rounding.
         let phase_increment = [
-            if self.symmetry * NYQUIST > ftw {
-                ftw / self.symmetry
+            if *self.symmetry * NYQUIST > ftw {
+                ftw / *self.symmetry
             } else {
                 NYQUIST
             } as i32,
@@ -103,16 +103,16 @@ impl BasicConfig {
             } as i32,
         ];
 
-        let amplitude = self.amplitude * (i16::MIN as f32 / -full_scale);
+        let amplitude = *self.amplitude * (i16::MIN as f32 / -full_scale);
         if !(i16::MIN as f32..=i16::MAX as f32).contains(&amplitude) {
             return Err(Error::InvalidAmplitude);
         }
 
-        let phase = self.phase * (1u64 << 32) as f32;
+        let phase = *self.phase * (1u64 << 32) as f32;
 
         Ok(Config {
             amplitude: amplitude as i16,
-            signal: self.signal,
+            signal: *self.signal,
             phase_increment,
             phase_offset: phase as i32,
         })

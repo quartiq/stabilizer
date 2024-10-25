@@ -13,8 +13,8 @@ pub use interface::BestEffortInterface;
 
 /// Specifies the API required for objects that are used as settings with the serial terminal
 /// interface.
-pub trait Settings<const Y: usize>:
-    TreeSerialize<Y> + TreeDeserializeOwned<Y> + Clone
+pub trait Settings:
+    TreeKey + TreeSerialize + TreeDeserializeOwned + Clone
 {
     /// Reset the settings to their default values.
     fn reset(&mut self) {}
@@ -27,7 +27,7 @@ pub trait Settings<const Y: usize>:
 ///
 /// Assuming there are no unit fields in the `Settings`, the empty value can be
 /// used to mark the "cleared" state.
-pub trait Platform<const Y: usize> {
+pub trait Platform {
     /// This type specifies the interface to the user, for example, a USB CDC-ACM serial port.
     type Interface: embedded_io::Read
         + embedded_io::ReadReady
@@ -35,7 +35,7 @@ pub trait Platform<const Y: usize> {
 
     type Error: core::fmt::Debug;
 
-    type Settings: Settings<Y>;
+    type Settings: Settings;
 
     /// Fetch a value from persisten storage
     fn fetch<'a>(
@@ -68,7 +68,7 @@ struct Interface<'a, P, const Y: usize> {
     updated: bool,
 }
 
-impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
+impl<'a, P: Platform, const Y: usize> Interface<'a, P, Y> {
     fn handle_platform(
         _menu: &menu::Menu<Self, P::Settings>,
         item: &menu::Item<Self, P::Settings>,
@@ -93,9 +93,9 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             &mut P::Settings,
         ),
     {
-        let mut iter = P::Settings::nodes::<Path<String<128>, '/'>>();
+        let mut iter = P::Settings::nodes::<Path<String<128>, '/'>, Y>();
         if let Some(key) = key {
-            match iter.root(&Path::<_, '/'>::from(key)) {
+            match iter.root(Path::<_, '/'>::from(key)) {
                 Ok(it) => iter = it,
                 Err(e) => {
                     writeln!(interface, "Failed to locate `{key}`: {e}")
@@ -144,7 +144,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
             |key, interface, settings, defaults| {
                 // Get current
                 let check =
-                    match json::get_by_key(settings, &key, interface.buffer) {
+                    match json::get_by_key(settings, key, interface.buffer) {
                         Err(miniconf::Error::Traversal(Traversal::Absent(
                             _,
                         ))) => {
@@ -173,7 +173,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                     };
 
                 // Get default and compare
-                match json::get_by_key(defaults, &key, interface.buffer) {
+                match json::get_by_key(defaults, key, interface.buffer) {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
                         write!(interface, " [default: absent]")
                     }
@@ -209,13 +209,13 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                     Ok(Some(stored)) => {
                         let slic = ::postcard::de_flavors::Slice::new(stored);
                         // Use defaults as scratch space for postcard->json conversion
-                        match postcard::set_by_key(defaults, &key, slic) {
+                        match postcard::set_by_key(defaults, key, slic) {
                             Err(e) => write!(
                                 interface,
                                 " [stored deserialize error: {e}]"
                             ),
                             Ok(_rest) =>
-                                match json::get_by_key(defaults, &key, interface.buffer) {
+                                match json::get_by_key(defaults, key, interface.buffer) {
                                     Err(e) => write!(
                                         interface,
                                         " [stored serialization error: {e}]"
@@ -258,7 +258,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 // Get current value checksum
                 let slic =
                     ::postcard::ser_flavors::Slice::new(interface.buffer);
-                let check = match postcard::get_by_key(settings, &key, slic) {
+                let check = match postcard::get_by_key(settings, key, slic) {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
                         return;
                     }
@@ -273,7 +273,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 // Get default if different
                 let slic =
                     ::postcard::ser_flavors::Slice::new(interface.buffer);
-                let slic = match postcard::get_by_key(defaults, &key, slic) {
+                let slic = match postcard::get_by_key(defaults, key, slic) {
                     Err(miniconf::Error::Traversal(Traversal::Absent(_))) => {
                         log::warn!(
                             "Can't clear. Default is absent: `{}`",
@@ -302,7 +302,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 // Set default
                 if let Some(slic) = slic {
                     let slic = ::postcard::de_flavors::Slice::new(slic);
-                    match postcard::set_by_key(settings, &key, slic) {
+                    match postcard::set_by_key(settings, key, slic) {
                         Err(miniconf::Error::Traversal(Traversal::Absent(
                             _,
                         ))) => {
@@ -381,7 +381,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 // Get default value checksum
                 let slic =
                     ::postcard::ser_flavors::Slice::new(interface.buffer);
-                let mut check = match postcard::get_by_key(defaults, &key, slic)
+                let mut check = match postcard::get_by_key(defaults, key, slic)
                 {
                     // Could also serialize directly into the hasher for all these checksum calcs
                     Ok(slic) => yafnv::fnv1a::<u32>(slic),
@@ -431,7 +431,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
                 // Get value
                 let slic =
                     ::postcard::ser_flavors::Slice::new(interface.buffer);
-                let value = match postcard::get_by_key(settings, &key, slic) {
+                let value = match postcard::get_by_key(settings, key, slic) {
                     Ok(value) => value,
                     Err(miniconf::Error::Traversal(Traversal::Absent(
                         _depth,
@@ -578,9 +578,7 @@ impl<'a, P: Platform<Y>, const Y: usize> Interface<'a, P, Y> {
     }
 }
 
-impl<'a, P: Platform<Y>, const Y: usize> core::fmt::Write
-    for Interface<'a, P, Y>
-{
+impl<'a, P: Platform, const Y: usize> core::fmt::Write for Interface<'a, P, Y> {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         self.platform
             .interface_mut()
@@ -589,11 +587,11 @@ impl<'a, P: Platform<Y>, const Y: usize> core::fmt::Write
     }
 }
 
-impl<'a, P: Platform<Y>, const Y: usize> ErrorType for Interface<'a, P, Y> {
+impl<'a, P: Platform, const Y: usize> ErrorType for Interface<'a, P, Y> {
     type Error = <P::Interface as ErrorType>::Error;
 }
 
-impl<'a, P: Platform<Y>, const Y: usize> Write for Interface<'a, P, Y> {
+impl<'a, P: Platform, const Y: usize> Write for Interface<'a, P, Y> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
         self.platform.interface_mut().write(buf)
     }
@@ -604,11 +602,11 @@ impl<'a, P: Platform<Y>, const Y: usize> Write for Interface<'a, P, Y> {
 }
 
 // The Menu runner
-pub struct Runner<'a, P: Platform<Y>, const Y: usize>(
+pub struct Runner<'a, P: Platform, const Y: usize>(
     menu::Runner<'a, Interface<'a, P, Y>, P::Settings, [u8]>,
 );
 
-impl<'a, P: Platform<Y>, const Y: usize> Runner<'a, P, Y> {
+impl<'a, P: Platform, const Y: usize> Runner<'a, P, Y> {
     /// Constructor
     ///
     /// # Args

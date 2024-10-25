@@ -111,7 +111,7 @@ pub struct EemGpioDevices {
 
 /// The available hardware interfaces on Stabilizer.
 pub struct StabilizerDevices<
-    C: serial_settings::Settings<Y> + 'static,
+    C: serial_settings::Settings + 'static,
     const Y: usize,
 > {
     pub temperature_sensor: CpuTempSensor,
@@ -217,7 +217,7 @@ pub fn setup<C, const Y: usize>(
     sample_ticks: u32,
 ) -> (StabilizerDevices<C, Y>, Option<PounderDevices>)
 where
-    C: serial_settings::Settings<Y> + AppSettings,
+    C: serial_settings::Settings + AppSettings,
 {
     // Set up RTT logging
     {

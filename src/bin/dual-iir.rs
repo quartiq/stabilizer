@@ -30,6 +30,7 @@
 
 use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
+use miniconf::{Leaf, Tree};
 use serde::{Deserialize, Serialize};
 
 use rtic_monotonics::Monotonic;
@@ -53,7 +54,6 @@ use stabilizer::{
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
-        miniconf::Tree,
         telemetry::TelemetryBuffer,
         NetworkState, NetworkUsers,
     },
@@ -77,10 +77,7 @@ const SAMPLE_PERIOD: f32 =
 
 #[derive(Clone, Debug, Tree)]
 pub struct Settings {
-    #[tree(depth = 3)]
     pub dual_iir: DualIir,
-
-    #[tree(depth = 1)]
     pub net: NetSettings,
 }
 
@@ -97,7 +94,7 @@ impl stabilizer::settings::AppSettings for Settings {
     }
 }
 
-impl serial_settings::Settings<4> for Settings {
+impl serial_settings::Settings for Settings {
     fn reset(&mut self) {
         *self = Self {
             dual_iir: DualIir::default(),
@@ -117,8 +114,7 @@ pub struct DualIir {
     ///
     /// # Value
     /// Any of the variants of [Gain] enclosed in double quotes.
-    #[tree(depth = 1)]
-    afe: [Gain; 2],
+    afe: [Leaf<Gain>; 2],
 
     /// Configure the IIR filter parameters.
     ///
@@ -129,8 +125,7 @@ pub struct DualIir {
     /// * `<m>` specifies which cascade to configure. `<m>` := [0, 1], depending on [IIR_CASCADE_LENGTH]
     ///
     /// See [iir::Biquad]
-    #[tree(depth = 2)]
-    iir_ch: [[iir::Biquad<f32>; IIR_CASCADE_LENGTH]; 2],
+    iir_ch: [[Leaf<iir::Biquad<f32>>; IIR_CASCADE_LENGTH]; 2],
 
     /// Specified true if DI1 should be used as a "hold" input.
     ///
@@ -139,7 +134,7 @@ pub struct DualIir {
     ///
     /// # Value
     /// "true" or "false"
-    allow_hold: bool,
+    allow_hold: Leaf<bool>,
 
     /// Specified true if "hold" should be forced regardless of DI1 state and hold allowance.
     ///
@@ -148,7 +143,7 @@ pub struct DualIir {
     ///
     /// # Value
     /// "true" or "false"
-    force_hold: bool,
+    force_hold: Leaf<bool>,
 
     /// Specifies the telemetry output period in seconds.
     ///
@@ -157,7 +152,7 @@ pub struct DualIir {
     ///
     /// # Value
     /// Any non-zero value less than 65536.
-    telemetry_period: u16,
+    telemetry_period: Leaf<u16>,
 
     /// Specifies the target for data streaming.
     ///
@@ -166,7 +161,7 @@ pub struct DualIir {
     ///
     /// # Value
     /// See [StreamTarget#miniconf]
-    stream: StreamTarget,
+    stream: Leaf<StreamTarget>,
 
     /// Specifies the config for signal generators to add on to DAC0/DAC1 outputs.
     ///
@@ -177,7 +172,6 @@ pub struct DualIir {
     ///
     /// # Value
     /// See [signal_generator::BasicConfig#miniconf]
-    #[tree(depth = 2)]
     source: [signal_generator::BasicConfig; 2],
 }
 
@@ -194,14 +188,14 @@ impl Default for DualIir {
             // The array is `iir_state[channel-index][cascade-index][coeff-index]`.
             // The IIR coefficients can be mapped to other transfer function
             // representations, for example as described in https://arxiv.org/abs/1508.06319
-            iir_ch: [[i; IIR_CASCADE_LENGTH]; 2],
+            iir_ch: [[i.into(); IIR_CASCADE_LENGTH]; 2],
 
             // Permit the DI1 digital input to suppress filter output updates.
-            allow_hold: false,
+            allow_hold: false.into(),
             // Force suppress filter output updates.
-            force_hold: false,
+            force_hold: false.into(),
             // The default telemetry period in seconds.
-            telemetry_period: 10,
+            telemetry_period: 10.into(),
 
             source: Default::default(),
 
@@ -357,8 +351,8 @@ mod app {
                     [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
                 telemetry.digital_inputs = digital_inputs;
 
-                let hold = settings.force_hold
-                    || (digital_inputs[1] && settings.allow_hold);
+                let hold = *settings.force_hold
+                    || (digital_inputs[1] && *settings.allow_hold);
 
                 (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
                     let adc_samples = [adc0, adc1];
@@ -461,8 +455,8 @@ mod app {
     #[task(priority = 1, local=[afes], shared=[network, settings, active_settings, source])]
     async fn settings_update(mut c: settings_update::Context) {
         c.shared.settings.lock(|settings| {
-            c.local.afes.0.set_gain(settings.dual_iir.afe[0]);
-            c.local.afes.1.set_gain(settings.dual_iir.afe[1]);
+            c.local.afes.0.set_gain(*settings.dual_iir.afe[0]);
+            c.local.afes.1.set_gain(*settings.dual_iir.afe[1]);
 
             // Update the signal generators
             for (i, &config) in settings.dual_iir.source.iter().enumerate() {
@@ -483,7 +477,7 @@ mod app {
 
             c.shared
                 .network
-                .lock(|net| net.direct_stream(settings.dual_iir.stream));
+                .lock(|net| net.direct_stream(*settings.dual_iir.stream));
 
             c.shared
                 .active_settings
@@ -498,13 +492,13 @@ mod app {
 
             let (gains, telemetry_period) =
                 c.shared.settings.lock(|settings| {
-                    (settings.dual_iir.afe, settings.dual_iir.telemetry_period)
+                    (settings.dual_iir.afe, *settings.dual_iir.telemetry_period)
                 });
 
             c.shared.network.lock(|net| {
                 net.telemetry.publish(&telemetry.finalize(
-                    gains[0],
-                    gains[1],
+                    *gains[0],
+                    *gains[1],
                     c.local.cpu_temp_sensor.get_temperature().unwrap(),
                 ))
             });

@@ -33,6 +33,7 @@ use core::{
     sync::atomic::{fence, Ordering},
 };
 
+use miniconf::{Leaf, Tree};
 use rtic_monotonics::Monotonic;
 
 use fugit::ExtU32;
@@ -55,7 +56,6 @@ use stabilizer::{
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
-        miniconf::Tree,
         serde::{Deserialize, Serialize},
         telemetry::TelemetryBuffer,
         NetworkState, NetworkUsers,
@@ -76,10 +76,7 @@ const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 
 #[derive(Clone, Debug, Tree)]
 pub struct Settings {
-    #[tree(depth = 2)]
     pub lockin: Lockin,
-
-    #[tree(depth = 1)]
     pub net: NetSettings,
 }
 
@@ -96,7 +93,7 @@ impl stabilizer::settings::AppSettings for Settings {
     }
 }
 
-impl serial_settings::Settings<3> for Settings {
+impl serial_settings::Settings for Settings {
     fn reset(&mut self) {
         *self = Self {
             lockin: Lockin::default(),
@@ -142,8 +139,7 @@ pub struct Lockin {
     ///
     /// # Value
     /// Any of the variants of [Gain] enclosed in double quotes.
-    #[tree(depth = 1)]
-    afe: [Gain; 2],
+    afe: [Leaf<Gain>; 2],
 
     /// Specifies the operational mode of the lockin.
     ///
@@ -152,7 +148,7 @@ pub struct Lockin {
     ///
     /// # Value
     /// One of the variants of [LockinMode] enclosed in double quotes.
-    lockin_mode: LockinMode,
+    lockin_mode: Leaf<LockinMode>,
 
     /// Specifis the PLL time constant.
     ///
@@ -163,7 +159,7 @@ pub struct Lockin {
     ///
     /// # Value
     /// The PLL time constant exponent (1-31).
-    pll_tc: [u32; 2],
+    pll_tc: [Leaf<u32>; 2],
 
     /// Specifies the lockin lowpass gains.
     ///
@@ -172,7 +168,7 @@ pub struct Lockin {
     ///
     /// # Value
     /// The lockin low-pass coefficients. See [`idsp::Lowpass`] for determining them.
-    lockin_k: <Lowpass<2> as Filter>::Config,
+    lockin_k: Leaf<<Lowpass<2> as Filter>::Config>,
 
     /// Specifies which harmonic to use for the lockin.
     ///
@@ -181,7 +177,7 @@ pub struct Lockin {
     ///
     /// # Value
     /// Harmonic index of the LO. -1 to _de_modulate the fundamental (complex conjugate)
-    lockin_harmonic: i32,
+    lockin_harmonic: Leaf<i32>,
 
     /// Specifies the LO phase offset.
     ///
@@ -191,7 +187,7 @@ pub struct Lockin {
     /// # Value
     /// Demodulation LO phase offset. Units are in terms of i32, where [i32::MIN] is equivalent to
     /// -pi and [i32::MAX] is equivalent to +pi.
-    lockin_phase: i32,
+    lockin_phase: Leaf<i32>,
 
     /// Specifies DAC output mode.
     ///
@@ -202,8 +198,7 @@ pub struct Lockin {
     ///
     /// # Value
     /// One of the variants of [Conf] enclosed in double quotes.
-    #[tree(depth = 1)]
-    output_conf: [Conf; 2],
+    output_conf: [Leaf<Conf>; 2],
 
     /// Specifies the telemetry output period in seconds.
     ///
@@ -212,7 +207,7 @@ pub struct Lockin {
     ///
     /// # Value
     /// Any non-zero value less than 65536.
-    telemetry_period: u16,
+    telemetry_period: Leaf<u16>,
 
     /// Specifies the target for data streaming.
     ///
@@ -221,27 +216,27 @@ pub struct Lockin {
     ///
     /// # Value
     /// See [StreamTarget#miniconf]
-    stream: StreamTarget,
+    stream: Leaf<StreamTarget>,
 }
 
 impl Default for Lockin {
     fn default() -> Self {
         Self {
-            afe: [Gain::G1; 2],
+            afe: [Gain::G1.into(); 2],
 
-            lockin_mode: LockinMode::External,
+            lockin_mode: LockinMode::External.into(),
 
-            pll_tc: [21, 21], // frequency and phase settling time (log2 counter cycles)
+            pll_tc: [21.into(), 21.into()], // frequency and phase settling time (log2 counter cycles)
 
-            lockin_k: [0x8_0000, -0x400_0000], // lockin lowpass gains
-            lockin_harmonic: -1, // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
-            lockin_phase: 0,     // Demodulation LO phase offset
+            lockin_k: [0x8_0000, -0x400_0000].into(), // lockin lowpass gains
+            lockin_harmonic: (-1).into(), // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
+            lockin_phase: 0.into(),       // Demodulation LO phase offset
 
-            output_conf: [Conf::InPhase, Conf::Quadrature],
+            output_conf: [Conf::InPhase.into(), Conf::Quadrature.into()],
             // The default telemetry period in seconds.
-            telemetry_period: 10,
+            telemetry_period: 10.into(),
 
-            stream: StreamTarget::default(),
+            stream: Default::default(),
         }
     }
 }
@@ -391,14 +386,14 @@ mod app {
 
         (active_settings, telemetry).lock(|settings, telemetry| {
             let (reference_phase, reference_frequency) =
-                match settings.lockin_mode {
+                match *settings.lockin_mode {
                     LockinMode::External => {
                         let timestamp =
                             timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
                         let (pll_phase, pll_frequency) = pll.update(
                             timestamp.map(|t| t as i32),
-                            settings.pll_tc[0],
-                            settings.pll_tc[1],
+                            *settings.pll_tc[0],
+                            *settings.pll_tc[1],
                         );
                         (pll_phase, (pll_frequency >> BATCH_SIZE_LOG2) as i32)
                     }
@@ -409,9 +404,9 @@ mod app {
                 };
 
             let sample_frequency =
-                reference_frequency.wrapping_mul(settings.lockin_harmonic);
+                reference_frequency.wrapping_mul(*settings.lockin_harmonic);
             let sample_phase = settings.lockin_phase.wrapping_add(
-                reference_phase.wrapping_mul(settings.lockin_harmonic),
+                reference_phase.wrapping_mul(*settings.lockin_harmonic),
             );
 
             (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
@@ -438,7 +433,7 @@ mod app {
                 // Convert to DAC data.
                 for (channel, samples) in dac_samples.iter_mut().enumerate() {
                     for sample in samples.iter_mut() {
-                        let value = match settings.output_conf[channel] {
+                        let value = match *settings.output_conf[channel] {
                             Conf::Magnitude => output.abs_sqr() as i32 >> 16,
                             Conf::Phase => output.arg() >> 16,
                             Conf::LogPower => output.log2() << 8,
@@ -514,12 +509,12 @@ mod app {
     #[task(priority = 1, local=[afes], shared=[network, settings, active_settings])]
     async fn settings_update(mut c: settings_update::Context) {
         c.shared.settings.lock(|settings| {
-            c.local.afes.0.set_gain(settings.lockin.afe[0]);
-            c.local.afes.1.set_gain(settings.lockin.afe[1]);
+            c.local.afes.0.set_gain(*settings.lockin.afe[0]);
+            c.local.afes.1.set_gain(*settings.lockin.afe[1]);
 
             c.shared
                 .network
-                .lock(|net| net.direct_stream(settings.lockin.stream));
+                .lock(|net| net.direct_stream(*settings.lockin.stream));
 
             c.shared
                 .active_settings
@@ -539,13 +534,13 @@ mod app {
 
             let (gains, telemetry_period) =
                 c.shared.settings.lock(|settings| {
-                    (settings.lockin.afe, settings.lockin.telemetry_period)
+                    (settings.lockin.afe, *settings.lockin.telemetry_period)
                 });
 
             c.shared.network.lock(|net| {
                 net.telemetry.publish(&telemetry.finalize(
-                    gains[0],
-                    gains[1],
+                    *gains[0],
+                    *gains[1],
                     c.local.cpu_temp_sensor.get_temperature().unwrap(),
                 ))
             });

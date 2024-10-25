@@ -27,7 +27,9 @@ use core::fmt::Write;
 use embassy_futures::block_on;
 use embedded_io::Write as EioWrite;
 use heapless::{String, Vec};
-use miniconf::{postcard, Path, Tree, TreeDeserializeOwned, TreeSerialize};
+use miniconf::{
+    postcard, Leaf, Path, Tree, TreeDeserializeOwned, TreeKey, TreeSerialize,
+};
 use sequential_storage::{
     cache::NoCache,
     map::{fetch_item, store_item, SerializationError},
@@ -40,14 +42,14 @@ use stm32h7xx_hal::flash::LockedFlashBank;
 #[derive(Clone, Debug, Tree)]
 pub struct NetSettings {
     /// The broker domain name (or IP address) to use for MQTT connections.
-    pub broker: String<255>,
+    pub broker: Leaf<String<255>>,
 
     /// The MQTT ID to use upon connection with a broker.
-    pub id: String<23>,
+    pub id: Leaf<String<23>>,
 
     /// An optional static IP address to use. An unspecified IP address (or malformed address) will
     /// use DHCP.
-    pub ip: String<15>,
+    pub ip: Leaf<String<15>>,
     #[tree(skip)]
     /// The MAC address of Stabilizer, which is used to reinitialize the ID to default settings.
     pub mac: EthernetAddress,
@@ -59,9 +61,9 @@ impl NetSettings {
         write!(&mut id, "{mac}").unwrap();
 
         Self {
-            broker: "mqtt".try_into().unwrap(),
-            ip: "0.0.0.0".try_into().unwrap(),
-            id,
+            broker: String::try_from("mqtt").unwrap().into(),
+            ip: String::try_from("0.0.0.0").unwrap().into(),
+            id: id.into(),
             mac,
         }
     }
@@ -100,7 +102,7 @@ impl sequential_storage::map::Key for SettingsKey {
     }
 }
 
-pub struct SerialSettingsPlatform<C, const Y: usize> {
+pub struct SerialSettingsPlatform<C> {
     /// The interface to read/write data to/from serially (via text) to the user.
     pub interface: BestEffortInterface<crate::hardware::SerialPort>,
 
@@ -113,14 +115,14 @@ pub struct SerialSettingsPlatform<C, const Y: usize> {
     pub metadata: &'static ApplicationMetadata,
 }
 
-impl<C, const Y: usize> SerialSettingsPlatform<C, Y>
+impl<C> SerialSettingsPlatform<C>
 where
-    C: TreeDeserializeOwned<Y> + TreeSerialize<Y>,
+    C: TreeDeserializeOwned + TreeSerialize + TreeKey,
 {
     pub fn load(structure: &mut C, storage: &mut Flash) {
         // Loop over flash and read settings
         let mut buffer = [0u8; 512];
-        for path in C::nodes::<Path<String<128>, '/'>>() {
+        for path in C::nodes::<Path<String<128>, '/'>, 8>() {
             let (path, _node) = path.unwrap();
 
             // Try to fetch the setting from flash.
@@ -161,9 +163,9 @@ where
     }
 }
 
-impl<C, const Y: usize> Platform<Y> for SerialSettingsPlatform<C, Y>
+impl<C> Platform for SerialSettingsPlatform<C>
 where
-    C: Settings<Y>,
+    C: Settings,
 {
     type Interface = BestEffortInterface<crate::hardware::SerialPort>;
     type Settings = C;
