@@ -96,3 +96,6 @@ opt-level = 3
 debug = true
 lto = true
 codegen-units = 1
+
+[patch.crates-io]
+idsp = { path = "../idsp" }

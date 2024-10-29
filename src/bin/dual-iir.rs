@@ -40,6 +40,7 @@ use mutex_trait::prelude::*;
 
 use idsp::iir;
 
+use stabilizer::hardware::signal_generator::SourceConfig;
 use stabilizer::{
     hardware::{
         self,
@@ -47,7 +48,7 @@ use stabilizer::{
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
         hal,
-        signal_generator::{self, SignalGenerator},
+        signal_generator::{self, Source},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SerialTerminal, SystemTimer, Systick,
         UsbDevice, AFE0, AFE1,
@@ -172,7 +173,9 @@ pub struct DualIir {
     ///
     /// # Value
     /// See [signal_generator::BasicConfig#miniconf]
-    source: [signal_generator::BasicConfig; 2],
+    source: [signal_generator::SourceConfig; 2],
+
+    trigger: Leaf<bool>,
 }
 
 impl Default for DualIir {
@@ -180,6 +183,9 @@ impl Default for DualIir {
         let mut i = iir::Biquad::IDENTITY;
         i.set_min(-SCALE);
         i.set_max(SCALE);
+        let mut source = SourceConfig::default();
+        source.period = SAMPLE_PERIOD;
+        source.scale = DacCode::FULL_SCALE;
         Self {
             // Analog frontend programmable gain amplifier gains (G1, G2, G5, G10)
             afe: Default::default(),
@@ -197,7 +203,8 @@ impl Default for DualIir {
             // The default telemetry period in seconds.
             telemetry_period: 10.into(),
 
-            source: Default::default(),
+            source: [source; 2],
+            trigger: false.into(),
 
             stream: Default::default(),
         }
@@ -215,7 +222,7 @@ mod app {
         settings: Settings,
         active_settings: DualIir,
         telemetry: TelemetryBuffer,
-        source: [SignalGenerator; 2],
+        source: [Source; 2],
     }
 
     #[local]
@@ -255,23 +262,16 @@ mod app {
 
         let generator = network.configure_streaming(StreamFormat::AdcDacData);
 
+        let source =
+            Source::try_from_config(&stabilizer.settings.dual_iir.source[0])
+                .unwrap();
+
         let shared = Shared {
             usb: stabilizer.usb,
             network,
             active_settings: stabilizer.settings.dual_iir.clone(),
             telemetry: TelemetryBuffer::default(),
-            source: [
-                SignalGenerator::new(
-                    stabilizer.settings.dual_iir.source[0]
-                        .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
-                        .unwrap(),
-                ),
-                SignalGenerator::new(
-                    stabilizer.settings.dual_iir.source[1]
-                        .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
-                        .unwrap(),
-                ),
-            ],
+            source: [source.clone(), source],
             settings: stabilizer.settings,
         };
 
@@ -385,7 +385,7 @@ mod app {
                                 // The truncation introduces 1/2 LSB distortion.
                                 let y: i16 = unsafe { y.to_int_unchecked() };
 
-                                let y = y.saturating_add(signal);
+                                let y = y.saturating_add((signal >> 16) as _);
 
                                 // Convert to DAC code
                                 *di = DacCode::from(y).0;
@@ -458,20 +458,21 @@ mod app {
             c.local.afes.0.set_gain(*settings.dual_iir.afe[0]);
             c.local.afes.1.set_gain(*settings.dual_iir.afe[1]);
 
-            // Update the signal generators
-            for (i, &config) in settings.dual_iir.source.iter().enumerate() {
-                match config.try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
-                {
-                    Ok(config) => {
-                        c.shared.source.lock(|generator| {
-                            generator[i].update_waveform(config)
-                        });
+            if *settings.dual_iir.trigger {
+                settings.dual_iir.trigger = false.into();
+                for (i, config) in settings.dual_iir.source.iter().enumerate() {
+                    match Source::try_from_config(config) {
+                        Ok(source) => {
+                            c.shared.source.lock(|s| {
+                                s[i] = source;
+                            });
+                        }
+                        Err(err) => log::error!(
+                            "Failed to update source on channel {}: {:?}",
+                            i,
+                            err
+                        ),
                     }
-                    Err(err) => log::error!(
-                        "Failed to update signal generation on DAC{}: {:?}",
-                        i,
-                        err
-                    ),
                 }
             }
 
