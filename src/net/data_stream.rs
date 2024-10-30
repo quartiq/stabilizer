@@ -52,8 +52,8 @@ const FRAME_COUNT: usize = 4;
 
 // The size of each frame in bytes.
 // Ensure the resulting ethernet frame is within the MTU:
-// 1500 MTU - 40 IP6 header - 8 UDP header
-const FRAME_SIZE: usize = 1500 - 40 - 8;
+// 1500 MTU - 40 IP6 header - 8 UDP header - 32 VPN - 20 IP4
+const FRAME_SIZE: usize = 1500 - 40 - 8 - 32 - 20;
 
 // The size of the frame queue must be at least as large as the number of frame buffers. Every
 // allocated frame buffer should fit in the queue.
