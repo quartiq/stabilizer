@@ -76,8 +76,7 @@ class AdcDac:
         ]
 
 
-class StabilizerStream(asyncio.DatagramProtocol):
-    """Stabilizer streaming receiver protocol"""
+class Frame:
     # The magic header half-word at the start of each packet.
     magic = 0x057B
     header_fmt = struct.Struct("<HBBI")
@@ -85,6 +84,21 @@ class StabilizerStream(asyncio.DatagramProtocol):
     parsers = {
         AdcDac.format_id: AdcDac,
     }
+
+    @classmethod
+    def parse(cls, data):
+        header = cls.header._make(cls.header_fmt.unpack_from(data))
+        if header.magic != cls.magic:
+            raise ValueError("Bad frame magic: %#04x", header.magic)
+        try:
+            parser = cls.parsers[header.format_id]
+        except KeyError:
+            raise ValueError("No parser for format %s", header.format_id)
+        return parser(header, data[cls.header_fmt.size:])
+
+
+class StabilizerStream(asyncio.DatagramProtocol):
+    """Stabilizer streaming receiver protocol"""
 
     @classmethod
     async def open(cls, addr, port, broker, maxsize=1):
@@ -104,9 +118,8 @@ class StabilizerStream(asyncio.DatagramProtocol):
         # wrong one. Thus, use the broker address to figure out our local address for the interface
         # of interest.
         if ipaddress.ip_address(addr).is_multicast:
-            print('Subscribing to multicast')
             group = socket.inet_aton(addr)
-            iface = socket.inet_aton('.'.join([str(x) for x in get_local_ip(broker)]))
+            iface = socket.inet_aton(get_local_ip(broker))
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, group + iface)
             sock.bind(('', port))
         else:
@@ -125,16 +138,11 @@ class StabilizerStream(asyncio.DatagramProtocol):
         logger.info("Connection lost")
 
     def datagram_received(self, data, _addr):
-        header = self.header._make(self.header_fmt.unpack_from(data))
-        if header.magic != self.magic:
-            logger.warning("Bad frame magic: %#04x, ignoring", header.magic)
-            return
         try:
-            parser = self.parsers[header.format_id]
-        except KeyError:
-            logger.warning("No parser for format %s, ignoring", header.format_id)
+            frame = Frame.parse(data)
+        except ValueError as e:
+            logger.warning("Parse error: %s", e)
             return
-        frame = parser(header, data[self.header_fmt.size:])
         if self.queue.full():
             old = self.queue.get_nowait()
             logger.debug("Dropping frame: %#08x", old.header.sequence)
