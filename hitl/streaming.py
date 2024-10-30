@@ -63,7 +63,7 @@ async def _main():
         try:
             logger.info("Testing stream reception")
             _transport, stream = await StabilizerStream.open(
-                args.ip, args.port, args.broker
+                args.port, args.ip, args.broker
             )
             loss = await measure(stream, args.duration)
             if loss > args.max_loss:

@@ -101,7 +101,7 @@ class StabilizerStream(asyncio.DatagramProtocol):
     """Stabilizer streaming receiver protocol"""
 
     @classmethod
-    async def open(cls, addr, port, broker, maxsize=1):
+    async def open(cls, port=9293, addr="0.0.0.0", broker=None, maxsize=1):
         """Open a UDP socket and start receiving frames"""
         loop = asyncio.get_running_loop()
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -121,7 +121,7 @@ class StabilizerStream(asyncio.DatagramProtocol):
             group = socket.inet_aton(addr)
             iface = socket.inet_aton(get_local_ip(broker))
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, group + iface)
-            sock.bind(('', port))
+            sock.bind(("", port))
         else:
             sock.bind((addr, port))
 
@@ -204,7 +204,7 @@ async def main():
 
     logging.basicConfig(level=logging.INFO)
     _transport, stream = await StabilizerStream.open(
-        args.host, args.port, args.broker, args.maxsize)
+        args.port, args.host, args.broker, args.maxsize)
     await measure(stream, args.duration)
 
 
