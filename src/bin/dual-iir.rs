@@ -40,7 +40,6 @@ use mutex_trait::prelude::*;
 
 use idsp::iir;
 
-use stabilizer::hardware::signal_generator::SourceConfig;
 use stabilizer::{
     hardware::{
         self,
@@ -107,14 +106,6 @@ impl serial_settings::Settings for Settings {
 #[derive(Clone, Debug, Tree, Serialize, Deserialize)]
 pub struct DualIir {
     /// Configure the Analog Front End (AFE) gain.
-    ///
-    /// # Path
-    /// `afe/<n>`
-    ///
-    /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
-    ///
-    /// # Value
-    /// Any of the variants of [Gain] enclosed in double quotes.
     afe: [Leaf<Gain>; 2],
 
     /// Configure the IIR filter parameters.
@@ -128,52 +119,25 @@ pub struct DualIir {
     /// See [iir::Biquad]
     iir_ch: [[Leaf<iir::Biquad<f32>>; IIR_CASCADE_LENGTH]; 2],
 
-    /// Specified true if DI1 should be used as a "hold" input.
-    ///
-    /// # Path
-    /// `allow_hold`
-    ///
-    /// # Value
-    /// "true" or "false"
+    /// Use DI0/1 to HOLD the biquad.
     allow_hold: Leaf<bool>,
 
-    /// Specified true if "hold" should be forced regardless of DI1 state and hold allowance.
-    ///
-    /// # Path
-    /// `force_hold`
-    ///
-    /// # Value
-    /// "true" or "false"
+    /// Force the biquad to HOLD.
     force_hold: Leaf<bool>,
 
-    /// Specifies the telemetry output period in seconds.
-    ///
-    /// # Path
-    /// `telemetry_period`
-    ///
-    /// # Value
-    /// Any non-zero value less than 65536.
-    telemetry_period: Leaf<u16>,
+    /// Telemetry output period in seconds.
+    telemetry_period: Leaf<f32>,
 
-    /// Specifies the target for data streaming.
-    ///
-    /// # Path
-    /// `stream`
+    /// Target IP and port for UDP streaming.
+    /// 
+    /// Can be multicast.
     ///
     /// # Value
     /// See [StreamTarget#miniconf]
     stream: Leaf<StreamTarget>,
 
-    /// Specifies the config for signal generators to add on to DAC0/DAC1 outputs.
-    ///
-    /// # Path
-    /// `source/<n>`
-    ///
-    /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
-    ///
-    /// # Value
-    /// See [signal_generator::BasicConfig#miniconf]
-    source: [signal_generator::SourceConfig; 2],
+    /// Signal generator configuration to add to the DAC0/DAC1 outputs
+    source: [signal_generator::Config; 2],
 
     trigger: Leaf<bool>,
 }
@@ -183,7 +147,7 @@ impl Default for DualIir {
         let mut i = iir::Biquad::IDENTITY;
         i.set_min(-SCALE);
         i.set_max(SCALE);
-        let mut source = SourceConfig::default();
+        let mut source = signal_generator::Config::default();
         source.period = SAMPLE_PERIOD;
         source.scale = DacCode::FULL_SCALE;
         Self {
@@ -201,7 +165,7 @@ impl Default for DualIir {
             // Force suppress filter output updates.
             force_hold: false.into(),
             // The default telemetry period in seconds.
-            telemetry_period: 10.into(),
+            telemetry_period: 10.0.into(),
 
             source: [source; 2],
             trigger: false.into(),
@@ -504,7 +468,7 @@ mod app {
                 ))
             });
 
-            Systick::delay((telemetry_period as u32).secs()).await;
+            Systick::delay(((telemetry_period*1000.0) as u32).millis()).await;
         }
     }
 

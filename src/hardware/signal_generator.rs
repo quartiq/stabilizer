@@ -1,5 +1,3 @@
-use core::iter::Fuse;
-
 use idsp::{AccuOsc, SyncExpSweep};
 use miniconf::{Leaf, Tree};
 use rand_core::{RngCore, SeedableRng};
@@ -36,7 +34,7 @@ impl Signal {
 
 /// Basic configuration for a generated signal.
 #[derive(Copy, Clone, Debug, Tree, Serialize, Deserialize)]
-pub struct SourceConfig {
+pub struct Config {
     /// The signal type that should be generated. See [Signal] variants.
     signal: Leaf<Signal>,
 
@@ -71,7 +69,7 @@ pub struct SourceConfig {
     pub scale: f32,
 }
 
-impl Default for SourceConfig {
+impl Default for Config {
     fn default() -> Self {
         Self {
             frequency: 1.0e3.into(),
@@ -138,7 +136,7 @@ pub enum Error {
 #[derive(Clone, Debug)]
 pub enum Source {
     SweptSine {
-        sweep: Fuse<AccuOsc<SyncExpSweep>>,
+        sweep: core::iter::Fuse<AccuOsc<SyncExpSweep>>,
         amp: Scaler,
     },
     Periodic {
@@ -176,7 +174,7 @@ impl Iterator for Source {
 
 impl Source {
     /// Convert from SI config
-    pub fn try_from_config(value: &SourceConfig) -> Result<Source, Error> {
+    pub fn try_from_config(value: &Config) -> Result<Source, Error> {
         if !(0.0..1.0).contains(&*value.symmetry) {
             return Err(Error::Symmetry);
         }
@@ -219,7 +217,7 @@ impl Source {
         };
 
         Ok(match *value.signal {
-            s @ (Signal::Cosine | Signal::Square | Signal::Triangle) => {
+            signal @ (Signal::Cosine | Signal::Square | Signal::Triangle) => {
                 Self::Periodic {
                     accu: AsymmetricAccu {
                         ftw2,
@@ -227,7 +225,7 @@ impl Source {
                         accu: 0,
                         count: *value.length,
                     },
-                    signal: s,
+                    signal,
                     amp,
                 }
             }

@@ -302,14 +302,18 @@ mod app {
             settings: stabilizer.settings,
         };
 
-        let signal_config = signal_generator::Config {
-            // Same frequency as batch size.
-            phase_increment: [1 << (32 - BATCH_SIZE_LOG2); 2],
-            // 1V Amplitude
-            amplitude: DacCode::try_from(1.0).unwrap().into(),
-            signal: signal_generator::Signal::Cosine,
-            phase_offset: 0,
+        let source = signal_generator::AsymmetricAccu {
+
         };
+        //::try_from_config(&signal_config).unwrap()
+        // let signal_config = signal_generator::Config {
+        //     // Same frequency as batch size.
+        //     phase_increment: [1 << (32 - BATCH_SIZE_LOG2); 2],
+        //     // 1V Amplitude
+        //     amplitude: DacCode::try_from(1.0).unwrap().into(),
+        //     signal: signal_generator::Signal::Cosine,
+        //     phase_offset: 0,
+        // };
 
         let mut local = Local {
             usb_terminal: stabilizer.usb_serial,
@@ -322,7 +326,7 @@ mod app {
 
             pll: RPLL::new(SAMPLE_TICKS_LOG2 + BATCH_SIZE_LOG2),
             lockin: idsp::Lockin::default(),
-            source: signal_generator::SignalGenerator::new(signal_config),
+            source,
 
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
