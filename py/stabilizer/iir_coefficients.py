@@ -141,7 +141,7 @@ def lowpass_coefficients(args):
     b0 = args.K * (f0_bar / (1 + f0_bar))
     b1 = args.K * f0_bar / (1 + f0_bar)
 
-    return [b0, b1, 0, a1, 0]
+    return [b0, b1, 0, -a1, 0]
 
 
 def highpass_coefficients(args):
@@ -149,10 +149,10 @@ def highpass_coefficients(args):
     f0_bar = pi * args.f0 * args.sample_period
 
     a1 = (1 - f0_bar) / (1 + f0_bar)
-    b0 = args.K * (f0_bar / (1 + f0_bar))
+    b0 = args.K / (1 + f0_bar)
     b1 = - args.K / (1 + f0_bar)
 
-    return [b0, b1, 0, a1, 0]
+    return [b0, b1, 0, -a1, 0]
 
 
 def allpass_coefficients(args):
@@ -164,7 +164,7 @@ def allpass_coefficients(args):
     b0 = args.K * (1 - f0_bar) / (1 + f0_bar)
     b1 = - args.K
 
-    return [b0, b1, 0, a1, 0]
+    return [b0, b1, 0, -a1, 0]
 
 
 def notch_coefficients(args):
@@ -179,7 +179,7 @@ def notch_coefficients(args):
     b1 = - (2 * args.K * (1 - f0_bar ** 2)) / denominator
     b2 = args.K * (1 + f0_bar ** 2) / denominator
 
-    return [b0, b1, b2, a1, a2]
+    return [b0, b1, b2, -a1, -a2]
 
 
 def pid_coefficients(args):
@@ -216,7 +216,7 @@ def pid_coefficients(args):
     b = [i/a[0] for i in b]
     a = [i/a[0] for i in a]
     assert a[0] == 1
-    return b + [-ai for ai in a[1:]]
+    return b + a[1:]
 
 
 def _main():
