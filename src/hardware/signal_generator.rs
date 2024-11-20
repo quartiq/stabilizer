@@ -88,7 +88,7 @@ impl Default for Config {
 
 #[derive(Clone, Debug)]
 pub struct AsymmetricAccu {
-    ftw2: [i32; 2],
+    ftw: [i32; 2],
     pow: i32,
     accu: i32,
     count: u32,
@@ -98,7 +98,7 @@ impl Iterator for AsymmetricAccu {
     type Item = i32;
     fn next(&mut self) -> Option<Self::Item> {
         let sign = self.accu.is_negative();
-        self.accu = self.accu.wrapping_add(self.ftw2[sign as usize]);
+        self.accu = self.accu.wrapping_add(self.ftw[sign as usize]);
         self.count
             .checked_sub(sign as u32 ^ self.accu.is_negative() as u32)
             .map(|c| {
@@ -180,20 +180,20 @@ impl Source {
         }
 
         const NYQUIST: f32 = (1u32 << 31) as _;
-        let ftw = *value.frequency * value.period * NYQUIST;
-        if !(0.0..2.0 * NYQUIST).contains(&ftw) {
+        let ftw0 = *value.frequency * value.period * NYQUIST;
+        if !(0.0..2.0 * NYQUIST).contains(&ftw0) {
             return Err(Error::Frequency);
         }
 
         // Clip both frequency tuning words to within Nyquist before rounding.
-        let ftw2 = [
-            if *value.symmetry * NYQUIST > ftw {
-                ftw / *value.symmetry
+        let ftw = [
+            if *value.symmetry * NYQUIST > ftw0 {
+                ftw0 / *value.symmetry
             } else {
                 NYQUIST
             } as i32,
-            if (1.0 - *value.symmetry) * NYQUIST > ftw {
-                ftw / (1.0 - *value.symmetry)
+            if (1.0 - *value.symmetry) * NYQUIST > ftw0 {
+                ftw0 / (1.0 - *value.symmetry)
             } else {
                 NYQUIST
             } as i32,
@@ -220,7 +220,7 @@ impl Source {
             signal @ (Signal::Cosine | Signal::Square | Signal::Triangle) => {
                 Self::Periodic {
                     accu: AsymmetricAccu {
-                        ftw2,
+                        ftw,
                         pow: (*value.phase * NYQUIST) as i32,
                         accu: 0,
                         count: *value.length,
@@ -232,7 +232,7 @@ impl Source {
             Signal::SweptSine => Self::SweptSine {
                 sweep: AccuOsc::from(
                     SyncExpSweep::new(
-                        (ftw * 2.0) as _,
+                        (ftw0 * 2.0) as _,
                         *value.length,
                         (*value.interval / value.period) as u32,
                     )
