@@ -242,7 +242,7 @@ impl Source {
                 amp,
             },
             Signal::WhiteNoise => Self::WhiteNoise {
-                rng: XorShiftRng::from_seed([0; 16]),
+                rng: XorShiftRng::from_seed(Default::default()),
                 count: *value.length,
                 amp,
             },
