@@ -99,3 +99,6 @@ codegen-units = 1
 
 [patch.crates-io]
 idsp = { path = "../idsp" }
+miniconf = {path = "../miniconf/miniconf"}
+miniconf_mqtt = {path = "../miniconf/miniconf_mqtt"}
+miniconf_derive = {path = "../miniconf/miniconf_derive"}
