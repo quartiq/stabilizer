@@ -1052,6 +1052,9 @@ where
         None
     };
 
+    let mut force_eem_source = gpioe.pe0.into_push_pull_output();
+    force_eem_source.set_high();
+
     let eem_gpio = EemGpioDevices {
         lvds4: gpiod.pd1.into_floating_input(),
         lvds5: gpiod.pd2.into_floating_input(),
