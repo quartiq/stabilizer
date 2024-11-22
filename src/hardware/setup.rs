@@ -19,11 +19,10 @@ use crate::settings::{AppSettings, NetSettings};
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
-    eem::Eem, eeprom, input_stamper::InputStamper,
-    metadata::ApplicationMetadata, platform, pounder,
-    pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
-    DigitalInput0, DigitalInput1, EthernetPhy, HardwareVersion, NetworkStack,
-    SerialTerminal, SystemTimer, Systick, UsbDevice, AFE0, AFE1,
+    eem, eeprom, input_stamper::InputStamper, metadata::ApplicationMetadata,
+    platform, pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc,
+    timers, DigitalInput0, DigitalInput1, EthernetPhy, HardwareVersion,
+    NetworkStack, SerialTerminal, SystemTimer, Systick, UsbDevice, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -115,7 +114,7 @@ pub struct StabilizerDevices<
     pub timestamp_timer: timers::TimestampTimer,
     pub net: NetworkDevices,
     pub digital_inputs: (DigitalInput0, DigitalInput1),
-    pub eem: Eem,
+    pub eem: eem::Eem,
     pub usb_serial: SerialTerminal<C, Y>,
     pub usb: UsbDevice,
     pub metadata: &'static ApplicationMetadata,
@@ -276,7 +275,10 @@ where
 
     device.RCC.d1ccipr.modify(|_, w| w.qspisel().rcc_hclk3());
 
-    device.RCC.d3ccipr.modify(|_, w| w.adcsel().per());
+    device
+        .RCC
+        .d3ccipr
+        .modify(|_, w| w.adcsel().per().spi6sel().pll2_q());
 
     let rcc = device.RCC.constrain();
     let mut ccdr = rcc
@@ -1048,21 +1050,36 @@ where
     force_eem_source.set_high();
 
     #[cfg(feature = "urukul")]
-    let eem_gpio = Eem::Urukul {
+    let eem = eem::Eem::Urukul(eem::Urukul {
+        spi: device.SPI6.spi(
+            (
+                gpiog.pg13.into_alternate(),
+                gpiog.pg12.into_alternate(),
+                gpiob.pb5.into_alternate(),
+            ),
+            hal::spi::Config::new(hal::spi::Mode {
+                polarity: hal::spi::Polarity::IdleHigh,
+                phase: hal::spi::Phase::CaptureOnSecondTransition,
+            })
+            .communication_mode(hal::spi::CommunicationMode::FullDuplex),
+            20.MHz(),
+            ccdr.peripheral.SPI6,
+            &ccdr.clocks,
+        ),
         cs: [
             gpiod.pd1.into_push_pull_output().erase(),
             gpiod.pd2.into_push_pull_output().erase(),
             gpiod.pd3.into_push_pull_output().erase(),
         ],
         io_update: gpiod.pd4.into_push_pull_output().erase(),
-    };
+    });
     #[cfg(not(feature = "urukul"))]
-    let eem_gpio = Eem::Gpio {
+    let eem = eem::Eem::Gpio(eem::Gpio {
         lvds4: gpiod.pd1.into_floating_input(),
         lvds5: gpiod.pd2.into_floating_input(),
         lvds6: gpiod.pd3.into_push_pull_output(),
         lvds7: gpiod.pd4.into_push_pull_output(),
-    };
+    });
 
     let (usb_device, usb_serial) = {
         let _usb_id = gpioa.pa10.into_alternate::<10>();
@@ -1157,7 +1174,7 @@ where
         adc_dac_timer: sampling_timer,
         timestamp_timer,
         digital_inputs,
-        eem: eem_gpio,
+        eem,
         usb: usb_device,
         metadata,
         settings,
