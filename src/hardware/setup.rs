@@ -1048,38 +1048,48 @@ where
 
     let mut force_eem_source = gpioe.pe0.into_push_pull_output();
     force_eem_source.set_high();
+    delay.delay_ms(100u8);
+
+    let poe_src_status = gpiob.pb6.into_floating_input();
+    let poe_at_event = gpioc.pc14.into_floating_input();
+    log::info!(
+        "PoE: src: {}, at: {}",
+        poe_src_status.is_high(),
+        poe_at_event.is_high()
+    );
 
     #[cfg(feature = "urukul")]
-    let eem = eem::Eem::Urukul(eem::Urukul {
+    let mut eem = eem::Eem::Urukul(eem::Urukul {
         spi: device.SPI6.spi(
             (
                 gpiog.pg13.into_alternate(),
                 gpiog.pg12.into_alternate(),
                 gpiob.pb5.into_alternate(),
             ),
-            hal::spi::Config::new(hal::spi::Mode {
-                polarity: hal::spi::Polarity::IdleHigh,
-                phase: hal::spi::Phase::CaptureOnSecondTransition,
-            })
-            .communication_mode(hal::spi::CommunicationMode::FullDuplex),
-            20.MHz(),
+            hal::spi::MODE_0,
+            1.MHz(), // TODO check
             ccdr.peripheral.SPI6,
             &ccdr.clocks,
         ),
         cs: [
+            gpiog.pg8.into_push_pull_output().erase(),
             gpiod.pd1.into_push_pull_output().erase(),
             gpiod.pd2.into_push_pull_output().erase(),
-            gpiod.pd3.into_push_pull_output().erase(),
         ],
-        io_update: gpiod.pd4.into_push_pull_output().erase(),
+        io_update: gpiod.pd3.into_push_pull_output().erase(),
+        sync: gpiod.pd4.into_push_pull_output().erase(),
     });
     #[cfg(not(feature = "urukul"))]
-    let eem = eem::Eem::Gpio(eem::Gpio {
+    let mut eem = eem::Eem::Gpio(eem::Gpio {
         lvds4: gpiod.pd1.into_floating_input(),
         lvds5: gpiod.pd2.into_floating_input(),
         lvds6: gpiod.pd3.into_push_pull_output(),
         lvds7: gpiod.pd4.into_push_pull_output(),
     });
+
+    if let eem::Eem::Urukul(urukul) = &mut eem {
+        urukul.init().unwrap();
+    }
 
     let (usb_device, usb_serial) = {
         let _usb_id = gpioa.pa10.into_alternate::<10>();
