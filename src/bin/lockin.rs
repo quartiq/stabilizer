@@ -302,9 +302,7 @@ mod app {
             settings: stabilizer.settings,
         };
 
-        let source = signal_generator::AsymmetricAccu {
-
-        };
+        let source = signal_generator::AsymmetricAccu {};
         //::try_from_config(&signal_config).unwrap()
         // let signal_config = signal_generator::Config {
         //     // Same frequency as batch size.

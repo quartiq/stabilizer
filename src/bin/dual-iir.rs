@@ -129,7 +129,7 @@ pub struct DualIir {
     telemetry_period: Leaf<f32>,
 
     /// Target IP and port for UDP streaming.
-    /// 
+    ///
     /// Can be multicast.
     ///
     /// # Value
@@ -468,7 +468,7 @@ mod app {
                 ))
             });
 
-            Systick::delay(((telemetry_period*1000.0) as u32).millis()).await;
+            Systick::delay(((telemetry_period * 1000.0) as u32).millis()).await;
         }
     }
 
