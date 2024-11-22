@@ -19,11 +19,11 @@ use crate::settings::{AppSettings, NetSettings};
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
-    eeprom, input_stamper::InputStamper, metadata::ApplicationMetadata,
-    platform, pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc,
-    timers, DigitalInput0, DigitalInput1, EemDigitalInput0, EemDigitalInput1,
-    EemDigitalOutput0, EemDigitalOutput1, EthernetPhy, HardwareVersion,
-    NetworkStack, SerialTerminal, SystemTimer, Systick, UsbDevice, AFE0, AFE1,
+    eem::Eem, eeprom, input_stamper::InputStamper,
+    metadata::ApplicationMetadata, platform, pounder,
+    pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
+    DigitalInput0, DigitalInput1, EthernetPhy, HardwareVersion, NetworkStack,
+    SerialTerminal, SystemTimer, Systick, UsbDevice, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -101,14 +101,6 @@ pub struct NetworkDevices {
     pub mac_address: smoltcp::wire::EthernetAddress,
 }
 
-/// The GPIO pins available on the EEM connector, if Pounder is not present.
-pub struct EemGpioDevices {
-    pub lvds4: EemDigitalInput0,
-    pub lvds5: EemDigitalInput1,
-    pub lvds6: EemDigitalOutput0,
-    pub lvds7: EemDigitalOutput1,
-}
-
 /// The available hardware interfaces on Stabilizer.
 pub struct StabilizerDevices<
     C: serial_settings::Settings + 'static,
@@ -123,7 +115,7 @@ pub struct StabilizerDevices<
     pub timestamp_timer: timers::TimestampTimer,
     pub net: NetworkDevices,
     pub digital_inputs: (DigitalInput0, DigitalInput1),
-    pub eem_gpio: EemGpioDevices,
+    pub eem: Eem,
     pub usb_serial: SerialTerminal<C, Y>,
     pub usb: UsbDevice,
     pub metadata: &'static ApplicationMetadata,
@@ -1055,7 +1047,17 @@ where
     let mut force_eem_source = gpioe.pe0.into_push_pull_output();
     force_eem_source.set_high();
 
-    let eem_gpio = EemGpioDevices {
+    #[cfg(feature = "urukul")]
+    let eem_gpio = Eem::Urukul {
+        cs: [
+            gpiod.pd1.into_push_pull_output().erase(),
+            gpiod.pd2.into_push_pull_output().erase(),
+            gpiod.pd3.into_push_pull_output().erase(),
+        ],
+        io_update: gpiod.pd4.into_push_pull_output().erase(),
+    };
+    #[cfg(not(feature = "urukul"))]
+    let eem_gpio = Eem::Gpio {
         lvds4: gpiod.pd1.into_floating_input(),
         lvds5: gpiod.pd2.into_floating_input(),
         lvds6: gpiod.pd3.into_push_pull_output(),
@@ -1155,7 +1157,7 @@ where
         adc_dac_timer: sampling_timer,
         timestamp_timer,
         digital_inputs,
-        eem_gpio,
+        eem: eem_gpio,
         usb: usb_device,
         metadata,
         settings,
