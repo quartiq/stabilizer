@@ -66,8 +66,8 @@ minimq = "0.9.0"
 usb-device = "0.3.2"
 usbd-serial = "0.2"
 # Keep this synced with the miniconf version in py/setup.py
-miniconf = { version = "0.17", features = ["json-core", "derive", "postcard"] }
-miniconf_mqtt = { version = "0.17" }
+miniconf = { version = "0.18", features = ["json-core", "derive", "postcard"] }
+miniconf_mqtt = { version = "0.18" }
 tca9539 = "0.2"
 smoltcp-nal = { version = "0.5", features = ["shared-stack"] }
 postcard = "1"
@@ -99,6 +99,3 @@ codegen-units = 1
 
 [patch.crates-io]
 idsp = { path = "../idsp" }
-miniconf = {path = "../miniconf/miniconf"}
-miniconf_mqtt = {path = "../miniconf/miniconf_mqtt"}
-miniconf_derive = {path = "../miniconf/miniconf_derive"}
