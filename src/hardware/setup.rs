@@ -15,14 +15,16 @@ use stm32h7xx_hal::{
 
 use smoltcp_nal::smoltcp;
 
+use crate::hardware::delay::AsmDelay;
 use crate::settings::{AppSettings, NetSettings};
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
-    eem, eeprom, input_stamper::InputStamper, metadata::ApplicationMetadata,
+    eeprom, input_stamper::InputStamper, metadata::ApplicationMetadata,
     platform, pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc,
-    timers, DigitalInput0, DigitalInput1, EthernetPhy, HardwareVersion,
-    NetworkStack, SerialTerminal, SystemTimer, Systick, UsbDevice, AFE0, AFE1,
+    timers, urukul, DigitalInput0, DigitalInput1, Eem, EthernetPhy, Gpio,
+    HardwareVersion, NetworkStack, SerialTerminal, SystemTimer, Systick,
+    UsbDevice, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -114,7 +116,7 @@ pub struct StabilizerDevices<
     pub timestamp_timer: timers::TimestampTimer,
     pub net: NetworkDevices,
     pub digital_inputs: (DigitalInput0, DigitalInput1),
-    pub eem: eem::Eem,
+    pub eem: Eem,
     pub usb_serial: SerialTerminal<C, Y>,
     pub usb: UsbDevice,
     pub metadata: &'static ApplicationMetadata,
@@ -1046,50 +1048,91 @@ where
         None
     };
 
-    let mut force_eem_source = gpioe.pe0.into_push_pull_output();
-    force_eem_source.set_high();
-    delay.delay_ms(100u8);
+    #[derive(Copy, Clone, Debug, PartialEq)]
+    pub enum PoePower {
+        /// No Power over Ethernet detected
+        Absent,
+        /// 802.3af (12.95 W) Power over Ethernet present
+        Low,
+        /// 802.3at (25.5 W) Power over Ethernet present
+        High,
+    }
 
     let poe_src_status = gpiob.pb6.into_floating_input();
     let poe_at_event = gpioc.pc14.into_floating_input();
-    log::info!(
-        "PoE: src: {}, at: {}",
-        poe_src_status.is_high(),
-        poe_at_event.is_high()
-    );
+    let poe = match (poe_src_status.is_high(), poe_at_event.is_high()) {
+        (false, _) => PoePower::Absent,
+        (true, false) => PoePower::Low,
+        (true, true) => PoePower::High,
+    };
+    log::info!("PoE: {poe:?}",);
 
-    #[cfg(feature = "urukul")]
-    let mut eem = eem::Eem::Urukul(eem::Urukul {
-        spi: device.SPI6.spi(
-            (
-                gpiog.pg13.into_alternate(),
-                gpiog.pg12.into_alternate(),
-                gpiob.pb5.into_alternate(),
-            ),
-            hal::spi::MODE_0,
-            1.MHz(), // TODO check
-            ccdr.peripheral.SPI6,
-            &ccdr.clocks,
-        ),
-        cs: [
-            gpiog.pg8.into_push_pull_output().erase(),
-            gpiod.pd1.into_push_pull_output().erase(),
-            gpiod.pd2.into_push_pull_output().erase(),
-        ],
-        io_update: gpiod.pd3.into_push_pull_output().erase(),
-        sync: gpiod.pd4.into_push_pull_output().erase(),
-    });
-    #[cfg(not(feature = "urukul"))]
-    let mut eem = eem::Eem::Gpio(eem::Gpio {
-        lvds4: gpiod.pd1.into_floating_input(),
-        lvds5: gpiod.pd2.into_floating_input(),
-        lvds6: gpiod.pd3.into_push_pull_output(),
-        lvds7: gpiod.pd4.into_push_pull_output(),
-    });
+    let mut force_eem_source = gpioe.pe0.into_push_pull_output();
 
-    if let eem::Eem::Urukul(urukul) = &mut eem {
-        urukul.init().unwrap();
+    // checks whether a pin can be weakly pulled high an low
+    fn check_input<const P: char, const N: u8>(
+        pin: hal::gpio::Pin<P, N, hal::gpio::Analog>,
+        mut is_floating: bool,
+        delay: &mut AsmDelay,
+    ) -> (hal::gpio::Pin<P, N, hal::gpio::Analog>, bool) {
+        let pin = pin.into_pull_up_input();
+        delay.delay_ms(1u8);
+        is_floating &= pin.is_high();
+        let pin = pin.into_pull_down_input();
+        delay.delay_ms(1u8);
+        is_floating &= pin.is_low();
+        (pin.into_analog(), is_floating)
     }
+
+    let mut lvds0 = gpiog.pg13;
+    let mut lvds1 = gpiob.pb5;
+    let mut lvds3 = gpiog.pg8;
+    let mut is_floating = true;
+    // Default EEM population: LVDS0/1/3 driven by LVDS receivers
+    (lvds0, is_floating) = check_input(lvds0, is_floating, &mut delay);
+    (lvds1, is_floating) = check_input(lvds1, is_floating, &mut delay);
+    (lvds3, is_floating) = check_input(lvds3, is_floating, &mut delay);
+    let eem = if !is_floating {
+        log::info!("EEM population variant: Default detected");
+        force_eem_source.set_low();
+        Eem::Gpio(Gpio {
+            lvds4: gpiod.pd1.into_floating_input(),
+            lvds5: gpiod.pd2.into_floating_input(),
+            lvds6: gpiod.pd3.into_push_pull_output(),
+            lvds7: gpiod.pd4.into_push_pull_output(),
+        })
+    } else {
+        assert_eq!(poe, PoePower::High);
+        log::info!("EEM population variant: Output detected");
+        force_eem_source.set_high();
+        delay.delay_ms(100u8);
+
+        let mut urukul = urukul::Urukul {
+            spi: device.SPI6.spi(
+                (
+                    lvds0.into_alternate(),      // SCK
+                    gpiog.pg12.into_alternate(), // MISO/SDO
+                    lvds1.into_alternate(),      // MOSI/SDI
+                ),
+                hal::spi::MODE_0,
+                20.MHz(),
+                ccdr.peripheral.SPI6,
+                &ccdr.clocks,
+            ),
+            cs: [
+                lvds3.into_push_pull_output().erase(),
+                gpiod.pd1.into_push_pull_output().erase(),
+                gpiod.pd2.into_push_pull_output().erase(),
+            ],
+            io_update: gpiod.pd3.into_push_pull_output().erase(),
+            sync: gpiod.pd4.into_push_pull_output().erase(),
+        };
+        if urukul.init().is_ok() {
+            Eem::Urukul(urukul)
+        } else {
+            Eem::None
+        }
+    };
 
     let (usb_device, usb_serial) = {
         let _usb_id = gpioa.pa10.into_alternate::<10>();

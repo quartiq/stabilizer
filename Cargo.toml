@@ -85,8 +85,6 @@ features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
 [features]
 nightly = []
 pounder_v1_0 = []
-urukul = []
-default = ["urukul"]
 
 [profile.dev]
 codegen-units = 1

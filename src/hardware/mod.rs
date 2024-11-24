@@ -20,6 +20,7 @@ pub mod setup;
 pub mod shared_adc;
 pub mod signal_generator;
 pub mod timers;
+pub mod urukul;
 
 // Type alias for the analog front-end (AFE) for ADC0.
 pub type AFE0 = afe::ProgrammableGainAmplifier<
@@ -37,6 +38,19 @@ pub type UsbBus = stm32h7xx_hal::usb_hs::UsbBus<stm32h7xx_hal::usb_hs::USB2>;
 
 // Type alias for the USB device.
 pub type UsbDevice = usb_device::device::UsbDevice<'static, UsbBus>;
+
+pub struct Gpio {
+    pub lvds4: hal::gpio::gpiod::PD1<hal::gpio::Input>,
+    pub lvds5: hal::gpio::gpiod::PD2<hal::gpio::Input>,
+    pub lvds6: hal::gpio::gpiod::PD3<hal::gpio::Output>,
+    pub lvds7: hal::gpio::gpiod::PD4<hal::gpio::Output>,
+}
+
+pub enum Eem {
+    Gpio(Gpio),
+    Urukul(urukul::Urukul),
+    None,
+}
 
 // Type alias for digital input 0 (DI0).
 pub type DigitalInput0 = hal::gpio::gpiog::PG9<hal::gpio::Input>;
