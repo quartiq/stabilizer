@@ -1107,8 +1107,8 @@ where
         force_eem_source.set_high();
         delay.delay_ms(100u8);
 
-        let mut urukul = urukul::Urukul {
-            spi: device.SPI6.spi(
+        urukul::Urukul::new(
+            device.SPI6.spi(
                 (
                     lvds0.into_alternate(),      // SCK
                     gpiog.pg12.into_alternate(), // MISO/SDO
@@ -1119,19 +1119,16 @@ where
                 ccdr.peripheral.SPI6,
                 &ccdr.clocks,
             ),
-            cs: [
+            [
                 lvds3.into_push_pull_output().erase(),
                 gpiod.pd1.into_push_pull_output().erase(),
                 gpiod.pd2.into_push_pull_output().erase(),
             ],
-            io_update: gpiod.pd3.into_push_pull_output().erase(),
-            sync: gpiod.pd4.into_push_pull_output().erase(),
-        };
-        if urukul.init().is_ok() {
-            Eem::Urukul(urukul)
-        } else {
-            Eem::None
-        }
+            gpiod.pd3.into_push_pull_output().erase(),
+            gpiod.pd4.into_push_pull_output().erase(),
+        )
+        .map(Eem::Urukul)
+        .unwrap_or(Eem::None)
     };
 
     let (usb_device, usb_serial) = {

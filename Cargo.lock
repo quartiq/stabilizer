@@ -1247,6 +1247,7 @@ dependencies = [
  "spin",
  "stm32h7xx-hal",
  "tca9539",
+ "thiserror",
  "usb-device",
  "usbd-serial",
 ]
