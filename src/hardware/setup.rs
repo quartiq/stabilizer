@@ -2,9 +2,11 @@
 //!
 //! This file contains all of the hardware-specific configuration of Stabilizer.
 use bit_field::BitField;
+use core::cell::RefCell;
 use core::mem::MaybeUninit;
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{fmt::Write, ptr, slice};
+use embedded_hal_compat::ForwardCompat;
 use heapless::String;
 use stm32h7xx_hal::{
     self as hal,
@@ -1107,29 +1109,42 @@ where
         force_eem_source.set_high();
         delay.delay_ms(100u8);
 
-        let spi = device.SPI6.spi(
-            (
-                lvds0.into_alternate(),      // SCK
-                gpiog.pg12.into_alternate(), // MISO/SDO
-                lvds1.into_alternate(),      // MOSI/SDI
-            ),
-            hal::spi::MODE_0,
-            20.MHz(),
-            ccdr.peripheral.SPI6,
-            &ccdr.clocks,
-        );
-        let bus = cortex_m::singleton!(: shared_bus::BusManagerSimple<hal::spi::Spi<hal::stm32::SPI6, hal::spi::Enabled>> = 
-        shared_bus::BusManagerSimple::new(spi)).unwrap();
+        let spi = device
+            .SPI6
+            .spi(
+                (
+                    lvds0.into_alternate(),      // SCK
+                    gpiog.pg12.into_alternate(), // MISO/SDO
+                    lvds1.into_alternate(),      // MOSI/SDI
+                ),
+                hal::spi::MODE_0,
+                20.MHz(),
+                ccdr.peripheral.SPI6,
+                &ccdr.clocks,
+            )
+            .forward();
+        let spi = cortex_m::singleton!(:
+            RefCell<embedded_hal_compat::Forward<hal::spi::Spi<hal::stm32::SPI6, hal::spi::Enabled>>> = 
+                RefCell::new(spi)).unwrap();
+
+        let cs = [
+            lvds3.into_push_pull_output().erase().forward(),
+            gpiod.pd1.into_push_pull_output().erase().forward(),
+            gpiod.pd2.into_push_pull_output().erase().forward(),
+        ];
+        let cs = cortex_m::singleton!(:
+            RefCell<[embedded_hal_compat::Forward<
+                hal::gpio::ErasedPin<hal::gpio::Output>,
+                embedded_hal_compat::markers::ForwardOutputPin>; 3]> =
+            RefCell::new(cs)
+        )
+        .unwrap();
 
         urukul::Urukul::new(
-            bus,
-            [
-                lvds3.into_push_pull_output().erase(),
-                gpiod.pd1.into_push_pull_output().erase(),
-                gpiod.pd2.into_push_pull_output().erase(),
-            ],
-            gpiod.pd3.into_push_pull_output().erase(),
-            gpiod.pd4.into_push_pull_output().erase(),
+            spi,
+            cs,
+            gpiod.pd3.into_push_pull_output().erase().forward(),
+            gpiod.pd4.into_push_pull_output().erase().forward(),
         )
         .map(Eem::Urukul)
         .unwrap_or(Eem::None)

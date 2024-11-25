@@ -1,6 +1,6 @@
 //! Module for all hardware-specific setup of Stabilizer
 
-pub use embedded_hal;
+pub use embedded_hal_02;
 pub use stm32h7xx_hal as hal;
 
 pub mod ad9912;
@@ -8,6 +8,7 @@ pub mod adc;
 pub mod afe;
 pub mod cpu_temp_sensor;
 pub mod dac;
+pub mod decoded_cs;
 pub mod delay;
 pub mod design_parameters;
 pub mod eem;
@@ -49,8 +50,13 @@ pub struct Gpio {
 
 pub type Urukul = urukul::Urukul<
     'static,
-    hal::spi::Spi<hal::stm32::SPI6, hal::spi::Enabled>,
-    hal::gpio::ErasedPin<hal::gpio::Output>,
+    embedded_hal_compat::Forward<
+        hal::spi::Spi<hal::stm32::SPI6, hal::spi::Enabled>,
+    >,
+    embedded_hal_compat::Forward<
+        hal::gpio::ErasedPin<hal::gpio::Output>,
+        embedded_hal_compat::markers::ForwardOutputPin,
+    >,
 >;
 
 pub enum Eem {

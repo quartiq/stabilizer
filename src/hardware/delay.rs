@@ -5,7 +5,7 @@
 //! # Note
 //! This implementation takes into account the Cortex-M7 CPU pipeline architecture to ensure delays
 //! are at least as long as specified.
-use embedded_hal::blocking::delay::{DelayMs, DelayUs};
+use embedded_hal_02::blocking::delay::{DelayMs, DelayUs};
 
 /// A basic delay implementation.
 pub struct AsmDelay {
