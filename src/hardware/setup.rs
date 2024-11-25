@@ -1107,18 +1107,22 @@ where
         force_eem_source.set_high();
         delay.delay_ms(100u8);
 
-        urukul::Urukul::new(
-            device.SPI6.spi(
-                (
-                    lvds0.into_alternate(),      // SCK
-                    gpiog.pg12.into_alternate(), // MISO/SDO
-                    lvds1.into_alternate(),      // MOSI/SDI
-                ),
-                hal::spi::MODE_0,
-                20.MHz(),
-                ccdr.peripheral.SPI6,
-                &ccdr.clocks,
+        let spi = device.SPI6.spi(
+            (
+                lvds0.into_alternate(),      // SCK
+                gpiog.pg12.into_alternate(), // MISO/SDO
+                lvds1.into_alternate(),      // MOSI/SDI
             ),
+            hal::spi::MODE_0,
+            20.MHz(),
+            ccdr.peripheral.SPI6,
+            &ccdr.clocks,
+        );
+        let bus = cortex_m::singleton!(: shared_bus::BusManagerSimple<hal::spi::Spi<hal::stm32::SPI6, hal::spi::Enabled>> = 
+        shared_bus::BusManagerSimple::new(spi)).unwrap();
+
+        urukul::Urukul::new(
+            bus,
             [
                 lvds3.into_push_pull_output().erase(),
                 gpiod.pd1.into_push_pull_output().erase(),

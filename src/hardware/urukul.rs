@@ -1,21 +1,13 @@
-use log;
-use stm32h7xx_hal::{self as hal, prelude::*};
-
+use crate::hardware::ad9912;
 use arbitrary_int::{u2, u24, u3, u4, u7};
-use bitbybit::bitfield;
-use core::fmt::Debug;
-
-pub struct Urukul {
-    spi: hal::spi::Spi<hal::stm32::SPI6, hal::spi::Enabled, u8>,
-    cs: [hal::gpio::ErasedPin<hal::gpio::Output>; 3],
-    io_update: hal::gpio::ErasedPin<hal::gpio::Output>,
-    sync: hal::gpio::ErasedPin<hal::gpio::Output>,
-    cfg: Cfg,
-    att: [u8; 4],
-}
+use bitbybit::{bitenum, bitfield};
+use embedded_hal::blocking::spi::{Transfer, Write};
+use embedded_hal::digital::v2::OutputPin;
+use log;
+use shared_bus::{BusManager, NullMutex, SpiProxy};
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
-pub enum Error {
+pub enum Error<E> {
     #[error("Invalid PROTO_REV {0}")]
     InvalidProtoRev(u7),
     #[error("RF_SW is driven {0}")]
@@ -23,17 +15,19 @@ pub enum Error {
     #[error("Invalid IFC_MODE {0}")]
     InvalidIfcMode(u4),
     #[error("SPI Error {0:?}")]
-    Spi(hal::spi::Error),
+    Spi(E),
+    #[error("DDS")]
+    Dds(#[from] ad9912::Error<E>),
 }
 
-impl From<hal::spi::Error> for Error {
-    fn from(value: hal::spi::Error) -> Self {
+impl<E> From<E> for Error<E> {
+    fn from(value: E) -> Self {
         Self::Spi(value)
     }
 }
 
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[bitenum(u3, exhaustive = true)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub enum Select {
     None = 0,
     Cfg = 1,
@@ -85,20 +79,56 @@ pub struct Status {
     pub proto_rev: u7,
 }
 
-impl Urukul {
+pub enum Dds<B> {
+    None,
+    Bus(B),
+    Ad9912(ad9912::Ad9912<B>),
+}
+
+impl<B: Transfer<u8> + Write<u8, Error = <B as Transfer<u8>>::Error>> Dds<B> {
+    pub fn detect(&mut self) -> Result<(), Error<<B as Transfer<u8>>::Error>> {
+        if let Self::Bus(bus) = core::mem::replace(self, Self::None) {
+            *self = ad9912::Ad9912::new(bus).map(Self::Ad9912)?;
+        }
+        Ok(())
+    }
+}
+
+pub struct Urukul<'a, B, P> {
+    spi: SpiProxy<'a, NullMutex<B>>,
+    cs: [P; 3],
+    io_update: P,
+    sync: P,
+    cfg: Cfg,
+    att: [u8; 4],
+    dds: [Dds<SpiProxy<'a, NullMutex<B>>>; 4],
+}
+
+impl<'a, B, P> Urukul<'a, B, P>
+where
+    B: Transfer<u8> + Write<u8, Error = <B as Transfer<u8>>::Error>,
+    P: OutputPin,
+    P::Error: core::fmt::Debug,
+{
     pub fn new(
-        spi: hal::spi::Spi<hal::stm32::SPI6, hal::spi::Enabled, u8>,
-        cs: [hal::gpio::ErasedPin<hal::gpio::Output>; 3],
-        io_update: hal::gpio::ErasedPin<hal::gpio::Output>,
-        sync: hal::gpio::ErasedPin<hal::gpio::Output>,
-    ) -> Result<Self, Error> {
+        bus: &'a BusManager<NullMutex<B>>,
+        cs: [P; 3],
+        io_update: P,
+        sync: P,
+    ) -> Result<Self, Error<<B as Transfer<u8>>::Error>> {
         let mut dev = Self {
-            spi,
+            spi: bus.acquire_spi(),
             cs,
             io_update,
             sync,
             cfg: Cfg::default(),
             att: [0; 4],
+            dds: [
+                Dds::Bus(bus.acquire_spi()),
+                Dds::Bus(bus.acquire_spi()),
+                Dds::Bus(bus.acquire_spi()),
+                Dds::Bus(bus.acquire_spi()),
+            ],
         };
         dev.init()?;
         Ok(dev)
@@ -106,7 +136,7 @@ impl Urukul {
 
     fn select(&mut self, s: Select) {
         for (i, cs) in self.cs.iter_mut().enumerate() {
-            cs.set_state(((s as u8 >> i) & 1 == 1).into());
+            cs.set_state(((s as u8 >> i) & 1 == 1).into()).unwrap();
         }
     }
 
@@ -121,11 +151,11 @@ impl Urukul {
         ret
     }
 
-    fn transfer<'a>(
+    fn transfer<'b>(
         &mut self,
         select: Select,
-        write: &'a mut [u8],
-    ) -> Result<&'a [u8], hal::spi::Error> {
+        write: &'b mut [u8],
+    ) -> Result<&'b [u8], <B as Transfer<u8>>::Error> {
         self.selected(select, |dev| dev.spi.transfer(write))
     }
 
@@ -133,7 +163,10 @@ impl Urukul {
         self.cfg
     }
 
-    pub fn set_cfg(&mut self, cfg: Cfg) -> Result<Status, Error> {
+    pub fn set_cfg(
+        &mut self,
+        cfg: Cfg,
+    ) -> Result<Status, <B as Transfer<u8>>::Error> {
         let mut cfg = cfg.raw_value().to_be_bytes();
         self.transfer(Select::Cfg, &mut cfg)?;
         Ok(Status::new_with_raw_value(u24::from_be_bytes(cfg)))
@@ -143,13 +176,17 @@ impl Urukul {
         self.att[ch.value() as usize]
     }
 
-    pub fn set_att(&mut self, ch: u2, att: u8) -> Result<(), Error> {
+    pub fn set_att(
+        &mut self,
+        ch: u2,
+        att: u8,
+    ) -> Result<(), <B as Transfer<u8>>::Error> {
         self.att[ch.value() as usize] = att;
         self.transfer(Select::Att, &mut self.att.clone())?;
         Ok(())
     }
 
-    pub fn init(&mut self) -> Result<(), Error> {
+    pub fn init(&mut self) -> Result<(), Error<<B as Transfer<u8>>::Error>> {
         let sta = self.set_cfg(self.cfg())?;
         if sta.proto_rev() != u7::new(0x8) {
             return Err(Error::InvalidProtoRev(sta.proto_rev()));
@@ -165,14 +202,25 @@ impl Urukul {
             sta.smp_err(),
             sta.pll_lock(),
         );
+
         // Idempotent read of attenuators
         self.att = self.selected(Select::Att, |dev| {
             let mut att = [0; 4];
             dev.spi.transfer(&mut att)?; // Write and read, but not update
             dev.spi.write(&att)?; // Write previously read and do a NOP update
-            Ok::<_, Error>(att)
+            Ok::<_, Error<_>>(att)
         })?;
         log::info!("att: {:?}", self.att);
+
+        for i in 0..4 {
+            self.selected(
+                Select::new_with_raw_value(
+                    Select::Dds0.raw_value() + u3::new(i as _),
+                ),
+                |dev| dev.dds[i].detect(),
+            )?;
+        }
+
         log::info!("Urukul CPLD initialization complete.");
         Ok(())
     }

@@ -3,6 +3,7 @@
 pub use embedded_hal;
 pub use stm32h7xx_hal as hal;
 
+pub mod ad9912;
 pub mod adc;
 pub mod afe;
 pub mod cpu_temp_sensor;
@@ -46,9 +47,15 @@ pub struct Gpio {
     pub lvds7: hal::gpio::gpiod::PD4<hal::gpio::Output>,
 }
 
+pub type Urukul = urukul::Urukul<
+    'static,
+    hal::spi::Spi<hal::stm32::SPI6, hal::spi::Enabled>,
+    hal::gpio::ErasedPin<hal::gpio::Output>,
+>;
+
 pub enum Eem {
     Gpio(Gpio),
-    Urukul(urukul::Urukul),
+    Urukul(Urukul),
     None,
 }
 

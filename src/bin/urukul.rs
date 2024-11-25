@@ -10,7 +10,7 @@ use fugit::ExtU32;
 
 use stabilizer::{
     hardware::{
-        self, hal, urukul::Urukul, SerialTerminal, SystemTimer, Systick,
+        self, hal, Urukul, SerialTerminal, SystemTimer, Systick,
         UsbDevice,
     },
     net::{telemetry::TelemetryBuffer, NetworkState, NetworkUsers},
