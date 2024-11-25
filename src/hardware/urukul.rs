@@ -31,19 +31,6 @@ impl<E: spi::Error> From<E> for Error {
     }
 }
 
-#[bitenum(u3, exhaustive = true)]
-#[derive(Debug, PartialEq, PartialOrd)]
-pub enum Select {
-    None = 0,
-    Cfg = 1,
-    Att = 2,
-    Multi = 3,
-    Dds0 = 4,
-    Dds1 = 5,
-    Dds2 = 6,
-    Dds3 = 7,
-}
-
 #[bitfield(u24, default = 0x000700)]
 #[derive(Debug, PartialEq)]
 pub struct Cfg {
@@ -58,7 +45,7 @@ pub struct Cfg {
     #[bits(13..=16, rw)]
     mask_nu: u4,
     #[bits([17, 21], rw)]
-    clk_sel: u2,
+    clk_sel: ClkSel,
     #[bit(18, rw)]
     sync_sel: bool,
     #[bit(19, rw)]
@@ -84,11 +71,19 @@ pub struct Status {
     pub proto_rev: u7,
 }
 
+#[bitenum(u2, exhaustive = true)]
+pub enum ClkSel {
+    Osc = 0,
+    Sma = 1,
+    Mmcx = 2,
+    _Sma = 3,
+}
+
 pub struct Urukul<'a, B, P> {
     att_spi: RefCellDevice<'a, B, DecodedCs<'a, P, 3>, NoDelay>,
     cfg_spi: RefCellDevice<'a, B, DecodedCs<'a, P, 3>, NoDelay>,
     io_update: P,
-    sync: P,
+    _sync: P,
     cfg: Cfg,
     att: [u8; 4],
     dds: [Ad9912<RefCellDevice<'a, B, DecodedCs<'a, P, 3>, NoDelay>>; 4],
@@ -102,7 +97,8 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
         sync: P,
     ) -> Result<Self, Error> {
         let sel = |sel| {
-            RefCellDevice::new(spi, DecodedCs::new(cs, sel), NoDelay).unwrap()
+            RefCellDevice::new(spi, DecodedCs::new(cs, u3::new(sel)), NoDelay)
+                .unwrap()
         };
         let cfg_spi = sel(1);
         let att_spi = sel(2);
@@ -110,7 +106,7 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
             cfg_spi,
             att_spi,
             io_update,
-            sync,
+            _sync: sync,
             cfg: Cfg::default(),
             att: [0; 4],
             dds: [
@@ -132,9 +128,11 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
         &mut self,
         cfg: Cfg,
     ) -> Result<Status, DeviceError<B::Error, P::Error>> {
-        let cfg = cfg.raw_value().to_be_bytes();
-        self.cfg_spi.write(&cfg)?;
-        Ok(Status::new_with_raw_value(u24::from_be_bytes(cfg)))
+        let mut bits = [0; 3];
+        let w = cfg.raw_value().to_be_bytes();
+        self.cfg_spi.transfer(&mut bits, &w)?;
+        self.cfg = cfg;
+        Ok(Status::new_with_raw_value(u24::from_be_bytes(bits)))
     }
 
     pub fn att(&self, ch: u2) -> u8 {
@@ -152,7 +150,7 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
 
     pub fn init(&mut self) -> Result<(), Error> {
         let sta = self.set_cfg(self.cfg())?;
-        if sta.proto_rev() != u7::new(0x8) {
+        if sta.proto_rev().value() != 0x8 {
             return Err(Error::InvalidProtoRev(sta.proto_rev()));
         }
         if sta.rf_sw() != u4::new(0) {
@@ -161,15 +159,10 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
         if sta.ifc_mode() != u4::new(0) {
             return Err(Error::InvalidIfcMode(sta.ifc_mode()));
         }
-        log::info!(
-            "smp_err={:4b} pll_lock={:4b}",
-            sta.smp_err(),
-            sta.pll_lock(),
-        );
 
-        let att = [0; 4];
-        // self.att_spi.read(&mut att)?; // This is destructive and clears attenuation
-        self.att_spi.write(&att)?;
+        // This is destructive and clears attenuation
+        // https://github.com/rust-embedded/embedded-hal/issues/642
+        self.att_spi.write(&self.att)?;
 
         for dds in self.dds.iter_mut() {
             dds.init()?;
@@ -177,5 +170,41 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
 
         log::info!("Urukul CPLD initialization complete.");
         Ok(())
+    }
+
+    pub fn io_update(&mut self) -> Result<(), P::Error> {
+        self.io_update.set_high()?;
+        self.io_update.set_low()
+    }
+
+    pub fn set_rf_sw(
+        &mut self,
+        ch: u2,
+        state: bool,
+    ) -> Result<(), DeviceError<B::Error, P::Error>> {
+        let mut v = self.cfg.rf_sw();
+        v &= !u4::new(1u8 << ch.value());
+        v |= u4::new((state as u8) << ch.value());
+        self.set_cfg(self.cfg.with_rf_sw(v))?;
+        Ok(())
+    }
+
+    pub fn set_led(
+        &mut self,
+        ch: u2,
+        state: bool,
+    ) -> Result<(), DeviceError<B::Error, P::Error>> {
+        let mut v = self.cfg.led();
+        v &= !u4::new(1u8 << ch.value());
+        v |= u4::new((state as u8) << ch.value());
+        self.set_cfg(self.cfg.with_led(v))?;
+        Ok(())
+    }
+
+    pub fn dds(
+        &mut self,
+        ch: u2,
+    ) -> &mut Ad9912<RefCellDevice<'a, B, DecodedCs<'a, P, 3>, NoDelay>> {
+        &mut self.dds[ch.value() as usize]
     }
 }

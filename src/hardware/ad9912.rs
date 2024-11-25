@@ -1,6 +1,6 @@
 use arbitrary_int::{u10, u14, u48, u5};
 use bitbybit::{bitenum, bitfield};
-use embedded_hal_1::spi::{self, SpiDevice};
+use embedded_hal_1::spi::{self, Operation, SpiDevice};
 use num_traits::float::FloatCore;
 
 #[bitenum(u13)]
@@ -153,35 +153,60 @@ pub struct Ad9912<B> {
     bus: B,
 }
 
+impl<B> Ad9912<B> {
+    pub fn sysclk(ndiv: u5, pll: Pll, refclk: f64) -> f64 {
+        refclk * ((pll.ref_doubler() as u8 + 1) * 2 * (ndiv.value() + 2)) as f64
+    }
+
+    pub fn frequency_to_ftw(frequency: f64, sysclk: f64) -> u48 {
+        let lsb = sysclk * (1.0 / (1u64 << 48) as f64);
+        u48::new((frequency * lsb).round() as _)
+    }
+
+    pub fn phase_to_pow(phase: f32) -> u14 {
+        u14::new((phase * (1.0 / (1u32 << 14) as f32)).round() as _)
+    }
+
+    pub fn dac_fs_to_fsc(dac_fs: f32, r_dac_ref: f32) -> u10 {
+        let lsb = r_dac_ref * (1024.0 / 192.0 / 1.2);
+        let fsc = dac_fs * lsb + (1024.0 / 192.0 * 72.0);
+        u10::new(fsc.round() as _)
+    }
+}
+
 impl<B: SpiDevice<u8>> Ad9912<B> {
     pub fn new(bus: B) -> Self {
         Self { bus }
     }
 
     fn write(&mut self, addr: Addr, data: &[u8]) -> Result<(), Error> {
-        self.bus.write(
-            &Instruction::builder()
-                .with_addr(addr)
-                .with_size(data.len().into())
-                .with_read(false)
-                .build()
-                .raw_value()
-                .to_be_bytes(),
-        )?;
-        Ok(self.bus.write(data)?)
+        Ok(self.bus.transaction(&mut [
+            Operation::Write(
+                &Instruction::builder()
+                    .with_addr(addr)
+                    .with_size(data.len().into())
+                    .with_read(false)
+                    .build()
+                    .raw_value()
+                    .to_be_bytes(),
+            ),
+            Operation::Write(data),
+        ])?)
     }
 
     fn read(&mut self, addr: Addr, data: &mut [u8]) -> Result<(), Error> {
-        self.bus.write(
-            &Instruction::builder()
-                .with_addr(addr)
-                .with_size(data.len().into())
-                .with_read(true)
-                .build()
-                .raw_value()
-                .to_be_bytes(),
-        )?;
-        Ok(self.bus.read(data)?)
+        Ok(self.bus.transaction(&mut [
+            Operation::Write(
+                &Instruction::builder()
+                    .with_addr(addr)
+                    .with_size(data.len().into())
+                    .with_read(true)
+                    .build()
+                    .raw_value()
+                    .to_be_bytes(),
+            ),
+            Operation::Read(data),
+        ])?)
     }
 
     pub fn init(&mut self) -> Result<(), Error> {
@@ -201,10 +226,22 @@ impl<B: SpiDevice<u8>> Ad9912<B> {
         self.read(Addr::PartId, &mut id)?;
         let id = u16::from_be_bytes(id);
         if id != 0x1982 {
-            Err(Error::Id(id))
-        } else {
-            Ok(())
+            return Err(Error::Id(id));
         }
+        self.write(
+            Addr::Power,
+            &Power::builder()
+                .with_digital_pd(false)
+                .with_full_pd(false)
+                .with_pll_pd(false)
+                .with_output_doubler_en(false)
+                .with_cmos_en(false)
+                .with_hstl_pd(true)
+                .build()
+                .raw_value()
+                .to_be_bytes(),
+        )?;
+        Ok(())
     }
 
     /// Non-clearing, needs init()
@@ -233,15 +270,6 @@ impl<B: SpiDevice<u8>> Ad9912<B> {
         self.write(Addr::Pll, &pll.raw_value().to_be_bytes())
     }
 
-    pub fn sysclk(ndiv: u5, pll: Pll, refclk: f64) -> f64 {
-        refclk * ((pll.ref_doubler() as u8 + 1) * 2 * (ndiv.value() + 2)) as f64
-    }
-
-    pub fn frequency_to_ftw(frequency: f64, sysclk: f64) -> u48 {
-        let lsb = sysclk * (1.0 / (1u64 << 48) as f64);
-        u48::new((frequency * lsb).round() as _)
-    }
-
     pub fn set_ftw(&mut self, ftw: u48) -> Result<(), Error> {
         self.write(Addr::Ftw0, &ftw.to_be_bytes())
     }
@@ -256,10 +284,6 @@ impl<B: SpiDevice<u8>> Ad9912<B> {
         Ok(ftw)
     }
 
-    pub fn phase_to_pow(phase: f32) -> u14 {
-        u14::new((phase * (1.0 / (1u32 << 14) as f32)).round() as _)
-    }
-
     pub fn set_pow(&mut self, pow: u14) -> Result<(), Error> {
         self.write(Addr::Phase, &pow.value().to_be_bytes())
     }
@@ -268,12 +292,6 @@ impl<B: SpiDevice<u8>> Ad9912<B> {
         let pow = Self::phase_to_pow(phase);
         self.set_pow(pow)?;
         Ok(pow)
-    }
-
-    pub fn dac_fs_to_fsc(dac_fs: f32, r_dac_ref: f32) -> u10 {
-        let lsb = r_dac_ref * (1024.0 / 192.0 / 1.2);
-        let fsc = dac_fs * lsb + (1024.0 / 192.0 * 72.0);
-        u10::new(fsc.round() as _)
     }
 
     pub fn set_fsc(&mut self, fsc: u10) -> Result<(), Error> {

@@ -67,6 +67,9 @@ impl Default for App {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
+    use arbitrary_int::{u2, u5};
+    use hardware::ad9912::{Ad9912, Pll};
+
     use super::*;
 
     #[shared]
@@ -97,9 +100,38 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let crate::hardware::Eem::Urukul(urukul) = stabilizer.eem else {
+        let crate::hardware::Eem::Urukul(mut urukul) = stabilizer.eem else {
             panic!("No Urukul detected.")
         };
+
+        let ch = u2::new(0);
+        urukul
+            .set_cfg(
+                urukul
+                    .cfg()
+                    .with_clk_sel(hardware::urukul::ClkSel::Osc)
+                    .with_div(u2::new(0)),
+            )
+            .unwrap();
+        urukul.io_update().unwrap();
+        let (ndiv, pll) = (
+            u5::new(10 / 2 - 2),
+            Pll::builder()
+                .with_charge_pump(hardware::ad9912::ChargePump::Ua375)
+                .with_vco_range_high(true)
+                .with_ref_doubler(false)
+                .with_vco_auto_range(false)
+                .build(),
+        );
+        let dds = urukul.dds(ch);
+        dds.set_pll(ndiv, pll).unwrap();
+        urukul.io_update().unwrap();
+        let dds = urukul.dds(ch);
+        let sysclk = Ad9912::<()>::sysclk(ndiv, pll, 100e6);
+        dds.set_frequency(80e6, sysclk).unwrap();
+        urukul.io_update().unwrap();
+        urukul.set_att(ch, 0xff).unwrap();
+        urukul.set_rf_sw(ch, true).unwrap();
 
         let network = NetworkUsers::new(
             stabilizer.net.stack,

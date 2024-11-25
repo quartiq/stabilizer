@@ -1147,7 +1147,7 @@ where
             gpiod.pd4.into_push_pull_output().erase().forward(),
         )
         .map(Eem::Urukul)
-        .unwrap_or(Eem::None)
+        .unwrap() //.unwrap_or(Eem::None)
     };
 
     let (usb_device, usb_serial) = {
