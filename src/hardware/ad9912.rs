@@ -1,6 +1,7 @@
-use arbitrary_int::{u10, u2, u5};
+use arbitrary_int::{u10, u14, u48, u5};
 use bitbybit::{bitenum, bitfield};
 use embedded_hal::blocking::spi::{Transfer, Write};
+use num_traits::float::FloatCore;
 
 #[bitenum(u13)]
 #[derive(PartialEq, Debug)]
@@ -102,13 +103,6 @@ pub struct Power {
 
 #[bitfield(u8, default = 0x00)]
 #[derive(Debug, PartialEq)]
-pub struct DdsReset {
-    #[bit(0, rw)]
-    dds: bool,
-}
-
-#[bitfield(u8, default = 0x00)]
-#[derive(Debug, PartialEq)]
 pub struct Reset {
     #[bit(1, rw)]
     sdiv: bool,
@@ -118,31 +112,26 @@ pub struct Reset {
     fund_dds_pd: bool,
 }
 
-#[bitfield(u8, default = 0x12)]
+#[bitenum(u2, exhaustive = true)]
 #[derive(Debug, PartialEq)]
-pub struct NDiv {
-    #[bits(0..=4, rw)]
-    ndiv: u5,
+pub enum ChargePump {
+    Ua250 = 0,
+    Ua375 = 1,
+    Off = 2,
+    Ua125 = 3,
 }
 
 #[bitfield(u8, default = 0x04)]
 #[derive(Debug, PartialEq)]
 pub struct Pll {
     #[bits(0..=1, rw)]
-    current: u2,
+    charge_pump: ChargePump,
     #[bit(2, rw)]
-    vco_range: bool,
+    vco_range_high: bool,
     #[bit(3, rw)]
     ref_doubler: bool,
     #[bit(7, rw)]
     vco_auto_range: bool,
-}
-
-#[bitfield(u16, default = 0x01ff)]
-#[derive(Debug, PartialEq)]
-pub struct Fsc {
-    #[bits(0..=9, rw)]
-    fsc: u10,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, thiserror::Error)]
@@ -173,6 +162,40 @@ impl<B: Transfer<u8> + Write<u8, Error = <B as Transfer<u8>>::Error>>
         Ok(dev)
     }
 
+    fn write(
+        &mut self,
+        addr: Addr,
+        data: &[u8],
+    ) -> Result<(), Error<<B as Transfer<u8>>::Error>> {
+        self.bus.write(
+            &Instruction::builder()
+                .with_addr(addr)
+                .with_size(data.len().into())
+                .with_read(false)
+                .build()
+                .raw_value()
+                .to_be_bytes(),
+        )?;
+        Ok(self.bus.write(data)?)
+    }
+
+    fn read<'a>(
+        &mut self,
+        addr: Addr,
+        data: &'a mut [u8],
+    ) -> Result<&'a [u8], Error<<B as Transfer<u8>>::Error>> {
+        self.bus.write(
+            &Instruction::builder()
+                .with_addr(addr)
+                .with_size(data.len().into())
+                .with_read(true)
+                .build()
+                .raw_value()
+                .to_be_bytes(),
+        )?;
+        Ok(self.bus.transfer(data)?)
+    }
+
     pub fn init(&mut self) -> Result<(), Error<<B as Transfer<u8>>::Error>> {
         self.write(
             Addr::Serial,
@@ -196,37 +219,106 @@ impl<B: Transfer<u8> + Write<u8, Error = <B as Transfer<u8>>::Error>>
         }
     }
 
-    pub fn write(
+    /// Non-clearing, needs init()
+    pub fn soft_reset(
         &mut self,
-        addr: Addr,
-        data: &[u8],
     ) -> Result<(), Error<<B as Transfer<u8>>::Error>> {
-        self.bus.write(
-            &Instruction::builder()
-                .with_addr(addr)
-                .with_size(data.len().into())
-                .with_read(false)
+        self.write(
+            Addr::Serial,
+            &Serial::builder()
+                .with_sdo_active(true)
+                .with_lsb_first(false)
+                .with_soft_reset(true)
+                .with_long_insn(true)
                 .build()
+                .mirror()
                 .raw_value()
                 .to_be_bytes(),
-        )?;
-        Ok(self.bus.write(data)?)
+        )
     }
 
-    pub fn read<'a>(
+    /// Needs io-update
+    pub fn dds_reset(
         &mut self,
-        addr: Addr,
-        data: &'a mut [u8],
-    ) -> Result<&'a [u8], Error<<B as Transfer<u8>>::Error>> {
-        self.bus.write(
-            &Instruction::builder()
-                .with_addr(addr)
-                .with_size(data.len().into())
-                .with_read(true)
-                .build()
-                .raw_value()
-                .to_be_bytes(),
-        )?;
-        Ok(self.bus.transfer(data)?)
+    ) -> Result<(), Error<<B as Transfer<u8>>::Error>> {
+        self.write(Addr::DdsReset, &1u8.to_be_bytes())
+    }
+
+    pub fn set_pll(
+        &mut self,
+        ndiv: u5,
+        pll: Pll,
+    ) -> Result<(), Error<<B as Transfer<u8>>::Error>> {
+        self.write(Addr::NDiv, &ndiv.value().to_be_bytes())?;
+        self.write(Addr::Pll, &pll.raw_value().to_be_bytes())
+    }
+
+    pub fn sysclk(ndiv: u5, pll: Pll, refclk: f64) -> f64 {
+        refclk * ((pll.ref_doubler() as u8 + 1) * 2 * (ndiv.value() + 2)) as f64
+    }
+
+    pub fn frequency_to_ftw(frequency: f64, sysclk: f64) -> u48 {
+        let lsb = sysclk * (1.0 / (1u64 << 48) as f64);
+        u48::new((frequency * lsb).round() as _)
+    }
+
+    pub fn set_ftw(
+        &mut self,
+        ftw: u48,
+    ) -> Result<(), Error<<B as Transfer<u8>>::Error>> {
+        self.write(Addr::Ftw0, &ftw.to_be_bytes())
+    }
+
+    pub fn set_frequency(
+        &mut self,
+        frequency: f64,
+        sysclk: f64,
+    ) -> Result<u48, Error<<B as Transfer<u8>>::Error>> {
+        let ftw = Self::frequency_to_ftw(frequency, sysclk);
+        self.set_ftw(ftw)?;
+        Ok(ftw)
+    }
+
+    pub fn phase_to_pow(phase: f32) -> u14 {
+        u14::new((phase * (1.0 / (1u32 << 14) as f32)).round() as _)
+    }
+
+    pub fn set_pow(
+        &mut self,
+        pow: u14,
+    ) -> Result<(), Error<<B as Transfer<u8>>::Error>> {
+        self.write(Addr::Phase, &pow.value().to_be_bytes())
+    }
+
+    pub fn set_phase(
+        &mut self,
+        phase: f32,
+    ) -> Result<u14, Error<<B as Transfer<u8>>::Error>> {
+        let pow = Self::phase_to_pow(phase);
+        self.set_pow(pow)?;
+        Ok(pow)
+    }
+
+    pub fn dac_fs_to_fsc(dac_fs: f32, r_dac_ref: f32) -> u10 {
+        let lsb = r_dac_ref * (1024.0 / 192.0 / 1.2);
+        let fsc = dac_fs * lsb + (1024.0 / 192.0 * 72.0);
+        u10::new(fsc.round() as _)
+    }
+
+    pub fn set_fsc(
+        &mut self,
+        fsc: u10,
+    ) -> Result<(), Error<<B as Transfer<u8>>::Error>> {
+        self.write(Addr::Fsc, &fsc.value().to_be_bytes())
+    }
+
+    pub fn set_full_scale_current(
+        &mut self,
+        dac_fs: f32,
+        r_dac_ref: f32,
+    ) -> Result<u10, Error<<B as Transfer<u8>>::Error>> {
+        let fsc = Self::dac_fs_to_fsc(dac_fs, r_dac_ref);
+        self.set_fsc(fsc)?;
+        Ok(fsc)
     }
 }

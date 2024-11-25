@@ -1227,6 +1227,7 @@ dependencies = [
  "minimq",
  "mono-clock",
  "mutex-trait",
+ "num-traits",
  "num_enum",
  "panic-persist",
  "paste",
