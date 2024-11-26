@@ -209,12 +209,9 @@ mod app {
                     let sysclk = if let Some(pll_n) = *ch.pll_n {
                         u.dds(i).set_power(power.with_pll_pd(false)).unwrap();
                         u.dds(i).set_ndiv(pll_n).unwrap();
-                        let mut pll = ad9912::Pll::builder()
+                        let mut pll = ad9912::Pll::default()
                             .with_charge_pump(ad9912::ChargePump::Ua375)
-                            .with_vco_range_high(true)
-                            .with_ref_doubler(*ch.pll_doubler)
-                            .with_vco_auto_range(false)
-                            .build();
+                            .with_ref_doubler(*ch.pll_doubler);
                         let sysclk = pll.set_refclk(pll_n, refclk);
                         u.dds(i).set_pll(pll).unwrap();
                         sysclk

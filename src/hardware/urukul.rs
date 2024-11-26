@@ -1,5 +1,3 @@
-use core::cell::RefCell;
-
 use crate::hardware::ad9912;
 use arbitrary_int::{u2, u24, u3, u4, u7};
 use bitbybit::{bitenum, bitfield};
@@ -114,8 +112,8 @@ pub struct Urukul<'a, B, P> {
 
 impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
     pub fn new(
-        spi: &'a RefCell<B>,
-        cs: &'a RefCell<[P; 3]>,
+        spi: &'a core::cell::RefCell<B>,
+        cs: &'a core::cell::RefCell<[P; 3]>,
         io_update: P,
         sync: P,
     ) -> Result<Self, Error> {

@@ -6,7 +6,7 @@ use core::cell::RefCell;
 use core::mem::MaybeUninit;
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{fmt::Write, ptr, slice};
-use embedded_hal_compat::ForwardCompat;
+use embedded_hal_compat::{markers::ForwardOutputPin, Forward, ForwardCompat};
 use heapless::String;
 use stm32h7xx_hal::{
     self as hal,
@@ -1124,7 +1124,7 @@ where
             )
             .forward();
         let spi = cortex_m::singleton!(:
-            RefCell<embedded_hal_compat::Forward<hal::spi::Spi<hal::stm32::SPI6, hal::spi::Enabled>>> = 
+            RefCell<Forward<hal::spi::Spi<hal::stm32::SPI6, hal::spi::Enabled>>> =
                 RefCell::new(spi)).unwrap();
 
         let cs = [
@@ -1133,21 +1133,23 @@ where
             gpiod.pd2.into_push_pull_output().erase().forward(),
         ];
         let cs = cortex_m::singleton!(:
-            RefCell<[embedded_hal_compat::Forward<
-                hal::gpio::ErasedPin<hal::gpio::Output>,
-                embedded_hal_compat::markers::ForwardOutputPin>; 3]> =
-            RefCell::new(cs)
+            RefCell<[Forward<hal::gpio::ErasedPin<hal::gpio::Output>, ForwardOutputPin>; 3]> =
+                RefCell::new(cs)
         )
         .unwrap();
 
-        urukul::Urukul::new(
+        match urukul::Urukul::new(
             spi,
             cs,
             gpiod.pd3.into_push_pull_output().erase().forward(),
             gpiod.pd4.into_push_pull_output().erase().forward(),
-        )
-        .map(Eem::Urukul)
-        .unwrap() //.unwrap_or(Eem::None)
+        ) {
+            Ok(urukul) => Eem::Urukul(urukul),
+            Err(err) => {
+                log::warn!("Urukul initialization failed: {err:?}");
+                Eem::None
+            }
+        }
     };
 
     let (usb_device, usb_serial) = {
