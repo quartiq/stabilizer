@@ -1,3 +1,10 @@
+//! Urukul as a downstream EEM on stabilizer.
+//!
+//! This requires the alternate direction EEM transceiver configuration.
+//! It exposes the Urukul CPLD and DDS settings via miniconf (MQTT and USB).
+//! 
+//! Note that several values are not range checked and out-of-range values
+//! will lead to panics.
 #![no_std]
 #![no_main]
 
