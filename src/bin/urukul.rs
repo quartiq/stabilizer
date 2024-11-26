@@ -16,14 +16,6 @@ use stabilizer::{
     settings::NetSettings,
 };
 
-// The number of samples in each batch process
-const BATCH_SIZE: usize = 8;
-
-// The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^7 =
-// 128, there is 1.28uS per sample, corresponding to a sampling frequency of 781.25 KHz.
-const SAMPLE_TICKS_LOG2: u8 = 7;
-const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
-
 #[derive(Clone, Debug, Tree)]
 pub struct Settings {
     pub urukul: App,
@@ -122,13 +114,12 @@ mod app {
     fn init(c: init::Context) -> (Shared, Local) {
         let clock = SystemTimer::new(|| Systick::now().ticks());
 
-        // Configure the microcontroller
         let (stabilizer, _pounder) = hardware::setup::setup::<Settings, 4>(
             c.core,
             c.device,
             clock,
-            BATCH_SIZE,
-            SAMPLE_TICKS,
+            8,
+            1 << 7,
         );
 
         let crate::hardware::Eem::Urukul(urukul) = stabilizer.eem else {
@@ -213,23 +204,14 @@ mod app {
                     let i = u2::new(i as _);
                     let sysclk = if let Some(pll_n) = *ch.pll_n {
                         u.dds(i).set_power(power.with_pll_pd(false)).unwrap();
-                        let pll = ad9912::Pll::builder()
+                        u.dds(i).set_ndiv(pll_n).unwrap();
+                        let mut pll = ad9912::Pll::builder()
                             .with_charge_pump(ad9912::ChargePump::Ua375)
                             .with_vco_range_high(true)
                             .with_ref_doubler(*ch.pll_doubler)
                             .with_vco_auto_range(false)
                             .build();
-                        let sysclk = ad9912::sysclk(pll_n, pll, refclk);
-                        let pll = if sysclk > 900e6 {
-                            pll.with_vco_auto_range(false)
-                                .with_vco_range_high(true)
-                        } else if sysclk > 810e6 {
-                            pll.with_vco_auto_range(true)
-                        } else {
-                            pll.with_vco_auto_range(false)
-                                .with_vco_range_high(false)
-                        };
-                        u.dds(i).set_ndiv(pll_n).unwrap();
+                        let sysclk = pll.set_refclk(pll_n, refclk);
                         u.dds(i).set_pll(pll).unwrap();
                         sysclk
                     } else {

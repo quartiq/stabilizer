@@ -134,6 +134,21 @@ pub struct Pll {
     vco_auto_range: bool,
 }
 
+impl Pll {
+    pub fn set_refclk(&mut self, ndiv: u5, refclk: f64) -> f64 {
+        let sysclk = refclk
+            * ((self.ref_doubler() as u8 + 1) * 2 * (ndiv.value() + 2)) as f64;
+        *self = if sysclk > 900e6 {
+            self.with_vco_auto_range(false).with_vco_range_high(true)
+        } else if sysclk > 810e6 {
+            self.with_vco_auto_range(true)
+        } else {
+            self.with_vco_auto_range(false).with_vco_range_high(false)
+        };
+        sysclk
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, thiserror::Error)]
 pub enum Error {
     #[error("Invalid Part ID {0}")]
@@ -151,10 +166,6 @@ impl<E: spi::Error> From<E> for Error {
 #[derive(Clone, Debug)]
 pub struct Ad9912<B> {
     bus: B,
-}
-
-pub fn sysclk(ndiv: u5, pll: Pll, refclk: f64) -> f64 {
-    refclk * ((pll.ref_doubler() as u8 + 1) * 2 * (ndiv.value() + 2)) as f64
 }
 
 pub fn frequency_to_ftw(frequency: f64, sysclk: f64) -> u48 {
