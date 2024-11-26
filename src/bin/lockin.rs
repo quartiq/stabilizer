@@ -527,7 +527,8 @@ mod app {
     #[task(priority = 1, local=[digital_inputs, cpu_temp_sensor], shared=[network, settings, telemetry])]
     async fn telemetry(mut c: telemetry::Context) {
         loop {
-            let mut telemetry = c.shared.telemetry.lock(|telemetry| *telemetry);
+            let mut telemetry =
+                c.shared.telemetry.lock(|telemetry| telemetry.clone());
 
             telemetry.digital_inputs = [
                 c.local.digital_inputs.0.is_high(),

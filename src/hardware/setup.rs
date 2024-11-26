@@ -2,9 +2,11 @@
 //!
 //! This file contains all of the hardware-specific configuration of Stabilizer.
 use bit_field::BitField;
+use core::cell::RefCell;
 use core::mem::MaybeUninit;
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{fmt::Write, ptr, slice};
+use embedded_hal_compat::{markers::ForwardOutputPin, Forward, ForwardCompat};
 use heapless::String;
 use stm32h7xx_hal::{
     self as hal,
@@ -15,15 +17,16 @@ use stm32h7xx_hal::{
 
 use smoltcp_nal::smoltcp;
 
+use crate::hardware::delay::AsmDelay;
 use crate::settings::{AppSettings, NetSettings};
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
     eeprom, input_stamper::InputStamper, metadata::ApplicationMetadata,
     platform, pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc,
-    timers, DigitalInput0, DigitalInput1, EemDigitalInput0, EemDigitalInput1,
-    EemDigitalOutput0, EemDigitalOutput1, EthernetPhy, HardwareVersion,
-    NetworkStack, SerialTerminal, SystemTimer, Systick, UsbDevice, AFE0, AFE1,
+    timers, urukul, DigitalInput0, DigitalInput1, Eem, EthernetPhy, Gpio,
+    HardwareVersion, NetworkStack, SerialTerminal, SystemTimer, Systick,
+    UsbDevice, AFE0, AFE1,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -101,14 +104,6 @@ pub struct NetworkDevices {
     pub mac_address: smoltcp::wire::EthernetAddress,
 }
 
-/// The GPIO pins available on the EEM connector, if Pounder is not present.
-pub struct EemGpioDevices {
-    pub lvds4: EemDigitalInput0,
-    pub lvds5: EemDigitalInput1,
-    pub lvds6: EemDigitalOutput0,
-    pub lvds7: EemDigitalOutput1,
-}
-
 /// The available hardware interfaces on Stabilizer.
 pub struct StabilizerDevices<
     C: serial_settings::Settings + 'static,
@@ -123,7 +118,7 @@ pub struct StabilizerDevices<
     pub timestamp_timer: timers::TimestampTimer,
     pub net: NetworkDevices,
     pub digital_inputs: (DigitalInput0, DigitalInput1),
-    pub eem_gpio: EemGpioDevices,
+    pub eem: Eem,
     pub usb_serial: SerialTerminal<C, Y>,
     pub usb: UsbDevice,
     pub metadata: &'static ApplicationMetadata,
@@ -284,7 +279,10 @@ where
 
     device.RCC.d1ccipr.modify(|_, w| w.qspisel().rcc_hclk3());
 
-    device.RCC.d3ccipr.modify(|_, w| w.adcsel().per());
+    device
+        .RCC
+        .d3ccipr
+        .modify(|_, w| w.adcsel().per().spi6sel().pll2_q());
 
     let rcc = device.RCC.constrain();
     let mut ccdr = rcc
@@ -1052,11 +1050,106 @@ where
         None
     };
 
-    let eem_gpio = EemGpioDevices {
-        lvds4: gpiod.pd1.into_floating_input(),
-        lvds5: gpiod.pd2.into_floating_input(),
-        lvds6: gpiod.pd3.into_push_pull_output(),
-        lvds7: gpiod.pd4.into_push_pull_output(),
+    #[derive(Copy, Clone, Debug, PartialEq)]
+    pub enum PoePower {
+        /// No Power over Ethernet detected
+        Absent,
+        /// 802.3af (12.95 W) Power over Ethernet present
+        Low,
+        /// 802.3at (25.5 W) Power over Ethernet present
+        High,
+    }
+
+    let poe_src_status = gpiob.pb6.into_floating_input();
+    let poe_at_event = gpioc.pc14.into_floating_input();
+    let poe = match (poe_src_status.is_high(), poe_at_event.is_high()) {
+        (false, _) => PoePower::Absent,
+        (true, false) => PoePower::Low,
+        (true, true) => PoePower::High,
+    };
+    log::info!("PoE: {poe:?}",);
+
+    let mut force_eem_source = gpioe.pe0.into_push_pull_output();
+
+    // checks whether a pin can be weakly pulled high an low
+    fn check_input<const P: char, const N: u8>(
+        pin: hal::gpio::Pin<P, N, hal::gpio::Analog>,
+        mut is_floating: bool,
+        delay: &mut AsmDelay,
+    ) -> (hal::gpio::Pin<P, N, hal::gpio::Analog>, bool) {
+        let pin = pin.into_pull_up_input();
+        delay.delay_ms(1u8);
+        is_floating &= pin.is_high();
+        let pin = pin.into_pull_down_input();
+        delay.delay_ms(1u8);
+        is_floating &= pin.is_low();
+        (pin.into_analog(), is_floating)
+    }
+
+    let mut lvds0 = gpiog.pg13;
+    let mut lvds1 = gpiob.pb5;
+    let mut lvds3 = gpiog.pg8;
+    let mut is_floating = true;
+    // Default EEM population: LVDS0/1/3 driven by LVDS receivers
+    (lvds0, is_floating) = check_input(lvds0, is_floating, &mut delay);
+    (lvds1, is_floating) = check_input(lvds1, is_floating, &mut delay);
+    (lvds3, is_floating) = check_input(lvds3, is_floating, &mut delay);
+    let eem = if !is_floating {
+        log::info!("EEM population variant: Default detected");
+        force_eem_source.set_low();
+        Eem::Gpio(Gpio {
+            lvds4: gpiod.pd1.into_floating_input(),
+            lvds5: gpiod.pd2.into_floating_input(),
+            lvds6: gpiod.pd3.into_push_pull_output(),
+            lvds7: gpiod.pd4.into_push_pull_output(),
+        })
+    } else {
+        log::info!("EEM population variant: Output detected");
+        assert!(poe != PoePower::Low);
+        force_eem_source.set_high();
+        delay.delay_ms(200u8);
+
+        let spi = device
+            .SPI6
+            .spi(
+                (
+                    lvds0.into_alternate(),      // SCK
+                    gpiog.pg12.into_alternate(), // MISO/SDO
+                    lvds1.into_alternate(),      // MOSI/SDI
+                ),
+                hal::spi::MODE_0,
+                20.MHz(),
+                ccdr.peripheral.SPI6,
+                &ccdr.clocks,
+            )
+            .forward();
+        let spi = cortex_m::singleton!(:
+            RefCell<Forward<hal::spi::Spi<hal::stm32::SPI6, hal::spi::Enabled>>> =
+                RefCell::new(spi)).unwrap();
+
+        let cs = [
+            lvds3.into_push_pull_output().erase().forward(),
+            gpiod.pd1.into_push_pull_output().erase().forward(),
+            gpiod.pd2.into_push_pull_output().erase().forward(),
+        ];
+        let cs = cortex_m::singleton!(:
+            RefCell<[Forward<hal::gpio::ErasedPin<hal::gpio::Output>, ForwardOutputPin>; 3]> =
+                RefCell::new(cs)
+        )
+        .unwrap();
+
+        match urukul::Urukul::new(
+            spi,
+            cs,
+            gpiod.pd3.into_push_pull_output().erase().forward(),
+            gpiod.pd4.into_push_pull_output().erase().forward(),
+        ) {
+            Ok(urukul) => Eem::Urukul(urukul),
+            Err(err) => {
+                log::warn!("Urukul initialization failed: {err:?}");
+                Eem::None
+            }
+        }
     };
 
     let (usb_device, usb_serial) = {
@@ -1152,7 +1245,7 @@ where
         adc_dac_timer: sampling_timer,
         timestamp_timer,
         digital_inputs,
-        eem_gpio,
+        eem,
         usb: usb_device,
         metadata,
         settings,
