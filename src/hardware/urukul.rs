@@ -7,6 +7,8 @@ use embedded_hal_1::digital::OutputPin;
 use embedded_hal_1::spi::{self, SpiBus, SpiDevice};
 use embedded_hal_bus::spi::{DeviceError, NoDelay, RefCellDevice};
 use log;
+use num_traits::Float;
+use serde::{Deserialize, Serialize};
 
 use super::ad9912::Ad9912;
 use super::decoded_cs::DecodedCs;
@@ -28,7 +30,7 @@ impl<E: spi::Error> From<E> for Error {
 }
 
 #[bitfield(u24, default = 0x000700)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Cfg {
     #[bits(0..=3, rw)]
     rf_sw: u4,
@@ -53,7 +55,7 @@ pub struct Cfg {
 }
 
 #[bitfield(u24)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Status {
     #[bits(0..=3, r)]
     pub rf_sw: u4,
@@ -68,6 +70,7 @@ pub struct Status {
 }
 
 #[bitenum(u2, exhaustive = true)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum ClkSel {
     Osc = 0,
     Sma = 1,
@@ -76,11 +79,27 @@ pub enum ClkSel {
 }
 
 #[bitenum(u2, exhaustive = true)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum DivSel {
     One = 0,
     _One = 1,
     Two = 2,
     Four = 3,
+}
+
+impl DivSel {
+    pub fn divider(&self) -> u32 {
+        match self {
+            Self::One => 1,
+            Self::Two => 2,
+            Self::Four => 4,
+            Self::_One => 1,
+        }
+    }
+}
+
+pub fn att_to_mu(att: f32) -> u8 {
+    255 - (att * 8.0).round() as u8
 }
 
 pub struct Urukul<'a, B, P> {
@@ -140,7 +159,7 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
     }
 
     pub fn att(&self, ch: u2) -> u8 {
-        self.att[ch.value() as usize]
+        self.att[(u2::new(3) - ch).value() as usize]
     }
 
     pub fn set_att(
@@ -148,7 +167,7 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
         ch: u2,
         att: u8,
     ) -> Result<(), DeviceError<B::Error, P::Error>> {
-        self.att[ch.value() as usize] = att;
+        self.att[(u2::new(3) - ch).value() as usize] = att;
         self.att_spi.write(&self.att)
     }
 

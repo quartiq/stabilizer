@@ -168,7 +168,7 @@ pub fn phase_to_pow(phase: f32) -> u14 {
 
 pub fn dac_fs_to_fsc(dac_fs: f32, r_dac_ref: f32) -> u10 {
     let lsb = r_dac_ref * (1024.0 / 192.0 / 1.2);
-    let fsc = dac_fs * lsb + (1024.0 / 192.0 * 72.0);
+    let fsc = dac_fs * lsb - (1024.0 / 192.0 * 72.0);
     u10::new(fsc.round() as _)
 }
 
@@ -226,20 +226,11 @@ impl<B: SpiDevice<u8>> Ad9912<B> {
         if id != 0x1982 {
             return Err(Error::Id(id));
         }
-        self.write(
-            Addr::Power,
-            &Power::builder()
-                .with_digital_pd(false)
-                .with_full_pd(false)
-                .with_pll_pd(false)
-                .with_output_doubler_en(false)
-                .with_cmos_en(false)
-                .with_hstl_pd(true)
-                .build()
-                .raw_value()
-                .to_be_bytes(),
-        )?;
         Ok(())
+    }
+
+    pub fn set_power(&mut self, power: Power) -> Result<(), Error> {
+        self.write(Addr::Power, &power.raw_value().to_be_bytes())
     }
 
     /// Non-clearing, needs init()

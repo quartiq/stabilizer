@@ -17,6 +17,9 @@ name = "arbitrary-int"
 version = "1.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c84fc003e338a6f69fbd4f7fe9f92b535ff13e9af8997f3b14b6ddff8b1df46d"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "atomic-polyfill"

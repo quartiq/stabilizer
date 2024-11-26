@@ -5,14 +5,14 @@ use arbitrary_int::{u2, u5};
 use fugit::ExtU32;
 use miniconf::{Leaf, Tree};
 use rtic_monotonics::Monotonic;
-use serde::{Deserialize, Serialize};
 
 use stabilizer::{
     hardware::{
-        self, ad9912, hal, urukul, SerialTerminal, SystemTimer, Systick,
-        Urukul, UsbDevice,
+        self, ad9912, hal,
+        urukul::{self, ClkSel, DivSel},
+        SerialTerminal, SystemTimer, Systick, Urukul, UsbDevice,
     },
-    net::{telemetry::TelemetryBuffer, NetworkState, NetworkUsers},
+    net::{NetworkState, NetworkUsers},
     settings::NetSettings,
 };
 
@@ -52,15 +52,51 @@ impl serial_settings::Settings for Settings {
     }
 }
 
-#[derive(Clone, Debug, Tree, Serialize, Deserialize)]
+#[derive(Clone, Debug, Tree)]
+pub struct Channel {
+    pll_n: Leaf<Option<u5>>,
+    pll_doubler: Leaf<bool>,
+    frequency: Leaf<f64>,
+    phase: Leaf<f32>,
+    full_scale_current: Leaf<f32>,
+    attenuation: Leaf<f32>,
+    enable: Leaf<bool>,
+    update: Leaf<bool>,
+}
+
+impl Default for Channel {
+    fn default() -> Self {
+        Self {
+            frequency: 0.0.into(),
+            phase: 0.0.into(),
+            full_scale_current: 20e-3.into(),
+            attenuation: 31.5.into(),
+            enable: false.into(),
+            pll_n: Some(u5::new(3)).into(),
+            pll_doubler: false.into(),
+            update: true.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Tree)]
 pub struct App {
-    telemetry_period: Leaf<f32>,
+    refclk: Leaf<f64>,
+    clk_sel: Leaf<ClkSel>,
+    div_sel: Leaf<DivSel>,
+    update: Leaf<bool>,
+    ch: [Channel; 4],
 }
 
 impl Default for App {
     fn default() -> Self {
+        let ch = Channel::default();
         Self {
-            telemetry_period: 10.0.into(),
+            clk_sel: ClkSel::Osc.into(),
+            div_sel: DivSel::One.into(),
+            update: true.into(),
+            refclk: 100.0e6.into(),
+            ch: [ch.clone(), ch.clone(), ch.clone(), ch.clone()],
         }
     }
 }
@@ -74,13 +110,11 @@ mod app {
         usb: UsbDevice,
         network: NetworkUsers<App, 3>,
         settings: Settings,
-        telemetry: TelemetryBuffer,
-        app: App,
-        urukul: Urukul,
     }
 
     #[local]
     struct Local {
+        urukul: Urukul,
         usb_terminal: SerialTerminal<Settings, 4>,
     }
 
@@ -97,37 +131,9 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        let crate::hardware::Eem::Urukul(mut urukul) = stabilizer.eem else {
+        let crate::hardware::Eem::Urukul(urukul) = stabilizer.eem else {
             panic!("No Urukul detected.")
         };
-
-        let ch = u2::new(0);
-        urukul.io_update().unwrap();
-        urukul
-            .set_cfg(
-                urukul
-                    .cfg()
-                    .with_clk_sel(urukul::ClkSel::Osc)
-                    .with_div_sel(urukul::DivSel::One),
-            )
-            .unwrap();
-        let ndiv = u5::new(10 / 2 - 2);
-        urukul.dds(ch).set_ndiv(ndiv).unwrap();
-        urukul.io_update().unwrap();
-        let pll = ad9912::Pll::builder()
-            .with_charge_pump(hardware::ad9912::ChargePump::Ua375)
-            .with_vco_range_high(true)
-            .with_ref_doubler(false)
-            .with_vco_auto_range(false)
-            .build();
-        urukul.dds(ch).set_pll(pll).unwrap();
-        urukul.io_update().unwrap();
-        let sysclk = ad9912::sysclk(ndiv, pll, 100e6);
-        let ftw = urukul.dds(ch).set_frequency(80e6, sysclk).unwrap();
-        urukul.io_update().unwrap();
-        assert_eq!(ftw, urukul.dds(ch).ftw().unwrap());
-        urukul.set_att(ch, 0xff).unwrap();
-        urukul.set_rf_sw(ch, true).unwrap();
 
         let network = NetworkUsers::new(
             stabilizer.net.stack,
@@ -141,30 +147,20 @@ mod app {
         let shared = Shared {
             usb: stabilizer.usb,
             network,
-            app: stabilizer.settings.urukul.clone(),
-            telemetry: TelemetryBuffer::default(),
             settings: stabilizer.settings,
-            urukul,
         };
 
         let local = Local {
+            urukul,
             usb_terminal: stabilizer.usb_serial,
         };
 
         // Spawn a settings update for default settings.
         settings_update::spawn().unwrap();
-        telemetry::spawn().unwrap();
         ethernet_link::spawn().unwrap();
         usb::spawn().unwrap();
 
         (shared, local)
-    }
-
-    #[task(binds=DMA1_STR4, shared=[app, telemetry], priority=3)]
-    #[link_section = ".itcm.process"]
-    fn process(_c: process::Context) {
-        // let process::SharedResources { app, telemetry, .. } = c.shared;
-        // let process::LocalResources { .. } = c.local;
     }
 
     #[idle(shared=[network, settings, usb])]
@@ -190,38 +186,72 @@ mod app {
         }
     }
 
-    #[task(priority = 1, shared=[network, settings, app])]
+    #[task(priority = 1, shared=[settings], local=[urukul])]
     async fn settings_update(mut c: settings_update::Context) {
-        c.shared.settings.lock(|settings| {
-            c.shared
-                .app
-                .lock(|current| *current = settings.urukul.clone());
+        let u = c.local.urukul;
+        c.shared.settings.lock(|s| {
+            let s = &mut s.urukul;
+            if *s.update {
+                *s.update = false;
+                u.set_cfg(
+                    u.cfg().with_clk_sel(*s.clk_sel).with_div_sel(*s.div_sel),
+                )
+                .unwrap();
+            }
+            let power = ad9912::Power::builder()
+                .with_digital_pd(false)
+                .with_full_pd(false)
+                .with_pll_pd(true)
+                .with_output_doubler_en(false)
+                .with_cmos_en(false)
+                .with_hstl_pd(true)
+                .build();
+            for (i, ch) in s.ch.iter_mut().enumerate() {
+                if *ch.update {
+                    *ch.update = false;
+                    let refclk = *s.refclk / s.div_sel.divider() as f64;
+                    let i = u2::new(i as _);
+                    let sysclk = if let Some(pll_n) = *ch.pll_n {
+                        u.dds(i).set_power(power.with_pll_pd(false)).unwrap();
+                        let pll = ad9912::Pll::builder()
+                            .with_charge_pump(ad9912::ChargePump::Ua375)
+                            .with_vco_range_high(true)
+                            .with_ref_doubler(*ch.pll_doubler)
+                            .with_vco_auto_range(false)
+                            .build();
+                        let sysclk = ad9912::sysclk(pll_n, pll, refclk);
+                        let pll = if sysclk > 900e6 {
+                            pll.with_vco_auto_range(false)
+                                .with_vco_range_high(true)
+                        } else if sysclk > 810e6 {
+                            pll.with_vco_auto_range(true)
+                        } else {
+                            pll.with_vco_auto_range(false)
+                                .with_vco_range_high(false)
+                        };
+                        u.dds(i).set_ndiv(pll_n).unwrap();
+                        u.dds(i).set_pll(pll).unwrap();
+                        sysclk
+                    } else {
+                        u.dds(i).set_power(power.with_pll_pd(true)).unwrap();
+                        refclk
+                    };
+                    u.dds(i).set_frequency(*ch.frequency, sysclk).unwrap();
+                    u.dds(i).set_phase(*ch.phase).unwrap();
+                    u.io_update().unwrap();
+                    u.dds(i)
+                        .set_full_scale_current(*ch.full_scale_current, 10e3)
+                        .unwrap();
+                    u.set_att(i, urukul::att_to_mu(*ch.attenuation)).unwrap();
+                    u.set_rf_sw(i, *ch.enable).unwrap();
+                }
+            }
         });
-    }
-
-    #[task(priority = 1, shared=[network, settings, telemetry])]
-    async fn telemetry(mut c: telemetry::Context) {
-        loop {
-            let _telemetry = c.shared.telemetry.lock(|telemetry| *telemetry);
-            let telemetry_period =
-                c.shared.settings.lock(|s| *s.urukul.telemetry_period);
-
-            // c.shared.network.lock(|net| {
-            //     net.telemetry.publish(&telemetry.finalize(
-            //         *gains[0],
-            //         *gains[1],
-            //         c.local.cpu_temp_sensor.get_temperature().unwrap(),
-            //     ))
-            // });
-
-            Systick::delay(((telemetry_period * 1000.0) as u32).millis()).await;
-        }
     }
 
     #[task(priority = 1, shared=[usb, settings], local=[usb_terminal])]
     async fn usb(mut c: usb::Context) {
         loop {
-            // Handle the USB serial terminal.
             c.shared.usb.lock(|usb| {
                 usb.poll(&mut [c
                     .local

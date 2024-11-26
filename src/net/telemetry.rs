@@ -40,7 +40,7 @@ pub struct TelemetryClient {
 /// These values can be converted to SI units immediately before reporting to save processing time.
 /// This allows for the DSP process to continually update the values without incurring significant
 /// run-time overhead during conversion to SI units.
-#[derive(Copy, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct TelemetryBuffer {
     /// The latest input sample on ADC0/ADC1.
     pub adcs: [AdcCode; 2],

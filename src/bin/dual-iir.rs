@@ -488,7 +488,8 @@ mod app {
     #[task(priority = 1, shared=[network, settings, telemetry], local=[cpu_temp_sensor])]
     async fn telemetry(mut c: telemetry::Context) {
         loop {
-            let telemetry = c.shared.telemetry.lock(|telemetry| *telemetry);
+            let telemetry =
+                c.shared.telemetry.lock(|telemetry| telemetry.clone());
 
             let (gains, telemetry_period) =
                 c.shared.settings.lock(|settings| {
