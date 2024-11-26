@@ -1,14 +1,17 @@
 //! Module for all hardware-specific setup of Stabilizer
 
-pub use embedded_hal;
+pub use embedded_hal_02;
 pub use stm32h7xx_hal as hal;
 
+pub mod ad9912;
 pub mod adc;
 pub mod afe;
 pub mod cpu_temp_sensor;
 pub mod dac;
+pub mod decoded_cs;
 pub mod delay;
 pub mod design_parameters;
+pub mod eem;
 mod eeprom;
 pub mod flash;
 pub mod input_stamper;
@@ -19,6 +22,7 @@ pub mod setup;
 pub mod shared_adc;
 pub mod signal_generator;
 pub mod timers;
+pub mod urukul;
 
 // Type alias for the analog front-end (AFE) for ADC0.
 pub type AFE0 = afe::ProgrammableGainAmplifier<
@@ -37,23 +41,35 @@ pub type UsbBus = stm32h7xx_hal::usb_hs::UsbBus<stm32h7xx_hal::usb_hs::USB2>;
 // Type alias for the USB device.
 pub type UsbDevice = usb_device::device::UsbDevice<'static, UsbBus>;
 
+pub struct Gpio {
+    pub lvds4: hal::gpio::gpiod::PD1<hal::gpio::Input>,
+    pub lvds5: hal::gpio::gpiod::PD2<hal::gpio::Input>,
+    pub lvds6: hal::gpio::gpiod::PD3<hal::gpio::Output>,
+    pub lvds7: hal::gpio::gpiod::PD4<hal::gpio::Output>,
+}
+
+pub type Urukul = urukul::Urukul<
+    'static,
+    embedded_hal_compat::Forward<
+        hal::spi::Spi<hal::stm32::SPI6, hal::spi::Enabled>,
+    >,
+    embedded_hal_compat::Forward<
+        hal::gpio::ErasedPin<hal::gpio::Output>,
+        embedded_hal_compat::markers::ForwardOutputPin,
+    >,
+>;
+
+pub enum Eem {
+    Gpio(Gpio),
+    Urukul(Urukul),
+    None,
+}
+
 // Type alias for digital input 0 (DI0).
 pub type DigitalInput0 = hal::gpio::gpiog::PG9<hal::gpio::Input>;
 
 // Type alias for digital input 1 (DI1).
 pub type DigitalInput1 = hal::gpio::gpioc::PC15<hal::gpio::Input>;
-
-// Type alias for LVDS4 (digital input).
-pub type EemDigitalInput0 = hal::gpio::gpiod::PD1<hal::gpio::Input>;
-
-// Type alias for LVDS5 (digital input).
-pub type EemDigitalInput1 = hal::gpio::gpiod::PD2<hal::gpio::Input>;
-
-// Type alias for LVDS6 (digital output).
-pub type EemDigitalOutput0 = hal::gpio::gpiod::PD3<hal::gpio::Output>;
-
-// Type alias for LVDS7 (digital output).
-pub type EemDigitalOutput1 = hal::gpio::gpiod::PD4<hal::gpio::Output>;
 
 // Number of TX descriptors in the ethernet descriptor ring.
 const TX_DESRING_CNT: usize = 4;

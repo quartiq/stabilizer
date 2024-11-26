@@ -2,7 +2,7 @@ use self::attenuators::AttenuatorInterface;
 
 use super::hal;
 use crate::hardware::{shared_adc::AdcChannel, I2c1Proxy};
-use embedded_hal::blocking::spi::Transfer;
+use embedded_hal_02::blocking::spi::Transfer;
 use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
 

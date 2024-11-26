@@ -13,6 +13,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "arbitrary-int"
+version = "1.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c84fc003e338a6f69fbd4f7fe9f92b535ff13e9af8997f3b14b6ddff8b1df46d"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "atomic-polyfill"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -47,6 +56,18 @@ name = "bit_field"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc827186963e592360843fb5ba4b973e145841266c1357f7180c43526f2e5b61"
+
+[[package]]
+name = "bitbybit"
+version = "1.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb157f9753a7cddfcf4a4f5fed928fbf4ce1b7b64b6bcc121d7a9f95d698997b"
+dependencies = [
+ "arbitrary-int",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.87",
+]
 
 [[package]]
 name = "bitfield"
@@ -228,6 +249,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c4c685bbef7fe13c3c6dd4da26841ed3980ef33e841cddfa15ce8a8fb3f1884"
 dependencies = [
  "embedded-hal 1.0.0",
+]
+
+[[package]]
+name = "embedded-hal-bus"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d3980bf28e8577db59fe2bdb3df868a419469d2cecb363644eea2b6f7797669"
+dependencies = [
+ "critical-section",
+ "embedded-hal 1.0.0",
+ "portable-atomic",
+]
+
+[[package]]
+name = "embedded-hal-compat"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08ecac72f6be75ad2d4809c9f07d45502e2e5c9a4e9579077f28d7135de81df3"
+dependencies = [
+ "embedded-hal 0.2.7",
+ "embedded-hal 1.0.0",
+ "nb 1.1.0",
 ]
 
 [[package]]
@@ -1186,12 +1229,17 @@ name = "stabilizer"
 version = "0.10.0"
 dependencies = [
  "ad9959",
+ "arbitrary-int",
  "bit_field",
+ "bitbybit",
  "built",
  "cortex-m",
  "cortex-m-rt",
  "embassy-futures",
  "embedded-hal 0.2.7",
+ "embedded-hal 1.0.0",
+ "embedded-hal-bus",
+ "embedded-hal-compat",
  "embedded-io",
  "embedded-storage",
  "embedded-storage-async",
@@ -1207,6 +1255,7 @@ dependencies = [
  "minimq",
  "mono-clock",
  "mutex-trait",
+ "num-traits",
  "num_enum",
  "panic-persist",
  "paste",
@@ -1227,6 +1276,7 @@ dependencies = [
  "spin",
  "stm32h7xx-hal",
  "tca9539",
+ "thiserror",
  "usb-device",
  "usbd-serial",
 ]

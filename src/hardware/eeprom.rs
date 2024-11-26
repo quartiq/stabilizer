@@ -1,4 +1,4 @@
-use embedded_hal::blocking::{delay::DelayMs, i2c::WriteRead};
+use embedded_hal_02::blocking::{delay::DelayMs, i2c::WriteRead};
 
 // The EEPROM is a variant without address bits, so the 3 LSB of this word are "dont-cares".
 const I2C_ADDR: u8 = 0x50;
