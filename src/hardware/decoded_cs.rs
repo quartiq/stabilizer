@@ -20,15 +20,21 @@ impl<'a, CS: ErrorType, const N: usize> ErrorType for DecodedCs<'a, CS, N> {
 
 impl<'a, CS: OutputPin, const N: usize> OutputPin for DecodedCs<'a, CS, N> {
     fn set_low(&mut self) -> Result<(), Self::Error> {
+        // assert
         for (i, cs) in self.cs.borrow_mut().iter_mut().enumerate() {
-            cs.set_state((self.sel.value() & (1 << i) != 0).into())?;
+            if self.sel.value() & (1 << i) != 0 {
+                cs.set_high()?;
+            }
         }
         Ok(())
     }
 
     fn set_high(&mut self) -> Result<(), Self::Error> {
-        for cs in self.cs.borrow_mut().iter_mut() {
-            cs.set_low()?;
+        // deassert
+        for (i, cs) in self.cs.borrow_mut().iter_mut().enumerate() {
+            if self.sel.value() & (1 << i) != 0 {
+                cs.set_low()?;
+            }
         }
         Ok(())
     }

@@ -11,8 +11,8 @@ pub enum Addr {
     Buffer = 0x0004,
     Update = 0x0005,
     Power = 0x0010,
-    DdsReset = 0x0013,
-    Reset = 0x0014,
+    DdsReset = 0x0012,
+    Reset = 0x0013,
     NDiv = 0x0020,
     Pll = 0x0022,
     SDiv = 0x0106,
@@ -21,8 +21,8 @@ pub enum Addr {
     Hstl = 0x0200,
     Cmos = 0x0201,
     Fsc = 0x040c,
-    SpurA = 0x0500,
-    SpurB = 0x0505,
+    SpurA = 0x0504,
+    SpurB = 0x0509,
 }
 
 #[bitenum(u2, exhaustive = true)]
@@ -153,25 +153,23 @@ pub struct Ad9912<B> {
     bus: B,
 }
 
-impl<B> Ad9912<B> {
-    pub fn sysclk(ndiv: u5, pll: Pll, refclk: f64) -> f64 {
-        refclk * ((pll.ref_doubler() as u8 + 1) * 2 * (ndiv.value() + 2)) as f64
-    }
+pub fn sysclk(ndiv: u5, pll: Pll, refclk: f64) -> f64 {
+    refclk * ((pll.ref_doubler() as u8 + 1) * 2 * (ndiv.value() + 2)) as f64
+}
 
-    pub fn frequency_to_ftw(frequency: f64, sysclk: f64) -> u48 {
-        let lsb = sysclk * (1.0 / (1u64 << 48) as f64);
-        u48::new((frequency * lsb).round() as _)
-    }
+pub fn frequency_to_ftw(frequency: f64, sysclk: f64) -> u48 {
+    let lsb = sysclk.recip() * (1u64 << 48) as f64;
+    u48::new((frequency * lsb).round() as _)
+}
 
-    pub fn phase_to_pow(phase: f32) -> u14 {
-        u14::new((phase * (1.0 / (1u32 << 14) as f32)).round() as _)
-    }
+pub fn phase_to_pow(phase: f32) -> u14 {
+    u14::new((phase * (1u32 << 14) as f32).round() as _)
+}
 
-    pub fn dac_fs_to_fsc(dac_fs: f32, r_dac_ref: f32) -> u10 {
-        let lsb = r_dac_ref * (1024.0 / 192.0 / 1.2);
-        let fsc = dac_fs * lsb + (1024.0 / 192.0 * 72.0);
-        u10::new(fsc.round() as _)
-    }
+pub fn dac_fs_to_fsc(dac_fs: f32, r_dac_ref: f32) -> u10 {
+    let lsb = r_dac_ref * (1024.0 / 192.0 / 1.2);
+    let fsc = dac_fs * lsb + (1024.0 / 192.0 * 72.0);
+    u10::new(fsc.round() as _)
 }
 
 impl<B: SpiDevice<u8>> Ad9912<B> {
@@ -262,11 +260,14 @@ impl<B: SpiDevice<u8>> Ad9912<B> {
 
     /// Needs io-update
     pub fn dds_reset(&mut self) -> Result<(), Error> {
-        self.write(Addr::DdsReset, &1u8.to_be_bytes())
+        self.write(Addr::DdsReset, &0x01u8.to_be_bytes())
     }
 
-    pub fn set_pll(&mut self, ndiv: u5, pll: Pll) -> Result<(), Error> {
-        self.write(Addr::NDiv, &ndiv.value().to_be_bytes())?;
+    pub fn set_ndiv(&mut self, ndiv: u5) -> Result<(), Error> {
+        self.write(Addr::NDiv, &ndiv.value().to_be_bytes())
+    }
+
+    pub fn set_pll(&mut self, pll: Pll) -> Result<(), Error> {
         self.write(Addr::Pll, &pll.raw_value().to_be_bytes())
     }
 
@@ -274,12 +275,18 @@ impl<B: SpiDevice<u8>> Ad9912<B> {
         self.write(Addr::Ftw0, &ftw.to_be_bytes())
     }
 
+    pub fn ftw(&mut self) -> Result<u48, Error> {
+        let mut r = u48::default().to_be_bytes();
+        self.read(Addr::Ftw0, &mut r)?;
+        Ok(u48::from_be_bytes(r))
+    }
+
     pub fn set_frequency(
         &mut self,
         frequency: f64,
         sysclk: f64,
     ) -> Result<u48, Error> {
-        let ftw = Self::frequency_to_ftw(frequency, sysclk);
+        let ftw = frequency_to_ftw(frequency, sysclk);
         self.set_ftw(ftw)?;
         Ok(ftw)
     }
@@ -289,7 +296,7 @@ impl<B: SpiDevice<u8>> Ad9912<B> {
     }
 
     pub fn set_phase(&mut self, phase: f32) -> Result<u14, Error> {
-        let pow = Self::phase_to_pow(phase);
+        let pow = phase_to_pow(phase);
         self.set_pow(pow)?;
         Ok(pow)
     }
@@ -303,7 +310,7 @@ impl<B: SpiDevice<u8>> Ad9912<B> {
         dac_fs: f32,
         r_dac_ref: f32,
     ) -> Result<u10, Error> {
-        let fsc = Self::dac_fs_to_fsc(dac_fs, r_dac_ref);
+        let fsc = dac_fs_to_fsc(dac_fs, r_dac_ref);
         self.set_fsc(fsc)?;
         Ok(fsc)
     }

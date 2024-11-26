@@ -1,16 +1,16 @@
 #![no_std]
 #![no_main]
 
-use miniconf::{Leaf, Tree};
-use serde::{Deserialize, Serialize};
-
-use rtic_monotonics::Monotonic;
-
+use arbitrary_int::{u2, u5};
 use fugit::ExtU32;
+use miniconf::{Leaf, Tree};
+use rtic_monotonics::Monotonic;
+use serde::{Deserialize, Serialize};
 
 use stabilizer::{
     hardware::{
-        self, hal, SerialTerminal, SystemTimer, Systick, Urukul, UsbDevice,
+        self, ad9912, hal, urukul, SerialTerminal, SystemTimer, Systick,
+        Urukul, UsbDevice,
     },
     net::{telemetry::TelemetryBuffer, NetworkState, NetworkUsers},
     settings::NetSettings,
@@ -67,9 +67,6 @@ impl Default for App {
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
-    use arbitrary_int::{u2, u5};
-    use hardware::ad9912::{Ad9912, Pll};
-
     use super::*;
 
     #[shared]
@@ -105,31 +102,30 @@ mod app {
         };
 
         let ch = u2::new(0);
+        urukul.io_update().unwrap();
         urukul
             .set_cfg(
                 urukul
                     .cfg()
-                    .with_clk_sel(hardware::urukul::ClkSel::Osc)
-                    .with_div(u2::new(0)),
+                    .with_clk_sel(urukul::ClkSel::Osc)
+                    .with_div_sel(urukul::DivSel::One),
             )
             .unwrap();
+        let ndiv = u5::new(10 / 2 - 2);
+        urukul.dds(ch).set_ndiv(ndiv).unwrap();
         urukul.io_update().unwrap();
-        let (ndiv, pll) = (
-            u5::new(10 / 2 - 2),
-            Pll::builder()
-                .with_charge_pump(hardware::ad9912::ChargePump::Ua375)
-                .with_vco_range_high(true)
-                .with_ref_doubler(false)
-                .with_vco_auto_range(false)
-                .build(),
-        );
-        let dds = urukul.dds(ch);
-        dds.set_pll(ndiv, pll).unwrap();
+        let pll = ad9912::Pll::builder()
+            .with_charge_pump(hardware::ad9912::ChargePump::Ua375)
+            .with_vco_range_high(true)
+            .with_ref_doubler(false)
+            .with_vco_auto_range(false)
+            .build();
+        urukul.dds(ch).set_pll(pll).unwrap();
         urukul.io_update().unwrap();
-        let dds = urukul.dds(ch);
-        let sysclk = Ad9912::<()>::sysclk(ndiv, pll, 100e6);
-        dds.set_frequency(80e6, sysclk).unwrap();
+        let sysclk = ad9912::sysclk(ndiv, pll, 100e6);
+        let ftw = urukul.dds(ch).set_frequency(80e6, sysclk).unwrap();
         urukul.io_update().unwrap();
+        assert_eq!(ftw, urukul.dds(ch).ftw().unwrap());
         urukul.set_att(ch, 0xff).unwrap();
         urukul.set_rf_sw(ch, true).unwrap();
 

@@ -13,12 +13,8 @@ use super::decoded_cs::DecodedCs;
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum Error {
-    #[error("Invalid PROTO_REV {0}")]
-    InvalidProtoRev(u7),
-    #[error("RF_SW is driven {0}")]
-    DrivenRfSw(u4),
-    #[error("Invalid IFC_MODE {0}")]
-    InvalidIfcMode(u4),
+    #[error("Initialization: {0}: {1}")]
+    Initialization(&'static str, u32),
     #[error("SPI Error {0}")]
     Spi(spi::ErrorKind),
     #[error("DDS")]
@@ -53,7 +49,7 @@ pub struct Cfg {
     #[bit(20, rw)]
     io_rst: bool,
     #[bits(22..=23, rw)]
-    div: u2,
+    div_sel: DivSel,
 }
 
 #[bitfield(u24)]
@@ -77,6 +73,14 @@ pub enum ClkSel {
     Sma = 1,
     Mmcx = 2,
     _Sma = 3,
+}
+
+#[bitenum(u2, exhaustive = true)]
+pub enum DivSel {
+    One = 0,
+    _One = 1,
+    Two = 2,
+    Four = 3,
 }
 
 pub struct Urukul<'a, B, P> {
@@ -151,13 +155,38 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
     pub fn init(&mut self) -> Result<(), Error> {
         let sta = self.set_cfg(self.cfg())?;
         if sta.proto_rev().value() != 0x8 {
-            return Err(Error::InvalidProtoRev(sta.proto_rev()));
+            return Err(Error::Initialization(
+                "Invalid PROTO_REV",
+                sta.proto_rev().value() as _,
+            ));
         }
         if sta.rf_sw() != u4::new(0) {
-            return Err(Error::DrivenRfSw(sta.rf_sw()));
+            return Err(Error::Initialization(
+                "RF_SW driven",
+                sta.rf_sw().value() as _,
+            ));
         }
         if sta.ifc_mode() != u4::new(0) {
-            return Err(Error::InvalidIfcMode(sta.ifc_mode()));
+            return Err(Error::Initialization(
+                "invalid IFC_MODE",
+                sta.ifc_mode().value() as _,
+            ));
+        }
+
+        let cfg = self.cfg();
+        self.set_cfg(cfg.with_io_rst(true).with_rst(true))?;
+        self.set_cfg(cfg)?;
+
+        for want in [[0; 4], [0xff; 4], [0x5a; 4], [0xa5; 4]].iter() {
+            self.att_spi.write(want)?;
+            let mut have = [0; 4];
+            self.att_spi.read(&mut have)?;
+            if want != &have {
+                return Err(Error::Initialization(
+                    "Attenuator mismatch",
+                    u32::from_be_bytes(have),
+                ));
+            }
         }
 
         // This is destructive and clears attenuation
@@ -168,7 +197,7 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
             dds.init()?;
         }
 
-        log::info!("Urukul CPLD initialization complete.");
+        log::info!("Urukul initialized");
         Ok(())
     }
 

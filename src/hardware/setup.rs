@@ -1104,10 +1104,10 @@ where
             lvds7: gpiod.pd4.into_push_pull_output(),
         })
     } else {
-        assert_eq!(poe, PoePower::High);
         log::info!("EEM population variant: Output detected");
+        assert!(poe != PoePower::Low);
         force_eem_source.set_high();
-        delay.delay_ms(100u8);
+        delay.delay_ms(200u8);
 
         let spi = device
             .SPI6
