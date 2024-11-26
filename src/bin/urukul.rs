@@ -48,9 +48,13 @@ impl serial_settings::Settings for Settings {
 pub struct Channel {
     pll_n: Leaf<Option<u5>>,
     pll_doubler: Leaf<bool>,
+    // TODO: range check
     frequency: Leaf<f64>,
+    // TODO: range check
     phase: Leaf<f32>,
+    // TODO: range check
     full_scale_current: Leaf<f32>,
+    // TODO: range check
     attenuation: Leaf<f32>,
     enable: Leaf<bool>,
     update: Leaf<bool>,
