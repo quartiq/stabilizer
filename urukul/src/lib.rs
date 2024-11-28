@@ -5,7 +5,7 @@ use bitbybit::{bitenum, bitfield};
 use embedded_hal::digital::OutputPin;
 use embedded_hal::spi::{self, SpiBus, SpiDevice};
 use embedded_hal_bus::spi::{DeviceError, NoDelay, RefCellDevice};
-use num_traits::Float;
+use num_traits::float::FloatCore;
 use serde::{Deserialize, Serialize};
 
 use ad9912::Ad9912;
