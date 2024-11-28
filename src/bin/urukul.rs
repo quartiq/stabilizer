@@ -15,9 +15,7 @@ use rtic_monotonics::Monotonic;
 
 use stabilizer::{
     hardware::{
-        self, ad9912, hal,
-        urukul::{self, ClkSel, DivSel},
-        SerialTerminal, SystemTimer, Systick, Urukul, UsbDevice,
+        self, hal, SerialTerminal, SystemTimer, Systick, Urukul, UsbDevice,
     },
     net::{NetworkState, NetworkUsers},
     settings::NetSettings,
@@ -85,8 +83,8 @@ impl Default for Channel {
 #[derive(Clone, Debug, Tree)]
 pub struct App {
     refclk: Leaf<f64>,
-    clk_sel: Leaf<ClkSel>,
-    div_sel: Leaf<DivSel>,
+    clk_sel: Leaf<urukul::ClkSel>,
+    div_sel: Leaf<urukul::DivSel>,
     update: Leaf<bool>,
     ch: [Channel; 4],
 }
@@ -95,8 +93,8 @@ impl Default for App {
     fn default() -> Self {
         let ch = Channel::default();
         Self {
-            clk_sel: ClkSel::Osc.into(),
-            div_sel: DivSel::One.into(),
+            clk_sel: urukul::ClkSel::Osc.into(),
+            div_sel: urukul::DivSel::One.into(),
             update: true.into(),
             refclk: 100.0e6.into(),
             ch: [ch.clone(), ch.clone(), ch.clone(), ch.clone()],

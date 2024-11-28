@@ -24,7 +24,7 @@ use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
     eeprom, input_stamper::InputStamper, metadata::ApplicationMetadata,
     platform, pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc,
-    timers, urukul, DigitalInput0, DigitalInput1, Eem, EthernetPhy, Gpio,
+    timers, DigitalInput0, DigitalInput1, Eem, EthernetPhy, Gpio,
     HardwareVersion, NetworkStack, SerialTerminal, SystemTimer, Systick,
     UsbDevice, AFE0, AFE1,
 };

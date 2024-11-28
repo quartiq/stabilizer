@@ -1,0 +1,16 @@
+[package]
+name = "encoded_pin"
+version = "0.1.0"
+edition = "2021"
+description = "Binary encoded OutputPin, e.g. for encoded SPI chip select"
+authors = [
+	"Robert Jördens <rj@quartiq.de>",
+]
+categories = ["embedded", "no-std"]
+license = "MIT OR Apache-2.0"
+keywords = ["spi"]
+repository = "https://github.com/quartiq/stabilizer"
+
+[dependencies]
+arbitrary-int = { version = "1.2.7", features = ["serde"] }
+embedded-hal = { version = "1.0" }
