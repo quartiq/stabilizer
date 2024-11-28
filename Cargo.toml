@@ -28,7 +28,7 @@ features = []
 default-target = "thumbv7em-none-eabihf"
 
 [workspace]
-members = ["ad9959", "serial-settings"]
+members = [ "ad9912", "ad9959", "encoded_pin", "serial-settings", "urukul"]
 
 [dependencies]
 panic-persist = { version = "0.3", features = ["utf8", "custom-panic-handler"] }
@@ -81,6 +81,8 @@ embedded-hal-compat = "0.13.0"
 embedded-hal-02 = { package = "embedded-hal", version = "0.2.7", features = ["unproven"] }
 embedded-hal-1 = { package = "embedded-hal", version = "1.0" }
 embedded-hal-bus = "0.2.0"
+urukul = { version = "0.1", path = "urukul" }
+ad9912 = { version = "0.1", path = "ad9912" }
 
 [build-dependencies]
 built = { version = "0.7", features = ["git2"], default-features = false }

@@ -1,6 +1,8 @@
+#![no_std]
+
 use arbitrary_int::{u10, u14, u48, u5};
 use bitbybit::{bitenum, bitfield};
-use embedded_hal_1::spi::{self, Operation, SpiDevice};
+use embedded_hal::spi::{self, Operation, SpiDevice};
 use num_traits::float::FloatCore;
 
 #[bitenum(u13)]

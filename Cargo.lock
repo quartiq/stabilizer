@@ -3,6 +3,17 @@
 version = 3
 
 [[package]]
+name = "ad9912"
+version = "0.1.0"
+dependencies = [
+ "arbitrary-int",
+ "bitbybit",
+ "embedded-hal 1.0.0",
+ "num-traits",
+ "thiserror",
+]
+
+[[package]]
 name = "ad9959"
 version = "0.3.0"
 dependencies = [
@@ -322,6 +333,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7a4b4d10ac48d08bfe3db7688c402baadb244721f30a77ce360bd24c3dffe58"
 dependencies = [
  "num",
+]
+
+[[package]]
+name = "encoded_pin"
+version = "0.1.0"
+dependencies = [
+ "arbitrary-int",
+ "embedded-hal 1.0.0",
 ]
 
 [[package]]
@@ -1380,6 +1399,7 @@ dependencies = [
 name = "stabilizer"
 version = "0.10.0"
 dependencies = [
+ "ad9912",
  "ad9959",
  "arbitrary-int",
  "bit_field",
@@ -1429,6 +1449,7 @@ dependencies = [
  "stm32h7xx-hal",
  "tca9539",
  "thiserror",
+ "urukul",
  "usb-device",
  "usbd-serial",
 ]
@@ -1613,6 +1634,22 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
+]
+
+[[package]]
+name = "urukul"
+version = "0.1.0"
+dependencies = [
+ "ad9912",
+ "arbitrary-int",
+ "bitbybit",
+ "embedded-hal 1.0.0",
+ "embedded-hal-bus",
+ "encoded_pin",
+ "log",
+ "num-traits",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]
