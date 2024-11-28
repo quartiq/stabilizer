@@ -76,8 +76,8 @@ const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 
 #[derive(Clone, Debug, Tree)]
 pub struct Settings {
-    pub lockin: Lockin,
-    pub net: NetSettings,
+    lockin: Lockin,
+    net: NetSettings,
 }
 
 impl stabilizer::settings::AppSettings for Settings {
