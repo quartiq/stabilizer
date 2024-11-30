@@ -23,8 +23,8 @@ use stabilizer::{
 
 #[derive(Clone, Debug, Tree)]
 pub struct Settings {
-    pub urukul: App,
-    pub net: NetSettings,
+    urukul: App,
+    net: NetSettings,
 }
 
 impl stabilizer::settings::AppSettings for Settings {
@@ -53,13 +53,9 @@ impl serial_settings::Settings for Settings {
 pub struct Channel {
     pll_n: Leaf<Option<u5>>,
     pll_doubler: Leaf<bool>,
-    // TODO: range check
     frequency: Leaf<f64>,
-    // TODO: range check
     phase: Leaf<f32>,
-    // TODO: range check
     full_scale_current: Leaf<f32>,
-    // TODO: range check
     attenuation: Leaf<f32>,
     enable: Leaf<bool>,
     update: Leaf<bool>,
@@ -91,13 +87,12 @@ pub struct App {
 
 impl Default for App {
     fn default() -> Self {
-        let ch = Channel::default();
         Self {
             clk_sel: urukul::ClkSel::Osc.into(),
             div_sel: urukul::DivSel::One.into(),
             update: true.into(),
             refclk: 100.0e6.into(),
-            ch: [ch.clone(), ch.clone(), ch.clone(), ch.clone()],
+            ch: Default::default(),
         }
     }
 }

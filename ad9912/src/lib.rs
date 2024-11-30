@@ -1,6 +1,6 @@
 #![no_std]
 
-use arbitrary_int::{u10, u14, u48, u5};
+use arbitrary_int::{u10, u14, u48, u5, Number};
 use bitbybit::{bitenum, bitfield};
 use embedded_hal::spi::{self, Operation, SpiDevice};
 use num_traits::float::FloatCore;
@@ -172,17 +172,23 @@ pub struct Ad9912<B> {
 
 pub fn frequency_to_ftw(frequency: f64, sysclk: f64) -> u48 {
     let lsb = sysclk.recip() * (1u64 << 48) as f64;
-    u48::new((frequency * lsb).round() as _)
+    // Alias into Nyquist
+    u48::new(((frequency * lsb).round() as i64 as u64) & u48::MASK)
 }
 
 pub fn phase_to_pow(phase: f32) -> u14 {
-    u14::new((phase * (1u32 << 14) as f32).round() as _)
+    // Alias into Nyquist
+    u14::new(((phase * (1u32 << 14) as f32).round() as i32 as u16) & u14::MASK)
 }
 
 pub fn dac_fs_to_fsc(dac_fs: f32, r_dac_ref: f32) -> u10 {
     let lsb = r_dac_ref * (1024.0 / 192.0 / 1.2);
     let fsc = dac_fs * lsb - (1024.0 / 192.0 * 72.0);
-    u10::new(fsc.round() as _)
+    // Clamp
+    u10::new(
+        fsc.round()
+            .clamp(u10::MIN.value() as _, u10::MAX.value() as _) as _,
+    )
 }
 
 impl<B: SpiDevice<u8>> Ad9912<B> {

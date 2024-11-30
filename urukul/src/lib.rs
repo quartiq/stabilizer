@@ -177,13 +177,13 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
                 sta.proto_rev().value() as _,
             ));
         }
-        if sta.rf_sw() != u4::new(0) {
+        if sta.rf_sw().value() != 0 {
             return Err(Error::Initialization(
                 "RF_SW driven",
                 sta.rf_sw().value() as _,
             ));
         }
-        if sta.ifc_mode() != u4::new(0) {
+        if sta.ifc_mode().value() != 0 {
             return Err(Error::Initialization(
                 "invalid IFC_MODE",
                 sta.ifc_mode().value() as _,
@@ -228,10 +228,10 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
         ch: u2,
         state: bool,
     ) -> Result<(), DeviceError<B::Error, P::Error>> {
-        let mut v = self.cfg.rf_sw();
-        v &= !u4::new(1u8 << ch.value());
-        v |= u4::new((state as u8) << ch.value());
-        self.set_cfg(self.cfg.with_rf_sw(v))?;
+        let mut v = self.cfg.rf_sw().value();
+        v &= !(1 << ch.value());
+        v |= (state as u8) << ch.value();
+        self.set_cfg(self.cfg.with_rf_sw(u4::new(v)))?;
         Ok(())
     }
 
@@ -240,10 +240,10 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
         ch: u2,
         state: bool,
     ) -> Result<(), DeviceError<B::Error, P::Error>> {
-        let mut v = self.cfg.led();
-        v &= !u4::new(1u8 << ch.value());
-        v |= u4::new((state as u8) << ch.value());
-        self.set_cfg(self.cfg.with_led(v))?;
+        let mut v = self.cfg.led().value();
+        v &= !(1 << ch.value());
+        v |= (state as u8) << ch.value();
+        self.set_cfg(self.cfg.with_led(u4::new(v)))?;
         Ok(())
     }
 
