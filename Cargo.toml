@@ -88,8 +88,8 @@ embedded-hal-02 = { package = "embedded-hal", version = "0.2.7", features = [
 ] }
 embedded-hal-1 = { package = "embedded-hal", version = "1.0" }
 embedded-hal-bus = "0.2.0"
-urukul = { version = "0.1", path = "urukul" }
-ad9912 = { version = "0.1", path = "ad9912" }
+urukul = { version = "0.1.1", path = "urukul" }
+ad9912 = { version = "0.1.1", path = "ad9912" }
 
 [build-dependencies]
 built = { version = "0.7", features = ["git2"], default-features = false }

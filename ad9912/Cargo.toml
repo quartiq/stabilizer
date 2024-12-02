@@ -1,6 +1,6 @@
 [package]
 name = "ad9912"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "AD9912 1 GHz DDS SPI driver"
 authors = [

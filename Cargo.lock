@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "ad9912"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "arbitrary-int",
  "bitbybit",
@@ -1639,7 +1639,7 @@ dependencies = [
 
 [[package]]
 name = "urukul"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ad9912",
  "arbitrary-int",
