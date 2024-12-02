@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error","Signal"],"struct":["BasicConfig","Config","SignalGenerator"]};
