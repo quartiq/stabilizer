@@ -759,8 +759,8 @@ dependencies = [
 
 [[package]]
 name = "menu"
-version = "0.6.0"
-source = "git+https://github.com/rust-embedded-community/menu.git#5b92046242bec0297811ef5b1cda38543f060250"
+version = "0.6.1"
+source = "git+https://github.com/rust-embedded-community/menu.git#f8a2cbb11b8fe7fe205e107bf30063f6c261e8e8"
 dependencies = [
  "embedded-io",
  "rustversion",
