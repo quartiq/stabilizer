@@ -5,9 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [v0.11.0](https://github.com/quartiq/stabilizer/compare/v0.10.0...v0.11.0) - 2024-12-02
+
+### Added
+
+* Support for Urukul-AD9912 as a downstream EEM
+
+### Changed
+
+* Various dependencies bumped (among them Miniconf v0.13 -> v0.18)
+
 ## [v0.10.0](https://github.com/quartiq/stabilizer/compare/v0.9.0...v0.10.0)
 
 ### Added
+
 * Serial terminal is available on USB for settings configurations
 * Reboot to DFU support added via the serial terminal for remote bootloading
 * The `meta` topic now contains metadata about the compiler, firmware, and hardware similar to
@@ -19,6 +30,7 @@ console.
   unified for all applications (i.e. lockin, dual-iir, etc.)
 
 ### Changed
+
 * Broker and static IP/DHCP are no longer configured at compile time,
   but is maintained in device flash and can be changed via the USB port.
 * MSRV removed. Stabilizer uses latest stable rust.
@@ -27,6 +39,7 @@ console.
 * The stream target is now configures as a `1.2.3.4:4321` string
 
 ### Fixed
+
 * Fixed an issue where the device would sometimes not enumerate on Windows
 
 ## [v0.9.0](https://github.com/quartiq/stabilizer/compare/v0.8.1...v0.9.0)

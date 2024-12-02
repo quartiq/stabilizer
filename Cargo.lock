@@ -1284,7 +1284,7 @@ dependencies = [
 
 [[package]]
 name = "serial-settings"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
@@ -1398,7 +1398,7 @@ dependencies = [
 
 [[package]]
 name = "stabilizer"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "ad9912",
  "ad9959",
