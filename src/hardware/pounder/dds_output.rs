@@ -135,7 +135,7 @@ pub struct ProfileBuilder<'a> {
     serializer: ProfileSerializer,
 }
 
-impl<'a> ProfileBuilder<'a> {
+impl ProfileBuilder<'_> {
     /// Update a number of channels with the provided configuration
     ///
     /// # Args

@@ -31,7 +31,7 @@ pub struct AdcChannel<'a, Adc, PIN> {
     mutex: &'a spin::Mutex<hal::adc::Adc<Adc, hal::adc::Enabled>>,
 }
 
-impl<'a, Adc, PIN> AdcChannel<'a, Adc, PIN>
+impl<Adc, PIN> AdcChannel<'_, Adc, PIN>
 where
     PIN: Channel<Adc, ID = u8>,
     hal::adc::Adc<Adc, hal::adc::Enabled>: OneShot<Adc, u32, PIN>,
