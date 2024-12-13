@@ -8,7 +8,7 @@ text = "MIT"
 [project]
 name = "stabilizer"
 # Note: keep this in sync with Cargo.toml
-version = "0.10.0"
+version = "0.11.0"
 description = "Utilities for configuring Stabilizer"
 authors = [
     { name = "Robert Jördens", email = "rj@quartiq.de" },
@@ -18,7 +18,7 @@ dependencies = [
     "numpy",
     "scipy",
     "matplotlib",
-    "miniconf-mqtt@git+https://github.com/quartiq/miniconf@v0.17.0#subdirectory=py/miniconf-mqtt",
+    "miniconf-mqtt@git+https://github.com/quartiq/miniconf@v0.18.2#subdirectory=py/miniconf-mqtt",
 ]
 
 [project.urls]

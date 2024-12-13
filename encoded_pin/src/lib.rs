@@ -16,11 +16,11 @@ impl<'a, P, const N: usize> EncodedPin<'a, P, N> {
     }
 }
 
-impl<'a, P: ErrorType, const N: usize> ErrorType for EncodedPin<'a, P, N> {
+impl<P: ErrorType, const N: usize> ErrorType for EncodedPin<'_, P, N> {
     type Error = P::Error;
 }
 
-impl<'a, P: OutputPin, const N: usize> OutputPin for EncodedPin<'a, P, N> {
+impl<P: OutputPin, const N: usize> OutputPin for EncodedPin<'_, P, N> {
     fn set_low(&mut self) -> Result<(), Self::Error> {
         // assert
         for (i, cs) in self.cs.borrow_mut().iter_mut().enumerate() {
