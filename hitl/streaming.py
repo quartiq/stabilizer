@@ -44,11 +44,9 @@ async def _main():
     ) as client:
         prefix = args.prefix
         if not args.prefix:
-            devices = await miniconf.discover(client, "dt/sinara/dual-iir/+")
-            assert (
-                len(devices) == 1
-            ), f"Not a single unique Stabilizer found: {devices}."
-            prefix = devices.pop()
+            prefix, _alive = miniconf.one(
+                await miniconf.discover(client, "dt/sinara/dual-iir/+")
+            )
 
         logging.basicConfig(level=logging.INFO)
 
