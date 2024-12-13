@@ -2,14 +2,14 @@
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
-[license]
-text = "MIT"
-
 [project]
 name = "stabilizer"
 # Note: keep this in sync with Cargo.toml
 version = "0.11.0"
 description = "Utilities for configuring Stabilizer"
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+]
 authors = [
     { name = "Robert Jördens", email = "rj@quartiq.de" },
     { name = "Ryan Summers", email = "ryan.summers@vertigo-designs.com" },
