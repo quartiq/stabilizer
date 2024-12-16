@@ -1,0 +1,31 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`TreeSerialize`/`TreeDeserialize` with `postcard`."><title>miniconf::postcard - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-b0742ba02757f159.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="miniconf" data-themes="" data-resource-suffix="" data-rustdoc-version="1.83.0 (90b35a623 2024-11-26)" data-channel="1.83.0" data-search-js="search-f0d225181b97f9a4.js" data-settings-js="settings-805db61a62df4bd2.js" ><script src="../../static.files/storage-1d39b6787ed640ff.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-f070b9041d14864c.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-0111fcff984fae8f.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../miniconf/index.html">miniconf</a><span class="version">0.18.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module postcard</a></h2><h3><a href="#functions">Module Items</a></h3><ul class="block"><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate miniconf</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="../index.html">miniconf</a></span><h1>Module <span>postcard</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/miniconf/postcard.rs.html#1-65">source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>TreeSerialize</code>/<code>TreeDeserialize</code> with <code>postcard</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>::postcard::{de_flavors::Slice, ser_flavors::AllocVec};
+<span class="kw">use </span>miniconf::{postcard, Leaf, Packed, Tree, TreeKey};
+
+<span class="attr">#[derive(Tree, Default, PartialEq, Debug)]
+</span><span class="kw">struct </span>S {
+    foo: Leaf&lt;u32&gt;,
+    bar: [Leaf&lt;u16&gt;; <span class="number">2</span>],
+};
+
+<span class="kw">let </span>source = S {
+    foo: <span class="number">9</span>.into(),
+    bar: [<span class="number">7</span>.into(), <span class="number">11</span>.into()],
+};
+<span class="kw">let </span>kv: Vec&lt;<span class="kw">_</span>&gt; = S::nodes::&lt;Packed, <span class="number">2</span>&gt;()
+    .map(|p| {
+        <span class="kw">let </span>(p, _node) = p.unwrap();
+        <span class="kw">let </span>v = postcard::get_by_key(<span class="kw-2">&amp;</span>source, p, AllocVec::new()).unwrap();
+        (p.into_lsb().get(), v)
+    })
+    .collect();
+<span class="macro">assert_eq!</span>(kv, [(<span class="number">2</span>, <span class="macro">vec!</span>[<span class="number">9</span>]), (<span class="number">6</span>, <span class="macro">vec!</span>[<span class="number">7</span>]), (<span class="number">7</span>, <span class="macro">vec!</span>[<span class="number">11</span>])]);
+
+<span class="kw">let </span><span class="kw-2">mut </span>target = S::default();
+<span class="kw">for </span>(k, v) <span class="kw">in </span>kv {
+    <span class="kw">let </span>p = Packed::from_lsb(k.try_into().unwrap());
+    postcard::set_by_key(<span class="kw-2">&amp;mut </span>target, p, Slice::new(<span class="kw-2">&amp;</span>v[..])).unwrap();
+}
+<span class="macro">assert_eq!</span>(source, target);</code></pre></div>
+</div></details><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.get_by_key.html" title="fn miniconf::postcard::get_by_key">get_<wbr>by_<wbr>key</a></div><div class="desc docblock-short">Get and serialize a node value into a <code>postcard</code> flavor.</div></li><li><div class="item-name"><a class="fn" href="fn.set_by_key.html" title="fn miniconf::postcard::set_by_key">set_<wbr>by_<wbr>key</a></div><div class="desc docblock-short">Deserialize and set a node value from a <code>postcard</code> flavor.</div></li></ul></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["dfu_bootflag","execute_system_bootloader","start_dfu_reboot"]};
