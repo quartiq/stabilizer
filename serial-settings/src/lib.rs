@@ -578,7 +578,7 @@ impl<'a, P: Platform, const Y: usize> Interface<'a, P, Y> {
     }
 }
 
-impl<'a, P: Platform, const Y: usize> core::fmt::Write for Interface<'a, P, Y> {
+impl<P: Platform, const Y: usize> core::fmt::Write for Interface<'_, P, Y> {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         self.platform
             .interface_mut()
@@ -587,11 +587,11 @@ impl<'a, P: Platform, const Y: usize> core::fmt::Write for Interface<'a, P, Y> {
     }
 }
 
-impl<'a, P: Platform, const Y: usize> ErrorType for Interface<'a, P, Y> {
+impl<P: Platform, const Y: usize> ErrorType for Interface<'_, P, Y> {
     type Error = <P::Interface as ErrorType>::Error;
 }
 
-impl<'a, P: Platform, const Y: usize> Write for Interface<'a, P, Y> {
+impl<P: Platform, const Y: usize> Write for Interface<'_, P, Y> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
         self.platform.interface_mut().write(buf)
     }

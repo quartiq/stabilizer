@@ -24,7 +24,7 @@ use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
     eeprom, input_stamper::InputStamper, metadata::ApplicationMetadata,
     platform, pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc,
-    timers, urukul, DigitalInput0, DigitalInput1, Eem, EthernetPhy, Gpio,
+    timers, DigitalInput0, DigitalInput1, Eem, EthernetPhy, Gpio,
     HardwareVersion, NetworkStack, SerialTerminal, SystemTimer, Systick,
     UsbDevice, AFE0, AFE1,
 };
@@ -152,9 +152,10 @@ static mut DES_RING: MaybeUninit<
 /// this method is undefined.
 fn load_itcm() {
     extern "C" {
-        static mut __sitcm: u32;
-        static mut __eitcm: u32;
-        static mut __siitcm: u32;
+        // ZST (`()`: not layout-stable. empty/zst struct in `repr(C)``: not "proper" C)
+        static mut __sitcm: [u32; 0];
+        static mut __eitcm: [u32; 0];
+        static mut __siitcm: [u32; 0];
     }
     // NOTE(unsafe): Assuming the address symbols from the linker as well as
     // the source instruction data are all valid, this is safe as it only
@@ -170,9 +171,9 @@ fn load_itcm() {
         // Ensure ITCM is enabled before loading.
         atomic::fence(Ordering::SeqCst);
 
-        let sitcm = core::ptr::addr_of_mut!(__sitcm);
-        let eitcm = core::ptr::addr_of_mut!(__eitcm);
-        let siitcm = core::ptr::addr_of_mut!(__siitcm);
+        let sitcm = core::ptr::addr_of_mut!(__sitcm) as *mut u32;
+        let eitcm = core::ptr::addr_of!(__eitcm) as *const u32;
+        let siitcm = core::ptr::addr_of!(__siitcm) as *const u32;
 
         let len = eitcm.offset_from(sitcm) as usize;
         let dst = slice::from_raw_parts_mut(sitcm, len);

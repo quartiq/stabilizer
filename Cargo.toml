@@ -1,7 +1,7 @@
 [package]
 name = "stabilizer"
 # Keep versions in Cargo.toml and py/setup.py synchronized.
-version = "0.10.0"
+version = "0.11.0"
 resolver = "2"
 authors = [
 	"Robert Jördens <rj@quartiq.de>",
@@ -15,10 +15,7 @@ repository = "https://github.com/quartiq/stabilizer"
 readme = "README.md"
 documentation = "https://docs.rs/stabilizer/"
 edition = "2021"
-exclude = [
-	"doc/",
-	"doc/*"
-]
+exclude = ["doc/", "doc/*"]
 
 [badges]
 maintenance = { status = "actively-developed" }
@@ -28,7 +25,7 @@ features = []
 default-target = "thumbv7em-none-eabihf"
 
 [workspace]
-members = ["ad9959", "serial-settings"]
+members = ["ad9912", "ad9959", "encoded_pin", "serial-settings", "urukul"]
 
 [dependencies]
 panic-persist = { version = "0.3", features = ["utf8", "custom-panic-handler"] }
@@ -36,9 +33,15 @@ sequential-storage = "3"
 embedded-io = "0.6"
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"
-cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }
+cortex-m = { version = "0.7.7", features = [
+	"inline-asm",
+	"critical-section-single-core",
+] }
 cortex-m-rt = { version = "0.7", features = ["device"] }
-log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
+log = { version = "0.4", features = [
+	"max_level_trace",
+	"release_max_level_info",
+] }
 rtt-target = "0.3"
 serde = { version = "1.0", features = ["derive"], default-features = false }
 serde-json-core = "0.6"
@@ -49,13 +52,13 @@ num_enum = { version = "0.7.3", default-features = false }
 paste = "1"
 idsp = "0.15.1"
 ad9959 = { path = "ad9959", version = "0.3.0" }
-serial-settings = { version = "0.1", path = "serial-settings" }
+serial-settings = { version = "0.2", path = "serial-settings" }
 mcp230xx = "1.0"
 mutex-trait = "0.2"
 fugit = "0.3"
 rtt-logger = "0.2"
 mono-clock = "0.1"
-spin = { version = "0.9", default-features = false, features = ["spin_mutex"]}
+spin = { version = "0.9", default-features = false, features = ["spin_mutex"] }
 shared-bus = { version = "0.3", features = ["cortex-m"] }
 lm75 = "0.2"
 enum-iterator = "2.1.0"
@@ -72,15 +75,21 @@ smoltcp-nal = { version = "0.5", features = ["shared-stack"] }
 postcard = "1"
 bit_field = "0.10.2"
 embassy-futures = { version = "0.1", default-features = false }
-serde_with = { version = "3.11", default-features = false, features = ["macros"] }
+serde_with = { version = "3.11", default-features = false, features = [
+	"macros",
+] }
 bitbybit = "1.3.2"
-arbitrary-int = { version = "1.2.7", features = ["serde"] }
-thiserror = { version = "2.0.3", default-features = false }
+arbitrary-int = { version = "1.3.0", features = ["serde"] }
+thiserror = { version = "2.0.7", default-features = false }
 num-traits = { version = "0.2.19", default-features = false }
 embedded-hal-compat = "0.13.0"
-embedded-hal-02 = { package = "embedded-hal", version = "0.2.7", features = ["unproven"] }
+embedded-hal-02 = { package = "embedded-hal", version = "0.2.7", features = [
+	"unproven",
+] }
 embedded-hal-1 = { package = "embedded-hal", version = "1.0" }
 embedded-hal-bus = "0.2.0"
+urukul = { version = "0.1.1", path = "urukul" }
+ad9912 = { version = "0.1.1", path = "ad9912" }
 
 [build-dependencies]
 built = { version = "0.7", features = ["git2"], default-features = false }

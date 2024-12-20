@@ -77,8 +77,8 @@ const SAMPLE_PERIOD: f32 =
 
 #[derive(Clone, Debug, Tree)]
 pub struct Settings {
-    pub dual_iir: DualIir,
-    pub net: NetSettings,
+    dual_iir: DualIir,
+    net: NetSettings,
 }
 
 impl stabilizer::settings::AppSettings for Settings {

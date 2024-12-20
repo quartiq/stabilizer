@@ -1,15 +1,15 @@
-use crate::hardware::ad9912;
+#![no_std]
+
 use arbitrary_int::{u2, u24, u3, u4, u7};
 use bitbybit::{bitenum, bitfield};
-use embedded_hal_1::digital::OutputPin;
-use embedded_hal_1::spi::{self, SpiBus, SpiDevice};
+use embedded_hal::digital::OutputPin;
+use embedded_hal::spi::{self, SpiBus, SpiDevice};
 use embedded_hal_bus::spi::{DeviceError, NoDelay, RefCellDevice};
-use log;
-use num_traits::Float;
+use num_traits::float::FloatCore;
 use serde::{Deserialize, Serialize};
 
-use super::ad9912::Ad9912;
-use super::decoded_cs::DecodedCs;
+use ad9912::Ad9912;
+use encoded_pin::EncodedPin;
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum Error {
@@ -18,7 +18,7 @@ pub enum Error {
     #[error("SPI Error {0}")]
     Spi(spi::ErrorKind),
     #[error("DDS")]
-    Dds(#[from] ad9912::Error),
+    Dds(#[source] ad9912::Error),
 }
 
 impl<E: spi::Error> From<E> for Error {
@@ -101,13 +101,13 @@ pub fn att_to_mu(att: f32) -> u8 {
 }
 
 pub struct Urukul<'a, B, P> {
-    att_spi: RefCellDevice<'a, B, DecodedCs<'a, P, 3>, NoDelay>,
-    cfg_spi: RefCellDevice<'a, B, DecodedCs<'a, P, 3>, NoDelay>,
+    att_spi: RefCellDevice<'a, B, EncodedPin<'a, P, 3>, NoDelay>,
+    cfg_spi: RefCellDevice<'a, B, EncodedPin<'a, P, 3>, NoDelay>,
     io_update: P,
     _sync: P,
     cfg: Cfg,
     att: [u8; 4],
-    dds: [Ad9912<RefCellDevice<'a, B, DecodedCs<'a, P, 3>, NoDelay>>; 4],
+    dds: [Ad9912<RefCellDevice<'a, B, EncodedPin<'a, P, 3>, NoDelay>>; 4],
 }
 
 impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
@@ -118,7 +118,7 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
         sync: P,
     ) -> Result<Self, Error> {
         let sel = |sel| {
-            RefCellDevice::new(spi, DecodedCs::new(cs, u3::new(sel)), NoDelay)
+            RefCellDevice::new(spi, EncodedPin::new(cs, u3::new(sel)), NoDelay)
                 .unwrap()
         };
         let cfg_spi = sel(1);
@@ -177,13 +177,13 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
                 sta.proto_rev().value() as _,
             ));
         }
-        if sta.rf_sw() != u4::new(0) {
+        if sta.rf_sw().value() != 0 {
             return Err(Error::Initialization(
                 "RF_SW driven",
                 sta.rf_sw().value() as _,
             ));
         }
-        if sta.ifc_mode() != u4::new(0) {
+        if sta.ifc_mode().value() != 0 {
             return Err(Error::Initialization(
                 "invalid IFC_MODE",
                 sta.ifc_mode().value() as _,
@@ -211,7 +211,7 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
         self.att_spi.write(&self.att)?;
 
         for dds in self.dds.iter_mut() {
-            dds.init()?;
+            dds.init().map_err(Error::Dds)?;
         }
 
         log::info!("Urukul initialized");
@@ -228,10 +228,10 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
         ch: u2,
         state: bool,
     ) -> Result<(), DeviceError<B::Error, P::Error>> {
-        let mut v = self.cfg.rf_sw();
-        v &= !u4::new(1u8 << ch.value());
-        v |= u4::new((state as u8) << ch.value());
-        self.set_cfg(self.cfg.with_rf_sw(v))?;
+        let mut v = self.cfg.rf_sw().value();
+        v &= !(1 << ch.value());
+        v |= (state as u8) << ch.value();
+        self.set_cfg(self.cfg.with_rf_sw(u4::new(v)))?;
         Ok(())
     }
 
@@ -240,17 +240,17 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
         ch: u2,
         state: bool,
     ) -> Result<(), DeviceError<B::Error, P::Error>> {
-        let mut v = self.cfg.led();
-        v &= !u4::new(1u8 << ch.value());
-        v |= u4::new((state as u8) << ch.value());
-        self.set_cfg(self.cfg.with_led(v))?;
+        let mut v = self.cfg.led().value();
+        v &= !(1 << ch.value());
+        v |= (state as u8) << ch.value();
+        self.set_cfg(self.cfg.with_led(u4::new(v)))?;
         Ok(())
     }
 
     pub fn dds(
         &mut self,
         ch: u2,
-    ) -> &mut Ad9912<RefCellDevice<'a, B, DecodedCs<'a, P, 3>, NoDelay>> {
+    ) -> &mut Ad9912<RefCellDevice<'a, B, EncodedPin<'a, P, 3>, NoDelay>> {
         &mut self.dds[ch.value() as usize]
     }
 }

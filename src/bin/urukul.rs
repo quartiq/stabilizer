@@ -15,9 +15,7 @@ use rtic_monotonics::Monotonic;
 
 use stabilizer::{
     hardware::{
-        self, ad9912, hal,
-        urukul::{self, ClkSel, DivSel},
-        SerialTerminal, SystemTimer, Systick, Urukul, UsbDevice,
+        self, hal, SerialTerminal, SystemTimer, Systick, Urukul, UsbDevice,
     },
     net::{NetworkState, NetworkUsers},
     settings::NetSettings,
@@ -25,8 +23,8 @@ use stabilizer::{
 
 #[derive(Clone, Debug, Tree)]
 pub struct Settings {
-    pub urukul: App,
-    pub net: NetSettings,
+    urukul: App,
+    net: NetSettings,
 }
 
 impl stabilizer::settings::AppSettings for Settings {
@@ -55,13 +53,9 @@ impl serial_settings::Settings for Settings {
 pub struct Channel {
     pll_n: Leaf<Option<u5>>,
     pll_doubler: Leaf<bool>,
-    // TODO: range check
     frequency: Leaf<f64>,
-    // TODO: range check
     phase: Leaf<f32>,
-    // TODO: range check
     full_scale_current: Leaf<f32>,
-    // TODO: range check
     attenuation: Leaf<f32>,
     enable: Leaf<bool>,
     update: Leaf<bool>,
@@ -85,21 +79,20 @@ impl Default for Channel {
 #[derive(Clone, Debug, Tree)]
 pub struct App {
     refclk: Leaf<f64>,
-    clk_sel: Leaf<ClkSel>,
-    div_sel: Leaf<DivSel>,
+    clk_sel: Leaf<urukul::ClkSel>,
+    div_sel: Leaf<urukul::DivSel>,
     update: Leaf<bool>,
     ch: [Channel; 4],
 }
 
 impl Default for App {
     fn default() -> Self {
-        let ch = Channel::default();
         Self {
-            clk_sel: ClkSel::Osc.into(),
-            div_sel: DivSel::One.into(),
+            clk_sel: urukul::ClkSel::Osc.into(),
+            div_sel: urukul::DivSel::One.into(),
             update: true.into(),
             refclk: 100.0e6.into(),
-            ch: [ch.clone(), ch.clone(), ch.clone(), ch.clone()],
+            ch: Default::default(),
         }
     }
 }

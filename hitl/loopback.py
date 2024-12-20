@@ -11,7 +11,7 @@ import logging
 import json
 import os
 
-from miniconf import Client, Miniconf, MQTTv5, discover, MiniconfException
+from miniconf import Client, Miniconf, MQTTv5, one, discover, MiniconfException
 from stabilizer import voltage_to_machine_units
 
 if sys.platform.lower() == "win32" or os.name.lower() == "nt":
@@ -100,12 +100,7 @@ def main():
             args.broker, protocol=MQTTv5, logger=logging.getLogger("aiomqtt-client")
         ) as client:
             if not args.prefix:
-                devices = await discover(client, "dt/sinara/dual-iir/+")
-                if len(devices) != 1:
-                    raise MiniconfException(
-                        "Discover", f"No unique Miniconf device (found `{devices}`)."
-                    )
-                prefix = devices.pop()
+                prefix, _alive = one(await discover(client, "dt/sinara/dual-iir/+"))
                 logging.info("Found device prefix: %s", prefix)
             else:
                 prefix = args.prefix

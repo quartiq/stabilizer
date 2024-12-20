@@ -1,24 +1,26 @@
+#![no_std]
+
 use arbitrary_int::UInt;
 use core::cell::RefCell;
-use embedded_hal_1::digital::{ErrorType, OutputPin};
+use embedded_hal::digital::{ErrorType, OutputPin};
 
-pub struct DecodedCs<'a, CS, const N: usize> {
-    cs: &'a RefCell<[CS; N]>,
+pub struct EncodedPin<'a, P, const N: usize> {
+    cs: &'a RefCell<[P; N]>,
     sel: UInt<u8, N>,
 }
 
-impl<'a, CS, const N: usize> DecodedCs<'a, CS, N> {
-    pub fn new(cs: &'a RefCell<[CS; N]>, sel: UInt<u8, N>) -> Self {
+impl<'a, P, const N: usize> EncodedPin<'a, P, N> {
+    pub fn new(cs: &'a RefCell<[P; N]>, sel: UInt<u8, N>) -> Self {
         assert!(sel.value() != 0);
         Self { cs, sel }
     }
 }
 
-impl<'a, CS: ErrorType, const N: usize> ErrorType for DecodedCs<'a, CS, N> {
-    type Error = CS::Error;
+impl<P: ErrorType, const N: usize> ErrorType for EncodedPin<'_, P, N> {
+    type Error = P::Error;
 }
 
-impl<'a, CS: OutputPin, const N: usize> OutputPin for DecodedCs<'a, CS, N> {
+impl<P: OutputPin, const N: usize> OutputPin for EncodedPin<'_, P, N> {
     fn set_low(&mut self) -> Result<(), Self::Error> {
         // assert
         for (i, cs) in self.cs.borrow_mut().iter_mut().enumerate() {

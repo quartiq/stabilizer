@@ -1,6 +1,6 @@
 [package]
 name = "serial-settings"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 readme = "README.md"
 description = "Embedded device settings management over serial terminal and flash"
@@ -18,9 +18,12 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 miniconf = { version = "0.18", features = ["json-core", "postcard"] }
-menu = { version = "0.6", features = ["echo"], git = "https://github.com/rust-embedded-community/menu.git" }
+menu = { version = "0.6.1", features = ["echo"] }
 heapless = "0.8"
 embedded-io = "0.6"
 yafnv = "3.0"
 postcard = "1"
-log = { version = "0.4", features = ["max_level_trace", "release_max_level_info"] }
+log = { version = "0.4", features = [
+	"max_level_trace",
+	"release_max_level_info",
+] }
