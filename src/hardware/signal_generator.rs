@@ -55,11 +55,11 @@ pub struct Config {
     /// The initial phase of the period output signal in turns
     phase: Leaf<f32>,
 
-    /// Number of half periods (periodic), octaves (sweep), or samples (noise), 0 for infinte
+    /// Number of half periods (periodic), periods in the first octave (sweep), or samples (noise), 0 for infinte
     length: Leaf<u32>,
 
     /// Sweep: cycles for the first octave
-    cycles: Leaf<u32>,
+    octaves: Leaf<u32>,
 
     /// Sample period
     #[tree(skip)]
@@ -78,7 +78,7 @@ impl Default for Config {
             amplitude: 0.0.into(),
             phase: 0.0.into(),
             offset: 0.0.into(),
-            cycles: 1.into(),
+            octaves: 1.into(),
             length: 0.into(),
             period: 1.0,
             scale: 1.0,
@@ -233,8 +233,8 @@ impl Source {
                 sweep: AccuOsc::new(
                     Sweep::optimize(
                         (*value.frequency * value.period) as _,
+                        *value.octaves,
                         *value.length,
-                        *value.cycles,
                     )
                     .or(Err(Error::Wrap))?,
                 ),
