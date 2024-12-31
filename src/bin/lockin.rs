@@ -28,6 +28,7 @@
 #![no_main]
 
 use core::{
+    iter,
     mem::MaybeUninit,
     sync::atomic::{fence, Ordering},
 };
@@ -263,7 +264,7 @@ mod app {
         dacs: (Dac0Output, Dac1Output),
         pll: RPLL,
         lockin: idsp::Lockin<Repeat<2, Lowpass<2>>>,
-        source: idsp::AccuOsc<idsp::Accu<i64>>,
+        source: idsp::AccuOsc<iter::Repeat<i64>>,
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
     }
@@ -300,10 +301,8 @@ mod app {
             settings: stabilizer.settings,
         };
 
-        let source = idsp::AccuOsc::from(idsp::Accu::new(
-            0,
-            1 << (64 - BATCH_SIZE_LOG2),
-        ));
+        let source =
+            idsp::AccuOsc::new(iter::repeat(1i64 << (64 - BATCH_SIZE_LOG2)));
 
         let mut local = Local {
             usb_terminal: stabilizer.usb_serial,

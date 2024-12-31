@@ -1,4 +1,4 @@
-use idsp::{AccuOsc, SyncExpSweep};
+use idsp::{AccuOsc, Sweep};
 use miniconf::{Leaf, Tree};
 use rand_core::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
@@ -58,8 +58,8 @@ pub struct Config {
     /// Number of half periods (periodic), octaves (sweep), or samples (noise), 0 for infinte
     length: Leaf<u32>,
 
-    /// Sweep interval in seconds per octave
-    interval: Leaf<f32>,
+    /// Sweep: cycles for the first octave
+    cycles: Leaf<u32>,
 
     /// Sample period
     #[tree(skip)]
@@ -78,7 +78,7 @@ impl Default for Config {
             amplitude: 0.0.into(),
             phase: 0.0.into(),
             offset: 0.0.into(),
-            interval: 1.0.into(),
+            cycles: 1.into(),
             length: 0.into(),
             period: 1.0,
             scale: 1.0,
@@ -136,7 +136,7 @@ pub enum Error {
 #[derive(Clone, Debug)]
 pub enum Source {
     SweptSine {
-        sweep: core::iter::Fuse<AccuOsc<SyncExpSweep>>,
+        sweep: AccuOsc<Sweep>,
         amp: Scaler,
     },
     Periodic {
@@ -230,15 +230,14 @@ impl Source {
                 }
             }
             Signal::SweptSine => Self::SweptSine {
-                sweep: AccuOsc::from(
-                    SyncExpSweep::new(
-                        (ftw0 * 2.0) as _,
+                sweep: AccuOsc::new(
+                    Sweep::optimize(
+                        (*value.frequency * value.period) as _,
                         *value.length,
-                        (*value.interval / value.period) as u32,
+                        *value.cycles,
                     )
                     .or(Err(Error::Wrap))?,
-                )
-                .fuse(),
+                ),
                 amp,
             },
             Signal::WhiteNoise => Self::WhiteNoise {
