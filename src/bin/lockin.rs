@@ -28,7 +28,7 @@
 #![no_main]
 
 use core::{
-    convert::TryFrom,
+    iter,
     mem::MaybeUninit,
     sync::atomic::{fence, Ordering},
 };
@@ -49,7 +49,6 @@ use stabilizer::{
         dac::{Dac0Output, Dac1Output, DacCode},
         hal,
         input_stamper::InputStamper,
-        signal_generator,
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SerialTerminal, SystemTimer, Systick,
         UsbDevice, AFE0, AFE1,
@@ -265,7 +264,7 @@ mod app {
         dacs: (Dac0Output, Dac1Output),
         pll: RPLL,
         lockin: idsp::Lockin<Repeat<2, Lowpass<2>>>,
-        source: signal_generator::SignalGenerator,
+        source: idsp::AccuOsc<iter::Repeat<i64>>,
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
     }
@@ -302,14 +301,8 @@ mod app {
             settings: stabilizer.settings,
         };
 
-        let signal_config = signal_generator::Config {
-            // Same frequency as batch size.
-            phase_increment: [1 << (32 - BATCH_SIZE_LOG2); 2],
-            // 1V Amplitude
-            amplitude: DacCode::try_from(1.0).unwrap().into(),
-            signal: signal_generator::Signal::Cosine,
-            phase_offset: 0,
-        };
+        let source =
+            idsp::AccuOsc::new(iter::repeat(1i64 << (64 - BATCH_SIZE_LOG2)));
 
         let mut local = Local {
             usb_terminal: stabilizer.usb_serial,
@@ -322,7 +315,7 @@ mod app {
 
             pll: RPLL::new(SAMPLE_TICKS_LOG2 + BATCH_SIZE_LOG2),
             lockin: idsp::Lockin::default(),
-            source: signal_generator::SignalGenerator::new(signal_config),
+            source,
 
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
@@ -443,7 +436,7 @@ mod app {
                             Conf::InPhase => output.re >> 16,
                             Conf::Quadrature => output.im >> 16,
 
-                            Conf::Modulation => source.next().unwrap() as i32,
+                            Conf::Modulation => source.next().unwrap().re,
                         };
 
                         *sample = DacCode::from(value as i16).0;
