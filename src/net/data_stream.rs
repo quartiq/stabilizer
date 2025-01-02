@@ -103,12 +103,6 @@ impl core::str::FromStr for StreamTarget {
     }
 }
 
-impl core::fmt::Display for StreamTarget {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
 /// Specifies the format of streamed data
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive)]
@@ -260,31 +254,31 @@ impl FrameGenerator {
         let sequence_number = self.sequence_number;
         self.sequence_number = self.sequence_number.wrapping_add(1);
 
-        if self.current_frame.is_none() {
-            if let Ok(buffer) =
-                FRAME_POOL.alloc([MaybeUninit::uninit(); FRAME_SIZE])
-            {
-                self.current_frame.replace(StreamFrame::new(
-                    buffer,
-                    self.format,
-                    sequence_number,
-                ));
-            } else {
-                return;
+        let current_frame = match self.current_frame.as_mut() {
+            None => {
+                if let Ok(buffer) =
+                    FRAME_POOL.alloc([MaybeUninit::uninit(); FRAME_SIZE])
+                {
+                    self.current_frame.insert(StreamFrame::new(
+                        buffer,
+                        self.format,
+                        sequence_number,
+                    ))
+                } else {
+                    return;
+                }
             }
-        }
-
-        // Note(unwrap): We ensure the frame is present above.
-        let current_frame = self.current_frame.as_mut().unwrap();
+            Some(frame) => frame,
+        };
 
         let len = current_frame.add_batch(func);
 
         if current_frame.is_full(len) {
             // Note(unwrap): The queue is designed to be at least as large as the frame buffer
             // count, so this enqueue should always succeed.
-            self.queue
-                .enqueue(self.current_frame.take().unwrap())
-                .unwrap();
+            if let Some(frame) = self.current_frame.take() {
+                self.queue.enqueue(frame).unwrap();
+            }
         }
     }
 }

@@ -55,11 +55,14 @@ pub struct Config {
     /// The initial phase of the period output signal in turns
     phase: Leaf<f32>,
 
-    /// Number of half periods (periodic), periods in the first octave (sweep), or samples (noise), 0 for infinte
+    /// Number of half periods (periodic) or samples (sweep and noise), 0 for infinte
     length: Leaf<u32>,
 
-    /// Sweep: cycles for the first octave
-    octaves: Leaf<u32>,
+    /// Sweep: Number of cycles for the first octave
+    cycles: Leaf<i32>,
+
+    /// Sweep: Sweep rate
+    rate: Leaf<i32>,
 
     /// Sample period
     #[tree(skip)]
@@ -72,14 +75,15 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            frequency: 1.0e3.into(),
-            symmetry: 0.5.into(),
-            signal: Signal::Cosine.into(),
-            amplitude: 0.0.into(),
-            phase: 0.0.into(),
-            offset: 0.0.into(),
-            octaves: 1.into(),
-            length: 0.into(),
+            frequency: Leaf(1.0e3),
+            symmetry: Leaf(0.5),
+            signal: Leaf(Signal::Cosine),
+            amplitude: Leaf(0.0),
+            phase: Leaf(0.0),
+            offset: Leaf(0.0),
+            cycles: Leaf(1),
+            rate: Leaf(0),
+            length: Leaf(0),
             period: 1.0,
             scale: 1.0,
         }
@@ -230,14 +234,11 @@ impl Source {
                 }
             }
             Signal::SweptSine => Self::SweptSine {
-                sweep: AccuOsc::new(
-                    Sweep::optimize(
-                        (*value.frequency * value.period) as _,
-                        *value.octaves,
-                        *value.length,
-                    )
-                    .or(Err(Error::Wrap))?,
-                ),
+                sweep: AccuOsc::new(Sweep::new(
+                    *value.rate,
+                    ((*value.rate * *value.cycles) as i64) << 32,
+                    *value.length as _,
+                )),
                 amp,
             },
             Signal::WhiteNoise => Self::WhiteNoise {

@@ -400,7 +400,7 @@ mod app {
                 .lock(|net, settings| net.update(&mut settings.dual_iir))
             {
                 NetworkState::SettingsChanged => {
-                    settings_update::spawn().unwrap()
+                    settings_update::spawn().unwrap();
                 }
                 NetworkState::Updated => {}
                 NetworkState::NoChange => {
