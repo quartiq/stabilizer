@@ -1,3 +1,5 @@
+use core::iter::Take;
+
 use idsp::{AccuOsc, Sweep};
 use miniconf::{Leaf, Tree};
 use rand_core::{RngCore, SeedableRng};
@@ -140,7 +142,7 @@ pub enum Error {
 #[derive(Clone, Debug)]
 pub enum Source {
     SweptSine {
-        sweep: AccuOsc<Sweep>,
+        sweep: Take<AccuOsc<Sweep>>,
         amp: Scaler,
     },
     Periodic {
@@ -237,8 +239,8 @@ impl Source {
                 sweep: AccuOsc::new(Sweep::new(
                     *value.rate,
                     ((*value.rate * *value.cycles) as i64) << 32,
-                    *value.length as _,
-                )),
+                ))
+                .take(*value.length as _),
                 amp,
             },
             Signal::WhiteNoise => Self::WhiteNoise {
