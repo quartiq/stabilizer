@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+# pylint: disable=too-few-public-methods
+
 """Stabilizer streaming receiver and parsers"""
 
 import argparse
@@ -21,7 +23,7 @@ Trace = namedtuple("Trace", "values scale label")
 
 def wrap(wide):
     """Wrap to 32 bit integer"""
-    return wide & 0xffffffff
+    return wide & 0xFFFFFFFF
 
 
 def get_local_ip(remote):
@@ -37,6 +39,7 @@ def get_local_ip(remote):
 
 class AdcDac:
     """Stabilizer default striming data format"""
+
     format_id = 1
 
     def __init__(self, header, body):
@@ -69,14 +72,16 @@ class AdcDac:
         """Convert the raw data to labelled Trace instances"""
         data = self.to_mu()
         return [
-            Trace(data[0], scale=DAC_VOLTS_PER_LSB, label='ADC0'),
-            Trace(data[1], scale=DAC_VOLTS_PER_LSB, label='ADC1'),
-            Trace(data[2], scale=DAC_VOLTS_PER_LSB, label='DAC0'),
-            Trace(data[3], scale=DAC_VOLTS_PER_LSB, label='DAC1')
+            Trace(data[0], scale=DAC_VOLTS_PER_LSB, label="ADC0"),
+            Trace(data[1], scale=DAC_VOLTS_PER_LSB, label="ADC1"),
+            Trace(data[2], scale=DAC_VOLTS_PER_LSB, label="DAC0"),
+            Trace(data[3], scale=DAC_VOLTS_PER_LSB, label="DAC1"),
         ]
 
 
 class Frame:
+    """Stream frame constisting of a header and multiple data batches"""
+
     # The magic header half-word at the start of each packet.
     magic = 0x057B
     header_fmt = struct.Struct("<HBBI")
@@ -87,14 +92,15 @@ class Frame:
 
     @classmethod
     def parse(cls, data):
+        """Parse known length frame"""
         header = cls.header._make(cls.header_fmt.unpack_from(data))
         if header.magic != cls.magic:
-            raise ValueError("Bad frame magic: %#04x", header.magic)
+            raise ValueError(f"Bad frame magic: {header.magic:#04x}")
         try:
             parser = cls.parsers[header.format_id]
-        except KeyError:
-            raise ValueError("No parser for format %s", header.format_id)
-        return parser(header, data[cls.header_fmt.size:])
+        except KeyError as exc:
+            raise ValueError(f"No parser for format: {header.format_id}") from exc
+        return parser(header, data[cls.header_fmt.size :])
 
 
 class StabilizerStream(asyncio.DatagramProtocol):
@@ -125,7 +131,9 @@ class StabilizerStream(asyncio.DatagramProtocol):
         else:
             sock.bind((addr, port))
 
-        transport, protocol = await loop.create_datagram_endpoint(lambda: cls(maxsize), sock=sock)
+        transport, protocol = await loop.create_datagram_endpoint(
+            lambda: cls(maxsize), sock=sock
+        )
         return transport, protocol
 
     def __init__(self, maxsize):
@@ -151,12 +159,14 @@ class StabilizerStream(asyncio.DatagramProtocol):
 
 async def measure(stream, duration):
     """Measure throughput and loss of stream reception"""
+
     @dataclass
     class _Statistics:
         expect = None
         received = 0
         lost = 0
         bytes = 0
+
     stat = _Statistics()
 
     async def _record():
@@ -175,36 +185,35 @@ async def measure(stream, duration):
     except asyncio.TimeoutError:
         pass
 
-    logger.info("Received %g MB, %g MB/s", stat.bytes/1e6,
-                stat.bytes/1e6/duration)
+    logger.info(
+        "Received %g MB, %g MB/s", stat.bytes / 1e6, stat.bytes / 1e6 / duration
+    )
 
     sent = stat.received + stat.lost
     if sent:
-        loss = stat.lost/sent
+        loss = stat.lost / sent
     else:
         loss = 1
-    logger.info("Loss: %s/%s batches (%g %%)", stat.lost, sent, loss*1e2)
+    logger.info("Loss: %s/%s batches (%g %%)", stat.lost, sent, loss * 1e2)
     return loss
 
 
 async def main():
     """Test CLI"""
     parser = argparse.ArgumentParser(description="Stabilizer streaming demo")
-    parser.add_argument("--port", type=int, default=9293,
-                        help="Local port to listen on")
-    parser.add_argument("--host", default="0.0.0.0",
-                        help="Local address to listen on")
-    parser.add_argument("--broker", default="mqtt",
-                        help="The MQTT broker address")
-    parser.add_argument("--maxsize", type=int, default=1,
-                        help="Frame queue size")
-    parser.add_argument("--duration", type=float, default=1.,
-                        help="Test duration")
+    parser.add_argument(
+        "--port", type=int, default=9293, help="Local port to listen on"
+    )
+    parser.add_argument("--host", default="0.0.0.0", help="Local address to listen on")
+    parser.add_argument("--broker", default="mqtt", help="The MQTT broker address")
+    parser.add_argument("--maxsize", type=int, default=1, help="Frame queue size")
+    parser.add_argument("--duration", type=float, default=1.0, help="Test duration")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
     _transport, stream = await StabilizerStream.open(
-        args.port, args.host, args.broker, args.maxsize)
+        args.port, args.host, args.broker, args.maxsize
+    )
     await measure(stream, args.duration)
 
 
