@@ -1,3 +1,6 @@
+use core::iter::Take;
+
+use idsp::{AccuOsc, Sweep};
 use miniconf::{Leaf, Tree};
 use rand_core::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
@@ -10,45 +13,116 @@ pub enum Signal {
     Square,
     Triangle,
     WhiteNoise,
+    SweptSine,
+}
+
+impl Signal {
+    #[inline]
+    fn map(&self, x: i32) -> i32 {
+        match self {
+            Self::Cosine => idsp::cossin(x).0,
+            Self::Square => {
+                if x.is_negative() {
+                    -i32::MAX
+                } else {
+                    i32::MAX
+                }
+            }
+            Self::Triangle => i32::MIN + (x.saturating_abs() << 1),
+            _ => unimplemented!(),
+        }
+    }
 }
 
 /// Basic configuration for a generated signal.
-///
-/// # Miniconf
-/// `{"signal": <signal>, "frequency", 1000.0, "symmetry": 0.5, "amplitude": 1.0}`
-///
-/// Where `<signal>` may be any of [Signal] variants, `frequency` specifies the signal frequency
-/// in Hertz, `symmetry` specifies the normalized signal symmetry which ranges from 0 - 1.0, and
-/// `amplitude` specifies the signal amplitude in Volts.
 #[derive(Copy, Clone, Debug, Tree, Serialize, Deserialize)]
-pub struct BasicConfig {
+pub struct Config {
     /// The signal type that should be generated. See [Signal] variants.
-    pub signal: Leaf<Signal>,
+    signal: Leaf<Signal>,
 
     /// The frequency of the generated signal in Hertz.
-    pub frequency: Leaf<f32>,
+    frequency: Leaf<f32>,
 
     /// The normalized symmetry of the signal. At 0% symmetry, the duration of the first half oscillation is minimal.
     /// At 25% symmetry, the first half oscillation lasts for 25% of the signal period. For square wave output this
     /// symmetry is the duty cycle.
-    pub symmetry: Leaf<f32>,
+    symmetry: Leaf<f32>,
 
-    /// The amplitude of the output signal in volts.
-    pub amplitude: Leaf<f32>,
+    /// The amplitude of the output signal
+    amplitude: Leaf<f32>,
 
-    /// The phase of the output signal in turns.
-    pub phase: Leaf<f32>,
+    /// Output offset
+    offset: Leaf<f32>,
+
+    /// The initial phase of the period output signal in turns
+    phase: Leaf<f32>,
+
+    /// Number of half periods (periodic) or samples (sweep and noise), 0 for infinte
+    length: Leaf<u32>,
+
+    /// Sweep: Number of cycles for the first octave
+    cycles: Leaf<i32>,
+
+    /// Sweep: Sweep rate
+    rate: Leaf<i32>,
+
+    /// Sample period
+    #[tree(skip)]
+    pub period: f32,
+    /// Output full scale
+    #[tree(skip)]
+    pub scale: f32,
 }
 
-impl Default for BasicConfig {
+impl Default for Config {
     fn default() -> Self {
         Self {
-            frequency: 1.0e3.into(),
-            symmetry: 0.5.into(),
-            signal: Signal::Cosine.into(),
-            amplitude: 0.0.into(),
-            phase: 0.0.into(),
+            frequency: Leaf(1.0e3),
+            symmetry: Leaf(0.5),
+            signal: Leaf(Signal::Cosine),
+            amplitude: Leaf(0.0),
+            phase: Leaf(0.0),
+            offset: Leaf(0.0),
+            cycles: Leaf(1),
+            rate: Leaf(0),
+            length: Leaf(0),
+            period: 1.0,
+            scale: 1.0,
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AsymmetricAccu {
+    ftw: [i32; 2],
+    pow: i32,
+    accu: i32,
+    count: u32,
+}
+
+impl Iterator for AsymmetricAccu {
+    type Item = i32;
+    fn next(&mut self) -> Option<Self::Item> {
+        let sign = self.accu.is_negative();
+        self.accu = self.accu.wrapping_add(self.ftw[sign as usize]);
+        self.count
+            .checked_sub(sign as u32 ^ self.accu.is_negative() as u32)
+            .map(|c| {
+                self.count = c;
+                self.accu.wrapping_add(self.pow)
+            })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Scaler {
+    amp: i32,
+    offset: i32,
+}
+
+impl Scaler {
+    fn map(&self, x: i32) -> i32 {
+        ((x as i64 * self.amp as i64) >> 31) as i32 + self.offset
     }
 }
 
@@ -56,156 +130,124 @@ impl Default for BasicConfig {
 #[derive(Copy, Clone, Debug)]
 pub enum Error {
     /// The provided amplitude is out-of-range.
-    InvalidAmplitude,
+    Amplitude,
     /// The provided symmetry is out of range.
-    InvalidSymmetry,
+    Symmetry,
     /// The provided frequency is out of range.
-    InvalidFrequency,
+    Frequency,
+    /// Sweep would wrap/invalid
+    Wrap,
 }
 
-impl BasicConfig {
-    /// Convert configuration into signal generator values.
-    ///
-    /// # Args
-    /// * `sample_period` - The time in seconds between samples.
-    /// * `full_scale` - The full scale output voltage.
-    pub fn try_into_config(
-        self,
-        sample_period: f32,
-        full_scale: f32,
-    ) -> Result<Config, Error> {
-        let symmetry_complement = 1.0 - *self.symmetry;
-        // Validate symmetry
-        if *self.symmetry < 0.0 || symmetry_complement < 0.0 {
-            return Err(Error::InvalidSymmetry);
+#[derive(Clone, Debug)]
+pub enum Source {
+    SweptSine {
+        sweep: Take<AccuOsc<Sweep>>,
+        amp: Scaler,
+    },
+    Periodic {
+        accu: AsymmetricAccu,
+        signal: Signal,
+        amp: Scaler,
+    },
+    WhiteNoise {
+        rng: XorShiftRng,
+        count: u32,
+        amp: Scaler,
+    },
+}
+
+impl Iterator for Source {
+    type Item = i32;
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        let (s, a) = match self {
+            Self::SweptSine { sweep, amp } => (sweep.next().map(|c| c.im), amp),
+            Self::Periodic { accu, signal, amp } => {
+                (accu.next().map(|p| signal.map(p)), amp)
+            }
+            Self::WhiteNoise { rng, count, amp } => (
+                count.checked_sub(1).map(|m| {
+                    *count = m;
+                    rng.next_u32() as i32
+                }),
+                amp,
+            ),
+        };
+        Some(a.map(s.unwrap_or_default()))
+    }
+}
+
+impl Source {
+    /// Convert from SI config
+    pub fn try_from_config(value: &Config) -> Result<Source, Error> {
+        if !(0.0..1.0).contains(&*value.symmetry) {
+            return Err(Error::Symmetry);
         }
 
         const NYQUIST: f32 = (1u32 << 31) as _;
-        let ftw = *self.frequency * sample_period * NYQUIST;
-
-        // Validate base frequency tuning word to be below Nyquist.
-        if ftw < 0.0 || 2.0 * ftw > NYQUIST {
-            return Err(Error::InvalidFrequency);
+        let ftw0 = *value.frequency * value.period * NYQUIST;
+        if !(0.0..2.0 * NYQUIST).contains(&ftw0) {
+            return Err(Error::Frequency);
         }
 
-        // Calculate the frequency tuning words.
         // Clip both frequency tuning words to within Nyquist before rounding.
-        let phase_increment = [
-            if *self.symmetry * NYQUIST > ftw {
-                ftw / *self.symmetry
+        let ftw = [
+            if *value.symmetry * NYQUIST > ftw0 {
+                ftw0 / *value.symmetry
             } else {
                 NYQUIST
             } as i32,
-            if symmetry_complement * NYQUIST > ftw {
-                ftw / symmetry_complement
+            if (1.0 - *value.symmetry) * NYQUIST > ftw0 {
+                ftw0 / (1.0 - *value.symmetry)
             } else {
                 NYQUIST
             } as i32,
         ];
 
-        let amplitude = *self.amplitude * (i16::MIN as f32 / -full_scale);
-        if !(i16::MIN as f32..=i16::MAX as f32).contains(&amplitude) {
-            return Err(Error::InvalidAmplitude);
-        }
-
-        let phase = *self.phase * (1u64 << 32) as f32;
-
-        Ok(Config {
-            amplitude: amplitude as i16,
-            signal: *self.signal,
-            phase_increment,
-            phase_offset: phase as i32,
-        })
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct Config {
-    /// The type of signal being generated
-    pub signal: Signal,
-
-    /// The full-scale output code of the signal
-    pub amplitude: i16,
-
-    /// The frequency tuning word of the signal. Phase is incremented by this amount
-    pub phase_increment: [i32; 2],
-
-    /// The phase offset
-    pub phase_offset: i32,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            signal: Signal::Cosine,
-            amplitude: 0,
-            phase_increment: [0, 0],
-            phase_offset: 0,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct SignalGenerator {
-    phase_accumulator: i32,
-    config: Config,
-    rng: XorShiftRng,
-}
-
-impl SignalGenerator {
-    /// Construct a new signal generator with some specific config.
-    ///
-    /// # Args
-    /// * `config` - The config to use for generating signals.
-    ///
-    /// # Returns
-    /// The generator
-    pub fn new(config: Config) -> Self {
-        Self {
-            config,
-            phase_accumulator: 0,
-            rng: XorShiftRng::from_seed([0; 16]), // zeros will initialize with XorShiftRng internal seed
-        }
-    }
-
-    /// Update waveform generation settings.
-    pub fn update_waveform(&mut self, new_config: Config) {
-        self.config = new_config;
-    }
-
-    /// Clear the phase accumulator.
-    pub fn clear_phase_accumulator(&mut self) {
-        self.phase_accumulator = 0;
-    }
-}
-
-impl core::iter::Iterator for SignalGenerator {
-    type Item = i16;
-
-    /// Get the next value in the generator sequence.
-    fn next(&mut self) -> Option<i16> {
-        let phase = self
-            .phase_accumulator
-            .wrapping_add(self.config.phase_offset);
-        let sign = phase.is_negative();
-        self.phase_accumulator = self
-            .phase_accumulator
-            .wrapping_add(self.config.phase_increment[sign as usize]);
-
-        let scale = match self.config.signal {
-            Signal::Cosine => idsp::cossin(phase).0 >> 16,
-            Signal::Square => {
-                if sign {
-                    i16::MIN as i32
-                } else {
-                    -(i16::MIN as i32)
-                }
+        let offset = *value.offset / value.scale;
+        let amplitude = *value.amplitude / value.scale;
+        fn abs(x: f32) -> f32 {
+            if x.is_sign_negative() {
+                -x
+            } else {
+                x
             }
-            Signal::Triangle => i16::MIN as i32 + (phase >> 15).abs(),
-            Signal::WhiteNoise => self.rng.next_u32() as i32 >> 16,
+        }
+        if abs(offset) + abs(amplitude) >= 1.0 {
+            return Err(Error::Amplitude);
+        }
+        let amp = Scaler {
+            amp: (amplitude * NYQUIST) as _,
+            offset: (offset * NYQUIST) as _,
         };
 
-        // Calculate the final output result as an i16.
-        Some(((self.config.amplitude as i32 * scale) >> 15) as _)
+        Ok(match *value.signal {
+            signal @ (Signal::Cosine | Signal::Square | Signal::Triangle) => {
+                Self::Periodic {
+                    accu: AsymmetricAccu {
+                        ftw,
+                        pow: (*value.phase * NYQUIST) as i32,
+                        accu: 0,
+                        count: *value.length,
+                    },
+                    signal,
+                    amp,
+                }
+            }
+            Signal::SweptSine => Self::SweptSine {
+                sweep: AccuOsc::new(Sweep::new(
+                    *value.rate,
+                    ((*value.rate * *value.cycles) as i64) << 32,
+                ))
+                .take(*value.length as _),
+                amp,
+            },
+            Signal::WhiteNoise => Self::WhiteNoise {
+                rng: XorShiftRng::from_seed(Default::default()),
+                count: *value.length,
+                amp,
+            },
+        })
     }
 }

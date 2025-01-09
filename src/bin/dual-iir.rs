@@ -47,7 +47,7 @@ use stabilizer::{
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
         hal,
-        signal_generator::{self, SignalGenerator},
+        signal_generator::{self, Source},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, SerialTerminal, SystemTimer, Systick,
         UsbDevice, AFE0, AFE1,
@@ -106,14 +106,6 @@ impl serial_settings::Settings for Settings {
 #[derive(Clone, Debug, Tree, Serialize, Deserialize)]
 pub struct DualIir {
     /// Configure the Analog Front End (AFE) gain.
-    ///
-    /// # Path
-    /// `afe/<n>`
-    ///
-    /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
-    ///
-    /// # Value
-    /// Any of the variants of [Gain] enclosed in double quotes.
     afe: [Leaf<Gain>; 2],
 
     /// Configure the IIR filter parameters.
@@ -127,52 +119,27 @@ pub struct DualIir {
     /// See [iir::Biquad]
     iir_ch: [[Leaf<iir::Biquad<f32>>; IIR_CASCADE_LENGTH]; 2],
 
-    /// Specified true if DI1 should be used as a "hold" input.
-    ///
-    /// # Path
-    /// `allow_hold`
-    ///
-    /// # Value
-    /// "true" or "false"
+    /// Use DI0/1 to HOLD the biquad.
     allow_hold: Leaf<bool>,
 
-    /// Specified true if "hold" should be forced regardless of DI1 state and hold allowance.
-    ///
-    /// # Path
-    /// `force_hold`
-    ///
-    /// # Value
-    /// "true" or "false"
+    /// Force the biquad to HOLD.
     force_hold: Leaf<bool>,
 
-    /// Specifies the telemetry output period in seconds.
-    ///
-    /// # Path
-    /// `telemetry_period`
-    ///
-    /// # Value
-    /// Any non-zero value less than 65536.
-    telemetry_period: Leaf<u16>,
+    /// Telemetry output period in seconds.
+    telemetry_period: Leaf<f32>,
 
-    /// Specifies the target for data streaming.
+    /// Target IP and port for UDP streaming.
     ///
-    /// # Path
-    /// `stream`
+    /// Can be multicast.
     ///
     /// # Value
     /// See [StreamTarget#miniconf]
     stream: Leaf<StreamTarget>,
 
-    /// Specifies the config for signal generators to add on to DAC0/DAC1 outputs.
-    ///
-    /// # Path
-    /// `source/<n>`
-    ///
-    /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
-    ///
-    /// # Value
-    /// See [signal_generator::BasicConfig#miniconf]
-    source: [signal_generator::BasicConfig; 2],
+    /// Signal generator configuration to add to the DAC0/DAC1 outputs
+    source: [signal_generator::Config; 2],
+
+    trigger: Leaf<bool>,
 }
 
 impl Default for DualIir {
@@ -180,6 +147,9 @@ impl Default for DualIir {
         let mut i = iir::Biquad::IDENTITY;
         i.set_min(-SCALE);
         i.set_max(SCALE);
+        let mut source = signal_generator::Config::default();
+        source.period = SAMPLE_PERIOD;
+        source.scale = DacCode::FULL_SCALE;
         Self {
             // Analog frontend programmable gain amplifier gains (G1, G2, G5, G10)
             afe: Default::default(),
@@ -195,9 +165,10 @@ impl Default for DualIir {
             // Force suppress filter output updates.
             force_hold: false.into(),
             // The default telemetry period in seconds.
-            telemetry_period: 10.into(),
+            telemetry_period: 10.0.into(),
 
-            source: Default::default(),
+            source: [source; 2],
+            trigger: false.into(),
 
             stream: Default::default(),
         }
@@ -215,7 +186,7 @@ mod app {
         settings: Settings,
         active_settings: DualIir,
         telemetry: TelemetryBuffer,
-        source: [SignalGenerator; 2],
+        source: [Source; 2],
     }
 
     #[local]
@@ -255,23 +226,16 @@ mod app {
 
         let generator = network.configure_streaming(StreamFormat::AdcDacData);
 
+        let source =
+            Source::try_from_config(&stabilizer.settings.dual_iir.source[0])
+                .unwrap();
+
         let shared = Shared {
             usb: stabilizer.usb,
             network,
             active_settings: stabilizer.settings.dual_iir.clone(),
             telemetry: TelemetryBuffer::default(),
-            source: [
-                SignalGenerator::new(
-                    stabilizer.settings.dual_iir.source[0]
-                        .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
-                        .unwrap(),
-                ),
-                SignalGenerator::new(
-                    stabilizer.settings.dual_iir.source[1]
-                        .try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
-                        .unwrap(),
-                ),
-            ],
+            source: [source.clone(), source],
             settings: stabilizer.settings,
         };
 
@@ -385,7 +349,7 @@ mod app {
                                 // The truncation introduces 1/2 LSB distortion.
                                 let y: i16 = unsafe { y.to_int_unchecked() };
 
-                                let y = y.saturating_add(signal);
+                                let y = y.saturating_add((signal >> 16) as _);
 
                                 // Convert to DAC code
                                 *di = DacCode::from(y).0;
@@ -436,7 +400,7 @@ mod app {
                 .lock(|net, settings| net.update(&mut settings.dual_iir))
             {
                 NetworkState::SettingsChanged => {
-                    settings_update::spawn().unwrap()
+                    settings_update::spawn().unwrap();
                 }
                 NetworkState::Updated => {}
                 NetworkState::NoChange => {
@@ -458,20 +422,21 @@ mod app {
             c.local.afes.0.set_gain(*settings.dual_iir.afe[0]);
             c.local.afes.1.set_gain(*settings.dual_iir.afe[1]);
 
-            // Update the signal generators
-            for (i, &config) in settings.dual_iir.source.iter().enumerate() {
-                match config.try_into_config(SAMPLE_PERIOD, DacCode::FULL_SCALE)
-                {
-                    Ok(config) => {
-                        c.shared.source.lock(|generator| {
-                            generator[i].update_waveform(config)
-                        });
+            if *settings.dual_iir.trigger {
+                settings.dual_iir.trigger = false.into();
+                for (i, config) in settings.dual_iir.source.iter().enumerate() {
+                    match Source::try_from_config(config) {
+                        Ok(source) => {
+                            c.shared.source.lock(|s| {
+                                s[i] = source;
+                            });
+                        }
+                        Err(err) => log::error!(
+                            "Failed to update source on channel {}: {:?}",
+                            i,
+                            err
+                        ),
                     }
-                    Err(err) => log::error!(
-                        "Failed to update signal generation on DAC{}: {:?}",
-                        i,
-                        err
-                    ),
                 }
             }
 
@@ -504,7 +469,7 @@ mod app {
                 ))
             });
 
-            Systick::delay((telemetry_period as u32).secs()).await;
+            Systick::delay(((telemetry_period * 1000.0) as u32).millis()).await;
         }
     }
 

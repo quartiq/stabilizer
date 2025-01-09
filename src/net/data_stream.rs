@@ -52,8 +52,8 @@ const FRAME_COUNT: usize = 4;
 
 // The size of each frame in bytes.
 // Ensure the resulting ethernet frame is within the MTU:
-// 1500 MTU - 40 IP6 header - 8 UDP header
-const FRAME_SIZE: usize = 1500 - 40 - 8;
+// 1500 MTU - 40 IP6 header - 8 UDP header - 32 VPN - 20 IP4
+const FRAME_SIZE: usize = 1500 - 40 - 8 - 32 - 20;
 
 // The size of the frame queue must be at least as large as the number of frame buffers. Every
 // allocated frame buffer should fit in the queue.
@@ -100,12 +100,6 @@ impl core::str::FromStr for StreamTarget {
         let addr = SocketAddr::from_str(s)
             .map_err(|_| "Invalid socket address format")?;
         Ok(Self(addr))
-    }
-}
-
-impl core::fmt::Display for StreamTarget {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        self.0.fmt(f)
     }
 }
 
@@ -260,31 +254,31 @@ impl FrameGenerator {
         let sequence_number = self.sequence_number;
         self.sequence_number = self.sequence_number.wrapping_add(1);
 
-        if self.current_frame.is_none() {
-            if let Ok(buffer) =
-                FRAME_POOL.alloc([MaybeUninit::uninit(); FRAME_SIZE])
-            {
-                self.current_frame.replace(StreamFrame::new(
-                    buffer,
-                    self.format,
-                    sequence_number,
-                ));
-            } else {
-                return;
+        let current_frame = match self.current_frame.as_mut() {
+            None => {
+                if let Ok(buffer) =
+                    FRAME_POOL.alloc([MaybeUninit::uninit(); FRAME_SIZE])
+                {
+                    self.current_frame.insert(StreamFrame::new(
+                        buffer,
+                        self.format,
+                        sequence_number,
+                    ))
+                } else {
+                    return;
+                }
             }
-        }
-
-        // Note(unwrap): We ensure the frame is present above.
-        let current_frame = self.current_frame.as_mut().unwrap();
+            Some(frame) => frame,
+        };
 
         let len = current_frame.add_batch(func);
 
         if current_frame.is_full(len) {
             // Note(unwrap): The queue is designed to be at least as large as the frame buffer
             // count, so this enqueue should always succeed.
-            self.queue
-                .enqueue(self.current_frame.take().unwrap())
-                .unwrap();
+            if let Some(frame) = self.current_frame.take() {
+                self.queue.enqueue(frame).unwrap();
+            }
         }
     }
 }
