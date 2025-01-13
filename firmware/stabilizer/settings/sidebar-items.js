@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["NetSettings","SerialSettingsPlatform","SettingsKey"],"trait":["AppSettings"]};
