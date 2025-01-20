@@ -31,7 +31,7 @@ def get_local_ip(remote):
     Returns a list of four octets."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        sock.connect((remote, 1883))
+        sock.connect((remote, 9))  # discard
         return sock.getsockname()[0]
     finally:
         sock.close()
@@ -123,39 +123,41 @@ class Frame:
         return parser(header, data[cls.header_fmt.size :])
 
 
-class StabilizerStream(asyncio.DatagramProtocol):
+class Stream(asyncio.DatagramProtocol):
     """Stabilizer streaming receiver protocol"""
 
     @classmethod
-    async def open(cls, port=9293, addr="0.0.0.0", bind=None, maxsize=1):
+    async def open(cls, port=9293, addr="0.0.0.0", local="0.0.0.0", maxsize=1):
         """Open a UDP socket and start receiving frames"""
         loop = asyncio.get_running_loop()
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-        # Increase the OS UDP receive buffer size to 16 MiB so that latency
-        # spikes don't impact much. Achieving 16 MiB may require increasing
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        # Increase the OS UDP receive buffer size so that latency
+        # spikes don't impact much. Achieving this may require increasing
         # the max allowed buffer size, e.g. via
         # `sudo sysctl net.core.rmem_max=26214400` but nowadays the default
-        # max appears to be ~ 50 MiB already.
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 16 << 20)
-
+        # max appears to be ~ 50 MiB already, at least on Linux.
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 8 << 20)
         # We need to specify which interface to receive multicasts from, or Windows may choose the
-        # wrong one. Thus, use the broker address to figure out our local address for the interface
-        # of interest.
+        # wrong one. Thus, use a bind address to figure out our local address for the interface
+        # of interest. There's also an interface index, at least on linux, but apparently windows
+        # sockets don't do that.
         if ipaddress.ip_address(addr).is_multicast:
+            multiaddr = socket.inet_aton(addr)
+            local = socket.inet_aton(local)
             sock.setsockopt(
                 socket.IPPROTO_IP,
                 socket.IP_ADD_MEMBERSHIP,
-                socket.inet_aton(addr) + socket.inet_aton(bind),
+                multiaddr + local,
             )
-            sock.bind(("", port))
-        else:
-            sock.bind((addr, port))
-
+        print(f"bind to {addr}")
+        sock.bind((addr, port))
         transport, protocol = await loop.create_datagram_endpoint(
-            lambda: cls(maxsize), sock=sock
+            lambda: cls(maxsize),
+            sock=sock,
         )
+
         return transport, protocol
 
     def __init__(self, maxsize):
@@ -199,8 +201,6 @@ async def measure(stream, duration):
             stat.received += frame.header.batches
             stat.expect = wrap(frame.header.sequence + frame.header.batches)
             stat.bytes += frame.size()
-            # test conversion
-            # frame.to_si()
 
     try:
         await asyncio.wait_for(_record(), timeout=duration)
@@ -212,10 +212,7 @@ async def measure(stream, duration):
     )
 
     sent = stat.received + stat.lost
-    if sent:
-        loss = stat.lost / sent
-    else:
-        loss = 1
+    loss = stat.lost / sent if sent else 1
     logger.info("Loss: %s/%s batches (%g %%)", stat.lost, sent, loss * 1e2)
     return loss
 
@@ -224,17 +221,32 @@ async def main():
     """Test CLI"""
     parser = argparse.ArgumentParser(description="Stabilizer streaming demo")
     parser.add_argument(
-        "--port", type=int, default=9293, help="Local port to listen on"
+        "--port", type=int, default=9293, help="Local port to listen on [%(default)s]"
     )
-    parser.add_argument("--host", default="0.0.0.0", help="Local address to listen on")
-    parser.add_argument("--broker", default="mqtt", help="The MQTT broker address")
-    parser.add_argument("--maxsize", type=int, default=1, help="Frame queue size")
-    parser.add_argument("--duration", type=float, default=1.0, help="Test duration")
+    parser.add_argument(
+        "--host", default="0.0.0.0", help="Local address to listen on [%(default)s]"
+    )
+    parser.add_argument(
+        "--local",
+        default="0.0.0.0",
+        help="The local IP address to receive multicast frames on [%(default)s]",
+    )
+    parser.add_argument(
+        "--broker", help="The MQTT broker address for local IP lookup [%(default)s]"
+    )
+    parser.add_argument(
+        "--maxsize", type=int, default=1, help="Frame queue size [%(default)s]"
+    )
+    parser.add_argument(
+        "--duration", type=float, default=1.0, help="Test duration [%(default)s]"
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
-    _transport, stream = await StabilizerStream.open(
-        args.port, args.host, get_local_ip(args.broker), args.maxsize
+    if args.broker is not None:
+        args.local = get_local_ip(args.broker)
+    _transport, stream = await Stream.open(
+        args.port, args.host, args.local, args.maxsize
     )
     await measure(stream, args.duration)
 
