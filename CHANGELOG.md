@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+### [UNRELEASED](https://github.com/quartiq/stabilizer/compare/v0.11.0...HEAD) - DATE
+
+### Added
+
+* Support for exponentially swept sine signal source
+
+### Changed
+
+* `py`: `StabilizerStream` renamed to `Stream`
+
 ## [v0.11.0](https://github.com/quartiq/stabilizer/compare/v0.10.0...v0.11.0) - 2024-12-02
 
 ### Added
