@@ -93,6 +93,7 @@ class ThermostatEem:
         return len(self.body)
 
     def to_si(self):
+        """Return the parsed data in SI units"""
         return np.frombuffer(
             self.body, np.dtype([("input", "<f4", (4, 4)), ("output", "<f4", (4,))])
         )
@@ -132,7 +133,10 @@ class Stream(asyncio.DatagramProtocol):
         loop = asyncio.get_running_loop()
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        except NameError:
+            pass  # Windows
         # Increase the OS UDP receive buffer size so that latency
         # spikes don't impact much. Achieving this may require increasing
         # the max allowed buffer size, e.g. via
@@ -151,14 +155,11 @@ class Stream(asyncio.DatagramProtocol):
                 socket.IP_ADD_MEMBERSHIP,
                 multiaddr + local,
             )
-        print(f"bind to {addr}")
         sock.bind((addr, port))
-        transport, protocol = await loop.create_datagram_endpoint(
+        return await loop.create_datagram_endpoint(
             lambda: cls(maxsize),
             sock=sock,
         )
-
-        return transport, protocol
 
     def __init__(self, maxsize):
         self.queue = asyncio.Queue(maxsize)
@@ -184,36 +185,30 @@ class Stream(asyncio.DatagramProtocol):
 async def measure(stream, duration):
     """Measure throughput and loss of stream reception"""
 
-    @dataclass
-    class _Statistics:
-        expect = None
-        received = 0
-        lost = 0
-        bytes = 0
-
-    stat = _Statistics()
+    expect = None
+    received = 0
+    lost = 0
+    bytes = 0
 
     async def _record():
         while True:
             frame = await stream.queue.get()
-            if stat.expect is not None:
-                stat.lost += wrap(frame.header.sequence - stat.expect)
-            stat.received += frame.header.batches
-            stat.expect = wrap(frame.header.sequence + frame.header.batches)
-            stat.bytes += frame.size()
+            if expect is not None:
+                lost += wrap(frame.header.sequence - expect)
+            received += frame.header.batches
+            expect = wrap(frame.header.sequence + frame.header.batches)
+            bytes += frame.size()
 
     try:
         await asyncio.wait_for(_record(), timeout=duration)
     except asyncio.TimeoutError:
         pass
 
-    logger.info(
-        "Received %g MB, %g MB/s", stat.bytes / 1e6, stat.bytes / 1e6 / duration
-    )
+    logger.info("Received %g MB payload, %g MB/s", bytes / 1e6, bytes / 1e6 / duration)
 
-    sent = stat.received + stat.lost
-    loss = stat.lost / sent if sent else 1
-    logger.info("Loss: %s/%s batches (%g %%)", stat.lost, sent, loss * 1e2)
+    sent = received + lost
+    loss = lost / sent if sent else 1
+    logger.info("Loss: %s/%s batches (%g %%)", lost, sent, loss * 1e2)
     return loss
 
 
