@@ -185,30 +185,36 @@ class Stream(asyncio.DatagramProtocol):
 async def measure(stream, duration):
     """Measure throughput and loss of stream reception"""
 
-    expect = None
-    received = 0
-    lost = 0
-    bytes = 0
+    @dataclass
+    class _Statistics:
+        expect = None
+        received = 0
+        lost = 0
+        bytes = 0
+
+    stat = _Statistics()
 
     async def _record():
         while True:
             frame = await stream.queue.get()
-            if expect is not None:
-                lost += wrap(frame.header.sequence - expect)
-            received += frame.header.batches
-            expect = wrap(frame.header.sequence + frame.header.batches)
-            bytes += frame.size()
+            if stat.expect is not None:
+                stat.lost += wrap(frame.header.sequence - stat.expect)
+            stat.received += frame.header.batches
+            stat.expect = wrap(frame.header.sequence + frame.header.batches)
+            stat.bytes += frame.size()
 
     try:
         await asyncio.wait_for(_record(), timeout=duration)
     except asyncio.TimeoutError:
         pass
 
-    logger.info("Received %g MB payload, %g MB/s", bytes / 1e6, bytes / 1e6 / duration)
+    logger.info(
+        "Received %g MB, %g MB/s", stat.bytes / 1e6, stat.bytes / 1e6 / duration
+    )
 
-    sent = received + lost
-    loss = lost / sent if sent else 1
-    logger.info("Loss: %s/%s batches (%g %%)", lost, sent, loss * 1e2)
+    sent = stat.received + stat.lost
+    loss = stat.lost / sent if sent else 1
+    logger.info("Loss: %s/%s batches (%g %%)", stat.lost, sent, loss * 1e2)
     return loss
 
 
