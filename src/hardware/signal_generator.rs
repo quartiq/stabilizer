@@ -35,7 +35,7 @@ impl Signal {
 }
 
 /// Basic configuration for a generated signal.
-#[derive(Copy, Clone, Debug, Tree, Serialize, Deserialize)]
+#[derive(Clone, Debug, Tree, Serialize, Deserialize)]
 pub struct Config {
     /// The signal type that should be generated. See [Signal] variants.
     signal: Leaf<Signal>,

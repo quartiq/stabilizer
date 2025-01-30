@@ -30,8 +30,7 @@
 
 use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
-use miniconf::{Leaf, Tree};
-use serde::{Deserialize, Serialize};
+use miniconf::{Leaf, StrLeaf, Tree};
 
 use rtic_monotonics::Monotonic;
 
@@ -103,8 +102,43 @@ impl serial_settings::Settings for Settings {
     }
 }
 
-#[derive(Clone, Debug, Tree, Serialize, Deserialize)]
+#[derive(Clone, Debug, Tree, Default)]
+pub struct Biquad {
+    /// Miniconf indirection for Tree access
+    #[tree(rename = "repr", typ = "iir::BiquadRepr<f32, f32>", defer = *self.repr)]
+    _repr: (),
+    /// IIR Biquad parameters
+    #[tree(rename = "typ")]
+    repr: StrLeaf<iir::BiquadRepr<f32, f32>>,
+}
+
+#[derive(Clone, Debug, Tree, Default)]
+pub struct Channel {
+    /// Analog Front End (AFE) gain.
+    gain: Leaf<Gain>,
+    /// Biquad
+    biquad: [Biquad; IIR_CASCADE_LENGTH],
+    /// Use DIx to HOLD the biquad.
+    allow_hold: Leaf<bool>,
+    /// Force the biquad to HOLD.
+    force_hold: Leaf<bool>,
+    /// Signal generator configuration to add to the DAC0/DAC1 outputs
+    source: signal_generator::Config,
+}
+
+#[derive(Clone, Debug, Tree)]
 pub struct DualIir {
+    /// Channel configuration
+    ch: [Channel; 2],
+    /// Trigger both signal sources
+    trigger: Leaf<bool>,
+    /// Telemetry output period in seconds.
+    telemetry_period: Leaf<f32>,
+    /// Target IP and port for UDP streaming.
+    ///
+    /// Can be multicast.
+    stream: Leaf<StreamTarget>,
+
     /// Configure the Analog Front End (AFE) gain.
     afe: [Leaf<Gain>; 2],
 
@@ -125,21 +159,8 @@ pub struct DualIir {
     /// Force the biquad to HOLD.
     force_hold: Leaf<bool>,
 
-    /// Telemetry output period in seconds.
-    telemetry_period: Leaf<f32>,
-
-    /// Target IP and port for UDP streaming.
-    ///
-    /// Can be multicast.
-    ///
-    /// # Value
-    /// See [StreamTarget#miniconf]
-    stream: Leaf<StreamTarget>,
-
     /// Signal generator configuration to add to the DAC0/DAC1 outputs
     source: [signal_generator::Config; 2],
-
-    trigger: Leaf<bool>,
 }
 
 impl Default for DualIir {
@@ -147,30 +168,24 @@ impl Default for DualIir {
         let mut i = iir::Biquad::IDENTITY;
         i.set_min(-SCALE);
         i.set_max(SCALE);
+        let i = core::array::from_fn(|_| i.clone().into());
         let mut source = signal_generator::Config::default();
         source.period = SAMPLE_PERIOD;
         source.scale = DacCode::FULL_SCALE;
+        let ch = Channel {
+            source: source.clone(),
+            ..Default::default()
+        };
         Self {
-            // Analog frontend programmable gain amplifier gains (G1, G2, G5, G10)
             afe: Default::default(),
-            // IIR filter tap gains are an array `[b0, b1, b2, a1, a2]` such that the
-            // new output is computed as `y0 = a1*y1 + a2*y2 + b0*x0 + b1*x1 + b2*x2`.
-            // The array is `iir_state[channel-index][cascade-index][coeff-index]`.
-            // The IIR coefficients can be mapped to other transfer function
-            // representations, for example as described in https://arxiv.org/abs/1508.06319
-            iir_ch: [[i.into(); IIR_CASCADE_LENGTH]; 2],
-
-            // Permit the DI1 digital input to suppress filter output updates.
+            iir_ch: [i.clone(), i],
             allow_hold: false.into(),
-            // Force suppress filter output updates.
             force_hold: false.into(),
-            // The default telemetry period in seconds.
             telemetry_period: 10.0.into(),
-
-            source: [source; 2],
+            source: [source.clone(), source],
             trigger: false.into(),
-
             stream: Default::default(),
+            ch: [ch.clone(), ch],
         }
     }
 }
