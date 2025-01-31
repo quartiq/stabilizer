@@ -105,14 +105,14 @@ pounder_v1_0 = []
 
 [profile.dev]
 codegen-units = 1
+opt-level = "s"
 incremental = false
-opt-level = 3
 
 [profile.release]
-opt-level = 3
+codegen-units = 1
+opt-level = "s"
 debug = true
 lto = true
-codegen-units = 1
 
 [patch.crates-io]
 idsp = { path = "../idsp" }

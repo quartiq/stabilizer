@@ -105,7 +105,7 @@ impl serial_settings::Settings for Settings {
 #[derive(Clone, Debug, Tree)]
 pub struct Biquad {
     /// Subtree access
-    #[tree(rename = "repr", typ = "iir::BiquadRepr<f32, f32>", defer = *self.repr)]
+    #[tree(rename = "repr", typ = "iir::BiquadRepr<f32, f32>", defer = "*self.repr")]
     _repr: (),
     /// Biquad parameters
     #[tree(rename = "typ")]
@@ -160,18 +160,13 @@ pub struct Channel {
 impl Channel {
     fn build(&self) -> Result<Active, signal_generator::Error> {
         Ok(Active {
-            source: Source::try_from_config(
-                &self.source,
-                SAMPLE_PERIOD,
-                DacCode::FULL_SCALE,
-            )
-            .unwrap(),
+            source: self.source.build(SAMPLE_PERIOD, SCALE).unwrap(),
             state: Default::default(),
             run: *self.run,
             biquad: self
                 .biquad
                 .each_ref()
-                .map(|biquad| biquad.repr.biquad::<f32>(SAMPLE_PERIOD)),
+                .map(|biquad| biquad.repr.build::<f32>(SAMPLE_PERIOD, SCALE)),
         })
     }
 }
@@ -428,25 +423,21 @@ mod app {
             c.local.afes.1.set_gain(*settings.dual_iir.ch[1].gain);
 
             if *settings.dual_iir.trigger {
-                settings.dual_iir.trigger = false.into();
-                for (i, ch) in settings.dual_iir.ch.iter().enumerate() {
-                    match Source::try_from_config(
-                        &ch.source,
-                        SAMPLE_PERIOD,
-                        DacCode::FULL_SCALE,
-                    ) {
-                        Ok(source) => {
-                            c.shared.active.lock(|ch| {
-                                ch[i].source = source;
-                            });
-                        }
-                        Err(err) => log::error!(
-                            "Failed to update source on channel {}: {:?}",
-                            i,
-                            err
-                        ),
+                settings.dual_iir.trigger = Leaf(false);
+                let s = settings.dual_iir.ch.each_ref().map(|ch| {
+                    let s = ch.source.build(SAMPLE_PERIOD, SCALE);
+                    if let Err(err) = &s {
+                        log::error!("Failed to update source: {:?}", err);
                     }
-                }
+                    s
+                });
+                c.shared.active.lock(|ch| {
+                    for (ch, s) in ch.iter_mut().zip(s) {
+                        if let Ok(s) = s {
+                            ch.source = s;
+                        }
+                    }
+                });
             }
 
             c.shared
@@ -458,7 +449,7 @@ mod app {
                     *ch.run,
                     ch.biquad
                         .each_ref()
-                        .map(|b| b.repr.biquad::<f32>(SAMPLE_PERIOD)),
+                        .map(|b| b.repr.build::<f32>(SAMPLE_PERIOD, SCALE)),
                 )
             });
             c.shared.active.lock(|active| {

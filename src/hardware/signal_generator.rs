@@ -169,39 +169,35 @@ impl Iterator for Source {
     }
 }
 
-impl Source {
+impl Config {
     /// Convert from SI config
-    pub fn try_from_config(
-        value: &Config,
-        period: f32,
-        scale: f32,
-    ) -> Result<Source, Error> {
-        if !(0.0..1.0).contains(&*value.symmetry) {
+    pub fn build(&self, period: f32, scale: f32) -> Result<Source, Error> {
+        if !(0.0..1.0).contains(&*self.symmetry) {
             return Err(Error::Symmetry);
         }
 
         const NYQUIST: f32 = (1u32 << 31) as _;
-        let ftw0 = *value.frequency * period * NYQUIST;
+        let ftw0 = *self.frequency * period * NYQUIST;
         if !(0.0..2.0 * NYQUIST).contains(&ftw0) {
             return Err(Error::Frequency);
         }
 
         // Clip both frequency tuning words to within Nyquist before rounding.
         let ftw = [
-            if *value.symmetry * NYQUIST > ftw0 {
-                ftw0 / *value.symmetry
+            if *self.symmetry * NYQUIST > ftw0 {
+                ftw0 / *self.symmetry
             } else {
                 NYQUIST
             } as i32,
-            if (1.0 - *value.symmetry) * NYQUIST > ftw0 {
-                ftw0 / (1.0 - *value.symmetry)
+            if (1.0 - *self.symmetry) * NYQUIST > ftw0 {
+                ftw0 / (1.0 - *self.symmetry)
             } else {
                 NYQUIST
             } as i32,
         ];
 
-        let offset = *value.offset / scale;
-        let amplitude = *value.amplitude / scale;
+        let offset = *self.offset / scale;
+        let amplitude = *self.amplitude / scale;
         fn abs(x: f32) -> f32 {
             if x.is_sign_negative() {
                 -x
@@ -217,30 +213,30 @@ impl Source {
             offset: (offset * NYQUIST) as _,
         };
 
-        Ok(match *value.signal {
+        Ok(match *self.signal {
             signal @ (Signal::Cosine | Signal::Square | Signal::Triangle) => {
-                Self::Periodic {
+                Source::Periodic {
                     accu: AsymmetricAccu {
                         ftw,
-                        pow: (*value.phase * NYQUIST) as i32,
+                        pow: (*self.phase * NYQUIST) as i32,
                         accu: 0,
-                        count: *value.length,
+                        count: *self.length,
                     },
                     signal,
                     amp,
                 }
             }
-            Signal::SweptSine => Self::SweptSine {
+            Signal::SweptSine => Source::SweptSine {
                 sweep: AccuOsc::new(Sweep::new(
-                    *value.rate,
-                    ((*value.rate * *value.cycles) as i64) << 32,
+                    *self.rate,
+                    ((*self.rate * *self.cycles) as i64) << 32,
                 ))
-                .take(*value.length as _),
+                .take(*self.length as _),
                 amp,
             },
-            Signal::WhiteNoise => Self::WhiteNoise {
+            Signal::WhiteNoise => Source::WhiteNoise {
                 rng: XorShiftRng::from_seed(Default::default()),
-                count: *value.length,
+                count: *self.length,
                 amp,
             },
         })
