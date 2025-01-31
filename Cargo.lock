@@ -1404,6 +1404,7 @@ dependencies = [
  "bit_field",
  "bitbybit",
  "built",
+ "bytemuck",
  "cortex-m",
  "cortex-m-rt",
  "embassy-futures",

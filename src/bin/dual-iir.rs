@@ -28,7 +28,6 @@
 #![no_std]
 #![no_main]
 
-use core::mem::MaybeUninit;
 use core::sync::atomic::{fence, Ordering};
 use miniconf::{Leaf, StrLeaf, Tree};
 
@@ -39,6 +38,7 @@ use mutex_trait::prelude::*;
 
 use idsp::iir;
 
+use serde::{Deserialize, Serialize};
 use stabilizer::{
     hardware::{
         self,
@@ -102,14 +102,47 @@ impl serial_settings::Settings for Settings {
     }
 }
 
-#[derive(Clone, Debug, Tree, Default)]
+#[derive(Clone, Debug, Tree)]
 pub struct Biquad {
-    /// Miniconf indirection for Tree access
+    /// Subtree access
     #[tree(rename = "repr", typ = "iir::BiquadRepr<f32, f32>", defer = *self.repr)]
     _repr: (),
-    /// IIR Biquad parameters
+    /// Biquad parameters
     #[tree(rename = "typ")]
     repr: StrLeaf<iir::BiquadRepr<f32, f32>>,
+}
+
+impl Default for Biquad {
+    fn default() -> Self {
+        let mut i = iir::Biquad::IDENTITY;
+        i.set_min(-SCALE);
+        i.set_max(SCALE);
+        Self {
+            _repr: (),
+            repr: StrLeaf(iir::BiquadRepr::Raw(Leaf(i))),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, Default)]
+pub enum Run {
+    #[default]
+    /// Run
+    Run,
+    /// Hold
+    Hold,
+    /// Hold controlled by corresponding digital input
+    External,
+}
+
+impl Run {
+    fn run(&self, di: bool) -> bool {
+        match self {
+            Self::Run => true,
+            Self::Hold => false,
+            Self::External => di,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Tree, Default)]
@@ -118,12 +151,29 @@ pub struct Channel {
     gain: Leaf<Gain>,
     /// Biquad
     biquad: [Biquad; IIR_CASCADE_LENGTH],
-    /// Use DIx to HOLD the biquad.
-    allow_hold: Leaf<bool>,
-    /// Force the biquad to HOLD.
-    force_hold: Leaf<bool>,
+    /// Run/Hold behavior
+    run: Leaf<Run>,
     /// Signal generator configuration to add to the DAC0/DAC1 outputs
     source: signal_generator::Config,
+}
+
+impl Channel {
+    fn build(&self) -> Result<Active, signal_generator::Error> {
+        Ok(Active {
+            source: Source::try_from_config(
+                &self.source,
+                SAMPLE_PERIOD,
+                DacCode::FULL_SCALE,
+            )
+            .unwrap(),
+            state: Default::default(),
+            run: *self.run,
+            biquad: self
+                .biquad
+                .each_ref()
+                .map(|biquad| biquad.repr.biquad::<f32>(SAMPLE_PERIOD)),
+        })
+    }
 }
 
 #[derive(Clone, Debug, Tree)]
@@ -138,56 +188,25 @@ pub struct DualIir {
     ///
     /// Can be multicast.
     stream: Leaf<StreamTarget>,
-
-    /// Configure the Analog Front End (AFE) gain.
-    afe: [Leaf<Gain>; 2],
-
-    /// Configure the IIR filter parameters.
-    ///
-    /// # Path
-    /// `iir_ch/<n>/<m>`
-    ///
-    /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
-    /// * `<m>` specifies which cascade to configure. `<m>` := [0, 1], depending on [IIR_CASCADE_LENGTH]
-    ///
-    /// See [iir::Biquad]
-    iir_ch: [[Leaf<iir::Biquad<f32>>; IIR_CASCADE_LENGTH]; 2],
-
-    /// Use DI0/1 to HOLD the biquad.
-    allow_hold: Leaf<bool>,
-
-    /// Force the biquad to HOLD.
-    force_hold: Leaf<bool>,
-
-    /// Signal generator configuration to add to the DAC0/DAC1 outputs
-    source: [signal_generator::Config; 2],
 }
 
 impl Default for DualIir {
     fn default() -> Self {
-        let mut i = iir::Biquad::IDENTITY;
-        i.set_min(-SCALE);
-        i.set_max(SCALE);
-        let i = core::array::from_fn(|_| i.clone().into());
-        let mut source = signal_generator::Config::default();
-        source.period = SAMPLE_PERIOD;
-        source.scale = DacCode::FULL_SCALE;
-        let ch = Channel {
-            source: source.clone(),
-            ..Default::default()
-        };
         Self {
-            afe: Default::default(),
-            iir_ch: [i.clone(), i],
-            allow_hold: false.into(),
-            force_hold: false.into(),
             telemetry_period: 10.0.into(),
-            source: [source.clone(), source],
             trigger: false.into(),
             stream: Default::default(),
-            ch: [ch.clone(), ch],
+            ch: Default::default(),
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Active {
+    source: Source,
+    biquad: [iir::Biquad<f32>; IIR_CASCADE_LENGTH],
+    run: Run,
+    state: [[f32; 4]; IIR_CASCADE_LENGTH],
 }
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
@@ -197,22 +216,20 @@ mod app {
     #[shared]
     struct Shared {
         usb: UsbDevice,
-        network: NetworkUsers<DualIir, 3>,
+        network: NetworkUsers<DualIir, 7>,
         settings: Settings,
-        active_settings: DualIir,
+        active: [Active; 2],
         telemetry: TelemetryBuffer,
-        source: [Source; 2],
     }
 
     #[local]
     struct Local {
-        usb_terminal: SerialTerminal<Settings, 4>,
+        usb_terminal: SerialTerminal<Settings, 8>,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         afes: (AFE0, AFE1),
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        iir_state: [[[f32; 4]; IIR_CASCADE_LENGTH]; 2],
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
     }
@@ -222,7 +239,7 @@ mod app {
         let clock = SystemTimer::new(|| Systick::now().ticks());
 
         // Configure the microcontroller
-        let (stabilizer, _pounder) = hardware::setup::setup::<Settings, 4>(
+        let (stabilizer, _pounder) = hardware::setup::setup::<Settings, 8>(
             c.core,
             c.device,
             clock,
@@ -241,16 +258,16 @@ mod app {
 
         let generator = network.configure_streaming(StreamFormat::AdcDacData);
 
-        let source =
-            Source::try_from_config(&stabilizer.settings.dual_iir.source[0])
-                .unwrap();
-
         let shared = Shared {
             usb: stabilizer.usb,
             network,
-            active_settings: stabilizer.settings.dual_iir.clone(),
+            active: stabilizer
+                .settings
+                .dual_iir
+                .ch
+                .each_ref()
+                .map(|a| a.build().unwrap()),
             telemetry: TelemetryBuffer::default(),
-            source: [source.clone(), source],
             settings: stabilizer.settings,
         };
 
@@ -261,7 +278,6 @@ mod app {
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            iir_state: [[[0.; 4]; IIR_CASCADE_LENGTH]; 2],
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
         };
@@ -305,107 +321,81 @@ mod app {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[active_settings, source, telemetry], priority=3)]
+    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, generator], shared=[active, telemetry], priority=3)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
-            active_settings,
-            telemetry,
-            source,
-            ..
+            active, telemetry, ..
         } = c.shared;
 
         let process::LocalResources {
             digital_inputs,
             adcs: (adc0, adc1),
             dacs: (dac0, dac1),
-            iir_state,
             generator,
             ..
         } = c.local;
 
-        (active_settings, telemetry, source).lock(
-            |settings, telemetry, source| {
-                let digital_inputs =
-                    [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
-                telemetry.digital_inputs = digital_inputs;
+        (active, telemetry).lock(|active, telemetry| {
+            let di = [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
+            telemetry.digital_inputs = di;
 
-                let hold = *settings.force_hold
-                    || (digital_inputs[1] && *settings.allow_hold);
+            (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
+                // Preserve instruction and data ordering w.r.t. DMA flag access.
+                fence(Ordering::SeqCst);
+                let adc = [&**adc0, &**adc1];
+                let mut dac = [&mut **dac0, &mut **dac1];
 
-                (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
-                    let adc_samples = [adc0, adc1];
-                    let dac_samples = [dac0, dac1];
-
-                    // Preserve instruction and data ordering w.r.t. DMA flag access.
-                    fence(Ordering::SeqCst);
-
-                    for channel in 0..adc_samples.len() {
-                        adc_samples[channel]
+                for (((adc, dac), active), di) in
+                    adc.iter().zip(dac.iter_mut()).zip(active).zip(di)
+                {
+                    for ((a, d), s) in
+                        adc.iter().zip(dac.iter_mut()).zip(&mut active.source)
+                    {
+                        let x = f32::from(*a as i16);
+                        let y = active
+                            .biquad
                             .iter()
-                            .zip(dac_samples[channel].iter_mut())
-                            .zip(&mut source[channel])
-                            .map(|((ai, di), signal)| {
-                                let x = f32::from(*ai as i16);
-                                let y = settings.iir_ch[channel]
-                                    .iter()
-                                    .zip(iir_state[channel].iter_mut())
-                                    .fold(x, |yi, (ch, state)| {
-                                        let filter = if hold {
-                                            &iir::Biquad::HOLD
-                                        } else {
-                                            ch
-                                        };
+                            .zip(active.state.iter_mut())
+                            .fold(x, |y, (ch, state)| {
+                                let filter = if active.run.run(di) {
+                                    ch
+                                } else {
+                                    &iir::Biquad::HOLD
+                                };
+                                filter.update(state, y)
+                            });
 
-                                        filter.update(state, yi)
-                                    });
+                        // Note(unsafe): The filter limits must ensure that the value is in range.
+                        // The truncation introduces 1/2 LSB distortion.
+                        let y: i16 = unsafe { y.to_int_unchecked() };
 
-                                // Note(unsafe): The filter limits must ensure that the value is in range.
-                                // The truncation introduces 1/2 LSB distortion.
-                                let y: i16 = unsafe { y.to_int_unchecked() };
+                        let y = y.saturating_add((s >> 16) as _);
 
-                                let y = y.saturating_add((signal >> 16) as _);
-
-                                // Convert to DAC code
-                                *di = DacCode::from(y).0;
-                            })
-                            .last();
+                        // Convert to DAC code
+                        *d = DacCode::from(y).0;
                     }
+                }
+                telemetry.adcs = [AdcCode(adc[0][0]), AdcCode(adc[1][0])];
+                telemetry.dacs = [DacCode(dac[0][0]), DacCode(dac[1][0])];
 
-                    // Stream the data.
-                    const N: usize = BATCH_SIZE * size_of::<i16>();
-                    generator.add(|buf| {
-                        for (data, buf) in adc_samples
-                            .iter()
-                            .chain(dac_samples.iter())
-                            .zip(buf.chunks_exact_mut(N))
-                        {
-                            let data = unsafe {
-                                core::slice::from_raw_parts(
-                                    data.as_ptr() as *const MaybeUninit<u8>,
-                                    N,
-                                )
-                            };
-                            buf.copy_from_slice(data)
-                        }
-                        N * 4
-                    });
-                    // Update telemetry measurements.
-                    telemetry.adcs = [
-                        AdcCode(adc_samples[0][0]),
-                        AdcCode(adc_samples[1][0]),
-                    ];
-
-                    telemetry.dacs = [
-                        DacCode(dac_samples[0][0]),
-                        DacCode(dac_samples[1][0]),
-                    ];
-
-                    // Preserve instruction and data ordering w.r.t. DMA flag access.
-                    fence(Ordering::SeqCst);
+                // Stream the data.
+                const N: usize = BATCH_SIZE * size_of::<i16>();
+                generator.add(|buf| {
+                    [adc[0], adc[1], dac[0], dac[1]]
+                        .into_iter()
+                        .zip(buf.chunks_exact_mut(N))
+                        .map(|(data, buf)| {
+                            buf.copy_from_slice(bytemuck::cast_slice(data))
+                        })
+                        .count()
+                        * N
                 });
-            },
-        );
+
+                // Preserve instruction and data ordering w.r.t. DMA flag access.
+                fence(Ordering::SeqCst);
+            });
+        });
     }
 
     #[idle(shared=[network, settings, usb])]
@@ -431,19 +421,23 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes], shared=[network, settings, active_settings, source])]
+    #[task(priority = 1, local=[afes], shared=[network, settings, active])]
     async fn settings_update(mut c: settings_update::Context) {
         c.shared.settings.lock(|settings| {
-            c.local.afes.0.set_gain(*settings.dual_iir.afe[0]);
-            c.local.afes.1.set_gain(*settings.dual_iir.afe[1]);
+            c.local.afes.0.set_gain(*settings.dual_iir.ch[0].gain);
+            c.local.afes.1.set_gain(*settings.dual_iir.ch[1].gain);
 
             if *settings.dual_iir.trigger {
                 settings.dual_iir.trigger = false.into();
-                for (i, config) in settings.dual_iir.source.iter().enumerate() {
-                    match Source::try_from_config(config) {
+                for (i, ch) in settings.dual_iir.ch.iter().enumerate() {
+                    match Source::try_from_config(
+                        &ch.source,
+                        SAMPLE_PERIOD,
+                        DacCode::FULL_SCALE,
+                    ) {
                         Ok(source) => {
-                            c.shared.source.lock(|s| {
-                                s[i] = source;
+                            c.shared.active.lock(|ch| {
+                                ch[i].source = source;
                             });
                         }
                         Err(err) => log::error!(
@@ -459,9 +453,19 @@ mod app {
                 .network
                 .lock(|net| net.direct_stream(*settings.dual_iir.stream));
 
-            c.shared
-                .active_settings
-                .lock(|current| *current = settings.dual_iir.clone());
+            let b = settings.dual_iir.ch.each_ref().map(|ch| {
+                (
+                    *ch.run,
+                    ch.biquad
+                        .each_ref()
+                        .map(|b| b.repr.biquad::<f32>(SAMPLE_PERIOD)),
+                )
+            });
+            c.shared.active.lock(|active| {
+                for (a, b) in active.iter_mut().zip(b) {
+                    (a.run, a.biquad) = b;
+                }
+            });
         });
     }
 
@@ -473,13 +477,16 @@ mod app {
 
             let (gains, telemetry_period) =
                 c.shared.settings.lock(|settings| {
-                    (settings.dual_iir.afe, *settings.dual_iir.telemetry_period)
+                    (
+                        settings.dual_iir.ch.each_ref().map(|ch| *ch.gain),
+                        *settings.dual_iir.telemetry_period,
+                    )
                 });
 
             c.shared.network.lock(|net| {
                 net.telemetry.publish(&telemetry.finalize(
-                    *gains[0],
-                    *gains[1],
+                    gains[0],
+                    gains[1],
                     c.local.cpu_temp_sensor.get_temperature().unwrap(),
                 ))
             });

@@ -65,13 +65,6 @@ pub struct Config {
 
     /// Sweep: Sweep rate
     rate: Leaf<i32>,
-
-    /// Sample period
-    #[tree(skip)]
-    pub period: f32,
-    /// Output full scale
-    #[tree(skip)]
-    pub scale: f32,
 }
 
 impl Default for Config {
@@ -86,8 +79,6 @@ impl Default for Config {
             cycles: Leaf(1),
             rate: Leaf(0),
             length: Leaf(0),
-            period: 1.0,
-            scale: 1.0,
         }
     }
 }
@@ -180,13 +171,17 @@ impl Iterator for Source {
 
 impl Source {
     /// Convert from SI config
-    pub fn try_from_config(value: &Config) -> Result<Source, Error> {
+    pub fn try_from_config(
+        value: &Config,
+        period: f32,
+        scale: f32,
+    ) -> Result<Source, Error> {
         if !(0.0..1.0).contains(&*value.symmetry) {
             return Err(Error::Symmetry);
         }
 
         const NYQUIST: f32 = (1u32 << 31) as _;
-        let ftw0 = *value.frequency * value.period * NYQUIST;
+        let ftw0 = *value.frequency * period * NYQUIST;
         if !(0.0..2.0 * NYQUIST).contains(&ftw0) {
             return Err(Error::Frequency);
         }
@@ -205,8 +200,8 @@ impl Source {
             } as i32,
         ];
 
-        let offset = *value.offset / value.scale;
-        let amplitude = *value.amplitude / value.scale;
+        let offset = *value.offset / scale;
+        let amplitude = *value.amplitude / scale;
         fn abs(x: f32) -> f32 {
             if x.is_sign_negative() {
                 -x

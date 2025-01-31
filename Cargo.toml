@@ -90,6 +90,7 @@ embedded-hal-1 = { package = "embedded-hal", version = "1.0" }
 embedded-hal-bus = "0.3.0"
 urukul = { version = "0.1.1", path = "urukul" }
 ad9912 = { version = "0.1.1", path = "ad9912" }
+bytemuck = { version = "1.21.0", features = ["zeroable_maybe_uninit"] }
 
 [build-dependencies]
 built = { version = "0.7", features = ["git2"], default-features = false }
@@ -114,4 +115,4 @@ lto = true
 codegen-units = 1
 
 [patch.crates-io]
-idsp = {path="../idsp"}
+idsp = { path = "../idsp" }
