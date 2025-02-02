@@ -638,7 +638,7 @@ dependencies = [
 [[package]]
 name = "idsp"
 version = "0.17.0"
-source = "git+https://github.com/quartiq/idsp.git?branch=biquad-enum#33fb1a2697b9f699bd0355580cd14e4e3d736973"
+source = "git+https://github.com/quartiq/idsp.git#2dabd6750b067a26c73170d79865d44eb4ef02a5"
 dependencies = [
  "miniconf",
  "num-complex 0.4.6",

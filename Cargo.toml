@@ -116,4 +116,4 @@ lto = true
 
 [patch.crates-io]
 #idsp = { path = "../idsp" }
-idsp = { git = "https://github.com/quartiq/idsp.git", branch = "biquad-enum" }
+idsp = { git = "https://github.com/quartiq/idsp.git" }
