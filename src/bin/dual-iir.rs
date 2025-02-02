@@ -103,16 +103,20 @@ impl serial_settings::Settings for Settings {
 }
 
 #[derive(Clone, Debug, Tree)]
-pub struct Biquad {
+pub struct BiquadRepr {
     /// Subtree access
-    #[tree(rename = "repr", typ = "iir::BiquadRepr<f32, f32>", defer = "*self.repr")]
+    #[tree(
+        rename = "repr",
+        typ = "iir::BiquadRepr<f32, f32>",
+        defer = "*self.repr"
+    )]
     _repr: (),
     /// Biquad parameters
     #[tree(rename = "typ")]
     repr: StrLeaf<iir::BiquadRepr<f32, f32>>,
 }
 
-impl Default for Biquad {
+impl Default for BiquadRepr {
     fn default() -> Self {
         let mut i = iir::Biquad::IDENTITY;
         i.set_min(-SCALE);
@@ -150,7 +154,7 @@ pub struct Channel {
     /// Analog Front End (AFE) gain.
     gain: Leaf<Gain>,
     /// Biquad
-    biquad: [Biquad; IIR_CASCADE_LENGTH],
+    biquad: [BiquadRepr; IIR_CASCADE_LENGTH],
     /// Run/Hold behavior
     run: Leaf<Run>,
     /// Signal generator configuration to add to the DAC0/DAC1 outputs
@@ -198,10 +202,10 @@ impl Default for DualIir {
 
 #[derive(Clone, Debug)]
 pub struct Active {
-    source: Source,
-    biquad: [iir::Biquad<f32>; IIR_CASCADE_LENGTH],
     run: Run,
+    biquad: [iir::Biquad<f32>; IIR_CASCADE_LENGTH],
     state: [[f32; 4]; IIR_CASCADE_LENGTH],
+    source: Source,
 }
 
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
@@ -334,6 +338,9 @@ mod app {
         (active, telemetry).lock(|active, telemetry| {
             let di = [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
             telemetry.digital_inputs = di;
+            let source: [[i16; BATCH_SIZE]; 2] = active.each_mut().map(|ch| {
+                core::array::from_fn(|_| (ch.source.next().unwrap() >> 16) as _)
+            });
 
             (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
                 // Preserve instruction and data ordering w.r.t. DMA flag access.
@@ -341,13 +348,17 @@ mod app {
                 let adc = [&**adc0, &**adc1];
                 let mut dac = [&mut **dac0, &mut **dac1];
 
-                for (((adc, dac), active), di) in
-                    adc.iter().zip(dac.iter_mut()).zip(active).zip(di)
+                for ((((adc, dac), active), di), source) in adc
+                    .iter()
+                    .zip(dac.iter_mut())
+                    .zip(active)
+                    .zip(di)
+                    .zip(source)
                 {
-                    for ((a, d), s) in
-                        adc.iter().zip(dac.iter_mut()).zip(&mut active.source)
+                    for ((adc, dac), source) in
+                        adc.iter().zip(dac.iter_mut()).zip(source)
                     {
-                        let x = f32::from(*a as i16);
+                        let x = f32::from(*adc as i16);
                         let y = active
                             .biquad
                             .iter()
@@ -365,10 +376,10 @@ mod app {
                         // The truncation introduces 1/2 LSB distortion.
                         let y: i16 = unsafe { y.to_int_unchecked() };
 
-                        let y = y.saturating_add((s >> 16) as _);
+                        let y = y.saturating_add(source);
 
                         // Convert to DAC code
-                        *d = DacCode::from(y).0;
+                        *dac = DacCode::from(y).0;
                     }
                 }
                 telemetry.adcs = [AdcCode(adc[0][0]), AdcCode(adc[1][0])];
