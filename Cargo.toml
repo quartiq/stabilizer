@@ -62,8 +62,8 @@ spin = { version = "0.9", default-features = false, features = ["spin_mutex"] }
 shared-bus = { version = "0.3", features = ["cortex-m"] }
 lm75 = "0.2"
 enum-iterator = "2.1.0"
-rand_xorshift = "0.3.0"
-rand_core = "0.6.4"
+rand_xorshift = "0.4.0"
+rand_core = "0.9.0"
 minimq = "0.9.0"
 usb-device = "0.3.2"
 usbd-serial = "0.2"
@@ -115,4 +115,5 @@ debug = true
 lto = true
 
 [patch.crates-io]
-idsp = { path = "../idsp" }
+#idsp = { path = "../idsp" }
+idsp = { git = "https://github.com/quartiq/idsp.git", branch = "biquad-enum" }

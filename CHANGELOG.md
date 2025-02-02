@@ -9,11 +9,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
-* Support for exponentially swept sine signal source
+* Support for exponentially swept sine signal source for transfer function
+  and distortion measurement
+* Support for "cooked" PID biquad and standard biquad filter prototypes from `idsp`
+* Defaulting to `s` optimization for debug and release
 
 ### Changed
 
 * `py`: `StabilizerStream` renamed to `Stream`
+* `dual-iir`: settings tree layout changed
 
 ## [v0.11.0](https://github.com/quartiq/stabilizer/compare/v0.10.0...v0.11.0) - 2024-12-02
 
