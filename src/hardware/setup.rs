@@ -1106,7 +1106,9 @@ where
         })
     } else {
         log::info!("EEM population variant: Output detected");
-        assert!(poe != PoePower::Low);
+        if poe != PoePower::Low {
+            log::warn!("No 802.3at PoE. Powering up EEM anyway.");
+        }
         force_eem_source.set_high();
         delay.delay_ms(200u8);
 
