@@ -311,6 +311,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "embedded-nal"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c56a28be191a992f28f178ec338a0bf02f63d7803244add736d026a471e6ed77"
+dependencies = [
+ "nb 1.1.0",
+]
+
+[[package]]
 name = "embedded-storage"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -803,7 +812,7 @@ dependencies = [
  "heapless 0.8.0",
  "log",
  "miniconf",
- "minimq",
+ "minimq 0.9.0",
  "serde-json-core",
  "smlang 0.8.0",
  "strum",
@@ -816,12 +825,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c63955f174d014ef627e6f21dda747c24a294be94234e91ae30a9b2173784e1"
 dependencies = [
  "bit_field",
- "embedded-nal",
+ "embedded-nal 0.8.0",
  "embedded-time",
  "heapless 0.7.17",
  "num_enum",
  "serde",
  "smlang 0.6.0",
+ "varint-rs",
+]
+
+[[package]]
+name = "minimq"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8aca206883c70c23d8a8179533c0dad0f7c9abe6574c0dc0908e913203b6b6e3"
+dependencies = [
+ "bit_field",
+ "embedded-nal 0.9.0",
+ "embedded-time",
+ "heapless 0.8.0",
+ "num_enum",
+ "serde",
+ "smlang 0.8.0",
  "varint-rs",
 ]
 
@@ -1377,7 +1402,7 @@ version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "975f15c4c77e7798c236b542032891f0cafe5f2e103debe59d069d50a645ed8a"
 dependencies = [
- "embedded-nal",
+ "embedded-nal 0.8.0",
  "embedded-time",
  "heapless 0.7.17",
  "nanorand",
@@ -1423,7 +1448,7 @@ dependencies = [
  "mcp230xx",
  "miniconf",
  "miniconf_mqtt",
- "minimq",
+ "minimq 0.10.0",
  "mono-clock",
  "mutex-trait",
  "num-traits",

@@ -64,7 +64,7 @@ lm75 = "0.2"
 enum-iterator = "2.1.0"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
-minimq = "0.9.0"
+minimq = "0.10.0"
 usb-device = "0.3.2"
 usbd-serial = "0.2"
 # Keep this synced with the miniconf version in py/setup.py
