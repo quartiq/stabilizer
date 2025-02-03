@@ -13,8 +13,7 @@ import logging
 import json
 import os
 
-from miniconf import Client, Miniconf, MQTTv5, one, discover, MiniconfException
-from stabilizer import voltage_to_machine_units
+from miniconf import Client, Miniconf, MQTTv5, one, discover
 
 if sys.platform.lower() == "win32" or os.name.lower() == "nt":
     from asyncio import set_event_loop_policy, WindowsSelectorEventLoopPolicy
@@ -27,10 +26,8 @@ async def test_loopback(stabilizer, telemetry_queue, set_point, gain=1, channel=
 
     Connect ADC and DAC of the respective channel and ensure no mezzanine present.
     """
-    print(f"Testing loopback for Vout = {set_point:.2f}, Gain = x{gain}")
+    print(f"Testing PID loopback for set point = {set_point:.2f}, gain = x{gain}")
     print("---------------------------------")
-    u = voltage_to_machine_units(set_point)
-    range = voltage_to_machine_units(10)
     for k, v in {
         "gain": f"G{gain}",
         # "biquad/0/typ": "Raw",
@@ -41,11 +38,11 @@ async def test_loopback(stabilizer, telemetry_queue, set_point, gain=1, channel=
         #     "max": u,
         # },
         "biquad/0/typ": "Pid",
-        "biquad/0/repr/Pid/ki": -10,
+        "biquad/0/repr/Pid/ki": -1000,
         "biquad/0/repr/Pid/kp": -0.1,
-        "biquad/0/repr/Pid/min": -range,
-        "biquad/0/repr/Pid/max": range,
-        "biquad/0/repr/Pid/setpoint": u,
+        "biquad/0/repr/Pid/min": -10,
+        "biquad/0/repr/Pid/max": 10,
+        "biquad/0/repr/Pid/setpoint": set_point*gain,
         "source/amplitude": 0,
         "run": "Run",
     }.items():

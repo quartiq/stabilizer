@@ -59,8 +59,6 @@ use stabilizer::{
     settings::NetSettings,
 };
 
-const SCALE: f32 = i16::MAX as _;
-
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
 
@@ -119,8 +117,8 @@ pub struct BiquadRepr {
 impl Default for BiquadRepr {
     fn default() -> Self {
         let mut i = iir::Biquad::IDENTITY;
-        i.set_min(-SCALE);
-        i.set_max(SCALE);
+        i.set_min(-i16::MAX as _);
+        i.set_max(i16::MAX as _);
         Self {
             _repr: (),
             repr: StrLeaf(iir::BiquadRepr::Raw(Leaf(i))),
@@ -164,13 +162,17 @@ pub struct Channel {
 impl Channel {
     fn build(&self) -> Result<Active, signal_generator::Error> {
         Ok(Active {
-            source: self.source.build(SAMPLE_PERIOD, SCALE).unwrap(),
+            source: self
+                .source
+                .build(SAMPLE_PERIOD, DacCode::FULL_SCALE.recip())
+                .unwrap(),
             state: Default::default(),
             run: *self.run,
-            biquad: self
-                .biquad
-                .each_ref()
-                .map(|biquad| biquad.repr.build::<f32>(SAMPLE_PERIOD, SCALE)),
+            biquad: self.biquad.each_ref().map(|biquad| {
+                biquad
+                    .repr
+                    .build::<f32>(SAMPLE_PERIOD, DacCode::LSB_PER_VOLT)
+            }),
         })
     }
 }
@@ -436,7 +438,9 @@ mod app {
             if *settings.dual_iir.trigger {
                 settings.dual_iir.trigger = Leaf(false);
                 let s = settings.dual_iir.ch.each_ref().map(|ch| {
-                    let s = ch.source.build(SAMPLE_PERIOD, SCALE);
+                    let s = ch
+                        .source
+                        .build(SAMPLE_PERIOD, DacCode::FULL_SCALE.recip());
                     if let Err(err) = &s {
                         log::error!("Failed to update source: {:?}", err);
                     }
@@ -458,9 +462,10 @@ mod app {
             let b = settings.dual_iir.ch.each_ref().map(|ch| {
                 (
                     *ch.run,
-                    ch.biquad
-                        .each_ref()
-                        .map(|b| b.repr.build::<f32>(SAMPLE_PERIOD, SCALE)),
+                    ch.biquad.each_ref().map(|b| {
+                        b.repr
+                            .build::<f32>(SAMPLE_PERIOD, DacCode::LSB_PER_VOLT)
+                    }),
                 )
             });
             c.shared.active.lock(|active| {

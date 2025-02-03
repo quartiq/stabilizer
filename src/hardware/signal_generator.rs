@@ -113,7 +113,8 @@ pub struct Scaler {
 
 impl Scaler {
     fn map(&self, x: i32) -> i32 {
-        ((x as i64 * self.amp as i64) >> 31) as i32 + self.offset
+        (((x as i64 * self.amp as i64) >> 31) as i32)
+            .saturating_add(self.offset)
     }
 }
 
@@ -196,8 +197,8 @@ impl Config {
             } as i32,
         ];
 
-        let offset = *self.offset / scale;
-        let amplitude = *self.amplitude / scale;
+        let offset = *self.offset * scale;
+        let amplitude = *self.amplitude * scale;
         fn abs(x: f32) -> f32 {
             if x.is_sign_negative() {
                 -x

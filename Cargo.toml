@@ -110,7 +110,7 @@ incremental = false
 
 [profile.release]
 codegen-units = 1
-opt-level = "s"
+opt-level = 3
 debug = true
 lto = true
 
