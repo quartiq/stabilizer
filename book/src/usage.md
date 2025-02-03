@@ -76,14 +76,7 @@ description of the possible error codes that Miniconf may return if the settings
 unsuccessful.
 
 # IIR Configuration
-For the `dual-iir` application, a Python utility has been written to easily configure the IIR
-filters for a variety of filtering and control applications.
-
-Then, use the built-in help to learn how the utility can automatically configure your IIR filters
-for you:
-```bash
-python -m stabilizer.iir_coefficients --help
-```
+For the `dual-iir` application, the application supports different representations of biquad coefficients.
 
 # Telemetry
 

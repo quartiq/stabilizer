@@ -35,7 +35,7 @@ impl Signal {
 }
 
 /// Basic configuration for a generated signal.
-#[derive(Copy, Clone, Debug, Tree, Serialize, Deserialize)]
+#[derive(Clone, Debug, Tree, Serialize, Deserialize)]
 pub struct Config {
     /// The signal type that should be generated. See [Signal] variants.
     signal: Leaf<Signal>,
@@ -65,13 +65,6 @@ pub struct Config {
 
     /// Sweep: Sweep rate
     rate: Leaf<i32>,
-
-    /// Sample period
-    #[tree(skip)]
-    pub period: f32,
-    /// Output full scale
-    #[tree(skip)]
-    pub scale: f32,
 }
 
 impl Default for Config {
@@ -86,8 +79,6 @@ impl Default for Config {
             cycles: Leaf(1),
             rate: Leaf(0),
             length: Leaf(0),
-            period: 1.0,
-            scale: 1.0,
         }
     }
 }
@@ -122,7 +113,8 @@ pub struct Scaler {
 
 impl Scaler {
     fn map(&self, x: i32) -> i32 {
-        ((x as i64 * self.amp as i64) >> 31) as i32 + self.offset
+        (((x as i64 * self.amp as i64) >> 31) as i32)
+            .saturating_add(self.offset)
     }
 }
 
@@ -178,35 +170,35 @@ impl Iterator for Source {
     }
 }
 
-impl Source {
+impl Config {
     /// Convert from SI config
-    pub fn try_from_config(value: &Config) -> Result<Source, Error> {
-        if !(0.0..1.0).contains(&*value.symmetry) {
+    pub fn build(&self, period: f32, scale: f32) -> Result<Source, Error> {
+        if !(0.0..1.0).contains(&*self.symmetry) {
             return Err(Error::Symmetry);
         }
 
         const NYQUIST: f32 = (1u32 << 31) as _;
-        let ftw0 = *value.frequency * value.period * NYQUIST;
+        let ftw0 = *self.frequency * period * NYQUIST;
         if !(0.0..2.0 * NYQUIST).contains(&ftw0) {
             return Err(Error::Frequency);
         }
 
         // Clip both frequency tuning words to within Nyquist before rounding.
         let ftw = [
-            if *value.symmetry * NYQUIST > ftw0 {
-                ftw0 / *value.symmetry
+            if *self.symmetry * NYQUIST > ftw0 {
+                ftw0 / *self.symmetry
             } else {
                 NYQUIST
             } as i32,
-            if (1.0 - *value.symmetry) * NYQUIST > ftw0 {
-                ftw0 / (1.0 - *value.symmetry)
+            if (1.0 - *self.symmetry) * NYQUIST > ftw0 {
+                ftw0 / (1.0 - *self.symmetry)
             } else {
                 NYQUIST
             } as i32,
         ];
 
-        let offset = *value.offset / value.scale;
-        let amplitude = *value.amplitude / value.scale;
+        let offset = *self.offset * scale;
+        let amplitude = *self.amplitude * scale;
         fn abs(x: f32) -> f32 {
             if x.is_sign_negative() {
                 -x
@@ -222,30 +214,30 @@ impl Source {
             offset: (offset * NYQUIST) as _,
         };
 
-        Ok(match *value.signal {
+        Ok(match *self.signal {
             signal @ (Signal::Cosine | Signal::Square | Signal::Triangle) => {
-                Self::Periodic {
+                Source::Periodic {
                     accu: AsymmetricAccu {
                         ftw,
-                        pow: (*value.phase * NYQUIST) as i32,
+                        pow: (*self.phase * NYQUIST) as i32,
                         accu: 0,
-                        count: *value.length,
+                        count: *self.length,
                     },
                     signal,
                     amp,
                 }
             }
-            Signal::SweptSine => Self::SweptSine {
+            Signal::SweptSine => Source::SweptSine {
                 sweep: AccuOsc::new(Sweep::new(
-                    *value.rate,
-                    ((*value.rate * *value.cycles) as i64) << 32,
+                    *self.rate,
+                    ((*self.rate * *self.cycles) as i64) << 32,
                 ))
-                .take(*value.length as _),
+                .take(*self.length as _),
                 amp,
             },
-            Signal::WhiteNoise => Self::WhiteNoise {
+            Signal::WhiteNoise => Source::WhiteNoise {
                 rng: XorShiftRng::from_seed(Default::default()),
-                count: *value.length,
+                count: *self.length,
                 amp,
             },
         })

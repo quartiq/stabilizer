@@ -62,8 +62,8 @@ spin = { version = "0.9", default-features = false, features = ["spin_mutex"] }
 shared-bus = { version = "0.3", features = ["cortex-m"] }
 lm75 = "0.2"
 enum-iterator = "2.1.0"
-rand_xorshift = "0.3.0"
-rand_core = "0.6.4"
+rand_xorshift = "0.4.0"
+rand_core = "0.9.0"
 minimq = "0.10.0"
 usb-device = "0.3.2"
 usbd-serial = "0.2"
@@ -90,6 +90,7 @@ embedded-hal-1 = { package = "embedded-hal", version = "1.0" }
 embedded-hal-bus = "0.3.0"
 urukul = { version = "0.1.1", path = "urukul" }
 ad9912 = { version = "0.1.1", path = "ad9912" }
+bytemuck = { version = "1.21.0", features = ["zeroable_maybe_uninit"] }
 
 [build-dependencies]
 built = { version = "0.7", features = ["git2"], default-features = false }
@@ -104,16 +105,17 @@ pounder_v1_0 = []
 
 [profile.dev]
 codegen-units = 1
+opt-level = "s"
 incremental = false
-opt-level = 3
 
 [profile.release]
+codegen-units = 1
 opt-level = 3
 debug = true
 lto = true
-codegen-units = 1
 
 [patch.crates-io]
+idsp = { git = "https://github.com/quartiq/idsp.git" }
 miniconf = { git = "https://github.com/quartiq/miniconf.git" }
 miniconf_derive = { git = "https://github.com/quartiq/miniconf.git" }
 miniconf_mqtt = { git = "https://github.com/quartiq/miniconf.git" }
