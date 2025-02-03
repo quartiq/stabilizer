@@ -311,6 +311,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "embedded-nal"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c56a28be191a992f28f178ec338a0bf02f63d7803244add736d026a471e6ed77"
+dependencies = [
+ "nb 1.1.0",
+]
+
+[[package]]
 name = "embedded-storage"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -816,7 +825,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c63955f174d014ef627e6f21dda747c24a294be94234e91ae30a9b2173784e1"
 dependencies = [
  "bit_field",
- "embedded-nal",
+ "embedded-nal 0.8.0",
  "embedded-time",
  "heapless 0.7.17",
  "num_enum",
@@ -1373,11 +1382,11 @@ dependencies = [
 
 [[package]]
 name = "smoltcp-nal"
-version = "0.5.1"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "975f15c4c77e7798c236b542032891f0cafe5f2e103debe59d069d50a645ed8a"
+checksum = "c433f9b2c78a974d0c04dec6a931747a37452e673ab0129283baca096f49a65a"
 dependencies = [
- "embedded-nal",
+ "embedded-nal 0.9.0",
  "embedded-time",
  "heapless 0.7.17",
  "nanorand",
