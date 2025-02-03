@@ -64,14 +64,14 @@ lm75 = "0.2"
 enum-iterator = "2.1.0"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
-minimq = "0.9.0"
+minimq = "0.10.0"
 usb-device = "0.3.2"
 usbd-serial = "0.2"
 # Keep this synced with the miniconf version in py/setup.py
 miniconf = { version = "0.18", features = ["json-core", "derive", "postcard"] }
 miniconf_mqtt = { version = "0.18" }
 tca9539 = "0.2"
-smoltcp-nal = { version = "0.5", features = ["shared-stack"] }
+smoltcp-nal = { version = "0.6", features = ["shared-stack"] }
 postcard = "1"
 bit_field = "0.10.2"
 embassy-futures = { version = "0.1", default-features = false }
@@ -112,3 +112,8 @@ opt-level = 3
 debug = true
 lto = true
 codegen-units = 1
+
+[patch.crates-io]
+miniconf = { git = "https://github.com/quartiq/miniconf.git" }
+miniconf_derive = { git = "https://github.com/quartiq/miniconf.git" }
+miniconf_mqtt = { git = "https://github.com/quartiq/miniconf.git" }
