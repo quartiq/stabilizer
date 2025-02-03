@@ -25,7 +25,7 @@
 
 #![allow(non_camel_case_types)] // https://github.com/rust-embedded/heapless/issues/411
 
-use core::{fmt::Write, mem::MaybeUninit};
+use core::{fmt::Write, mem::MaybeUninit, net::SocketAddr};
 use heapless::{
     box_pool,
     pool::boxed::{Box, BoxBlock},
@@ -35,7 +35,7 @@ use heapless::{
 use num_enum::IntoPrimitive;
 use serde::Serialize;
 use serde_with::DeserializeFromStr;
-use smoltcp_nal::embedded_nal::{nb, SocketAddr, UdpClientStack};
+use smoltcp_nal::embedded_nal::{nb, UdpClientStack};
 
 use super::NetworkReference;
 
