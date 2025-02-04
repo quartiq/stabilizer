@@ -61,7 +61,7 @@ pub struct Config {
     length: Leaf<u32>,
 
     /// Sweep: initial state
-    state: Leaf<i32>,
+    state: Leaf<i64>,
 
     /// Sweep: Sweep rate
     rate: Leaf<i32>,
@@ -228,11 +228,8 @@ impl Config {
                 }
             }
             Signal::SweptSine => Source::SweptSine {
-                sweep: AccuOsc::new(Sweep::new(
-                    *self.rate,
-                    (*self.state as i64) << 32,
-                ))
-                .take(*self.length as _),
+                sweep: AccuOsc::new(Sweep::new(*self.rate, *self.state))
+                    .take(*self.length as _),
                 amp,
             },
             Signal::WhiteNoise => Source::WhiteNoise {
