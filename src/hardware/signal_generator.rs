@@ -60,8 +60,8 @@ pub struct Config {
     /// Number of half periods (periodic) or samples (sweep and noise), 0 for infinte
     length: Leaf<u32>,
 
-    /// Sweep: Number of cycles for the first octave
-    cycles: Leaf<i32>,
+    /// Sweep: initial state
+    state: Leaf<i32>,
 
     /// Sweep: Sweep rate
     rate: Leaf<i32>,
@@ -76,7 +76,7 @@ impl Default for Config {
             amplitude: Leaf(0.0),
             phase: Leaf(0.0),
             offset: Leaf(0.0),
-            cycles: Leaf(1),
+            state: Leaf(0),
             rate: Leaf(0),
             length: Leaf(0),
         }
@@ -230,7 +230,7 @@ impl Config {
             Signal::SweptSine => Source::SweptSine {
                 sweep: AccuOsc::new(Sweep::new(
                     *self.rate,
-                    ((*self.rate * *self.cycles) as i64) << 32,
+                    (*self.state as i64) << 32,
                 ))
                 .take(*self.length as _),
                 amp,
