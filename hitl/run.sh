@@ -40,8 +40,8 @@ ping -c 5 -w 20 stabilizer-hitl
 # Test the MQTT interface. This uses the default broker "mqtt"
 python3 -m miniconf $PREFIX '?'
 python3 -m miniconf $PREFIX \
-    '/ch/0/gain="G2"' 'biquad/0/typ="Pid"' \
-    /ch/0/biquad/0/repr/Pid/ki=-10 kp=-0.1 setpoint=0 min=-30000 max=30000 \
+    '/ch/0/gain="G2"' '/ch/0/biquad/0/typ="Pid"' \
+    /ch/0/biquad/0/repr/Pid/setpoint=0 min=-30000 max=30000 gain/i=-10 gain/p=-0.1 \
     '/ch/0/run="Run"'
 
 # Test the ADC/DACs connected via loopback.
