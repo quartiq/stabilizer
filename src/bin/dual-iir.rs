@@ -102,6 +102,9 @@ impl serial_settings::Settings for Settings {
 
 #[derive(Clone, Debug, Tree)]
 pub struct BiquadRepr {
+    /// Biquad parameters
+    #[tree(rename = "typ")]
+    repr: StrLeaf<iir::BiquadRepr<f32, f32>>,
     /// Subtree access
     #[tree(
         rename = "repr",
@@ -109,9 +112,6 @@ pub struct BiquadRepr {
         defer = "*self.repr"
     )]
     _repr: (),
-    /// Biquad parameters
-    #[tree(rename = "typ")]
-    repr: StrLeaf<iir::BiquadRepr<f32, f32>>,
 }
 
 impl Default for BiquadRepr {
@@ -181,8 +181,12 @@ impl Channel {
 pub struct DualIir {
     /// Channel configuration
     ch: [Channel; 2],
+    /// Trigger handshake
+    #[tree(skip)]
+    trigger: bool,
     /// Trigger both signal sources
-    trigger: Leaf<bool>,
+    #[tree(validate=self.validate_trigger, rename="trigger")]
+    _trigger: Leaf<()>,
     /// Telemetry output period in seconds.
     telemetry_period: Leaf<f32>,
     /// Target IP and port for UDP streaming.
@@ -191,11 +195,23 @@ pub struct DualIir {
     stream: Leaf<StreamTarget>,
 }
 
+impl DualIir {
+    fn validate_trigger(
+        &mut self,
+        depth: usize,
+    ) -> Result<usize, &'static str> {
+        debug_assert!(!self.trigger);
+        self.trigger = true;
+        Ok(depth)
+    }
+}
+
 impl Default for DualIir {
     fn default() -> Self {
         Self {
-            telemetry_period: 10.0.into(),
-            trigger: false.into(),
+            telemetry_period: Leaf(10.0),
+            trigger: false,
+            _trigger: Leaf(()),
             stream: Default::default(),
             ch: Default::default(),
         }
@@ -217,7 +233,7 @@ mod app {
     #[shared]
     struct Shared {
         usb: UsbDevice,
-        network: NetworkUsers<DualIir, 7>,
+        network: NetworkUsers<DualIir, 8>,
         settings: Settings,
         active: [Active; 2],
         telemetry: TelemetryBuffer,
@@ -225,7 +241,7 @@ mod app {
 
     #[local]
     struct Local {
-        usb_terminal: SerialTerminal<Settings, 8>,
+        usb_terminal: SerialTerminal<Settings, 9>,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         afes: (AFE0, AFE1),
@@ -240,7 +256,7 @@ mod app {
         let clock = SystemTimer::new(|| Systick::now().ticks());
 
         // Configure the microcontroller
-        let (stabilizer, _pounder) = hardware::setup::setup::<Settings, 8>(
+        let (stabilizer, _pounder) = hardware::setup::setup::<Settings, 9>(
             c.core,
             c.device,
             clock,
@@ -435,8 +451,8 @@ mod app {
             c.local.afes.0.set_gain(*settings.dual_iir.ch[0].gain);
             c.local.afes.1.set_gain(*settings.dual_iir.ch[1].gain);
 
-            if *settings.dual_iir.trigger {
-                settings.dual_iir.trigger = Leaf(false);
+            if settings.dual_iir.trigger {
+                settings.dual_iir.trigger = false;
                 let s = settings.dual_iir.ch.each_ref().map(|ch| {
                     let s = ch
                         .source
@@ -454,11 +470,6 @@ mod app {
                     }
                 });
             }
-
-            c.shared
-                .network
-                .lock(|net| net.direct_stream(*settings.dual_iir.stream));
-
             let b = settings.dual_iir.ch.each_ref().map(|ch| {
                 (
                     *ch.run,
@@ -473,6 +484,9 @@ mod app {
                     (a.run, a.biquad) = b;
                 }
             });
+            c.shared
+                .network
+                .lock(|net| net.direct_stream(*settings.dual_iir.stream));
         });
     }
 

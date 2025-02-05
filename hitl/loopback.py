@@ -38,17 +38,18 @@ async def test_loopback(stabilizer, telemetry_queue, set_point, gain=1, channel=
         #     "max": u,
         # },
         "biquad/0/typ": "Pid",
-        "biquad/0/repr/Pid/ki": -1000,
-        "biquad/0/repr/Pid/kp": -0.1,
+        "biquad/0/repr/Pid/order": "I",
+        "biquad/0/repr/Pid/gain/i": -1000,
+        "biquad/0/repr/Pid/gain/p": -0.1,
         "biquad/0/repr/Pid/min": -10,
         "biquad/0/repr/Pid/max": 10,
         "biquad/0/repr/Pid/setpoint": set_point*gain,
         "source/amplitude": 0,
+        "source/offset": 0,
         "run": "Run",
     }.items():
         await stabilizer.set(f"/ch/{channel}/{k}", v)
-    await stabilizer.set(f"/trigger", True)
-    await stabilizer.set(f"/trigger", False)
+    await stabilizer.set(f"/trigger", None)
     await telemetry_queue.__anext__()  # discard
     latest_values = json.loads((await telemetry_queue.__anext__()).payload)
     print(f"Latest telemtry: {latest_values}")
