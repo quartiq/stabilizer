@@ -1,6 +1,8 @@
 //! Module for all hardware-specific setup of Stabilizer
 
 pub use embedded_hal_02;
+use embedded_hal_compat::{markers::ForwardOutputPin, Forward};
+use hal::gpio::{self, ErasedPin, Input, Output};
 pub use stm32h7xx_hal as hal;
 
 pub mod adc;
@@ -21,16 +23,9 @@ pub mod shared_adc;
 pub mod signal_generator;
 pub mod timers;
 
-// Type alias for the analog front-end (AFE) for ADC0.
-pub type AFE0 = afe::ProgrammableGainAmplifier<
-    hal::gpio::gpiof::PF2<hal::gpio::Output<hal::gpio::PushPull>>,
-    hal::gpio::gpiof::PF5<hal::gpio::Output<hal::gpio::PushPull>>,
->;
-
-// Type alias for the analog front-end (AFE) for ADC1.
-pub type AFE1 = afe::ProgrammableGainAmplifier<
-    hal::gpio::gpiod::PD14<hal::gpio::Output<hal::gpio::PushPull>>,
-    hal::gpio::gpiod::PD15<hal::gpio::Output<hal::gpio::PushPull>>,
+// Type alias for the analog front-end
+pub type Pgia = afe::ProgrammableGainAmplifier<
+    Forward<ErasedPin<Output>, ForwardOutputPin>,
 >;
 
 pub type UsbBus = stm32h7xx_hal::usb_hs::UsbBus<stm32h7xx_hal::usb_hs::USB2>;
@@ -39,21 +34,16 @@ pub type UsbBus = stm32h7xx_hal::usb_hs::UsbBus<stm32h7xx_hal::usb_hs::USB2>;
 pub type UsbDevice = usb_device::device::UsbDevice<'static, UsbBus>;
 
 pub struct Gpio {
-    pub lvds4: hal::gpio::gpiod::PD1<hal::gpio::Input>,
-    pub lvds5: hal::gpio::gpiod::PD2<hal::gpio::Input>,
-    pub lvds6: hal::gpio::gpiod::PD3<hal::gpio::Output>,
-    pub lvds7: hal::gpio::gpiod::PD4<hal::gpio::Output>,
+    pub lvds4: gpio::gpiod::PD1<Input>,
+    pub lvds5: gpio::gpiod::PD2<Input>,
+    pub lvds6: gpio::gpiod::PD3<Output>,
+    pub lvds7: gpio::gpiod::PD4<Output>,
 }
 
 pub type Urukul = urukul::Urukul<
     'static,
-    embedded_hal_compat::Forward<
-        hal::spi::Spi<hal::stm32::SPI6, hal::spi::Enabled>,
-    >,
-    embedded_hal_compat::Forward<
-        hal::gpio::ErasedPin<hal::gpio::Output>,
-        embedded_hal_compat::markers::ForwardOutputPin,
-    >,
+    Forward<hal::spi::Spi<hal::stm32::SPI6, hal::spi::Enabled>>,
+    Forward<ErasedPin<Output>, ForwardOutputPin>,
 >;
 
 pub enum Eem {
@@ -118,9 +108,13 @@ pub enum HardwareVersion {
     Unknown(u8),
 }
 
-impl From<u8> for HardwareVersion {
-    fn from(bitfield: u8) -> Self {
-        match bitfield {
+impl From<&[bool]> for HardwareVersion {
+    fn from(bits: &[bool]) -> Self {
+        match bits
+            .iter()
+            .enumerate()
+            .fold(0, |v, (i, b)| v | ((*b as u8) << i))
+        {
             0b000 => HardwareVersion::Rev1_0,
             0b001 => HardwareVersion::Rev1_1,
             0b010 => HardwareVersion::Rev1_2,

@@ -3,8 +3,8 @@ use self::attenuators::AttenuatorInterface;
 use super::hal;
 use crate::hardware::{shared_adc::AdcChannel, I2c1Proxy};
 use embedded_hal_02::blocking::spi::Transfer;
-use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 
 pub mod attenuators;
 pub mod dds_output;
@@ -14,7 +14,7 @@ pub mod rf_power;
 #[cfg(not(feature = "pounder_v1_0"))]
 pub mod timestamp;
 
-#[derive(Debug, Copy, Clone, Sequence)]
+#[derive(Debug, Copy, Clone, strum::EnumIter)]
 pub enum GpioPin {
     Led4Green,
     Led5Red,
@@ -472,7 +472,7 @@ impl PounderDevices {
         // Configure power-on-default state for pounder. All LEDs are off, on-board oscillator
         // selected and enabled, attenuators out of reset. Note that testing indicates the
         // output state needs to be set first to properly update the output registers.
-        for pin in enum_iterator::all::<GpioPin>() {
+        for pin in GpioPin::iter() {
             devices.io.set_gpio_level(pin, mcp230xx::Level::Low)?;
             devices.io.set_gpio_dir(pin, mcp230xx::Direction::Output)?;
         }

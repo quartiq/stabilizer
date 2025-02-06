@@ -37,7 +37,6 @@ use miniconf::{Leaf, Tree};
 use rtic_monotonics::Monotonic;
 
 use fugit::ExtU32;
-use mutex_trait::prelude::*;
 
 use idsp::{Accu, Complex, ComplexExt, Filter, Lowpass, Repeat, RPLL};
 
@@ -50,8 +49,8 @@ use stabilizer::{
         hal,
         input_stamper::InputStamper,
         timers::SamplingTimer,
-        DigitalInput0, DigitalInput1, SerialTerminal, SystemTimer, Systick,
-        UsbDevice, AFE0, AFE1,
+        DigitalInput0, DigitalInput1, Pgia, SerialTerminal, SystemTimer,
+        Systick, UsbDevice,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -259,7 +258,7 @@ mod app {
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         timestamper: InputStamper,
-        afes: (AFE0, AFE1),
+        afes: [Pgia; 2],
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         pll: RPLL,
@@ -502,8 +501,8 @@ mod app {
     #[task(priority = 1, local=[afes], shared=[network, settings, active_settings])]
     async fn settings_update(mut c: settings_update::Context) {
         c.shared.settings.lock(|settings| {
-            c.local.afes.0.set_gain(*settings.lockin.afe[0]);
-            c.local.afes.1.set_gain(*settings.lockin.afe[1]);
+            c.local.afes[0].set_gain(*settings.lockin.afe[0]);
+            c.local.afes[1].set_gain(*settings.lockin.afe[1]);
 
             c.shared
                 .network

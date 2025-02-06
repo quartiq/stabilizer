@@ -52,7 +52,7 @@
 //! served promptly after the transfer completes.
 use stm32h7xx_hal as hal;
 
-use mutex_trait::Mutex;
+use rtic::Mutex;
 
 use super::design_parameters::{SampleBuffer, MAX_SAMPLE_BUFFER_SIZE};
 use super::timers;
@@ -260,8 +260,8 @@ macro_rules! dac_output {
         // This is not actually a Mutex. It only re-uses the semantics and macros of mutex-trait
         // to reduce rightward drift when jointly calling `with_buffer(f)` on multiple DAC/ADCs.
         impl Mutex for $name {
-            type Data = &'static mut [u16];
-            fn lock<R>(&mut self, f: impl FnOnce(&mut Self::Data) -> R) -> R {
+            type T = &'static mut [u16];
+            fn lock<R>(&mut self, f: impl FnOnce(&mut Self::T) -> R) -> R {
                 self.with_buffer(f).unwrap()
             }
         }
