@@ -168,9 +168,11 @@ impl Channel {
             state: Default::default(),
             run: *self.run,
             biquad: self.biquad.each_ref().map(|biquad| {
-                biquad
-                    .repr
-                    .build::<f32>(SAMPLE_PERIOD, DacCode::LSB_PER_VOLT)
+                biquad.repr.build::<f32>(
+                    SAMPLE_PERIOD,
+                    1.0,
+                    DacCode::LSB_PER_VOLT,
+                )
             }),
         })
     }
@@ -475,8 +477,11 @@ mod app {
                 (
                     *ch.run,
                     ch.biquad.each_ref().map(|b| {
-                        b.repr
-                            .build::<f32>(SAMPLE_PERIOD, DacCode::LSB_PER_VOLT)
+                        b.repr.build::<f32>(
+                            SAMPLE_PERIOD,
+                            1.0,
+                            DacCode::LSB_PER_VOLT,
+                        )
                     }),
                 )
             });
