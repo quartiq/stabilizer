@@ -17,8 +17,8 @@ dependencies = [
 name = "ad9959"
 version = "0.3.0"
 dependencies = [
- "bit_field",
- "bitflags 2.8.0",
+ "arbitrary-int",
+ "bitbybit",
  "bytemuck",
  "embedded-hal 0.2.7",
 ]

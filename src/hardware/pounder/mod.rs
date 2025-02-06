@@ -2,6 +2,8 @@ use self::attenuators::AttenuatorInterface;
 
 use super::hal;
 use crate::hardware::{shared_adc::AdcChannel, I2c1Proxy};
+use ad9959::Address;
+use bitbybit::bitenum;
 use embedded_hal_02::blocking::spi::Transfer;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -100,7 +102,8 @@ impl From<hal::xspi::QspiError> for Error {
 
 /// The numerical value (discriminant) of the Channel enum is the index in the attenuator shift
 /// register as well as the attenuator latch enable signal index on the GPIO extender.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, PartialEq, PartialOrd)]
+#[bitenum(u4)]
 #[allow(dead_code)]
 pub enum Channel {
     In0 = 0,
@@ -157,12 +160,7 @@ pub struct DdsClockConfig {
 impl From<Channel> for ad9959::Channel {
     /// Translate pounder channels to DDS output channels.
     fn from(other: Channel) -> Self {
-        match other {
-            Channel::In0 => Self::TWO,
-            Channel::In1 => Self::FOUR,
-            Channel::Out0 => Self::ONE,
-            Channel::Out1 => Self::THREE,
-        }
+        other.raw_value()
     }
 }
 
@@ -231,10 +229,8 @@ impl ad9959::Interface for QspiInterface {
     /// Args:
     /// * `addr` - The address to write over QSPI to the DDS.
     /// * `data` - The data to write.
-    fn write(&mut self, addr: u8, data: &[u8]) -> Result<(), Error> {
-        if (addr & 0x80) != 0 {
-            return Err(Error::InvalidAddress);
-        }
+    fn write(&mut self, addr: Address, data: &[u8]) -> Result<(), Error> {
+        let addr = addr.raw_value().value();
 
         // The QSPI interface implementation always operates in 4-bit mode because the AD9959 uses
         // IO3 as SYNC_IO in some output modes. In order for writes to be successful, SYNC_IO must
@@ -319,10 +315,8 @@ impl ad9959::Interface for QspiInterface {
         }
     }
 
-    fn read(&mut self, addr: u8, dest: &mut [u8]) -> Result<(), Error> {
-        if (addr & 0x80) != 0 {
-            return Err(Error::InvalidAddress);
-        }
+    fn read(&mut self, addr: Address, dest: &mut [u8]) -> Result<(), Error> {
+        let addr = addr.raw_value().value();
 
         // This implementation only supports operation (read) in four-bit-serial mode.
         if self.mode != ad9959::Mode::FourBitSerial {

@@ -56,7 +56,7 @@ use log::warn;
 use stm32h7xx_hal as hal;
 
 use super::{hrtimer::HighResTimerE, QspiInterface};
-use ad9959::{Channel, Mode, ProfileSerializer};
+use ad9959::{Mode, ProfileSerializer};
 
 /// The DDS profile update stream.
 pub struct DdsOutput {
@@ -92,12 +92,8 @@ impl DdsOutput {
 
     /// Get a builder for serializing a Pounder DDS profile.
     #[allow(dead_code)]
-    pub fn builder(&mut self) -> ProfileBuilder {
-        let mode = self.mode;
-        ProfileBuilder {
-            dds_output: self,
-            serializer: ProfileSerializer::new(mode),
-        }
+    pub fn builder(&mut self) -> ProfileSerializer {
+        ProfileSerializer::new(self.mode)
     }
 
     /// Write a profile to the stream.
@@ -109,7 +105,7 @@ impl DdsOutput {
     ///
     /// # Args
     /// * `profile` - The serialized DDS profile to write.
-    pub fn write(&mut self, profile: &[u32]) {
+    pub fn write(&mut self, mut profile: ProfileSerializer) {
         // Note(unsafe): We own the QSPI interface, so it is safe to access the registers in a raw
         // fashion.
         let regs = unsafe { &*hal::stm32::QUADSPI::ptr() };
@@ -119,48 +115,12 @@ impl DdsOutput {
             warn!("QSPI stalling")
         }
 
-        for word in profile.iter() {
+        for word in profile.finalize().iter() {
             // Note(unsafe): any bit pattern is valid for a TX FIFO write.
             regs.dr.write(|w| unsafe { w.bits(*word) });
         }
 
         // Trigger the IO_update signal generating timer to asynchronous create the IO_Update pulse.
         self.io_update_trigger.trigger();
-    }
-}
-
-/// A temporary builder for serializing and writing profiles.
-pub struct ProfileBuilder<'a> {
-    dds_output: &'a mut DdsOutput,
-    serializer: ProfileSerializer,
-}
-
-impl ProfileBuilder<'_> {
-    /// Update a number of channels with the provided configuration
-    ///
-    /// # Args
-    /// * `channels` - A list of channels to apply the configuration to.
-    /// * `ftw` - If provided, indicates a frequency tuning word for the channels.
-    /// * `pow` - If provided, indicates a phase offset word for the channels.
-    /// * `acr` - If provided, indicates the amplitude control register for the channels. The
-    ///   24-bits of the ACR should be stored in the last 3 LSB.
-    #[allow(dead_code)]
-    #[inline]
-    pub fn update_channels(
-        &mut self,
-        channels: Channel,
-        ftw: Option<u32>,
-        pow: Option<u16>,
-        acr: Option<u32>,
-    ) -> &mut Self {
-        self.serializer.update_channels(channels, ftw, pow, acr);
-        self
-    }
-
-    /// Write the profile to the DDS asynchronously.
-    #[allow(dead_code)]
-    #[inline]
-    pub fn write(&mut self) {
-        self.dds_output.write(self.serializer.finalize());
     }
 }

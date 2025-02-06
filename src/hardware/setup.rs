@@ -897,9 +897,9 @@ where
         .unwrap();
 
         let ad9959 = {
-            let qspi_interface = {
+            let qspi = {
                 // Instantiate the QUADSPI pins and peripheral interface.
-                let qspi_pins = {
+                let pins = {
                     let _ncs =
                         gpioc.pc11.into_alternate::<9>().speed(Speed::VeryHigh);
 
@@ -914,7 +914,7 @@ where
                 };
 
                 let qspi = device.QUADSPI.bank2(
-                    qspi_pins,
+                    pins,
                     design_parameters::POUNDER_QSPI_FREQUENCY.convert(),
                     &ccdr.clocks,
                     ccdr.peripheral.QSPI,
@@ -924,9 +924,9 @@ where
             };
 
             #[cfg(not(feature = "pounder_v1_0"))]
-            let reset_pin = gpiog.pg6.into_push_pull_output();
+            let mut reset = gpiog.pg6.into_push_pull_output();
             #[cfg(feature = "pounder_v1_0")]
-            let reset_pin = gpioa.pa0.into_push_pull_output();
+            let mut reset = gpioa.pa0.into_push_pull_output();
 
             let mut io_update = gpiog.pg7.into_push_pull_output();
 
@@ -937,8 +937,8 @@ where
             delay.delay_ms(10u32);
 
             let mut ad9959 = ad9959::Ad9959::new(
-                qspi_interface,
-                reset_pin,
+                qspi,
+                &mut reset,
                 &mut io_update,
                 &mut delay,
                 ad9959::Mode::FourBitSerial,
