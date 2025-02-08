@@ -246,7 +246,7 @@ impl<I: Interface> Ad9959<I> {
                 !(10e6..=125e6).contains(&reference_clock_frequency)
                     || !(100e6..=500e6).contains(&sysclk)
             }
-            _ => false,
+            _ => true,
         } {
             return Err(Error::Bounds);
         }
@@ -387,7 +387,7 @@ impl<I: Interface> Ad9959<I> {
     pub fn get_phase(&mut self, channel: Channel) -> Result<f32, Error> {
         let mut pow = 0u16.to_be_bytes();
         self.read_channel(channel, Address::CPOW0, &mut pow)?;
-        let pow = u16::from_be_bytes(pow) & 0x3FFF;
+        let pow = u16::from_be_bytes(pow) & u14::MAX.value();
         Ok(pow as f32 / (1 << 14) as f32)
     }
 
@@ -407,18 +407,17 @@ impl<I: Interface> Ad9959<I> {
         if !(0.0..=1.0).contains(&amplitude) {
             return Err(Error::Bounds);
         }
-        let asf = (amplitude * u10::MAX.value() as f32) as u16;
-        let acr = if asf >= u10::MAX.value() {
-            Acr::default().with_multiplier(false)
-        } else {
-            Acr::default().with_multiplier(true).with_asf(u10::new(asf))
+        let asf = (amplitude * (1 << 10) as f32) as u16;
+        let acr = match u10::try_new(asf) {
+            Ok(asf) => Acr::default().with_multiplier(true).with_asf(asf),
+            Err(_) => Acr::default().with_multiplier(false),
         };
         self.write_channel(
             channel,
             Address::ACR,
             &acr.raw_value().to_be_bytes(),
         )?;
-        Ok(asf as f32 / u10::MAX.value() as f32)
+        Ok(asf as f32 / (1 << 10) as f32)
     }
 
     /// Get the configured amplitude of a channel.
@@ -435,7 +434,7 @@ impl<I: Interface> Ad9959<I> {
         Ok(if acr.multiplier() {
             1.0
         } else {
-            acr.asf().value() as f32 / u10::MAX.value() as f32
+            acr.asf().value() as f32 / (1 << 10) as f32
         })
     }
 

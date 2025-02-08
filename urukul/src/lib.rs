@@ -185,7 +185,7 @@ impl<'a, B: SpiBus<u8>, P: OutputPin> Urukul<'a, B, P> {
         }
         if sta.ifc_mode().value() != 0 {
             return Err(Error::Initialization(
-                "invalid IFC_MODE",
+                "Invalid IFC_MODE",
                 sta.ifc_mode().value() as _,
             ));
         }
