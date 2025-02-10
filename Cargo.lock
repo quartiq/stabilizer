@@ -750,7 +750,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.18.0"
-source = "git+https://github.com/quartiq/miniconf.git#23fc746768695287561fe8b5332e1c022a507cfb"
+source = "git+https://github.com/quartiq/miniconf.git#1752e76cdd387b8cb9a6615e9b9dc700ba958c01"
 dependencies = [
  "itoa",
  "miniconf_derive",
@@ -763,7 +763,7 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.18.0"
-source = "git+https://github.com/quartiq/miniconf.git#23fc746768695287561fe8b5332e1c022a507cfb"
+source = "git+https://github.com/quartiq/miniconf.git#1752e76cdd387b8cb9a6615e9b9dc700ba958c01"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -774,7 +774,7 @@ dependencies = [
 [[package]]
 name = "miniconf_mqtt"
 version = "0.18.0"
-source = "git+https://github.com/quartiq/miniconf.git#23fc746768695287561fe8b5332e1c022a507cfb"
+source = "git+https://github.com/quartiq/miniconf.git#1752e76cdd387b8cb9a6615e9b9dc700ba958c01"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
