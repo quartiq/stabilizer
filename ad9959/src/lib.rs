@@ -186,7 +186,7 @@ impl<I: Interface> Ad9959<I> {
             .or(Err(Error::Interface))?;
 
         let csr = Csr::default().with_channel(u4::new(0b1111)).with_mode(mode);
-        ad9959.write(Address::CSR, &[csr.raw_value()])?;
+        ad9959.write(Address::CSR, &csr.raw_value().to_be_bytes())?;
 
         io_update.set_high().or(Err(Error::Pin))?;
         delay.delay_us(5);
@@ -263,7 +263,7 @@ impl<I: Interface> Ad9959<I> {
     /// Get the current CSR register.
     pub fn csr(&mut self) -> Result<Csr, Error> {
         let mut data = u8::new(0).to_be_bytes();
-        self.read(Address::FR1, &mut data)?;
+        self.read(Address::CSR, &mut data)?;
         Ok(Csr::new_with_raw_value(u8::from_be_bytes(data)))
     }
 
@@ -292,7 +292,7 @@ impl<I: Interface> Ad9959<I> {
 
         // Enable all channels.
         csr.set_channel(u4::new(0b1111));
-        self.write(Address::CSR, &csr.raw_value().to_be_bytes())?;
+        self.write(Address::CSR, &[csr.raw_value()])?;
         self.read(Address::CSR, &mut data)?;
         if Csr::new_with_raw_value(data[0]).channel() != csr.channel() {
             return Ok(false);
@@ -300,7 +300,7 @@ impl<I: Interface> Ad9959<I> {
 
         // Clear all channel enables.
         csr.set_channel(u4::new(0b0000));
-        self.write(Address::CSR, &csr.raw_value().to_be_bytes())?;
+        self.write(Address::CSR, &[csr.raw_value()])?;
         self.read(Address::CSR, &mut data)?;
         if Csr::new_with_raw_value(data[0]).channel() != csr.channel() {
             return Ok(false);
@@ -387,7 +387,7 @@ impl<I: Interface> Ad9959<I> {
     pub fn get_phase(&mut self, channel: Channel) -> Result<f32, Error> {
         let mut pow = 0u16.to_be_bytes();
         self.read_channel(channel, Address::CPOW0, &mut pow)?;
-        let pow = u16::from_be_bytes(pow) & u14::MAX.value();
+        let pow = u16::from_be_bytes(pow) & 0x3FFF;
         Ok(pow as f32 / (1 << 14) as f32)
     }
 
@@ -545,6 +545,7 @@ impl ProfileSerializer {
     }
 
     /// Add a register write to the serialization data.
+    #[inline]
     fn push_write(&mut self, register: Address, value: &[u8]) {
         let data = &mut self.data[self.index..];
         data[0] = register as u8;

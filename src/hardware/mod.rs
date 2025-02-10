@@ -110,11 +110,7 @@ pub enum HardwareVersion {
 
 impl From<&[bool]> for HardwareVersion {
     fn from(bits: &[bool]) -> Self {
-        match bits
-            .iter()
-            .enumerate()
-            .fold(0, |v, (i, b)| v | ((*b as u8) << i))
-        {
+        match bits.iter().rev().fold(0, |v, b| (v << 1) | *b as u8) {
             0b000 => HardwareVersion::Rev1_0,
             0b001 => HardwareVersion::Rev1_1,
             0b010 => HardwareVersion::Rev1_2,

@@ -81,8 +81,8 @@ impl TelemetryBuffer {
     /// # Returns
     /// The finalized telemetry structure that can be serialized and reported.
     pub fn finalize(self, afe0: Gain, afe1: Gain, cpu_temp: f32) -> Telemetry {
-        let in0_volts = Into::<f32>::into(self.adcs[0]) / afe0.gain();
-        let in1_volts = Into::<f32>::into(self.adcs[1]) / afe1.gain();
+        let in0_volts = f32::from(self.adcs[0]) / afe0.gain();
+        let in1_volts = f32::from(self.adcs[1]) / afe1.gain();
 
         Telemetry {
             cpu_temp,

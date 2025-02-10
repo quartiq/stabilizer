@@ -102,8 +102,7 @@ impl From<hal::xspi::QspiError> for Error {
 
 /// The numerical value (discriminant) of the Channel enum is the index in the attenuator shift
 /// register as well as the attenuator latch enable signal index on the GPIO extender.
-#[derive(Debug, PartialEq, PartialOrd)]
-#[bitenum(u4)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 #[allow(dead_code)]
 pub enum Channel {
     In0 = 0,
@@ -160,7 +159,14 @@ pub struct DdsClockConfig {
 impl From<Channel> for ad9959::Channel {
     /// Translate pounder channels to DDS output channels.
     fn from(other: Channel) -> Self {
-        other.raw_value()
+        Self::new(
+            1 << match other {
+                Channel::In0 => 1,
+                Channel::In1 => 3,
+                Channel::Out0 => 0,
+                Channel::Out1 => 2,
+            },
+        )
     }
 }
 
