@@ -69,7 +69,7 @@ use core::mem::MaybeUninit;
 
 use stm32h7xx_hal as hal;
 
-use mutex_trait::Mutex;
+use rtic::Mutex;
 
 use super::design_parameters::SampleBuffer;
 use super::timers;
@@ -423,15 +423,17 @@ macro_rules! adc_input {
                 where
                     F: FnOnce(&mut &'static mut [u16]) -> R,
                 {
-                    unsafe { self.transfer.next_dbm_transfer_with(|buf, _current| f(buf)) }
+                    unsafe { self.transfer.next_dbm_transfer_with(|buf, _current| {
+                        f(buf)
+                    })}
                 }
             }
 
             // This is not actually a Mutex. It only re-uses the semantics and macros of mutex-trait
             // to reduce rightward drift when jointly calling `with_buffer(f)` on multiple DAC/ADCs.
             impl Mutex for $name {
-                type Data = &'static mut [u16];
-                fn lock<R>(&mut self, f: impl FnOnce(&mut Self::Data) -> R) -> R {
+                type T = &'static mut [u16];
+                fn lock<R>(&mut self, f: impl FnOnce(&mut Self::T) -> R) -> R {
                     self.with_buffer(f).unwrap()
                 }
             }

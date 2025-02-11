@@ -1,3 +1,4 @@
+use arbitrary_int::u5;
 use stm32h7xx_hal::time::MegaHertz;
 
 /// The system clock, used in various timer calculations
@@ -34,12 +35,12 @@ pub const POUNDER_IO_UPDATE_DURATION: f32 = 50e-9;
 pub const DDS_REF_CLK: MegaHertz = MegaHertz::MHz(100);
 
 /// The multiplier used for the DDS reference clock PLL.
-pub const DDS_MULTIPLIER: u8 = 5;
+pub const DDS_MULTIPLIER: u5 = u5::new(5);
 
 /// The DDS system clock frequency after the internal PLL multiplication.
 #[allow(dead_code)]
 pub const DDS_SYSTEM_CLK: MegaHertz =
-    MegaHertz::MHz(DDS_REF_CLK.to_MHz() * DDS_MULTIPLIER as u32);
+    MegaHertz::MHz(DDS_REF_CLK.to_MHz() * DDS_MULTIPLIER.value() as u32);
 
 /// The divider from the DDS system clock to the SYNC_CLK output (sync-clk is always 1/4 of sysclk).
 #[allow(dead_code)]

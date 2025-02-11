@@ -2,9 +2,11 @@ use self::attenuators::AttenuatorInterface;
 
 use super::hal;
 use crate::hardware::{shared_adc::AdcChannel, I2c1Proxy};
+use ad9959::Address;
+use bitbybit::bitenum;
 use embedded_hal_02::blocking::spi::Transfer;
-use enum_iterator::Sequence;
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 
 pub mod attenuators;
 pub mod dds_output;
@@ -14,7 +16,7 @@ pub mod rf_power;
 #[cfg(not(feature = "pounder_v1_0"))]
 pub mod timestamp;
 
-#[derive(Debug, Copy, Clone, Sequence)]
+#[derive(Debug, Copy, Clone, strum::EnumIter)]
 pub enum GpioPin {
     Led4Green,
     Led5Red,
@@ -100,7 +102,7 @@ impl From<hal::xspi::QspiError> for Error {
 
 /// The numerical value (discriminant) of the Channel enum is the index in the attenuator shift
 /// register as well as the attenuator latch enable signal index on the GPIO extender.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 #[allow(dead_code)]
 pub enum Channel {
     In0 = 0,
@@ -157,12 +159,14 @@ pub struct DdsClockConfig {
 impl From<Channel> for ad9959::Channel {
     /// Translate pounder channels to DDS output channels.
     fn from(other: Channel) -> Self {
-        match other {
-            Channel::In0 => Self::TWO,
-            Channel::In1 => Self::FOUR,
-            Channel::Out0 => Self::ONE,
-            Channel::Out1 => Self::THREE,
-        }
+        Self::new(
+            1 << match other {
+                Channel::In0 => 1,
+                Channel::In1 => 3,
+                Channel::Out0 => 0,
+                Channel::Out1 => 2,
+            },
+        )
     }
 }
 
@@ -231,10 +235,8 @@ impl ad9959::Interface for QspiInterface {
     /// Args:
     /// * `addr` - The address to write over QSPI to the DDS.
     /// * `data` - The data to write.
-    fn write(&mut self, addr: u8, data: &[u8]) -> Result<(), Error> {
-        if (addr & 0x80) != 0 {
-            return Err(Error::InvalidAddress);
-        }
+    fn write(&mut self, addr: Address, data: &[u8]) -> Result<(), Error> {
+        let addr = addr.raw_value().value();
 
         // The QSPI interface implementation always operates in 4-bit mode because the AD9959 uses
         // IO3 as SYNC_IO in some output modes. In order for writes to be successful, SYNC_IO must
@@ -319,10 +321,8 @@ impl ad9959::Interface for QspiInterface {
         }
     }
 
-    fn read(&mut self, addr: u8, dest: &mut [u8]) -> Result<(), Error> {
-        if (addr & 0x80) != 0 {
-            return Err(Error::InvalidAddress);
-        }
+    fn read(&mut self, addr: Address, dest: &mut [u8]) -> Result<(), Error> {
+        let addr = addr.raw_value().value();
 
         // This implementation only supports operation (read) in four-bit-serial mode.
         if self.mode != ad9959::Mode::FourBitSerial {
@@ -472,7 +472,7 @@ impl PounderDevices {
         // Configure power-on-default state for pounder. All LEDs are off, on-board oscillator
         // selected and enabled, attenuators out of reset. Note that testing indicates the
         // output state needs to be set first to properly update the output registers.
-        for pin in enum_iterator::all::<GpioPin>() {
+        for pin in GpioPin::iter() {
             devices.io.set_gpio_level(pin, mcp230xx::Level::Low)?;
             devices.io.set_gpio_dir(pin, mcp230xx::Direction::Output)?;
         }

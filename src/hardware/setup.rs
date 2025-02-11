@@ -1,7 +1,6 @@
 //! Stabilizer hardware configuration
 //!
 //! This file contains all of the hardware-specific configuration of Stabilizer.
-use bit_field::BitField;
 use core::cell::RefCell;
 use core::mem::MaybeUninit;
 use core::sync::atomic::{self, AtomicBool, Ordering};
@@ -25,8 +24,8 @@ use super::{
     eeprom, input_stamper::InputStamper, metadata::ApplicationMetadata,
     platform, pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc,
     timers, DigitalInput0, DigitalInput1, Eem, EthernetPhy, Gpio,
-    HardwareVersion, NetworkStack, SerialTerminal, SystemTimer, Systick,
-    UsbDevice, AFE0, AFE1,
+    HardwareVersion, NetworkStack, Pgia, SerialTerminal, SystemTimer, Systick,
+    UsbDevice,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -110,7 +109,7 @@ pub struct StabilizerDevices<
     const Y: usize,
 > {
     pub temperature_sensor: CpuTempSensor,
-    pub afes: (AFE0, AFE1),
+    pub afes: [Pgia; 2],
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
     pub dacs: (dac::Dac0Output, dac::Dac1Output),
     pub timestamper: InputStamper,
@@ -572,19 +571,17 @@ where
         // AFE_PWR_ON on hardware revision v1.3.2
         gpioe.pe1.into_push_pull_output().set_high();
 
-        let afe0 = {
-            let a0_pin = gpiof.pf2.into_push_pull_output();
-            let a1_pin = gpiof.pf5.into_push_pull_output();
-            afe::ProgrammableGainAmplifier::new(a0_pin, a1_pin)
-        };
+        let afe0 = afe::ProgrammableGainAmplifier::new([
+            gpiof.pf2.into_push_pull_output().erase().forward(),
+            gpiof.pf5.into_push_pull_output().erase().forward(),
+        ]);
 
-        let afe1 = {
-            let a0_pin = gpiod.pd14.into_push_pull_output();
-            let a1_pin = gpiod.pd15.into_push_pull_output();
-            afe::ProgrammableGainAmplifier::new(a0_pin, a1_pin)
-        };
+        let afe1 = afe::ProgrammableGainAmplifier::new([
+            gpiod.pd14.into_push_pull_output().erase().forward(),
+            gpiod.pd15.into_push_pull_output().erase().forward(),
+        ]);
 
-        (afe0, afe1)
+        [afe0, afe1]
     };
 
     let input_stamper = {
@@ -611,20 +608,14 @@ where
 
     let metadata = {
         // Read the hardware version pins.
-        let hardware_version = {
-            let hwrev0 = gpiog.pg0.into_pull_down_input();
-            let hwrev1 = gpiog.pg1.into_pull_down_input();
-            let hwrev2 = gpiog.pg2.into_pull_down_input();
-            let hwrev3 = gpiog.pg3.into_pull_down_input();
-
-            HardwareVersion::from(
-                *0u8.set_bit(0, hwrev0.is_high())
-                    .set_bit(1, hwrev1.is_high())
-                    .set_bit(2, hwrev2.is_high())
-                    .set_bit(3, hwrev3.is_high()),
-            )
-        };
-
+        let hardware_version = HardwareVersion::from(
+            &[
+                gpiog.pg0.into_pull_down_input().is_high(),
+                gpiog.pg1.into_pull_down_input().is_high(),
+                gpiog.pg2.into_pull_down_input().is_high(),
+                gpiog.pg3.into_pull_down_input().is_high(),
+            ][..],
+        );
         ApplicationMetadata::new(hardware_version)
     };
 
@@ -906,9 +897,9 @@ where
         .unwrap();
 
         let ad9959 = {
-            let qspi_interface = {
+            let qspi = {
                 // Instantiate the QUADSPI pins and peripheral interface.
-                let qspi_pins = {
+                let pins = {
                     let _ncs =
                         gpioc.pc11.into_alternate::<9>().speed(Speed::VeryHigh);
 
@@ -923,7 +914,7 @@ where
                 };
 
                 let qspi = device.QUADSPI.bank2(
-                    qspi_pins,
+                    pins,
                     design_parameters::POUNDER_QSPI_FREQUENCY.convert(),
                     &ccdr.clocks,
                     ccdr.peripheral.QSPI,
@@ -933,9 +924,9 @@ where
             };
 
             #[cfg(not(feature = "pounder_v1_0"))]
-            let reset_pin = gpiog.pg6.into_push_pull_output();
+            let mut reset = gpiog.pg6.into_push_pull_output();
             #[cfg(feature = "pounder_v1_0")]
-            let reset_pin = gpioa.pa0.into_push_pull_output();
+            let mut reset = gpioa.pa0.into_push_pull_output();
 
             let mut io_update = gpiog.pg7.into_push_pull_output();
 
@@ -946,8 +937,8 @@ where
             delay.delay_ms(10u32);
 
             let mut ad9959 = ad9959::Ad9959::new(
-                qspi_interface,
-                reset_pin,
+                qspi,
+                &mut reset,
                 &mut io_update,
                 &mut delay,
                 ad9959::Mode::FourBitSerial,

@@ -33,8 +33,7 @@ use miniconf::{Leaf, StrLeaf, Tree};
 
 use rtic_monotonics::Monotonic;
 
-use fugit::ExtU32;
-use mutex_trait::prelude::*;
+use fugit::ExtU32 as _;
 
 use idsp::iir;
 
@@ -48,8 +47,8 @@ use stabilizer::{
         hal,
         signal_generator::{self, Source},
         timers::SamplingTimer,
-        DigitalInput0, DigitalInput1, SerialTerminal, SystemTimer, Systick,
-        UsbDevice, AFE0, AFE1,
+        DigitalInput0, DigitalInput1, Pgia, SerialTerminal, SystemTimer,
+        Systick, UsbDevice,
     },
     net::{
         data_stream::{FrameGenerator, StreamFormat, StreamTarget},
@@ -169,9 +168,11 @@ impl Channel {
             state: Default::default(),
             run: *self.run,
             biquad: self.biquad.each_ref().map(|biquad| {
-                biquad
-                    .repr
-                    .build::<f32>(SAMPLE_PERIOD, DacCode::LSB_PER_VOLT)
+                biquad.repr.build::<f32>(
+                    SAMPLE_PERIOD,
+                    1.0,
+                    DacCode::LSB_PER_VOLT,
+                )
             }),
         })
     }
@@ -244,7 +245,7 @@ mod app {
         usb_terminal: SerialTerminal<Settings, 9>,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
-        afes: (AFE0, AFE1),
+        afes: [Pgia; 2],
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         generator: FrameGenerator,
@@ -338,7 +339,11 @@ mod app {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, generator], shared=[active, telemetry], priority=3)]
+    #[task(
+        binds=DMA1_STR4,
+        local=[digital_inputs, adcs, dacs, generator, source: [[i16; BATCH_SIZE]; 2] = [[0; BATCH_SIZE]; 2]],
+        shared=[active, telemetry],
+        priority=3)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
@@ -350,28 +355,27 @@ mod app {
             adcs: (adc0, adc1),
             dacs: (dac0, dac1),
             generator,
+            source,
             ..
         } = c.local;
 
         (active, telemetry).lock(|active, telemetry| {
-            let di = [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
-            telemetry.digital_inputs = di;
-            let source: [[i16; BATCH_SIZE]; 2] = active.each_mut().map(|ch| {
-                core::array::from_fn(|_| (ch.source.next().unwrap() >> 16) as _)
-            });
-
             (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
-                // Preserve instruction and data ordering w.r.t. DMA flag access.
+                // Preserve instruction and data ordering w.r.t. DMA flag access before and after.
                 fence(Ordering::SeqCst);
-                let adc = [&**adc0, &**adc1];
-                let mut dac = [&mut **dac0, &mut **dac1];
+                let adc: [&[u16; BATCH_SIZE]; 2] = [
+                    (**adc0).try_into().unwrap(),
+                    (**adc1).try_into().unwrap(),
+                ];
+                let mut dac: [&mut [u16; BATCH_SIZE]; 2] =
+                    [(*dac0).try_into().unwrap(), (*dac1).try_into().unwrap()];
 
                 for ((((adc, dac), active), di), source) in adc
-                    .iter()
+                    .into_iter()
                     .zip(dac.iter_mut())
-                    .zip(active)
-                    .zip(di)
-                    .zip(source)
+                    .zip(active.iter_mut())
+                    .zip(telemetry.digital_inputs)
+                    .zip(source.iter())
                 {
                     for ((adc, dac), source) in
                         adc.iter().zip(dac.iter_mut()).zip(source)
@@ -393,17 +397,12 @@ mod app {
                         // Note(unsafe): The filter limits must ensure that the value is in range.
                         // The truncation introduces 1/2 LSB distortion.
                         let y: i16 = unsafe { y.to_int_unchecked() };
-
-                        let y = y.saturating_add(source);
-
-                        // Convert to DAC code
-                        *dac = DacCode::from(y).0;
+                        *dac = DacCode::from(y.saturating_add(*source)).0;
                     }
                 }
                 telemetry.adcs = [AdcCode(adc[0][0]), AdcCode(adc[1][0])];
                 telemetry.dacs = [DacCode(dac[0][0]), DacCode(dac[1][0])];
 
-                // Stream the data.
                 const N: usize = BATCH_SIZE * size_of::<i16>();
                 generator.add(|buf| {
                     [adc[0], adc[1], dac[0], dac[1]]
@@ -416,9 +415,13 @@ mod app {
                         * N
                 });
 
-                // Preserve instruction and data ordering w.r.t. DMA flag access.
                 fence(Ordering::SeqCst);
             });
+            *source = active.each_mut().map(|ch| {
+                core::array::from_fn(|_| (ch.source.next().unwrap() >> 16) as _)
+            });
+            telemetry.digital_inputs =
+                [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
         });
     }
 
@@ -448,8 +451,8 @@ mod app {
     #[task(priority = 1, local=[afes], shared=[network, settings, active])]
     async fn settings_update(mut c: settings_update::Context) {
         c.shared.settings.lock(|settings| {
-            c.local.afes.0.set_gain(*settings.dual_iir.ch[0].gain);
-            c.local.afes.1.set_gain(*settings.dual_iir.ch[1].gain);
+            c.local.afes[0].set_gain(*settings.dual_iir.ch[0].gain);
+            c.local.afes[1].set_gain(*settings.dual_iir.ch[1].gain);
 
             if settings.dual_iir.trigger {
                 settings.dual_iir.trigger = false;
@@ -474,8 +477,11 @@ mod app {
                 (
                     *ch.run,
                     ch.biquad.each_ref().map(|b| {
-                        b.repr
-                            .build::<f32>(SAMPLE_PERIOD, DacCode::LSB_PER_VOLT)
+                        b.repr.build::<f32>(
+                            SAMPLE_PERIOD,
+                            1.0,
+                            DacCode::LSB_PER_VOLT,
+                        )
                     }),
                 )
             });
