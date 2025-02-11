@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get","get_by_key","set","set_by_key"]};
