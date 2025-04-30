@@ -108,7 +108,7 @@ pub struct BiquadRepr {
     #[tree(
         rename = "repr",
         typ = "iir::BiquadRepr<f32, f32>",
-        defer = "*self.repr"
+        defer = "(*self.repr)"
     )]
     _repr: (),
 }
@@ -182,12 +182,8 @@ impl Channel {
 pub struct DualIir {
     /// Channel configuration
     ch: [Channel; 2],
-    /// Trigger handshake
-    #[tree(skip)]
-    trigger: bool,
     /// Trigger both signal sources
-    #[tree(validate=self.validate_trigger, rename="trigger")]
-    _trigger: Leaf<()>,
+    trigger: Leaf<bool>,
     /// Telemetry output period in seconds.
     telemetry_period: Leaf<f32>,
     /// Target IP and port for UDP streaming.
@@ -196,23 +192,11 @@ pub struct DualIir {
     stream: Leaf<StreamTarget>,
 }
 
-impl DualIir {
-    fn validate_trigger(
-        &mut self,
-        depth: usize,
-    ) -> Result<usize, &'static str> {
-        debug_assert!(!self.trigger);
-        self.trigger = true;
-        Ok(depth)
-    }
-}
-
 impl Default for DualIir {
     fn default() -> Self {
         Self {
             telemetry_period: Leaf(10.0),
-            trigger: false,
-            _trigger: Leaf(()),
+            trigger: Leaf(false),
             stream: Default::default(),
             ch: Default::default(),
         }
@@ -454,8 +438,8 @@ mod app {
             c.local.afes[0].set_gain(*settings.dual_iir.ch[0].gain);
             c.local.afes[1].set_gain(*settings.dual_iir.ch[1].gain);
 
-            if settings.dual_iir.trigger {
-                settings.dual_iir.trigger = false;
+            if *settings.dual_iir.trigger {
+                *settings.dual_iir.trigger = false;
                 let s = settings.dual_iir.ch.each_ref().map(|ch| {
                     let s = ch
                         .source

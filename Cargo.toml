@@ -57,7 +57,7 @@ mcp230xx = "1.0"
 fugit = "0.3"
 rtt-logger = "0.2"
 mono-clock = "0.1"
-spin = { version = "0.9", default-features = false, features = ["spin_mutex"] }
+spin = { version = "0.10", default-features = false, features = ["spin_mutex"] }
 shared-bus = { version = "0.3", features = ["cortex-m"] }
 lm75 = "0.2"
 rand_xorshift = "0.4.0"
@@ -87,7 +87,7 @@ embedded-hal-bus = "0.3.0"
 urukul = { version = "0.1.1", path = "urukul" }
 ad9912 = { version = "0.1.1", path = "ad9912" }
 bytemuck = { version = "1.21.0", features = ["zeroable_maybe_uninit"] }
-strum = { version = "0.26.3", default-features = false, features = ["derive"] }
+strum = { version = "0.27.1", default-features = false, features = ["derive"] }
 
 [build-dependencies]
 built = { version = "0.7", features = ["git2"], default-features = false }
