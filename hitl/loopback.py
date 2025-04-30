@@ -49,7 +49,7 @@ async def test_loopback(stabilizer, telemetry_queue, set_point, gain=1, channel=
         "run": "Run",
     }.items():
         await stabilizer.set(f"/ch/{channel}/{k}", v)
-    await stabilizer.set(f"/trigger", None)
+    await stabilizer.set(f"/trigger", True)
     await telemetry_queue.__anext__()  # discard
     latest_values = json.loads((await telemetry_queue.__anext__()).payload)
     print(f"Latest telemtry: {latest_values}")

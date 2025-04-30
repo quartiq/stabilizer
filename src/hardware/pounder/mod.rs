@@ -3,7 +3,6 @@ use self::attenuators::AttenuatorInterface;
 use super::hal;
 use crate::hardware::{shared_adc::AdcChannel, I2c1Proxy};
 use ad9959::Address;
-use bitbybit::bitenum;
 use embedded_hal_02::blocking::spi::Transfer;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
