@@ -90,7 +90,7 @@ bytemuck = { version = "1.21.0", features = ["zeroable_maybe_uninit"] }
 strum = { version = "0.27.1", default-features = false, features = ["derive"] }
 
 [build-dependencies]
-built = { version = "0.7", features = ["git2"], default-features = false }
+built = { version = "0.8", features = ["git2"], default-features = false }
 
 [dependencies.stm32h7xx-hal]
 version = "0.16.0"

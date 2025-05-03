@@ -102,15 +102,11 @@ impl serial_settings::Settings for Settings {
 #[derive(Clone, Debug, Tree)]
 pub struct BiquadRepr {
     /// Biquad parameters
-    #[tree(rename = "typ")]
-    repr: StrLeaf<iir::BiquadRepr<f32, f32>>,
-    /// Subtree access
-    #[tree(
-        rename = "repr",
-        typ = "iir::BiquadRepr<f32, f32>",
-        defer = "(*self.repr)"
-    )]
-    _repr: (),
+    #[tree(typ="Leaf<iir::BiquadReprDiscriminants>", rename="typ",
+        with(serialize=self.repr.tag_serialize, deserialize=self.repr.tag_deserialize),
+        deny(ref_any="deny", mut_any="deny"))]
+    _tag: (),
+    repr: iir::BiquadRepr<f32, f32>,
 }
 
 impl Default for BiquadRepr {
@@ -119,8 +115,8 @@ impl Default for BiquadRepr {
         i.set_min(-i16::MAX as _);
         i.set_max(i16::MAX as _);
         Self {
-            _repr: (),
-            repr: StrLeaf(iir::BiquadRepr::Raw(Leaf(i))),
+            _tag: (),
+            repr: iir::BiquadRepr::Raw(Leaf(i)),
         }
     }
 }
