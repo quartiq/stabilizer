@@ -415,9 +415,9 @@ dependencies = [
 
 [[package]]
 name = "git2"
-version = "0.20.1"
+version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5220b8ba44c68a9a7f7a7659e864dd73692e417ef0211bea133c7b74e031eeb9"
+checksum = "2deb07a133b1520dc1a5690e9bd08950108873d7ed5de38dcc74d3b5ebffa110"
 dependencies = [
  "bitflags 2.9.0",
  "libc",
@@ -685,9 +685,9 @@ dependencies = [
 
 [[package]]
 name = "libm"
-version = "0.2.13"
+version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9627da5196e5d8ed0b0495e61e518847578da83483c37288316d9b2e03a7f72"
+checksum = "a25169bd5913a4b437588a7e3d127cd6e90127b60e0ffbd834a38f1599e016b8"
 
 [[package]]
 name = "libz-sys"
@@ -763,7 +763,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.18.0"
-source = "git+https://github.com/quartiq/miniconf.git#69d7023063321a7a352f5a705b5b05b9278b0387"
+source = "git+https://github.com/quartiq/miniconf.git#898c4222cc83574c8db44dfe7f63e318736af6ef"
 dependencies = [
  "itoa",
  "miniconf_derive",
@@ -776,7 +776,7 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.18.0"
-source = "git+https://github.com/quartiq/miniconf.git#69d7023063321a7a352f5a705b5b05b9278b0387"
+source = "git+https://github.com/quartiq/miniconf.git#898c4222cc83574c8db44dfe7f63e318736af6ef"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -787,7 +787,7 @@ dependencies = [
 [[package]]
 name = "miniconf_mqtt"
 version = "0.18.0"
-source = "git+https://github.com/quartiq/miniconf.git#69d7023063321a7a352f5a705b5b05b9278b0387"
+source = "git+https://github.com/quartiq/miniconf.git#898c4222cc83574c8db44dfe7f63e318736af6ef"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
