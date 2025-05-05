@@ -69,7 +69,6 @@ usbd-serial = "0.2"
 miniconf = { version = "0.18", features = ["json-core", "derive", "postcard"] }
 miniconf_mqtt = { version = "0.18" }
 tca9539 = "0.2"
-smoltcp-nal = { version = "0.6", features = ["shared-stack"] }
 postcard = "1"
 embassy-futures = { version = "0.1", default-features = false }
 serde_with = { version = "3.12", default-features = false, features = [
@@ -89,12 +88,18 @@ ad9912 = { version = "0.1.1", path = "ad9912" }
 bytemuck = { version = "1.21.0", features = ["zeroable_maybe_uninit"] }
 strum = { version = "0.27.1", default-features = false, features = ["derive"] }
 
-[build-dependencies]
-built = { version = "0.8", features = ["git2"], default-features = false }
-
 [dependencies.stm32h7xx-hal]
 version = "0.16.0"
 features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
+git = "https://github.com/stm32-rs/stm32h7xx-hal.git"
+
+[dependencies.smoltcp-nal]
+version = "0.6"
+features = ["shared-stack"]
+git = "https://github.com/quartiq/smoltcp-nal.git"
+
+[build-dependencies]
+built = { version = "0.8", features = ["git2"], default-features = false }
 
 [features]
 nightly = []
