@@ -29,7 +29,7 @@
 #![no_main]
 
 use core::sync::atomic::{fence, Ordering};
-use miniconf::{Leaf, StrLeaf, Tree};
+use miniconf::{Leaf, Tree};
 
 use rtic_monotonics::Monotonic;
 
