@@ -1324,9 +1324,9 @@ dependencies = [
 
 [[package]]
 name = "smoltcp"
-version = "0.12.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dad095989c1533c1c266d9b1e8d70a1329dd3723c3edac6d03bbd67e7bf6f4bb"
+checksum = "5a1a996951e50b5971a2c8c0fa05a381480d70a933064245c4a223ddc87ccc97"
 dependencies = [
  "bitflags 1.3.2",
  "byteorder",
@@ -1338,11 +1338,12 @@ dependencies = [
 [[package]]
 name = "smoltcp-nal"
 version = "0.6.0"
-source = "git+https://github.com/quartiq/smoltcp-nal.git#bb415665334c34f7434d51edb20793e36dc7f0cd"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c433f9b2c78a974d0c04dec6a931747a37452e673ab0129283baca096f49a65a"
 dependencies = [
  "embedded-nal",
  "embedded-time",
- "heapless 0.8.0",
+ "heapless 0.7.17",
  "nanorand",
  "shared-bus",
  "smoltcp",
@@ -1441,14 +1442,14 @@ dependencies = [
 [[package]]
 name = "stm32h7xx-hal"
 version = "0.16.0"
-source = "git+https://github.com/stm32-rs/stm32h7xx-hal.git#bcb9248c003f3670e5a8c9e19cb54b823bec10ff"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bd869329be25440b24e2b3583a1c016151b4a54bc36d96d82af7fcd9d010b98"
 dependencies = [
  "bare-metal 1.0.0",
  "cast",
  "cortex-m",
  "embedded-dma",
  "embedded-hal 0.2.7",
- "embedded-hal 1.0.0",
  "embedded-storage",
  "fugit",
  "nb 1.1.0",
