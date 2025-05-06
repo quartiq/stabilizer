@@ -246,7 +246,8 @@ impl FrameGenerator {
     ///
     /// # Args
     /// * `f` - A closure that will be provided the buffer to write batch data into.
-    ///         Returns the number of bytes written.
+    ///
+    /// Returns the number of bytes written.
     pub fn add<F>(&mut self, func: F)
     where
         F: FnMut(&mut [MaybeUninit<u8>]) -> usize,
