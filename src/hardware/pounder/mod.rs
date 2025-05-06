@@ -551,7 +551,7 @@ impl attenuators::AttenuatorInterface for PounderDevices {
     ///
     /// Args:
     /// * `channels` - A 4 byte slice to be shifted into the
-    ///     attenuators and to contain the data shifted out.
+    ///   attenuators and to contain the data shifted out.
     fn transfer_attenuators(
         &mut self,
         channels: &mut [u8; 4],

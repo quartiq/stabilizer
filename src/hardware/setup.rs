@@ -2,10 +2,10 @@
 //!
 //! This file contains all of the hardware-specific configuration of Stabilizer.
 use core::cell::RefCell;
-use core::mem::MaybeUninit;
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{fmt::Write, ptr, slice};
 use embedded_hal_compat::{markers::ForwardOutputPin, Forward, ForwardCompat};
+use grounded::uninit::GroundedCell;
 use heapless::String;
 use stm32h7xx_hal::{
     self as hal,
@@ -135,9 +135,9 @@ pub struct PounderDevices {
 
 #[link_section = ".sram3.eth"]
 /// Static storage for the ethernet DMA descriptor ring.
-static mut DES_RING: MaybeUninit<
+static DES_RING: GroundedCell<
     ethernet::DesRing<{ super::TX_DESRING_CNT }, { super::RX_DESRING_CNT }>,
-> = MaybeUninit::uninit();
+> = GroundedCell::uninit();
 
 /// Setup ITCM and load its code from flash.
 ///
@@ -660,7 +660,11 @@ where
             (ref_clk, mdio, mdc, crs_dv, rxd0, rxd1, tx_en, txd0, txd1)
         };
 
-        let ring = unsafe { DES_RING.write(ethernet::DesRing::new()) };
+        let ring = unsafe {
+            let ring = DES_RING.get();
+            ring.write(ethernet::DesRing::new());
+            &mut *ring
+        };
 
         // Configure the ethernet controller
         let (mut eth_dma, eth_mac) = ethernet::new(

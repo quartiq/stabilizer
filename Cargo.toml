@@ -87,6 +87,7 @@ urukul = { version = "0.1.1", path = "urukul" }
 ad9912 = { version = "0.1.1", path = "ad9912" }
 bytemuck = { version = "1.21.0", features = ["zeroable_maybe_uninit"] }
 strum = { version = "0.27.1", default-features = false, features = ["derive"] }
+grounded = "0.2.0"
 
 [dependencies.stm32h7xx-hal]
 version = "0.16.0"
