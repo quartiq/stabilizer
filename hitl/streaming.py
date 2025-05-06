@@ -9,6 +9,7 @@ import sys
 import os
 
 import miniconf
+from miniconf.common import MQTTv5, one
 from stabilizer.stream import measure, Stream, get_local_ip
 
 logger = logging.getLogger(__name__)
@@ -41,10 +42,10 @@ async def _main():
 
     async with miniconf.Client(
         args.broker,
-        protocol=miniconf.MQTTv5,
+        protocol=MQTTv5,
         logger=logging.getLogger("aiomqtt-client"),
     ) as client:
-        prefix, _alive = miniconf.one(await miniconf.discover(client, args.prefix))
+        prefix, _alive = one(await miniconf.discover(client, args.prefix))
         conf = miniconf.Miniconf(client, prefix)
         if ipaddress.ip_address(args.addr).is_unspecified:
             args.addr = get_local_ip(args.broker)
