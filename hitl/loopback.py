@@ -13,7 +13,8 @@ import logging
 import json
 import os
 
-from miniconf import Client, Miniconf, MQTTv5, one, discover
+from miniconf.common import MQTTv5, one
+from miniconf import Client, Miniconf, discover
 
 if sys.platform.lower() == "win32" or os.name.lower() == "nt":
     from asyncio import set_event_loop_policy, WindowsSelectorEventLoopPolicy
@@ -43,7 +44,7 @@ async def test_loopback(stabilizer, telemetry_queue, set_point, gain=1, channel=
         "biquad/0/repr/Pid/gain/p": -0.1,
         "biquad/0/repr/Pid/min": -10,
         "biquad/0/repr/Pid/max": 10,
-        "biquad/0/repr/Pid/setpoint": set_point*gain,
+        "biquad/0/repr/Pid/setpoint": set_point * gain,
         "source/amplitude": 0,
         "source/offset": 0,
         "run": "Run",
