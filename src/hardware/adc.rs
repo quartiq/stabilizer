@@ -69,7 +69,7 @@ use stm32h7xx_hal as hal;
 
 use rtic::Mutex;
 
-use grounded::uninit::GroundedArrayCell;
+use grounded::uninit::{GroundedArrayCell, GroundedCell};
 
 use super::design_parameters::SampleBuffer;
 use super::timers;
@@ -151,13 +151,13 @@ impl TryFrom<f32> for AdcCode {
 // transfer. Data in AXI SRAM is not initialized on boot, so the contents are random. This value is
 // initialized during setup.
 #[link_section = ".axisram.buffers"]
-static SPI_START: GroundedArrayCell<u32, 1> = GroundedArrayCell::uninit();
+static SPI_START: GroundedCell<[u32; 1]> = GroundedCell::uninit();
 
 // The following data is written by the timer flag clear trigger into the SPI IFCR register to clear
 // the EOT flag. Data in AXI SRAM is not initialized on boot, so the contents are random. This
 // value is initialized during setup.
 #[link_section = ".axisram.buffers"]
-static SPI_EOT_CLEAR: GroundedArrayCell<u32, 1> = GroundedArrayCell::uninit();
+static SPI_EOT_CLEAR: GroundedCell<[u32; 1]> = GroundedCell::uninit();
 
 // The following global buffers are used for the ADC sample DMA transfers. Two buffers are used for
 // each transfer in a ping-pong buffer configuration (one is being acquired while the other is being
@@ -250,14 +250,14 @@ macro_rules! adc_input {
                     hal::dma::dma::$trigger_stream<hal::stm32::DMA1>,
                     [< $spi CR >],
                     MemoryToPeripheral,
-                    &'static mut [u32],
+                    &'static mut [u32; 1],
                     hal::dma::DBTransfer,
                 >,
                 clear_transfer: Transfer<
                     hal::dma::dma::$clear_stream<hal::stm32::DMA1>,
                     [< $spi IFCR >],
                     MemoryToPeripheral,
-                    &'static mut [u32],
+                    &'static mut [u32; 1],
                     hal::dma::DBTransfer,
                 >,
             }
@@ -296,8 +296,9 @@ macro_rules! adc_input {
                     // never actually modified. It technically only needs to be immutably
                     // borrowed, but the current HAL API only supports mutable borrows.
                     let spi_eot_clear = unsafe {
-                        SPI_EOT_CLEAR.initialize_all_copied(1 << 3);
-                        SPI_EOT_CLEAR.get_subslice_mut_unchecked(0, 1)
+                        let ptr = SPI_EOT_CLEAR.get();
+                        ptr.write([1 << 3]);
+                        &mut *ptr
                     };
 
                     // Generate DMA events when the timer hits zero (roll-over). This must be before
@@ -340,8 +341,9 @@ macro_rules! adc_input {
                     // current HAL API only supports mutable borrows.
                     // Write a binary code into the SPI control register to initiate a transfer.
                     let spi_start = unsafe {
-                        SPI_START.initialize_all_copied(0x201);
-                        SPI_START.get_subslice_mut_unchecked(0, 1)
+                        let ptr = SPI_START.get();
+                        ptr.write([0x201]);
+                        &mut *ptr
                     };
 
                     // Construct the trigger stream to write from memory to the peripheral.
