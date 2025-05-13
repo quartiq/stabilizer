@@ -25,6 +25,7 @@ jobs:
           zip bin.zip
           target/*/release/dual-iir
           target/*/release/lockin
+          target/*/release/urukul
       - id: create_release
         uses: actions/create-release@v1
         env:

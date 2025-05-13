@@ -28,12 +28,6 @@ jobs:
           command: install
           args: mdbook-linkcheck
 
-      - name: Install ToC
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: mdbook-toc
-
       - uses: peaceiris/actions-mdbook@v1
         with:
           mdbook-version: '0.4.12'
