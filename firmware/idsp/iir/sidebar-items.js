@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Action","BiquadRepr","BiquadReprDiscriminants","Order","Shape","Typ"],"struct":["Ba","Biquad","Filter","FilterRepr","Gain","Pid","PidBuilder"]};
