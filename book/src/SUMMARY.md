@@ -1,6 +1,5 @@
 # Summary
 
-- [Table of contents](./toc.md)
 - [Overview](./overview.md)
 - [Setup](./setup.md)
 - [Usage](./usage.md)
