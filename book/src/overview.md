@@ -1,4 +1,6 @@
-# Overview
+# Stabilizer
+
+## Overview
 
 Stabilizer is a flexible tool designed for quantum physics experiments. Fundamentally, Stabilizer
 samples up two two analog input signals, performs digital signal processing internally, and then
@@ -11,15 +13,16 @@ implementation of digital lockin schemes.
 This documentation is intended to bring a user up to speed on using Stabilizer and the firmware
 provided by QUARTIQ and contributors.
 
-# Hardware
+## Hardware
 
 The Stabilizer hardware is managed via a [separate repository](https://github.com/sinara-hw/Stabilizer).
-Some information about the hardware is gathered in the [Stabilizer wiki](https://github.com/sinara-hw/Stabilizer/wiki). More detailed data, measurements, discussions, and tests have been posted in the [Stabilizer issue tracker](https://github.com/sinara-hw/Stabilizer/issues?q=is%3Aissue).
-
-[![Hardware](https://github.com/sinara-hw/Stabilizer/wiki/Stabilizer_v1.0_top_small.jpg)](https://github.com/sinara-hw/Stabilizer)
+Some information about the hardware is gathered in the [Stabilizer wiki](https://github.com/sinara-hw/Stabilizer/wiki). More detailed data, measurements, discussions, and tests have been posted in the Stabilizer [hardware](https://github.com/sinara-hw/Stabilizer/issues?q=is%3Aissue) and [firmware](https://github.com/quartiq/stabilizer/issues?q=is%3Aissue) issue trackers.
 
 Stabilizer can be extended and coupled with a mezzanine board. One such mezzanine is the DDS upconversion/downconversion frontend Pounder. The Pounder hardware is managed via a [separate repository](https://github.com/sinara-hw/Pounder), again with [wiki](https://github.com/sinara-hw/Pounder/wiki) and [issue tracker](https://github.com/sinara-hw/Pounder/issues?q=is%3Aissue).
-# Applications
+
+Stabilizer can also control downstream EEM modules, for example [Urukul-AD9912](https://github.com/sinara-hw/Urukul).
+
+## Applications
 
 This firmware offers a library of hardware and software functionality targeting the use of the Stabilizer hardware in various digital signal processing applications commonly occurring in Quantum Technology.
 It provides abstractions over the fast analog inputs and outputs, time stamping, Pounder DDS interfaces and a collection of tailored and optimized digital signal processing algorithms (IIR, FIR, Lockin, PLL, reciprocal PLL, Unwrapper, Lowpass, Cosine-Sine, Atan2) in the [`idsp` crate](firmware/idsp/index.html).
@@ -33,8 +36,10 @@ information.
 | :---: | :---- |
 | [`dual-iir`](firmware/dual_iir/index.html) | Two channel biquad IIR filter |
 | [`lockin`](firmware/lockin/index.html) | Lockin amplifier support various various reference sources |
+| [`dds`](firmware/dds/index.html) | Urukul-AD9912 control over MQTT |
 
 ## Library Documentation
+
 The Stabilizer library docs contain documentation for common components used in all Stabilizer
 applications.
 

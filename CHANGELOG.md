@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 * `py`: `StabilizerStream` renamed to `Stream`
 * `dual-iir`: settings tree layout changed
+* `urukul`: bin target renamed to `dds`
 
 ## [v0.11.0](https://github.com/quartiq/stabilizer/compare/v0.10.0...v0.11.0) - 2024-12-02
 

@@ -1,27 +1,17 @@
 #!/bin/bash
 
-# Title:
-#   Stabilizer hardware-in-the-loop (HITL) test script.
-#
-# Description:
-#   This shell file is executed by the hardware runner in Quartiq's office to exercise the various
-#   hardware aspects of Stabilizer.
-
 # Enable shell operating mode flags.
 set -eux
 
-# Stabilizer device prefix for HITL
 PREFIX=dt/sinara/dual-iir/04-91-62-d9-7e-5f
 PROBE=0483:3754:004C003D3137510D33333639
 
 #PREFIX=dt/sinara/dual-iir/04-91-62-d9-81-ff
 #PROBE=0483:3754:0016001B5553500A20393256
 
-# Set up python for testing
 python3 -m venv --system-site-packages .venv
-. .venv/bin/activate
+source .venv/bin/activate
 
-# Install Miniconf utilities for configuring stabilizer.
 python3 -m pip install -U setuptools pip
 python3 -m pip install py/
 

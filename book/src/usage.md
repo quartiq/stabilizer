@@ -1,11 +1,5 @@
+# Usage
 
-
-### Table of Contents
-
-<-- TOC -->
-
-
-# Miniconf Run-time Settings
 Stabilizer supports run-time settings configuration using MQTT or the USB port.
 
 Settings can be stored in the MQTT broker so that they are automatically applied whenever
@@ -24,30 +18,21 @@ defaulted to Stabilizer's MAC address.
 Settings are specific to an application. If two identical settings exist for two different
 applications, each application maintains its own independent value.
 
-## Installation
-Install the Miniconf configuration utilities using a virtual environment:
-```
-python -m venv --system-site-packages vpy
+## Miniconf installation
 
-# Refer to https://docs.python.org/3/tutorial/venv.html for more information on activating the
-# virtual environment. This command is different on different platforms.
-./vpy/Scripts/activate
-```
+Create a virtual python environment with `python -m venv --system-site-packages .venv` and activate it with `source .venv/bin/activate`.
+Refer to the [`venv` tutorial](https://docs.python.org/3/tutorial/venv.html) for more information on activating the
+virtual environment. The command depends on the operating system.
 
-Next, install prerequisite packages
-```
-python -m pip install py
-```
+Next, install prerequisite packages with `python -m pip install py/`.
 
-To use `miniconf`, execute it as follows:
-```
-python -m miniconf --help
-```
+To use the `miniconf` command line too see `python -m miniconf --help`.
 
 Miniconf also exposes a programmatic Python API, so it's possible to write automation scripting of
 Stabilizer as well.
 
-## Usage
+## Settings
+
 The Miniconf Python utility utilizes a unique "device prefix". The device prefix is always of the
 form `dt/sinara/<app>/<mac-address>`, where `<app>` is the name of the application and
 `<mac-address>` is the MAC address of the device, formatted with delimiting dashes, and lower case letters.
@@ -55,15 +40,14 @@ form `dt/sinara/<app>/<mac-address>`, where `<app>` is the name of the applicati
 Settings have a `path` and a `value` being configured. The `value` parameter is JSON-encoded data
 and the `path` value is a path-like string.
 
-```
-python -m miniconf --broker 10.34.16.1 dt/sinara/dual-iir/00-11-22-33-44-55 stream='"10.34.16.123:4000"'
+```bash
+python -m miniconf -b mqtt -d dt/sinara/dual-iir/+ stream='"10.34.16.123:4000"'
 ```
 
-Where `10.34.16.1` is the MQTT broker address that matches the one used by the application and `10.34.16.123` and `4000` are the desire stream target IP and port.
+Where `mqtt` is the MQTT broker (host name or address) that matches the one used by the application
+(set using the USB terminal) and `10.34.16.123` and `4000` are the desired stream target IP and port.
 
-The prefix can be found for a specific device by looking at the topic on which telemetry that is
-being published. It can also be automatically discovered if there is only one
-device alive.
+The prefix can be discovered as above or determined for a specific device through the USB serial terminal.
 
 Refer to the [application documentation](overview.md#applications) for the exact settings and values exposed
 for each application.
@@ -75,10 +59,7 @@ Refer to the documentation for [Miniconf](firmware/miniconf/enum.Error.html) for
 description of the possible error codes that Miniconf may return if the settings update was
 unsuccessful.
 
-# IIR Configuration
-For the `dual-iir` application, the application supports different representations of biquad coefficients.
-
-# Telemetry
+## Telemetry
 
 Stabilizer applications publish telemetry utilizes MQTT for managing run-time settings configurations as well as live telemetry
 reporting.
@@ -99,13 +80,16 @@ digital input states.
 
 Refer to the respective [application documentation](overview.md#applications) for more information on telemetry.
 
-# Stream
+## Stream
 
 Stabilizer supports streaming real-time data over UDP. The stream is
 intended to be a high-bandwidth mechanism to transfer large amounts of data from Stabilizer to a
 host computer for further analysis.
 
-Streamed data is sent with "best effort" - it's possible that data may be lost either due to
-network congestion or by Stabilizer.
+Streamed data is sent with "best effort" - it's possible that data may be lost due to
+network congestion.
 
 Refer to the the respective [application documentation](overview.md#applications) for more information.
+
+[`stabilizer-stream`](https://github.com/quartiq/stabilizer-stream) is an application that supports process
+the stream and measures power spectral density/integrated RMS in real time.
