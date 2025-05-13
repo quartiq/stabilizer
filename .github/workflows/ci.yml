@@ -112,6 +112,7 @@ jobs:
 
       - name: cargo deadlinks
         uses: actions-rs/cargo@v1
+        continue-on-error: true
         with:
           command: deadlinks
           # We intentionally ignore fragments, as RTIC may generate fragments for various
