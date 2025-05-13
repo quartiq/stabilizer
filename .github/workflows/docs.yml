@@ -1,4 +1,4 @@
-name: Release Documentation
+name: Documentation
 
 on:
   workflow_dispatch:
@@ -41,7 +41,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: doc
-          args: --no-deps -p miniconf -p ad9959 -p stabilizer -p idsp
+          args: --no-deps -p miniconf -p ad9959 -p stabilizer -p idsp -p urukul -p serial-settings
 
       - name: Build Book
         working-directory: book
