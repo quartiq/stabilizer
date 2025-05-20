@@ -50,7 +50,7 @@ rtic = { version = "2.1", features = ["thumbv7-backend"] }
 rtic-monotonics = { version = "2.0", features = ["cortex-m-systick"] }
 num_enum = { version = "0.7.3", default-features = false }
 paste = "1"
-idsp = "0.17.0"
+idsp = "0.18.0"
 ad9959 = { path = "ad9959", version = "0.3.0" }
 serial-settings = { version = "0.2", path = "serial-settings" }
 mcp230xx = "1.0"
@@ -66,8 +66,8 @@ minimq = "0.10.0"
 usb-device = "0.3.2"
 usbd-serial = "0.2"
 # Keep this synced with the miniconf version in py/setup.py
-miniconf = { version = "0.18", features = ["json-core", "derive", "postcard"] }
-miniconf_mqtt = { version = "0.18" }
+miniconf = { version = "0.19", features = ["json-core", "derive", "postcard"] }
+miniconf_mqtt = { version = "0.19" }
 tca9539 = "0.2"
 postcard = "1"
 embassy-futures = { version = "0.1", default-features = false }
@@ -125,9 +125,3 @@ codegen-units = 1
 opt-level = "s"
 debug = true
 lto = true
-
-[patch.crates-io]
-idsp = { git = "https://github.com/quartiq/idsp.git" }
-miniconf = { git = "https://github.com/quartiq/miniconf.git" }
-miniconf_derive = { git = "https://github.com/quartiq/miniconf.git" }
-miniconf_mqtt = { git = "https://github.com/quartiq/miniconf.git" }
