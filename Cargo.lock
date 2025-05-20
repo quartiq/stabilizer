@@ -94,9 +94,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitflags"
-version = "2.9.0"
+version = "2.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c8214115b7bf84099f1309324e63141d4c5d7cc26862f97a0a857dbefe165bd"
+checksum = "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967"
 
 [[package]]
 name = "built"
@@ -127,9 +127,9 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cc"
-version = "1.2.22"
+version = "1.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32db95edf998450acc7881c932f94cd9b05c87b4b2599e8bab064753da4acfd1"
+checksum = "5f4ac86a9e5bc1e2b3449ab9d7d3a6a405e3d1bb28d7b9be8614f55846ae3766"
 dependencies = [
  "jobserver",
  "libc",
@@ -419,7 +419,7 @@ version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2deb07a133b1520dc1a5690e9bd08950108873d7ed5de38dcc74d3b5ebffa110"
 dependencies = [
- "bitflags 2.9.0",
+ "bitflags 2.9.1",
  "libc",
  "libgit2-sys",
  "log",
@@ -539,9 +539,9 @@ checksum = "00210d6893afc98edb752b664b8890f0ef174c8adbb8d0be9710fa66fbbf72d3"
 
 [[package]]
 name = "icu_properties"
-version = "2.0.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2549ca8c7241c82f59c80ba2a6f415d931c5b58d24fb8412caa1a1f02c49139a"
+checksum = "016c619c1eeb94efb86809b015c58f479963de65bdb6253345c1a1276f22e32b"
 dependencies = [
  "displaydoc",
  "icu_collections",
@@ -555,9 +555,9 @@ dependencies = [
 
 [[package]]
 name = "icu_properties_data"
-version = "2.0.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8197e866e47b68f8f7d95249e172903bec06004b18b2937f1095d40a0c57de04"
+checksum = "298459143998310acd25ffe6810ed544932242d3f07083eee1084d83a71bd632"
 
 [[package]]
 name = "icu_provider"
@@ -605,8 +605,9 @@ dependencies = [
 
 [[package]]
 name = "idsp"
-version = "0.17.0"
-source = "git+https://github.com/quartiq/idsp.git#3101355080f142b17b5fce0724f90e357d198697"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0aff21db97b9679ca4b7534008aea7acdd1c11fea5d42b2a0ed50bd655d68fcf"
 dependencies = [
  "miniconf",
  "num-complex 0.4.6",
@@ -739,8 +740,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf"
-version = "0.18.0"
-source = "git+https://github.com/quartiq/miniconf.git#2306dc178429d1ed44b4a1f0418bb652fe1d748e"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba8be0161220741600b1780aeb762e495612923a28aa63824e6598cbdb2c8c15"
 dependencies = [
  "itoa",
  "miniconf_derive",
@@ -752,8 +754,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_derive"
-version = "0.18.0"
-source = "git+https://github.com/quartiq/miniconf.git#2306dc178429d1ed44b4a1f0418bb652fe1d748e"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a85197d39f81603fd67a8b4cba3e35c879133aa3044ee7d953e2526f5edbe258"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -763,8 +766,9 @@ dependencies = [
 
 [[package]]
 name = "miniconf_mqtt"
-version = "0.18.0"
-source = "git+https://github.com/quartiq/miniconf.git#2306dc178429d1ed44b4a1f0418bb652fe1d748e"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f39a5973640a2e9e3bcf3876dd3320481f9fe42abe4c7635cade86dba4cdbb5c"
 dependencies = [
  "embedded-io",
  "heapless 0.8.0",
@@ -1681,7 +1685,7 @@ version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f42320e61fe2cfd34354ecb597f86f413484a798ba44a8ca1165c58d42da6c1"
 dependencies = [
- "bitflags 2.9.0",
+ "bitflags 2.9.1",
 ]
 
 [[package]]
