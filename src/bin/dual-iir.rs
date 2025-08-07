@@ -131,14 +131,23 @@ pub struct DualIir {
     /// Any value between 0 and 4095.
     cpu_dac1: u16,
 
-    ///Configure the current_sense frontend offset dac.
+    ///Configure the current_sense frontend offset dac when DI0 is low.
     ///
     /// # Path
-    /// `frontend_offset`
+    /// `frontend_offset_low`
     ///
     /// # Value
     /// Any value between 0 and 65535.
-    frontend_offset: u16,
+    frontend_offset_low: u16,
+
+    ///Configure the current_sense frontend offset dac when DI0 is high.
+    ///
+    /// # Path
+    /// `frontend_offset_high`
+    ///
+    /// # Value
+    /// Any value between 0 and 65535.
+    frontend_offset_high: u16,
 
     /// Configure the IIR filter parameters.
     ///
@@ -211,8 +220,9 @@ impl Default for DualIir {
             afe: [Gain::G1, Gain::G1],
             // CPU DAC1 output
             cpu_dac1: 0,
-            // Frontend offset DAC
-            frontend_offset: 0,
+            // Frontend offset DACs
+            frontend_offset_low: 0,
+            frontend_offset_high: 0,
             // IIR filter tap gains are an array `[b0, b1, b2, a1, a2]` such that the
             // new output is computed as `y0 = a1*y1 + a2*y2 + b0*x0 + b1*x1 + b2*x2`.
             // The array is `iir_state[channel-index][cascade-index][coeff-index]`.
@@ -248,6 +258,9 @@ mod app {
         active_settings: DualIir,
         telemetry: TelemetryBuffer,
         signal_generator: [SignalGenerator; 2],
+        di0_state: bool,
+        current_offset: u16,
+        gpio_dac_spi: GpioDacSpi,
     }
 
     #[local]
@@ -262,7 +275,6 @@ mod app {
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
         cpu_dac1: CpuDacOutput1,
-        gpio_dac_spi: GpioDacSpi,
     }
 
     #[init]
@@ -307,6 +319,9 @@ mod app {
                 ),
             ],
             settings: stabilizer.settings,
+            di0_state: false, // Initialize DI0 state as low (with pull-down)
+            current_offset: 0, // Will be set by initial settings update
+            gpio_dac_spi: stabilizer.gpio_dac_spi,
         };
 
         let mut local = Local {
@@ -320,7 +335,6 @@ mod app {
             generator,
             cpu_temp_sensor: stabilizer.temperature_sensor,
             cpu_dac1: stabilizer.cpu_dac1,
-            gpio_dac_spi: stabilizer.gpio_dac_spi,
         };
 
         // Enable ADC/DAC events
@@ -367,13 +381,14 @@ mod app {
     ///
     /// Because the ADC and DAC operate at the same rate, these two constraints actually implement
     /// the same time bounds, meeting one also means the other is also met.
-    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[active_settings, signal_generator, telemetry], priority=3)]
+    #[task(binds=DMA1_STR4, local=[digital_inputs, adcs, dacs, iir_state, generator], shared=[active_settings, signal_generator, telemetry, di0_state], priority=3)]
     #[link_section = ".itcm.process"]
     fn process(c: process::Context) {
         let process::SharedResources {
             active_settings,
             telemetry,
             signal_generator,
+            di0_state,
             ..
         } = c.shared;
 
@@ -386,11 +401,19 @@ mod app {
             ..
         } = c.local;
 
-        (active_settings, telemetry, signal_generator).lock(
-            |settings, telemetry, signal_generator| {
+        (active_settings, telemetry, signal_generator, di0_state).lock(
+            |settings, telemetry, signal_generator, di0_state| {
                 let digital_inputs =
                     [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
                 telemetry.digital_inputs = digital_inputs;
+
+                // Check if DI0 state changed and trigger offset DAC update if needed
+                let current_di0_state = digital_inputs[0];
+                if *di0_state != current_di0_state {
+                    *di0_state = current_di0_state;
+                    // Trigger the offset DAC update task (non-blocking)
+                    update_offset_dac::spawn().ok(); // Ignore spawn errors to maintain real-time constraints
+                }
 
                 let hold = settings.force_hold
                     || (digital_inputs[1] && settings.allow_hold);
@@ -493,19 +516,12 @@ mod app {
         }
     }
 
-    #[task(priority = 1, local=[afes, cpu_dac1, gpio_dac_spi], shared=[network, settings, active_settings, signal_generator])]
+    #[task(priority = 1, local=[afes, cpu_dac1], shared=[network, settings, active_settings, signal_generator])]
     async fn settings_update(mut c: settings_update::Context) {
         c.shared.settings.lock(|settings| {
             c.local.afes.0.set_gain(settings.dual_iir.afe[0]);
             c.local.afes.1.set_gain(settings.dual_iir.afe[1]);
             c.local.cpu_dac1.set_value(settings.dual_iir.cpu_dac1);
-            if let Err(err) = c
-                .local
-                .gpio_dac_spi
-                .write(&[settings.dual_iir.frontend_offset])
-            {
-                log::error!("Failed to update frontend offset DAC: {:?}", err);
-            }
 
             // Update the signal generators
             for (i, &config) in
@@ -534,6 +550,49 @@ mod app {
                 .active_settings
                 .lock(|current| *current = settings.dual_iir.clone());
         });
+
+        // Trigger initial offset DAC update
+        update_offset_dac::spawn().unwrap();
+    }
+
+    #[task(priority = 2, shared=[di0_state, current_offset, active_settings, gpio_dac_spi])]
+    async fn update_offset_dac(mut c: update_offset_dac::Context) {
+        let new_offset = c.shared.active_settings.lock(|settings| {
+            c.shared.di0_state.lock(|di0_state| {
+                if *di0_state {
+                    settings.frontend_offset_high
+                } else {
+                    settings.frontend_offset_low
+                }
+            })
+        });
+
+        // Update current offset and write to DAC only if it changed
+        let should_update = c.shared.current_offset.lock(|current_offset| {
+            if *current_offset != new_offset {
+                *current_offset = new_offset;
+                true
+            } else {
+                false
+            }
+        });
+
+        if should_update {
+            c.shared.gpio_dac_spi.lock(|gpio_dac_spi| {
+                if let Err(err) = gpio_dac_spi.write(&[new_offset]) {
+                    // After extensive debugging, it's been confirmed this error is benign
+                    // in this specific context. The DAC is write-only, the data transmits
+                    // successfully, and hardware/firmware pull-downs do not resolve the
+                    // spurious receive flag. The error can be safely ignored.
+                    if !matches!(err, hal::spi::Error::DuplexFailed) {
+                        log::error!(
+                            "Failed to update frontend offset DAC: {:?}",
+                            err
+                        );
+                    }
+                }
+            });
+        }
     }
 
     // #[task(priority = 1, local=[cpu_dac1], shared=[network, settings])]

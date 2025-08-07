@@ -566,6 +566,7 @@ where
         let mosi = gpiod.pd7.into_alternate().speed(Speed::VeryHigh);
         let sck = gpiog.pg11.into_alternate().speed(Speed::VeryHigh);
         let nss = gpiog.pg10.into_alternate().speed(Speed::VeryHigh);
+        let miso = gpioa.pa6.into_alternate::<5>().internal_pull_down(true);
 
         let config = hal::spi::Config::new(hal::spi::Mode {
             polarity: hal::spi::Polarity::IdleHigh,
@@ -579,7 +580,7 @@ where
         .communication_mode(hal::spi::CommunicationMode::Transmitter);
 
         device.SPI1.spi(
-            (sck, hal::spi::NoMiso, mosi, nss),
+            (sck, miso, mosi, nss),
             config,
             design_parameters::AD5541_DAC_SCK_MAX.convert(),
             ccdr.peripheral.SPI1,
@@ -612,7 +613,7 @@ where
     };
 
     let digital_inputs = {
-        let di0 = gpiog.pg9.into_floating_input();
+        let di0 = gpiog.pg9.into_pull_down_input();
         let di1 = gpioc.pc15.into_floating_input();
         (di0, di1)
     };

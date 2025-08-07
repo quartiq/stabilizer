@@ -333,7 +333,16 @@ def _main():
         "--cpu-dac1", type=int, default=4095, help="CPU DAC1 value (%(default)s)"
     )
     parser.add_argument(
-        "--frontend-offset", type=int, default=0, help="Frontend offset (%(default)s)"
+        "--frontend-offset-low",
+        type=int,
+        default=0,
+        help="Frontend offset when DI0 is low (%(default)s)",
+    )
+    parser.add_argument(
+        "--frontend-offset-high",
+        type=int,
+        default=0,
+        help="Frontend offset when DI0 is high (%(default)s)",
     )
     parser.add_argument(
         "--stream-target",
@@ -442,8 +451,12 @@ def _main():
                 value=args.cpu_dac1,
             )
             await interface.set(
-                path="/frontend_offset",
-                value=args.frontend_offset,
+                path="/frontend_offset_low",
+                value=args.frontend_offset_low,
+            )
+            await interface.set(
+                path="/frontend_offset_high",
+                value=args.frontend_offset_high,
             )
             await interface.set(
                 path="/stream_target",
