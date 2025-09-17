@@ -55,8 +55,7 @@ use stabilizer::{
     },
     net::{
         serde::{Deserialize, Serialize},
-        telemetry::TelemetryBuffer,
-        NetworkState, NetworkUsers,
+        NetworkState, NetworkUsers, TelemetryBuffer,
     },
 };
 

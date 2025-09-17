@@ -51,7 +51,7 @@ use stabilizer::{
         DigitalInput0, DigitalInput1, Pgia, SerialTerminal, SystemTimer,
         Systick, UsbDevice,
     },
-    net::{telemetry::TelemetryBuffer, NetworkState, NetworkUsers},
+    net::{NetworkState, NetworkUsers, TelemetryBuffer},
 };
 use stream::{FrameGenerator, StreamFormat, StreamTarget};
 
