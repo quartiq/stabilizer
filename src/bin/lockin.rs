@@ -38,23 +38,8 @@ use idsp::{Accu, Complex, ComplexExt, Filter, Lowpass, Repeat, RPLL};
 use miniconf::{Leaf, Tree};
 use rtic_monotonics::Monotonic;
 use serde::{Deserialize, Serialize};
-use stream::FrameGenerator;
 
-use stabilizer::{
-    convert::{AdcCode, DacCode, Gain},
-    hardware::{
-        self,
-        adc::{Adc0Input, Adc1Input},
-        dac::{Dac0Output, Dac1Output},
-        hal,
-        input_stamper::InputStamper,
-        net::{NetworkState, NetworkUsers},
-        timers::SamplingTimer,
-        DigitalInput0, DigitalInput1, Pgia, SerialTerminal, SystemTimer,
-        Systick, UsbDevice,
-    },
-    telemetry::TelemetryBuffer,
-};
+use stabilizer::convert::{AdcCode, DacCode, Gain};
 
 use platform::{AppSettings, NetSettings};
 
@@ -242,6 +227,21 @@ impl Default for Lockin {
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, SDMMC])]
 mod app {
     use super::*;
+    use stabilizer::{
+        hardware::{
+            self,
+            adc::{Adc0Input, Adc1Input},
+            dac::{Dac0Output, Dac1Output},
+            hal,
+            input_stamper::InputStamper,
+            net::{NetworkState, NetworkUsers},
+            timers::SamplingTimer,
+            DigitalInput0, DigitalInput1, Pgia, SerialTerminal, SystemTimer,
+            Systick, UsbDevice,
+        },
+        telemetry::TelemetryBuffer,
+    };
+    use stream::FrameGenerator;
 
     #[shared]
     struct Shared {

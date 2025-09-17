@@ -40,21 +40,7 @@ use idsp::iir;
 use platform::{AppSettings, NetSettings};
 use serde::{Deserialize, Serialize};
 use signal_generator::{self, Source};
-use stabilizer::{
-    convert::{AdcCode, DacCode, Gain},
-    hardware::{
-        self,
-        adc::{Adc0Input, Adc1Input},
-        dac::{Dac0Output, Dac1Output},
-        hal,
-        net::{NetworkState, NetworkUsers},
-        timers::SamplingTimer,
-        DigitalInput0, DigitalInput1, Pgia, SerialTerminal, SystemTimer,
-        Systick, UsbDevice,
-    },
-    telemetry::TelemetryBuffer,
-};
-use stream::FrameGenerator;
+use stabilizer::convert::{AdcCode, DacCode, Gain};
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
@@ -211,6 +197,21 @@ pub struct Active {
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
     use super::*;
+
+    use stabilizer::{
+        hardware::{
+            self,
+            adc::{Adc0Input, Adc1Input},
+            dac::{Dac0Output, Dac1Output},
+            hal,
+            net::{NetworkState, NetworkUsers},
+            timers::SamplingTimer,
+            DigitalInput0, DigitalInput1, Pgia, SerialTerminal, SystemTimer,
+            Systick, UsbDevice,
+        },
+        telemetry::TelemetryBuffer,
+    };
+    use stream::FrameGenerator;
 
     #[shared]
     struct Shared {

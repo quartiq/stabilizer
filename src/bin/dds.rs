@@ -13,12 +13,6 @@ use fugit::ExtU32;
 use miniconf::Tree;
 use rtic_monotonics::Monotonic;
 
-use stabilizer::hardware::{
-    self, hal,
-    net::{NetworkState, NetworkUsers},
-    SerialTerminal, SystemTimer, Systick, Urukul, UsbDevice,
-};
-
 use platform::{AppSettings, NetSettings};
 
 #[derive(Clone, Debug, Tree)]
@@ -104,6 +98,12 @@ impl Default for App {
 mod app {
     use super::*;
 
+    use stabilizer::hardware::{
+        self, hal,
+        net::{NetworkState, NetworkUsers},
+        SerialTerminal, SystemTimer, Systick, Urukul, UsbDevice,
+    };
+
     #[shared]
     struct Shared {
         usb: UsbDevice,
@@ -129,7 +129,7 @@ mod app {
             1 << 7,
         );
 
-        let crate::hardware::Eem::Urukul(urukul) = stabilizer.eem else {
+        let stabilizer::hardware::Eem::Urukul(urukul) = stabilizer.eem else {
             panic!("No Urukul detected.")
         };
 

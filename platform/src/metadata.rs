@@ -1,3 +1,4 @@
+use core::fmt;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -11,8 +12,8 @@ pub struct ApplicationMetadata {
     pub hardware_version: &'static str,
 }
 
-impl core::fmt::Display for ApplicationMetadata {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl fmt::Display for ApplicationMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!(
             "{:<20}: {} [{}]",
             "Version", self.firmware_version, self.profile,

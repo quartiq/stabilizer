@@ -23,59 +23,18 @@
 //! 3. Unknown/unneeded settings values in flash can be actively ignored, facilitating simple flash
 //!    storage sharing.
 use crate::{dfu, metadata::ApplicationMetadata};
-use core::fmt::Write;
 use embassy_futures::block_on;
 use embedded_io::{Read as EioRead, ReadReady, Write as EioWrite, WriteReady};
 use embedded_storage_async::nor_flash::NorFlash;
 use heapless::{String, Vec};
 use miniconf::{
-    Path, Tree, TreeDeserializeOwned, TreeSchema, TreeSerialize, postcard,
+    Path, TreeDeserializeOwned, TreeSchema, TreeSerialize, postcard,
 };
 use sequential_storage::{
     cache::NoCache,
     map::{SerializationError, fetch_item, store_item},
 };
 use serial_settings::{BestEffortInterface, Platform, Settings};
-use smoltcp_nal::smoltcp::wire::EthernetAddress;
-
-/// Settings that are used for configuring the network interface to Stabilizer.
-#[derive(Clone, Debug, Tree)]
-pub struct NetSettings {
-    /// The broker domain name (or IP address) to use for MQTT connections.
-    pub broker: String<255>,
-
-    /// The MQTT ID to use upon connection with a broker.
-    pub id: String<23>,
-
-    /// An optional static IP address to use. An unspecified IP address (or malformed address) will
-    /// use DHCP.
-    pub ip: String<15>,
-    #[tree(skip)]
-    /// The MAC address of Stabilizer, which is used to reinitialize the ID to default settings.
-    pub mac: EthernetAddress,
-}
-
-impl NetSettings {
-    pub fn new(mac: EthernetAddress) -> Self {
-        let mut id = String::new();
-        write!(&mut id, "{mac}").unwrap();
-
-        Self {
-            broker: String::try_from("mqtt").unwrap(),
-            ip: String::try_from("0.0.0.0").unwrap(),
-            id,
-            mac,
-        }
-    }
-}
-
-pub trait AppSettings {
-    /// Construct the settings given known network settings.
-    fn new(net: NetSettings) -> Self;
-
-    /// Get the network settings from the application settings.
-    fn net(&self) -> &NetSettings;
-}
 
 #[derive(
     Default, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq,
