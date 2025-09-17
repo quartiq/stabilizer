@@ -625,19 +625,14 @@ where
     ));
     log::info!("EUI48: {}", mac_addr);
 
-    let (flash, mut settings) = {
-        let mut flash = {
-            let (_, flash_bank2) = device.FLASH.split();
-            super::flash::Flash(flash_bank2.unwrap())
-        };
-
-        let mut settings = C::new(NetSettings::new(mac_addr));
-        crate::settings::SerialSettingsPlatform::load(
-            &mut settings,
-            &mut flash,
-        );
-        (flash, settings)
+    let mut flash = {
+        let (_, flash_bank2) = device.FLASH.split();
+        super::flash::Flash(flash_bank2.unwrap())
     };
+
+    assert!(C::SCHEMA.shape().max_depth <= Y);
+    let mut settings = C::new(NetSettings::new(mac_addr));
+    crate::settings::SerialSettingsPlatform::load(&mut settings, &mut flash);
 
     let network_devices = {
         let ethernet_pins = {

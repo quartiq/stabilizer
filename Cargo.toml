@@ -125,3 +125,10 @@ codegen-units = 1
 opt-level = "s"
 debug = true
 lto = true
+
+
+[patch.crates-io]
+miniconf = { path = "../miniconf/miniconf" }
+miniconf_derive = { path = "../miniconf/miniconf_derive" }
+miniconf_mqtt = { path = "../miniconf/miniconf_mqtt" }
+idsp = { path = "../idsp" }

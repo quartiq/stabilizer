@@ -102,10 +102,8 @@ impl serial_settings::Settings for Settings {
 #[derive(Clone, Debug, Tree)]
 pub struct BiquadRepr {
     /// Biquad parameters
-    #[tree(typ="Leaf<iir::BiquadReprDiscriminants>", rename="typ",
-        with(serialize=self.repr.tag_serialize, deserialize=self.repr.tag_deserialize),
-        deny(ref_any="deny", mut_any="deny"))]
-    _tag: (),
+    #[tree(rename="typ", typ="&str", with=miniconf::str_leaf, defer=self.repr)]
+    _typ: (),
     repr: iir::BiquadRepr<f32, f32>,
 }
 
@@ -115,7 +113,7 @@ impl Default for BiquadRepr {
         i.set_min(-i16::MAX as _);
         i.set_max(i16::MAX as _);
         Self {
-            _tag: (),
+            _typ: (),
             repr: iir::BiquadRepr::Raw(Leaf(i)),
         }
     }
@@ -145,11 +143,13 @@ impl Run {
 #[derive(Clone, Debug, Tree, Default)]
 pub struct Channel {
     /// Analog Front End (AFE) gain.
-    gain: Leaf<Gain>,
+    #[tree(with=miniconf::leaf)]
+    gain: Gain,
     /// Biquad
     biquad: [BiquadRepr; IIR_CASCADE_LENGTH],
     /// Run/Hold behavior
-    run: Leaf<Run>,
+    #[tree(with=miniconf::leaf)]
+    run: Run,
     /// Signal generator configuration to add to the DAC0/DAC1 outputs
     source: signal_generator::Config,
 }
@@ -162,7 +162,7 @@ impl Channel {
                 .build(SAMPLE_PERIOD, DacCode::FULL_SCALE.recip())
                 .unwrap(),
             state: Default::default(),
-            run: *self.run,
+            run: self.run,
             biquad: self.biquad.each_ref().map(|biquad| {
                 biquad.repr.build::<f32>(
                     SAMPLE_PERIOD,
@@ -179,20 +179,23 @@ pub struct DualIir {
     /// Channel configuration
     ch: [Channel; 2],
     /// Trigger both signal sources
-    trigger: Leaf<bool>,
+    #[tree(with=miniconf::leaf)]
+    trigger: bool,
     /// Telemetry output period in seconds.
-    telemetry_period: Leaf<f32>,
+    #[tree(with=miniconf::leaf)]
+    telemetry_period: f32,
     /// Target IP and port for UDP streaming.
     ///
     /// Can be multicast.
-    stream: Leaf<StreamTarget>,
+    #[tree(with=miniconf::leaf)]
+    stream: StreamTarget,
 }
 
 impl Default for DualIir {
     fn default() -> Self {
         Self {
-            telemetry_period: Leaf(10.0),
-            trigger: Leaf(false),
+            telemetry_period: 10.0,
+            trigger: false,
             stream: Default::default(),
             ch: Default::default(),
         }
@@ -431,11 +434,11 @@ mod app {
     #[task(priority = 1, local=[afes], shared=[network, settings, active])]
     async fn settings_update(mut c: settings_update::Context) {
         c.shared.settings.lock(|settings| {
-            c.local.afes[0].set_gain(*settings.dual_iir.ch[0].gain);
-            c.local.afes[1].set_gain(*settings.dual_iir.ch[1].gain);
+            c.local.afes[0].set_gain(settings.dual_iir.ch[0].gain);
+            c.local.afes[1].set_gain(settings.dual_iir.ch[1].gain);
 
-            if *settings.dual_iir.trigger {
-                *settings.dual_iir.trigger = false;
+            if settings.dual_iir.trigger {
+                settings.dual_iir.trigger = false;
                 let s = settings.dual_iir.ch.each_ref().map(|ch| {
                     let s = ch
                         .source
@@ -455,7 +458,7 @@ mod app {
             }
             let b = settings.dual_iir.ch.each_ref().map(|ch| {
                 (
-                    *ch.run,
+                    ch.run,
                     ch.biquad.each_ref().map(|b| {
                         b.repr.build::<f32>(
                             SAMPLE_PERIOD,
@@ -472,7 +475,7 @@ mod app {
             });
             c.shared
                 .network
-                .lock(|net| net.direct_stream(*settings.dual_iir.stream));
+                .lock(|net| net.direct_stream(settings.dual_iir.stream));
         });
     }
 
@@ -485,8 +488,8 @@ mod app {
             let (gains, telemetry_period) =
                 c.shared.settings.lock(|settings| {
                     (
-                        settings.dual_iir.ch.each_ref().map(|ch| *ch.gain),
-                        *settings.dual_iir.telemetry_period,
+                        settings.dual_iir.ch.each_ref().map(|ch| ch.gain),
+                        settings.dual_iir.telemetry_period,
                     )
                 });
 

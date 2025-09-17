@@ -24,7 +24,7 @@ use telemetry::TelemetryClient;
 
 use core::fmt::Write;
 use heapless::String;
-use miniconf::{TreeDeserializeOwned, TreeKey, TreeSerialize};
+use miniconf::{TreeDeserializeOwned, TreeSchema, TreeSerialize};
 use miniconf_mqtt::minimq;
 
 pub type NetworkReference =
@@ -76,7 +76,7 @@ where
 
 impl<S, const Y: usize> NetworkUsers<S, Y>
 where
-    S: Default + TreeDeserializeOwned + TreeSerialize + TreeKey + Clone,
+    S: Default + TreeDeserializeOwned + TreeSerialize + TreeSchema + Clone,
 {
     /// Construct Stabilizer's default network users.
     ///

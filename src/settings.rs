@@ -28,7 +28,7 @@ use embassy_futures::block_on;
 use embedded_io::Write as EioWrite;
 use heapless::{String, Vec};
 use miniconf::{
-    postcard, Leaf, Path, Tree, TreeDeserializeOwned, TreeKey, TreeSerialize,
+    postcard, Path, Tree, TreeDeserializeOwned, TreeSchema, TreeSerialize,
 };
 use sequential_storage::{
     cache::NoCache,
@@ -42,14 +42,14 @@ use stm32h7xx_hal::flash::LockedFlashBank;
 #[derive(Clone, Debug, Tree)]
 pub struct NetSettings {
     /// The broker domain name (or IP address) to use for MQTT connections.
-    pub broker: Leaf<String<255>>,
+    pub broker: String<255>,
 
     /// The MQTT ID to use upon connection with a broker.
-    pub id: Leaf<String<23>>,
+    pub id: String<23>,
 
     /// An optional static IP address to use. An unspecified IP address (or malformed address) will
     /// use DHCP.
-    pub ip: Leaf<String<15>>,
+    pub ip: String<15>,
     #[tree(skip)]
     /// The MAC address of Stabilizer, which is used to reinitialize the ID to default settings.
     pub mac: EthernetAddress,
@@ -61,9 +61,9 @@ impl NetSettings {
         write!(&mut id, "{mac}").unwrap();
 
         Self {
-            broker: String::try_from("mqtt").unwrap().into(),
-            ip: String::try_from("0.0.0.0").unwrap().into(),
-            id: id.into(),
+            broker: String::try_from("mqtt").unwrap(),
+            ip: String::try_from("0.0.0.0").unwrap(),
+            id,
             mac,
         }
     }
@@ -117,13 +117,13 @@ pub struct SerialSettingsPlatform<C> {
 
 impl<C> SerialSettingsPlatform<C>
 where
-    C: TreeDeserializeOwned + TreeSerialize + TreeKey,
+    C: TreeDeserializeOwned + TreeSerialize + TreeSchema,
 {
     pub fn load(structure: &mut C, storage: &mut Flash) {
         // Loop over flash and read settings
         let mut buffer = [0u8; 512];
-        for path in C::nodes::<Path<String<128>, '/'>, 8>() {
-            let (path, _node) = path.unwrap();
+        for path in C::SCHEMA.nodes::<Path<String<128>, '/'>, 8>() {
+            let path = path.unwrap();
 
             // Try to fetch the setting from flash.
             let value: &[u8] = match block_on(fetch_item(
@@ -136,7 +136,7 @@ where
                 Err(e) => {
                     log::warn!(
                         "Failed to fetch `{}` from flash: {e:?}",
-                        path.as_str()
+                        path.0.as_str()
                     );
                     continue;
                 }
@@ -150,13 +150,13 @@ where
                 continue;
             }
 
-            log::info!("Loading initial `{}` from flash", path.as_str());
+            log::info!("Loading initial `{}` from flash", path.0.as_str());
 
             let flavor = ::postcard::de_flavors::Slice::new(value);
             if let Err(e) = postcard::set_by_key(structure, &path, flavor) {
                 log::warn!(
                     "Failed to deserialize `{}` from flash: {e:?}",
-                    path.as_str()
+                    path.0.as_str()
                 );
             }
         }
