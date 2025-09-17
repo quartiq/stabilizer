@@ -16,6 +16,7 @@ use rtic_monotonics::Monotonic;
 use platform::{AppSettings, NetSettings};
 
 #[derive(Clone, Debug, Tree)]
+#[tree(meta(doc, typename))]
 pub struct Settings {
     urukul: App,
     net: NetSettings,
@@ -44,6 +45,7 @@ impl serial_settings::Settings for Settings {
 }
 
 #[derive(Clone, Debug, Tree)]
+#[tree(meta(doc, typename))]
 pub struct Channel {
     #[tree(with=miniconf::leaf)]
     pll_n: Option<u5>,
@@ -72,6 +74,7 @@ impl Default for Channel {
 }
 
 #[derive(Clone, Debug, Tree)]
+#[tree(meta(doc, typename))]
 pub struct App {
     refclk: f64,
     #[tree(with=miniconf::leaf)]

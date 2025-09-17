@@ -38,6 +38,7 @@ impl Signal {
 
 /// Basic configuration for a generated signal.
 #[derive(Clone, Debug, Tree, Serialize, Deserialize)]
+#[tree(meta(doc, typename))]
 pub struct Config {
     /// The signal type that should be generated. See [Signal] variants.
     #[tree(with=miniconf::leaf)]

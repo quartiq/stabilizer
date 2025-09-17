@@ -55,6 +55,7 @@ const SAMPLE_TICKS_LOG2: u32 = 7;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 
 #[derive(Clone, Debug, Tree)]
+#[tree(meta(doc, typename))]
 pub struct Settings {
     lockin: Lockin,
     net: NetSettings,
@@ -109,6 +110,7 @@ enum LockinMode {
 }
 
 #[derive(Clone, Debug, Tree)]
+#[tree(meta(doc, typename))]
 pub struct Lockin {
     /// Configure the Analog Front End (AFE) gain.
     ///

@@ -56,6 +56,7 @@ const SAMPLE_PERIOD: f32 =
     SAMPLE_TICKS as f32 * stabilizer::design_parameters::TIMER_PERIOD;
 
 #[derive(Clone, Debug, Tree)]
+#[tree(meta(doc, typename))]
 pub struct Settings {
     dual_iir: DualIir,
     net: NetSettings,
@@ -84,6 +85,7 @@ impl serial_settings::Settings for Settings {
 }
 
 #[derive(Clone, Debug, Tree)]
+#[tree(meta(doc, typename))]
 pub struct BiquadRepr {
     /// Biquad parameters
     #[tree(rename="typ", typ="&str", with=miniconf::str_leaf, defer=self.repr)]
@@ -124,7 +126,9 @@ impl Run {
     }
 }
 
+/// A ADC-DAC channel
 #[derive(Clone, Debug, Tree, Default)]
+#[tree(meta(doc, typename))]
 pub struct Channel {
     /// Analog Front End (AFE) gain.
     #[tree(with=miniconf::leaf)]
@@ -159,6 +163,7 @@ impl Channel {
 }
 
 #[derive(Clone, Debug, Tree)]
+#[tree(meta(doc, typename))]
 pub struct DualIir {
     /// Channel configuration
     ch: [Channel; 2],

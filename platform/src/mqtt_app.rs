@@ -5,6 +5,7 @@ use smoltcp_nal::smoltcp::wire::EthernetAddress;
 
 /// Settings that are used for configuring the network interface to Stabilizer.
 #[derive(Clone, Debug, Tree)]
+#[tree(meta(doc, typename))]
 pub struct NetSettings {
     /// The broker domain name (or IP address) to use for MQTT connections.
     pub broker: String<255>,
