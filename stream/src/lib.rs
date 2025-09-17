@@ -72,15 +72,15 @@ box_pool!(FRAME_POOL: Frame);
 /// ## Example
 /// `192.168.0.1:1234`
 #[derive(Copy, Clone, Debug, DeserializeFromStr, PartialEq, Eq)]
-pub struct StreamTarget(pub SocketAddr);
+pub struct Target(pub SocketAddr);
 
-impl Default for StreamTarget {
+impl Default for Target {
     fn default() -> Self {
         Self("0.0.0.0:0".parse().unwrap())
     }
 }
 
-impl Serialize for StreamTarget {
+impl Serialize for Target {
     fn serialize<S: serde::Serializer>(
         &self,
         serializer: S,
@@ -91,7 +91,7 @@ impl Serialize for StreamTarget {
     }
 }
 
-impl core::str::FromStr for StreamTarget {
+impl core::str::FromStr for Target {
     type Err = &'static str;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -104,7 +104,7 @@ impl core::str::FromStr for StreamTarget {
 /// Specifies the format of streamed data
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive)]
-pub enum StreamFormat {
+pub enum Format {
     /// Reserved, unused format specifier.
     Unknown = 0,
 
@@ -132,7 +132,7 @@ pub enum StreamFormat {
 /// # Returns
 /// (generator, stream) where `generator` can be used to enqueue "batches" for transmission. The
 /// `stream` is the logically consumer (UDP transmitter) of the enqueued data.
-pub fn setup_streaming<N: UdpClientStack<Error = smoltcp_nal::NetworkError>>(
+pub fn setup<N: UdpClientStack<Error = smoltcp_nal::NetworkError>>(
     stack: N,
 ) -> (FrameGenerator, DataStream<N>) {
     // The queue needs to be at least as large as the frame count to ensure that every allocated
@@ -222,7 +222,7 @@ impl FrameGenerator {
     fn new(queue: Producer<'static, StreamFrame, FRAME_QUEUE_SIZE>) -> Self {
         Self {
             queue,
-            format: StreamFormat::Unknown.into(),
+            format: Format::Unknown.into(),
             current_frame: None,
             sequence_number: 0,
         }
@@ -289,7 +289,7 @@ pub struct DataStream<N: UdpClientStack> {
     stack: N,
     socket: Option<<N as UdpClientStack>::UdpSocket>,
     queue: Consumer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
-    remote: StreamTarget,
+    remote: Target,
 }
 
 impl<N: UdpClientStack<Error = smoltcp_nal::NetworkError>> DataStream<N> {
@@ -306,7 +306,7 @@ impl<N: UdpClientStack<Error = smoltcp_nal::NetworkError>> DataStream<N> {
         Self {
             stack,
             socket: None,
-            remote: StreamTarget::default(),
+            remote: Target::default(),
             queue: consumer,
         }
     }
@@ -346,7 +346,7 @@ impl<N: UdpClientStack<Error = smoltcp_nal::NetworkError>> DataStream<N> {
     ///
     /// # Args
     /// * `remote` - The destination to send stream data to.
-    pub fn set_remote(&mut self, remote: StreamTarget) {
+    pub fn set_remote(&mut self, remote: Target) {
         // Close socket to be reopened if the remote has changed.
         if remote != self.remote {
             self.close();

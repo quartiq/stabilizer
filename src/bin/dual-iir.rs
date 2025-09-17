@@ -53,7 +53,7 @@ use stabilizer::{
     },
     net::{NetworkState, NetworkUsers, TelemetryBuffer},
 };
-use stream::{FrameGenerator, StreamFormat, StreamTarget};
+use stream::FrameGenerator;
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
@@ -66,7 +66,7 @@ const BATCH_SIZE: usize = 8;
 const SAMPLE_TICKS_LOG2: u8 = 7;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 const SAMPLE_PERIOD: f32 =
-    SAMPLE_TICKS as f32 * hardware::design_parameters::TIMER_PERIOD;
+    SAMPLE_TICKS as f32 * stabilizer::design_parameters::TIMER_PERIOD;
 
 #[derive(Clone, Debug, Tree)]
 pub struct Settings {
@@ -185,7 +185,7 @@ pub struct DualIir {
     ///
     /// Can be multicast.
     #[tree(with=miniconf::leaf)]
-    stream: StreamTarget,
+    stream: stream::Target,
 }
 
 impl Default for DualIir {
@@ -254,7 +254,7 @@ mod app {
             stabilizer.metadata,
         );
 
-        let generator = network.configure_streaming(StreamFormat::AdcDacData);
+        let generator = network.configure_streaming(stream::Format::AdcDacData);
 
         let shared = Shared {
             usb: stabilizer.usb,

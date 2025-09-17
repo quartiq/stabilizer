@@ -9,11 +9,13 @@ pub use heapless;
 pub use miniconf;
 pub use serde;
 
-use crate::hardware::{adc::AdcCode, afe::Gain, dac::DacCode, SystemTimer};
-use crate::hardware::{EthernetPhy, NetworkManager, NetworkStack};
+use crate::hardware::{
+    adc::AdcCode, afe::Gain, dac::DacCode, hal::ethernet::EthernetDMA,
+    EthernetPhy, SystemTimer,
+};
 use platform::{ApplicationMetadata, NetSettings, TelemetryClient};
 use serde::Serialize;
-use stream::{DataStream, FrameGenerator, StreamTarget};
+use stream::{DataStream, FrameGenerator, Target};
 
 use core::fmt::Write;
 use heapless::String;
@@ -22,6 +24,24 @@ use miniconf_mqtt::minimq;
 
 pub type NetworkReference =
     smoltcp_nal::shared::NetworkStackProxy<'static, NetworkStack>;
+
+// Number of TX descriptors in the ethernet descriptor ring.
+pub const TX_DESRING_CNT: usize = 4;
+
+// Number of RX descriptors in the ethernet descriptor ring.
+pub const RX_DESRING_CNT: usize = 4;
+
+pub type NetworkStack = smoltcp_nal::NetworkStack<
+    'static,
+    EthernetDMA<TX_DESRING_CNT, RX_DESRING_CNT>,
+    SystemTimer,
+>;
+
+pub type NetworkManager = smoltcp_nal::shared::NetworkManager<
+    'static,
+    EthernetDMA<TX_DESRING_CNT, RX_DESRING_CNT>,
+    SystemTimer,
+>;
 
 /// The telemetry buffer is used for storing sample values during execution.
 ///
@@ -114,7 +134,7 @@ pub struct NetworkUsers<S>
 where
     S: Default + TreeDeserializeOwned + TreeSerialize + Clone,
 {
-    pub miniconf: miniconf_mqtt::MqttClient<
+    miniconf: miniconf_mqtt::MqttClient<
         'static,
         S,
         NetworkReference,
@@ -198,8 +218,7 @@ where
 
         let telemetry = TelemetryClient::new(mqtt, prefix, metadata);
 
-        let (generator, stream) =
-            stream::setup_streaming(stack_manager.acquire_stack());
+        let (generator, stream) = stream::setup(stack_manager.acquire_stack());
 
         NetworkUsers {
             miniconf,
@@ -227,7 +246,7 @@ where
     ///
     /// # Args
     /// * `remote` - The destination for the streamed data.
-    pub fn direct_stream(&mut self, remote: StreamTarget) {
+    pub fn direct_stream(&mut self, remote: Target) {
         if self.generator.is_none() {
             self.stream.set_remote(remote);
         }
@@ -283,7 +302,7 @@ fn get_client_id(id: &str, mode: &str) -> String<64> {
 ///
 /// # Returns
 /// The MQTT prefix used for this device.
-pub fn get_device_prefix(app: &str, id: &str) -> String<128> {
+fn get_device_prefix(app: &str, id: &str) -> String<128> {
     // Note(unwrap): The mac address + binary name must be short enough to fit into this string. If
     // they are defined too long, this will panic and the device will fail to boot.
     let mut prefix: String<128> = String::new();
@@ -300,7 +319,7 @@ pub fn get_device_prefix(app: &str, id: &str) -> String<128> {
 
 /// Processor for managing network hardware.
 pub struct NetworkProcessor {
-    pub stack: NetworkReference,
+    stack: NetworkReference,
     phy: EthernetPhy,
     network_was_reset: bool,
 }

@@ -1,6 +1,12 @@
 //! Stabilizer hardware configuration
 //!
 //! This file contains all of the hardware-specific configuration of Stabilizer.
+use super::hal::{
+    self,
+    ethernet::{self, PHY},
+    gpio::Speed,
+    prelude::*,
+};
 use core::cell::RefCell;
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{fmt::Write, ptr, slice};
@@ -8,24 +14,25 @@ use embedded_hal_compat::{markers::ForwardOutputPin, Forward, ForwardCompat};
 use grounded::uninit::GroundedCell;
 use heapless::String;
 use platform::{AppSettings, ApplicationMetadata, NetSettings};
-use stm32h7xx_hal::{
-    self as hal,
-    ethernet::{self, PHY},
-    gpio::Speed,
-    prelude::*,
-};
 
 use smoltcp_nal::smoltcp;
 
+use crate::design_parameters;
 use crate::hardware::delay::AsmDelay;
 
 use super::{
-    adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
-    eeprom, input_stamper::InputStamper, pounder,
-    pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
-    DigitalInput0, DigitalInput1, Eem, EthernetPhy, Gpio, HardwareVersion,
-    NetworkStack, Pgia, SerialTerminal, SystemTimer, Systick, UsbDevice,
+    adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, eeprom,
+    input_stamper::InputStamper, pounder, pounder::dds_output::DdsOutput,
+    shared_adc::SharedAdc, timers, DigitalInput0, DigitalInput1, Eem,
+    EthernetPhy, Gpio, HardwareVersion, Pgia, SerialTerminal, SystemTimer,
+    Systick, UsbDevice,
 };
+
+use crate::net::NetworkStack;
+
+// fn delay_us(t: u32) {
+//     cortex_m::asm::delay(self.frequency_us * t)
+// }
 
 const NUM_TCP_SOCKETS: usize = 4;
 const NUM_UDP_SOCKETS: usize = 1;
@@ -132,7 +139,10 @@ pub struct PounderDevices {
 #[link_section = ".sram3.eth"]
 /// Static storage for the ethernet DMA descriptor ring.
 static DES_RING: GroundedCell<
-    ethernet::DesRing<{ super::TX_DESRING_CNT }, { super::RX_DESRING_CNT }>,
+    ethernet::DesRing<
+        { crate::net::TX_DESRING_CNT },
+        { crate::net::RX_DESRING_CNT },
+    >,
 > = GroundedCell::uninit();
 
 /// Setup ITCM and load its code from flash.
@@ -842,7 +852,7 @@ where
 
     // Measure the Pounder PGOOD output to detect if pounder is present on Stabilizer.
     let pounder_pgood = gpiob.pb13.into_pull_down_input();
-    delay.delay_ms(2u8);
+    delay.delay_us(2000u32);
     let pounder = if pounder_pgood.is_high() {
         log::info!("Found Pounder");
 
@@ -931,7 +941,7 @@ where
             // time is not specified, but bench testing indicates it usually comes up within
             // 200-300uS. We do a larger delay to ensure that it comes up and is stable before
             // using it.
-            delay.delay_ms(10u32);
+            delay.delay_us(10_000u32);
 
             let mut ad9959 = ad9959::Ad9959::new(
                 qspi,
@@ -1067,10 +1077,10 @@ where
         delay: &mut AsmDelay,
     ) -> (hal::gpio::Pin<P, N, hal::gpio::Analog>, bool) {
         let pin = pin.into_pull_up_input();
-        delay.delay_ms(1u8);
+        delay.delay_us(1_000u32);
         is_floating &= pin.is_high();
         let pin = pin.into_pull_down_input();
-        delay.delay_ms(1u8);
+        delay.delay_us(1_000u32);
         is_floating &= pin.is_low();
         (pin.into_analog(), is_floating)
     }
@@ -1098,7 +1108,7 @@ where
             log::warn!("No 802.3at PoE. Powering up EEM anyway.");
         }
         force_eem_source.set_high();
-        delay.delay_ms(200u8);
+        delay.delay_us(200_000u32);
 
         let spi = device
             .SPI6

@@ -3,8 +3,8 @@
 //! # Description
 //! This file provides an API for measuring the internal STM32 temperature sensor. This temperature
 //! sensor measures the silicon junction temperature (Tj) and is connected via an internal ADC.
-use stm32h7xx_hal::{
-    self as hal,
+use super::hal::{
+    self,
     signature::{TS_CAL_110, TS_CAL_30},
 };
 
@@ -57,8 +57,7 @@ impl CpuTempSensor {
 
     /// Get the temperature of the CPU in degrees Celsius.
     pub fn get_temperature(&mut self) -> Result<f32, AdcError> {
-        self.sensor
-            .read_raw()
-            .map(|raw| self.calibration.sample_to_temperature(raw))
+        let t = self.sensor.read_raw()?;
+        Ok(self.calibration.sample_to_temperature(t))
     }
 }

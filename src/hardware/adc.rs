@@ -65,16 +65,15 @@
 //! In this implementation, double buffer mode DMA transfers are used because the SPI RX FIFOs
 //! have finite depth, FIFO access is slower than AXISRAM access, and because the single
 //! buffer mode DMA disable/enable and buffer update sequence is slow.
-use stm32h7xx_hal as hal;
-
 use rtic::Mutex;
 
 use grounded::uninit::{GroundedArrayCell, GroundedCell};
 
-use super::design_parameters::SampleBuffer;
 use super::timers;
+use crate::design_parameters::SampleBuffer;
 
-use hal::{
+use super::hal::{
+    self,
     dma::{
         config::Priority,
         dma::{DMAReq, DmaConfig},

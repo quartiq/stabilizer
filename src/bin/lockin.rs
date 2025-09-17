@@ -39,7 +39,7 @@ use rtic_monotonics::Monotonic;
 use fugit::ExtU32;
 
 use idsp::{Accu, Complex, ComplexExt, Filter, Lowpass, Repeat, RPLL};
-use stream::{FrameGenerator, StreamFormat, StreamTarget};
+use stream::FrameGenerator;
 
 use stabilizer::{
     hardware::{
@@ -217,7 +217,7 @@ pub struct Lockin {
     /// # Value
     /// See [StreamTarget#miniconf]
     #[tree(with=miniconf::leaf)]
-    stream: StreamTarget,
+    stream: stream::Target,
 }
 
 impl Default for Lockin {
@@ -293,7 +293,7 @@ mod app {
             stabilizer.metadata,
         );
 
-        let generator = network.configure_streaming(StreamFormat::AdcDacData);
+        let generator = network.configure_streaming(stream::Format::AdcDacData);
 
         let shared = Shared {
             network,

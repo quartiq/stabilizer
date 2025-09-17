@@ -50,16 +50,15 @@
 //! While double-buffered mode is used for DMA to avoid lost DAC-update events, there is no check
 //! for re-use of a previously provided DAC output buffer. It is assumed that the DMA request is
 //! served promptly after the transfer completes.
-use stm32h7xx_hal as hal;
-
 use rtic::Mutex;
 
-use super::design_parameters::{SampleBuffer, MAX_SAMPLE_BUFFER_SIZE};
 use super::timers;
+use crate::design_parameters::{SampleBuffer, MAX_SAMPLE_BUFFER_SIZE};
 
 use core::convert::TryFrom;
 
-use hal::{
+use super::hal::{
+    self,
     dma::{
         dma::{DMAReq, DmaConfig},
         traits::TargetAddress,

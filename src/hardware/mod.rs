@@ -2,9 +2,11 @@
 
 pub use embedded_hal_02;
 use embedded_hal_compat::{markers::ForwardOutputPin, Forward};
-use hal::gpio::{self, ErasedPin, Input, Output};
+use hal::{
+    flash::{LockedFlashBank, UnlockedFlashBank},
+    gpio::{self, ErasedPin, Input, Output},
+};
 pub use stm32h7xx_hal as hal;
-use stm32h7xx_hal::flash::{LockedFlashBank, UnlockedFlashBank};
 
 use platform::{ApplicationMetadata, AsyncFlash, UnlockFlash};
 
@@ -13,8 +15,6 @@ pub mod afe;
 pub mod cpu_temp_sensor;
 pub mod dac;
 pub mod delay;
-pub mod design_parameters;
-pub mod eem;
 mod eeprom;
 pub mod input_stamper;
 pub mod pounder;
@@ -56,24 +56,6 @@ pub type DigitalInput0 = hal::gpio::gpiog::PG9<hal::gpio::Input>;
 
 // Type alias for digital input 1 (DI1).
 pub type DigitalInput1 = hal::gpio::gpioc::PC15<hal::gpio::Input>;
-
-// Number of TX descriptors in the ethernet descriptor ring.
-const TX_DESRING_CNT: usize = 4;
-
-// Number of RX descriptors in the ethernet descriptor ring.
-const RX_DESRING_CNT: usize = 4;
-
-pub type NetworkStack = smoltcp_nal::NetworkStack<
-    'static,
-    hal::ethernet::EthernetDMA<TX_DESRING_CNT, RX_DESRING_CNT>,
-    SystemTimer,
->;
-
-pub type NetworkManager = smoltcp_nal::shared::NetworkManager<
-    'static,
-    hal::ethernet::EthernetDMA<TX_DESRING_CNT, RX_DESRING_CNT>,
-    SystemTimer,
->;
 
 pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
 
