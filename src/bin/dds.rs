@@ -18,8 +18,9 @@ use stabilizer::{
         self, hal, SerialTerminal, SystemTimer, Systick, Urukul, UsbDevice,
     },
     net::{NetworkState, NetworkUsers},
-    settings::NetSettings,
 };
+
+use platform::{AppSettings, NetSettings};
 
 #[derive(Clone, Debug, Tree)]
 pub struct Settings {
@@ -27,7 +28,7 @@ pub struct Settings {
     net: NetSettings,
 }
 
-impl stabilizer::settings::AppSettings for Settings {
+impl AppSettings for Settings {
     fn new(net: NetSettings) -> Self {
         Self {
             net,

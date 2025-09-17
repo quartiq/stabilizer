@@ -22,18 +22,18 @@
 //!    settings values
 //! 3. Unknown/unneeded settings values in flash can be actively ignored, facilitating simple flash
 //!    storage sharing.
-use crate::hardware::{dfu, metadata::ApplicationMetadata};
+use crate::{dfu, metadata::ApplicationMetadata};
 use core::fmt::Write;
 use embassy_futures::block_on;
-use embedded_io::Write as EioWrite;
+use embedded_io::{Read as EioRead, ReadReady, Write as EioWrite, WriteReady};
 use embedded_storage_async::nor_flash::NorFlash;
 use heapless::{String, Vec};
 use miniconf::{
-    postcard, Path, Tree, TreeDeserializeOwned, TreeSchema, TreeSerialize,
+    Path, Tree, TreeDeserializeOwned, TreeSchema, TreeSerialize, postcard,
 };
 use sequential_storage::{
     cache::NoCache,
-    map::{fetch_item, store_item, SerializationError},
+    map::{SerializationError, fetch_item, store_item},
 };
 use serial_settings::{BestEffortInterface, Platform, Settings};
 use smoltcp_nal::smoltcp::wire::EthernetAddress;
@@ -102,9 +102,9 @@ impl sequential_storage::map::Key for SettingsKey {
     }
 }
 
-pub struct SerialSettingsPlatform<C, F> {
+pub struct SerialSettingsPlatform<C, F, S> {
     /// The interface to read/write data to/from serially (via text) to the user.
-    pub interface: BestEffortInterface<crate::hardware::SerialPort>,
+    pub interface: BestEffortInterface<S>,
 
     pub _settings_marker: core::marker::PhantomData<C>,
 
@@ -115,7 +115,7 @@ pub struct SerialSettingsPlatform<C, F> {
     pub metadata: &'static ApplicationMetadata,
 }
 
-impl<C, F> SerialSettingsPlatform<C, F>
+impl<C, F, S> SerialSettingsPlatform<C, F, S>
 where
     C: TreeDeserializeOwned + TreeSerialize + TreeSchema,
     F: NorFlash,
@@ -164,12 +164,13 @@ where
     }
 }
 
-impl<C, F> Platform for SerialSettingsPlatform<C, F>
+impl<C, F, S> Platform for SerialSettingsPlatform<C, F, S>
 where
     C: Settings,
     F: NorFlash,
+    S: EioWrite + WriteReady + ReadReady + EioRead,
 {
-    type Interface = BestEffortInterface<crate::hardware::SerialPort>;
+    type Interface = BestEffortInterface<S>;
     type Settings = C;
     type Error = sequential_storage::Error<F::Error>;
 
@@ -213,7 +214,7 @@ where
     fn cmd(&mut self, cmd: &str) {
         match cmd {
             "reboot" => cortex_m::peripheral::SCB::sys_reset(),
-            "dfu" => dfu::start_dfu_reboot(),
+            "dfu" => dfu::dfu_reboot(),
             "service" => {
                 write!(&mut self.interface, "{}", &self.metadata).unwrap();
             }

@@ -12,12 +12,9 @@ pub use serde;
 pub mod network_processor;
 pub mod telemetry;
 
-use crate::hardware::{
-    metadata::ApplicationMetadata, EthernetPhy, NetworkManager, NetworkStack,
-    SystemTimer,
-};
-use crate::settings::NetSettings;
+use crate::hardware::{EthernetPhy, NetworkManager, NetworkStack, SystemTimer};
 use network_processor::NetworkProcessor;
+use platform::{ApplicationMetadata, NetSettings};
 use stream::{DataStream, FrameGenerator, StreamTarget};
 use telemetry::TelemetryClient;
 

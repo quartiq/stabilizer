@@ -58,8 +58,9 @@ use stabilizer::{
         telemetry::TelemetryBuffer,
         NetworkState, NetworkUsers,
     },
-    settings::NetSettings,
 };
+
+use platform::{AppSettings, NetSettings};
 
 // The logarithm of the number of samples in each batch process. This corresponds with 2^3 samples
 // per batch = 8 samples
@@ -78,7 +79,7 @@ pub struct Settings {
     net: NetSettings,
 }
 
-impl stabilizer::settings::AppSettings for Settings {
+impl AppSettings for Settings {
     fn new(net: NetSettings) -> Self {
         Self {
             net,

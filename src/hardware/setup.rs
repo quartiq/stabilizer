@@ -7,6 +7,7 @@ use core::{fmt::Write, ptr, slice};
 use embedded_hal_compat::{markers::ForwardOutputPin, Forward, ForwardCompat};
 use grounded::uninit::GroundedCell;
 use heapless::String;
+use platform::{AppSettings, ApplicationMetadata, NetSettings};
 use stm32h7xx_hal::{
     self as hal,
     ethernet::{self, PHY},
@@ -17,12 +18,11 @@ use stm32h7xx_hal::{
 use smoltcp_nal::smoltcp;
 
 use crate::hardware::delay::AsmDelay;
-use crate::settings::{AppSettings, NetSettings};
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
-    dfu, eeprom, input_stamper::InputStamper, metadata::ApplicationMetadata,
-    pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
+    eeprom, input_stamper::InputStamper, pounder,
+    pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
     DigitalInput0, DigitalInput1, Eem, EthernetPhy, Gpio, HardwareVersion,
     NetworkStack, Pgia, SerialTerminal, SystemTimer, Systick, UsbDevice,
 };
@@ -254,8 +254,8 @@ where
     }
 
     // Check for a reboot to DFU before doing any system configuration.
-    if dfu::dfu_bootflag() {
-        dfu::execute_system_bootloader();
+    if platform::dfu_flag_is_set() {
+        platform::bootload_dfu();
     }
 
     let pwr = device.PWR.constrain();
@@ -612,7 +612,7 @@ where
                 gpiog.pg3.into_pull_down_input().is_high(),
             ][..],
         );
-        ApplicationMetadata::new(hardware_version.into())
+        crate::hardware::metadata(hardware_version.into())
     };
 
     let mac_addr = smoltcp::wire::EthernetAddress(eeprom::read_eui48(
@@ -623,11 +623,14 @@ where
 
     let mut flash = {
         let (_, flash_bank2) = device.FLASH.split();
-        super::flash::Flash(flash_bank2.unwrap())
+        platform::AsyncFlash(crate::hardware::Flash(flash_bank2.unwrap()))
     };
 
     let mut settings = C::new(NetSettings::new(mac_addr));
-    crate::settings::SerialSettingsPlatform::load(&mut settings, &mut flash);
+    platform::SerialSettingsPlatform::<_, _, ()>::load(
+        &mut settings,
+        &mut flash,
+    );
 
     let network_devices = {
         let ethernet_pins = {
@@ -1205,7 +1208,7 @@ where
             cortex_m::singleton!(: [u8; 512] = [0u8; 512]).unwrap();
 
         serial_settings::Runner::new(
-            crate::settings::SerialSettingsPlatform {
+            platform::SerialSettingsPlatform {
                 interface: serial_settings::BestEffortInterface::new(
                     usb_serial,
                 ),

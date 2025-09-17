@@ -37,6 +37,7 @@ use fugit::ExtU32 as _;
 
 use idsp::iir;
 
+use platform::{AppSettings, NetSettings};
 use serde::{Deserialize, Serialize};
 use signal_generator::{self, Source};
 use stabilizer::{
@@ -51,7 +52,6 @@ use stabilizer::{
         Systick, UsbDevice,
     },
     net::{telemetry::TelemetryBuffer, NetworkState, NetworkUsers},
-    settings::NetSettings,
 };
 use stream::{FrameGenerator, StreamFormat, StreamTarget};
 
@@ -74,7 +74,7 @@ pub struct Settings {
     net: NetSettings,
 }
 
-impl stabilizer::settings::AppSettings for Settings {
+impl AppSettings for Settings {
     fn new(net: NetSettings) -> Self {
         Self {
             net,

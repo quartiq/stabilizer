@@ -4,6 +4,9 @@ pub use embedded_hal_02;
 use embedded_hal_compat::{markers::ForwardOutputPin, Forward};
 use hal::gpio::{self, ErasedPin, Input, Output};
 pub use stm32h7xx_hal as hal;
+use stm32h7xx_hal::flash::{LockedFlashBank, UnlockedFlashBank};
+
+use platform::{ApplicationMetadata, AsyncFlash, UnlockFlash};
 
 pub mod adc;
 pub mod afe;
@@ -11,12 +14,9 @@ pub mod cpu_temp_sensor;
 pub mod dac;
 pub mod delay;
 pub mod design_parameters;
-pub mod dfu;
 pub mod eem;
 mod eeprom;
-pub mod flash;
 pub mod input_stamper;
-pub mod metadata;
 pub mod pounder;
 pub mod setup;
 pub mod shared_adc;
@@ -95,8 +95,65 @@ pub type SerialPort = usbd_serial::SerialPort<
 
 pub type SerialTerminal<C> = serial_settings::Runner<
     'static,
-    crate::settings::SerialSettingsPlatform<C, flash::Flash>,
+    platform::SerialSettingsPlatform<C, AsyncFlash<Flash>, SerialPort>,
 >;
+
+pub struct Flash(LockedFlashBank);
+
+impl embedded_storage::nor_flash::ErrorType for Flash {
+    type Error =
+        <LockedFlashBank as embedded_storage::nor_flash::ErrorType>::Error;
+}
+
+impl embedded_storage::nor_flash::ReadNorFlash for Flash {
+    const READ_SIZE: usize = LockedFlashBank::READ_SIZE;
+
+    fn capacity(&self) -> usize {
+        self.0.capacity()
+    }
+
+    fn read(
+        &mut self,
+        offset: u32,
+        bytes: &mut [u8],
+    ) -> Result<(), Self::Error> {
+        self.0.read(offset, bytes)
+    }
+}
+
+impl UnlockFlash for Flash {
+    type Unlocked<'a> = UnlockedFlashBank<'a>;
+    fn unlock(&mut self) -> Self::Unlocked<'_> {
+        self.0.unlocked()
+    }
+}
+
+mod build_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
+/// Construct the global metadata.
+///
+/// # Note
+/// This may only be called once.
+///
+/// # Args
+/// * `hardware_version` - The hardware version detected.
+///
+/// # Returns
+/// A reference to the global metadata.
+pub fn metadata(version: &'static str) -> &'static ApplicationMetadata {
+    cortex_m::singleton!(: ApplicationMetadata = ApplicationMetadata {
+        firmware_version: build_info::GIT_VERSION.unwrap_or("Unspecified"),
+        rust_version: build_info::RUSTC_VERSION,
+        profile: build_info::PROFILE,
+        git_dirty: build_info::GIT_DIRTY.unwrap_or(false),
+        features: build_info::FEATURES_STR,
+        hardware_version: version,
+        panic_info: panic_persist::get_panic_message_utf8().unwrap_or("None"),
+    })
+    .unwrap()
+}
 
 #[derive(strum::IntoStaticStr)]
 pub enum HardwareVersion {

@@ -10,9 +10,9 @@
 //! sampling frequency. Instead, the raw codes are stored and the telemetry is generated as
 //! required immediately before transmission. This ensures that any slower computation required
 //! for unit conversion can be off-loaded to lower priority tasks.
-use crate::hardware::metadata::ApplicationMetadata;
 use heapless::String;
 use minimq::Publication;
+use platform::ApplicationMetadata;
 use serde::Serialize;
 
 use super::NetworkReference;

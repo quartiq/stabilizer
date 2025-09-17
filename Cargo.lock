@@ -987,6 +987,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
+name = "platform"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "embassy-futures",
+ "embedded-io",
+ "embedded-storage",
+ "embedded-storage-async",
+ "heapless 0.8.0",
+ "log",
+ "miniconf",
+ "postcard",
+ "sequential-storage",
+ "serde",
+ "serial-settings",
+ "smoltcp-nal",
+]
+
+[[package]]
 name = "portable-atomic"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1405,12 +1424,10 @@ dependencies = [
  "bytemuck",
  "cortex-m",
  "cortex-m-rt",
- "embassy-futures",
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0",
  "embedded-hal-bus",
  "embedded-hal-compat",
- "embedded-io",
  "embedded-storage",
  "embedded-storage-async",
  "fugit",
@@ -1427,15 +1444,13 @@ dependencies = [
  "num_enum",
  "panic-persist",
  "paste",
- "postcard",
+ "platform",
  "rtic",
  "rtic-monotonics",
  "rtt-logger",
  "rtt-target",
- "sequential-storage",
  "serde",
  "serde-json-core",
- "serde_with",
  "serial-settings",
  "shared-bus",
  "signal_generator",
@@ -1497,12 +1512,10 @@ dependencies = [
  "cortex-m",
  "heapless 0.8.0",
  "log",
- "miniconf",
  "num_enum",
  "serde",
  "serde_with",
  "smoltcp-nal",
- "thiserror",
 ]
 
 [[package]]
