@@ -10,13 +10,13 @@
 //! sampling frequency. Instead, the raw codes are stored and the telemetry is generated as
 //! required immediately before transmission. This ensures that any slower computation required
 //! for unit conversion can be off-loaded to lower priority tasks.
+use crate::ApplicationMetadata;
 use heapless::String;
 use minimq::{
+    Publication,
     embedded_nal::{Dns, TcpClientStack},
     embedded_time::Clock,
-    Publication,
 };
-use platform::ApplicationMetadata;
 use serde::Serialize;
 
 /// Default metadata message if formatting errors occur.
@@ -102,11 +102,7 @@ impl<C: Clock, S: TcpClientStack<Error = smoltcp_nal::NetworkError> + Dns>
         if !self.meta_published
             && self.mqtt.client().can_publish(minimq::QoS::AtMostOnce)
         {
-            let Self {
-                ref mut mqtt,
-                metadata,
-                ..
-            } = self;
+            let Self { mqtt, metadata, .. } = self;
 
             let mut topic: String<128> = self.prefix.try_into().unwrap();
             topic.push_str("/meta").unwrap();

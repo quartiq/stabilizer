@@ -51,7 +51,6 @@ log = { version = "0.4", features = [
 ] }
 rtt-target = "0.3"
 serde = { version = "1.0", features = ["derive"], default-features = false }
-serde-json-core = "0.6"
 heapless = { version = "0.8", features = ["serde"] }
 rtic = { version = "2.1", features = ["thumbv7-backend"] }
 rtic-monotonics = { version = "2.0", features = ["cortex-m-systick"] }
@@ -67,7 +66,6 @@ mono-clock = "0.1"
 spin = { version = "0.10", default-features = false, features = ["spin_mutex"] }
 shared-bus = { version = "0.3", features = ["cortex-m"] }
 lm75 = "0.2"
-minimq = "0.10.0"
 usb-device = "0.3.2"
 usbd-serial = "0.2"
 # Keep this synced with the miniconf version in py/setup.py
