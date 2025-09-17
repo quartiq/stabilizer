@@ -1,4 +1,3 @@
-use crate::hardware::HardwareVersion;
 use serde::Serialize;
 
 mod build_info {
@@ -13,7 +12,7 @@ pub struct ApplicationMetadata {
     pub git_dirty: bool,
     pub features: &'static str,
     pub panic_info: &'static str,
-    pub hardware_version: HardwareVersion,
+    pub hardware_version: &'static str,
 }
 
 impl ApplicationMetadata {
@@ -27,7 +26,7 @@ impl ApplicationMetadata {
     ///
     /// # Returns
     /// A reference to the global metadata.
-    pub fn new(version: HardwareVersion) -> &'static ApplicationMetadata {
+    pub fn new(version: &'static str) -> &'static ApplicationMetadata {
         cortex_m::singleton!(: ApplicationMetadata = ApplicationMetadata {
             firmware_version: build_info::GIT_VERSION.unwrap_or("Unspecified"),
             rust_version: build_info::RUSTC_VERSION,
@@ -37,5 +36,25 @@ impl ApplicationMetadata {
             hardware_version: version,
             panic_info: panic_persist::get_panic_message_utf8().unwrap_or("None"),
         }).unwrap()
+    }
+}
+
+impl core::fmt::Display for ApplicationMetadata {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_fmt(format_args!(
+            "{:<20}: {} [{}]",
+            "Version", self.firmware_version, self.profile,
+        ))?;
+        f.write_fmt(format_args!(
+            "{:<20}: {}",
+            "Hardware Revision", self.hardware_version
+        ))?;
+        f.write_fmt(format_args!(
+            "{:<20}: {}",
+            "Rustc Version", self.rust_version
+        ))?;
+        f.write_fmt(format_args!("{:<20}: {}", "Features", self.features))?;
+        f.write_fmt(format_args!("{:<20}: {}", "Panic Info", self.panic_info))?;
+        Ok(())
     }
 }

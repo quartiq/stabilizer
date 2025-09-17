@@ -22,10 +22,11 @@
 //!    settings values
 //! 3. Unknown/unneeded settings values in flash can be actively ignored, facilitating simple flash
 //!    storage sharing.
-use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
+use crate::hardware::{dfu, metadata::ApplicationMetadata};
 use core::fmt::Write;
 use embassy_futures::block_on;
 use embedded_io::Write as EioWrite;
+use embedded_storage_async::nor_flash::NorFlash;
 use heapless::{String, Vec};
 use miniconf::{
     postcard, Path, Tree, TreeDeserializeOwned, TreeSchema, TreeSerialize,
@@ -36,7 +37,6 @@ use sequential_storage::{
 };
 use serial_settings::{BestEffortInterface, Platform, Settings};
 use smoltcp_nal::smoltcp::wire::EthernetAddress;
-use stm32h7xx_hal::flash::LockedFlashBank;
 
 /// Settings that are used for configuring the network interface to Stabilizer.
 #[derive(Clone, Debug, Tree)]
@@ -102,24 +102,25 @@ impl sequential_storage::map::Key for SettingsKey {
     }
 }
 
-pub struct SerialSettingsPlatform<C> {
+pub struct SerialSettingsPlatform<C, F> {
     /// The interface to read/write data to/from serially (via text) to the user.
     pub interface: BestEffortInterface<crate::hardware::SerialPort>,
 
     pub _settings_marker: core::marker::PhantomData<C>,
 
     /// The storage mechanism used to persist settings to between boots.
-    pub storage: Flash,
+    pub storage: F,
 
     /// Metadata associated with the application
     pub metadata: &'static ApplicationMetadata,
 }
 
-impl<C> SerialSettingsPlatform<C>
+impl<C, F> SerialSettingsPlatform<C, F>
 where
     C: TreeDeserializeOwned + TreeSerialize + TreeSchema,
+    F: NorFlash,
 {
-    pub fn load(structure: &mut C, storage: &mut Flash) {
+    pub fn load(structure: &mut C, storage: &mut F) {
         // Loop over flash and read settings
         let mut buffer = [0u8; 512];
         for path in C::SCHEMA.nodes::<Path<String<128>, '/'>, 8>() {
@@ -128,7 +129,7 @@ where
             // Try to fetch the setting from flash.
             let value: &[u8] = match block_on(fetch_item(
                 storage,
-                storage.range(),
+                0..storage.capacity() as _,
                 &mut NoCache::new(),
                 &mut buffer,
                 &SettingsKey(path.clone().into_inner().into_bytes()),
@@ -163,22 +164,21 @@ where
     }
 }
 
-impl<C> Platform for SerialSettingsPlatform<C>
+impl<C, F> Platform for SerialSettingsPlatform<C, F>
 where
     C: Settings,
+    F: NorFlash,
 {
     type Interface = BestEffortInterface<crate::hardware::SerialPort>;
     type Settings = C;
-    type Error = sequential_storage::Error<
-        <LockedFlashBank as embedded_storage::nor_flash::ErrorType>::Error,
-    >;
+    type Error = sequential_storage::Error<F::Error>;
 
     fn fetch<'a>(
         &mut self,
         buf: &'a mut [u8],
         key: &[u8],
     ) -> Result<Option<&'a [u8]>, Self::Error> {
-        let range = self.storage.range();
+        let range = 0..self.storage.capacity() as _;
         block_on(fetch_item(
             &mut self.storage,
             range,
@@ -195,7 +195,7 @@ where
         key: &[u8],
         value: &[u8],
     ) -> Result<(), Self::Error> {
-        let range = self.storage.range();
+        let range = 0..self.storage.capacity() as _;
         block_on(store_item(
             &mut self.storage,
             range,
@@ -213,40 +213,9 @@ where
     fn cmd(&mut self, cmd: &str) {
         match cmd {
             "reboot" => cortex_m::peripheral::SCB::sys_reset(),
-            "dfu" => platform::start_dfu_reboot(),
+            "dfu" => dfu::start_dfu_reboot(),
             "service" => {
-                writeln!(
-                    &mut self.interface,
-                    "{:<20}: {} [{}]",
-                    "Version",
-                    self.metadata.firmware_version,
-                    self.metadata.profile,
-                )
-                .unwrap();
-                writeln!(
-                    &mut self.interface,
-                    "{:<20}: {}",
-                    "Hardware Revision", self.metadata.hardware_version
-                )
-                .unwrap();
-                writeln!(
-                    &mut self.interface,
-                    "{:<20}: {}",
-                    "Rustc Version", self.metadata.rust_version
-                )
-                .unwrap();
-                writeln!(
-                    &mut self.interface,
-                    "{:<20}: {}",
-                    "Features", self.metadata.features
-                )
-                .unwrap();
-                writeln!(
-                    &mut self.interface,
-                    "{:<20}: {}",
-                    "Panic Info", self.metadata.panic_info
-                )
-                .unwrap();
+                write!(&mut self.interface, "{}", &self.metadata).unwrap();
             }
             _ => {
                 writeln!(

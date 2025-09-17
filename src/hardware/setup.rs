@@ -21,11 +21,10 @@ use crate::settings::{AppSettings, NetSettings};
 
 use super::{
     adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
-    eeprom, input_stamper::InputStamper, metadata::ApplicationMetadata,
-    platform, pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc,
-    timers, DigitalInput0, DigitalInput1, Eem, EthernetPhy, Gpio,
-    HardwareVersion, NetworkStack, Pgia, SerialTerminal, SystemTimer, Systick,
-    UsbDevice,
+    dfu, eeprom, input_stamper::InputStamper, metadata::ApplicationMetadata,
+    pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
+    DigitalInput0, DigitalInput1, Eem, EthernetPhy, Gpio, HardwareVersion,
+    NetworkStack, Pgia, SerialTerminal, SystemTimer, Systick, UsbDevice,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -104,10 +103,7 @@ pub struct NetworkDevices {
 }
 
 /// The available hardware interfaces on Stabilizer.
-pub struct StabilizerDevices<
-    C: serial_settings::Settings + 'static,
-    const Y: usize,
-> {
+pub struct StabilizerDevices<C: serial_settings::Settings + 'static> {
     pub temperature_sensor: CpuTempSensor,
     pub afes: [Pgia; 2],
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
@@ -118,7 +114,7 @@ pub struct StabilizerDevices<
     pub net: NetworkDevices,
     pub digital_inputs: (DigitalInput0, DigitalInput1),
     pub eem: Eem,
-    pub usb_serial: SerialTerminal<C, Y>,
+    pub usb_serial: SerialTerminal<C>,
     pub usb: UsbDevice,
     pub metadata: &'static ApplicationMetadata,
     pub settings: C,
@@ -204,13 +200,13 @@ fn load_itcm() {
 /// stabilizer hardware interfaces in a disabled state. `pounder` is an `Option` containing
 /// `Some(devices)` if pounder is detected, where `devices` is a `PounderDevices` structure
 /// containing all of the pounder hardware interfaces in a disabled state.
-pub fn setup<C, const Y: usize>(
+pub fn setup<C>(
     mut core: stm32h7xx_hal::stm32::CorePeripherals,
     device: stm32h7xx_hal::stm32::Peripherals,
     clock: SystemTimer,
     batch_size: usize,
     sample_ticks: u32,
-) -> (StabilizerDevices<C, Y>, Option<PounderDevices>)
+) -> (StabilizerDevices<C>, Option<PounderDevices>)
 where
     C: serial_settings::Settings + AppSettings,
 {
@@ -258,8 +254,8 @@ where
     }
 
     // Check for a reboot to DFU before doing any system configuration.
-    if platform::dfu_bootflag() {
-        platform::execute_system_bootloader();
+    if dfu::dfu_bootflag() {
+        dfu::execute_system_bootloader();
     }
 
     let pwr = device.PWR.constrain();
@@ -616,7 +612,7 @@ where
                 gpiog.pg3.into_pull_down_input().is_high(),
             ][..],
         );
-        ApplicationMetadata::new(hardware_version)
+        ApplicationMetadata::new(hardware_version.into())
     };
 
     let mac_addr = smoltcp::wire::EthernetAddress(eeprom::read_eui48(
@@ -630,7 +626,6 @@ where
         super::flash::Flash(flash_bank2.unwrap())
     };
 
-    assert!(C::SCHEMA.shape().max_depth <= Y);
     let mut settings = C::new(NetSettings::new(mac_addr));
     crate::settings::SerialSettingsPlatform::load(&mut settings, &mut flash);
 

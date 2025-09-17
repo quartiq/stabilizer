@@ -39,7 +39,6 @@ use idsp::iir;
 
 use serde::{Deserialize, Serialize};
 use signal_generator::{self, Source};
-use stream::{FrameGenerator, StreamFormat, StreamTarget};
 use stabilizer::{
     hardware::{
         self,
@@ -51,12 +50,10 @@ use stabilizer::{
         DigitalInput0, DigitalInput1, Pgia, SerialTerminal, SystemTimer,
         Systick, UsbDevice,
     },
-    net::{
-        telemetry::TelemetryBuffer,
-        NetworkState, NetworkUsers,
-    },
+    net::{telemetry::TelemetryBuffer, NetworkState, NetworkUsers},
     settings::NetSettings,
 };
+use stream::{FrameGenerator, StreamFormat, StreamTarget};
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
@@ -217,7 +214,7 @@ mod app {
     #[shared]
     struct Shared {
         usb: UsbDevice,
-        network: NetworkUsers<DualIir, 8>,
+        network: NetworkUsers<DualIir>,
         settings: Settings,
         active: [Active; 2],
         telemetry: TelemetryBuffer,
@@ -225,7 +222,7 @@ mod app {
 
     #[local]
     struct Local {
-        usb_terminal: SerialTerminal<Settings, 9>,
+        usb_terminal: SerialTerminal<Settings>,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         afes: [Pgia; 2],
@@ -240,7 +237,7 @@ mod app {
         let clock = SystemTimer::new(|| Systick::now().ticks());
 
         // Configure the microcontroller
-        let (stabilizer, _pounder) = hardware::setup::setup::<Settings, 9>(
+        let (stabilizer, _pounder) = hardware::setup::setup::<Settings>(
             c.core,
             c.device,
             clock,

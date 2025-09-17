@@ -249,7 +249,7 @@ mod app {
     #[shared]
     struct Shared {
         usb: UsbDevice,
-        network: NetworkUsers<Lockin, 2>,
+        network: NetworkUsers<Lockin>,
         settings: Settings,
         active_settings: Lockin,
         telemetry: TelemetryBuffer,
@@ -257,7 +257,7 @@ mod app {
 
     #[local]
     struct Local {
-        usb_terminal: SerialTerminal<Settings, 3>,
+        usb_terminal: SerialTerminal<Settings>,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         timestamper: InputStamper,
@@ -276,7 +276,7 @@ mod app {
         let clock = SystemTimer::new(|| Systick::now().ticks());
 
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) = hardware::setup::setup::<Settings, 3>(
+        let (mut stabilizer, _pounder) = hardware::setup::setup::<Settings>(
             c.core,
             c.device,
             clock,

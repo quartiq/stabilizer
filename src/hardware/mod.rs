@@ -11,12 +11,12 @@ pub mod cpu_temp_sensor;
 pub mod dac;
 pub mod delay;
 pub mod design_parameters;
+pub mod dfu;
 pub mod eem;
 mod eeprom;
 pub mod flash;
 pub mod input_stamper;
 pub mod metadata;
-pub mod platform;
 pub mod pounder;
 pub mod setup;
 pub mod shared_adc;
@@ -93,12 +93,12 @@ pub type SerialPort = usbd_serial::SerialPort<
     &'static mut [u8],
 >;
 
-pub type SerialTerminal<C, const Y: usize> = serial_settings::Runner<
+pub type SerialTerminal<C> = serial_settings::Runner<
     'static,
-    crate::settings::SerialSettingsPlatform<C>,
-    Y,
+    crate::settings::SerialSettingsPlatform<C, flash::Flash>,
 >;
 
+#[derive(strum::IntoStaticStr)]
 pub enum HardwareVersion {
     Rev1_0,
     Rev1_1,

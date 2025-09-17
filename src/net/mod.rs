@@ -17,8 +17,8 @@ use crate::hardware::{
     SystemTimer,
 };
 use crate::settings::NetSettings;
-use stream::{DataStream, FrameGenerator, StreamTarget};
 use network_processor::NetworkProcessor;
+use stream::{DataStream, FrameGenerator, StreamTarget};
 use telemetry::TelemetryClient;
 
 use core::fmt::Write;
@@ -54,8 +54,10 @@ pub enum NetworkState {
     NoChange,
 }
 
+const MAX_DEPTH: usize = 10;
+
 /// A structure of Stabilizer's default network users.
-pub struct NetworkUsers<S, const Y: usize>
+pub struct NetworkUsers<S>
 where
     S: Default + TreeDeserializeOwned + TreeSerialize + Clone,
 {
@@ -65,7 +67,7 @@ where
         NetworkReference,
         SystemTimer,
         minimq::broker::NamedBroker<NetworkReference>,
-        Y,
+        MAX_DEPTH,
     >,
     pub processor: NetworkProcessor,
     stream: DataStream<NetworkReference>,
@@ -73,7 +75,7 @@ where
     pub telemetry: TelemetryClient,
 }
 
-impl<S, const Y: usize> NetworkUsers<S, Y>
+impl<S> NetworkUsers<S>
 where
     S: Default + TreeDeserializeOwned + TreeSerialize + TreeSchema + Clone,
 {
@@ -115,7 +117,7 @@ where
             stack_manager.acquire_stack(),
         )
         .unwrap();
-        let settings = miniconf_mqtt::MqttClient::<_, _, _, _, Y>::new(
+        let settings = miniconf_mqtt::MqttClient::<_, _, _, _, MAX_DEPTH>::new(
             stack_manager.acquire_stack(),
             prefix.as_str(),
             clock,

@@ -5,12 +5,6 @@ use stm32h7xx_hal::flash::Error as FlashError;
 
 pub struct Flash(pub LockedFlashBank);
 
-impl Flash {
-    pub fn range(&self) -> core::ops::Range<u32> {
-        0..(self.0.len() as u32)
-    }
-}
-
 impl ErrorType for Flash {
     type Error = FlashError;
 }

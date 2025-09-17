@@ -62,13 +62,13 @@ pub trait Platform {
     fn interface_mut(&mut self) -> &mut Self::Interface;
 }
 
-struct Interface<'a, P, const Y: usize> {
+struct Interface<'a, P> {
     platform: P,
     buffer: &'a mut [u8],
     updated: bool,
 }
 
-impl<'a, P: Platform, const Y: usize> Interface<'a, P, Y> {
+impl<'a, P: Platform> Interface<'a, P> {
     fn handle_platform(
         _menu: &menu::Menu<Self, P::Settings>,
         item: &menu::Item<Self, P::Settings>,
@@ -104,7 +104,9 @@ impl<'a, P: Platform, const Y: usize> Interface<'a, P, Y> {
                 }
             }
         } else {
-            NodeIter::<Path<String<128>, '/'>, Y>::new(P::Settings::SCHEMA)
+            NodeIter::<Path<String<128>, '/'>, MAX_DEPTH>::new(
+                P::Settings::SCHEMA,
+            )
         };
 
         let mut defaults = settings.clone();
@@ -583,7 +585,7 @@ impl<'a, P: Platform, const Y: usize> Interface<'a, P, Y> {
     }
 }
 
-impl<P: Platform, const Y: usize> core::fmt::Write for Interface<'_, P, Y> {
+impl<P: Platform> core::fmt::Write for Interface<'_, P> {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         self.platform
             .interface_mut()
@@ -592,11 +594,11 @@ impl<P: Platform, const Y: usize> core::fmt::Write for Interface<'_, P, Y> {
     }
 }
 
-impl<P: Platform, const Y: usize> ErrorType for Interface<'_, P, Y> {
+impl<P: Platform> ErrorType for Interface<'_, P> {
     type Error = <P::Interface as ErrorType>::Error;
 }
 
-impl<P: Platform, const Y: usize> Write for Interface<'_, P, Y> {
+impl<P: Platform> Write for Interface<'_, P> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
         self.platform.interface_mut().write(buf)
     }
@@ -606,12 +608,14 @@ impl<P: Platform, const Y: usize> Write for Interface<'_, P, Y> {
     }
 }
 
+const MAX_DEPTH: usize = 10;
+
 // The Menu runner
-pub struct Runner<'a, P: Platform, const Y: usize>(
-    menu::Runner<'a, Interface<'a, P, Y>, P::Settings, [u8]>,
+pub struct Runner<'a, P: Platform>(
+    menu::Runner<'a, Interface<'a, P>, P::Settings, [u8]>,
 );
 
-impl<'a, P: Platform, const Y: usize> Runner<'a, P, Y> {
+impl<'a, P: Platform> Runner<'a, P> {
     /// Constructor
     ///
     /// # Args
@@ -629,7 +633,7 @@ impl<'a, P: Platform, const Y: usize> Runner<'a, P, Y> {
         serialize_buf: &'a mut [u8],
         settings: &mut P::Settings,
     ) -> Result<Self, P::Error> {
-        assert!(P::Settings::SCHEMA.shape().max_depth <= Y);
+        assert!(P::Settings::SCHEMA.shape().max_depth <= MAX_DEPTH);
         Ok(Self(menu::Runner::new(
             Interface::menu(),
             line_buf,
