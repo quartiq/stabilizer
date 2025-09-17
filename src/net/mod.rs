@@ -9,7 +9,6 @@ pub use heapless;
 pub use miniconf;
 pub use serde;
 
-pub mod data_stream;
 pub mod network_processor;
 pub mod telemetry;
 
@@ -18,7 +17,7 @@ use crate::hardware::{
     SystemTimer,
 };
 use crate::settings::NetSettings;
-use data_stream::{DataStream, FrameGenerator, StreamTarget};
+use stream::{DataStream, FrameGenerator, StreamTarget};
 use network_processor::NetworkProcessor;
 use telemetry::TelemetryClient;
 
@@ -69,7 +68,7 @@ where
         Y,
     >,
     pub processor: NetworkProcessor,
-    stream: DataStream,
+    stream: DataStream<NetworkReference>,
     generator: Option<FrameGenerator>,
     pub telemetry: TelemetryClient,
 }
@@ -145,7 +144,7 @@ where
         let telemetry = TelemetryClient::new(mqtt, prefix, metadata);
 
         let (generator, stream) =
-            data_stream::setup_streaming(stack_manager.acquire_stack());
+            stream::setup_streaming(stack_manager.acquire_stack());
 
         NetworkUsers {
             miniconf: settings,

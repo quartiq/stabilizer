@@ -39,6 +39,7 @@ use rtic_monotonics::Monotonic;
 use fugit::ExtU32;
 
 use idsp::{Accu, Complex, ComplexExt, Filter, Lowpass, Repeat, RPLL};
+use stream::{FrameGenerator, StreamFormat, StreamTarget};
 
 use stabilizer::{
     hardware::{
@@ -53,7 +54,6 @@ use stabilizer::{
         Systick, UsbDevice,
     },
     net::{
-        data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         serde::{Deserialize, Serialize},
         telemetry::TelemetryBuffer,
         NetworkState, NetworkUsers,

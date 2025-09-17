@@ -1,3 +1,5 @@
+#![no_std]
+
 use core::iter::Take;
 
 use idsp::{AccuOsc, Sweep};
@@ -120,15 +122,19 @@ impl Scaler {
 }
 
 /// Represents the errors that can occur when attempting to configure the signal generator.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, thiserror::Error)]
 pub enum Error {
     /// The provided amplitude is out-of-range.
+    #[error("Invalid amplitude")]
     Amplitude,
     /// The provided symmetry is out of range.
+    #[error("Invalid symmetry")]
     Symmetry,
     /// The provided frequency is out of range.
+    #[error("Invalid frequency")]
     Frequency,
     /// Sweep would wrap/invalid
+    #[error("Sweep would wrap")]
     Wrap,
 }
 
@@ -201,11 +207,7 @@ impl Config {
         let offset = self.offset * scale;
         let amplitude = self.amplitude * scale;
         fn abs(x: f32) -> f32 {
-            if x.is_sign_negative() {
-                -x
-            } else {
-                x
-            }
+            if x.is_sign_negative() { -x } else { x }
         }
         if abs(offset) + abs(amplitude) >= 1.0 {
             return Err(Error::Amplitude);

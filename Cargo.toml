@@ -25,7 +25,15 @@ features = []
 default-target = "thumbv7em-none-eabihf"
 
 [workspace]
-members = ["ad9912", "ad9959", "encoded_pin", "serial-settings", "urukul"]
+members = [
+	"ad9912",
+	"ad9959",
+	"encoded_pin",
+	"serial-settings",
+	"urukul",
+	"signal_generator",
+	"stream",
+]
 
 [dependencies]
 panic-persist = { version = "0.3", features = ["utf8", "custom-panic-handler"] }
@@ -60,8 +68,6 @@ mono-clock = "0.1"
 spin = { version = "0.10", default-features = false, features = ["spin_mutex"] }
 shared-bus = { version = "0.3", features = ["cortex-m"] }
 lm75 = "0.2"
-rand_xorshift = "0.4.0"
-rand_core = "0.9.0"
 minimq = "0.10.0"
 usb-device = "0.3.2"
 usbd-serial = "0.2"
@@ -88,6 +94,8 @@ ad9912 = { version = "0.1.1", path = "ad9912" }
 bytemuck = { version = "1.21.0", features = ["zeroable_maybe_uninit"] }
 strum = { version = "0.27.1", default-features = false, features = ["derive"] }
 grounded = "0.2.0"
+signal_generator = { version = "0.1", path = "signal_generator" }
+stream = { version = "0.1", path = "stream" }
 
 [dependencies.stm32h7xx-hal]
 version = "0.16.0"
@@ -120,12 +128,17 @@ opt-level = 3
 [profile.release.package.ad9959]
 opt-level = 3
 
+[profile.release.package.signal_generator]
+opt-level = 3
+
+[profile.release.package.stream]
+opt-level = 3
+
 [profile.release]
 codegen-units = 1
 opt-level = "s"
 debug = true
 lto = true
-
 
 [patch.crates-io]
 miniconf = { path = "../miniconf/miniconf" }

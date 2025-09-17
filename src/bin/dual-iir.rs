@@ -38,6 +38,8 @@ use fugit::ExtU32 as _;
 use idsp::iir;
 
 use serde::{Deserialize, Serialize};
+use signal_generator::{self, Source};
+use stream::{FrameGenerator, StreamFormat, StreamTarget};
 use stabilizer::{
     hardware::{
         self,
@@ -45,13 +47,11 @@ use stabilizer::{
         afe::Gain,
         dac::{Dac0Output, Dac1Output, DacCode},
         hal,
-        signal_generator::{self, Source},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, Pgia, SerialTerminal, SystemTimer,
         Systick, UsbDevice,
     },
     net::{
-        data_stream::{FrameGenerator, StreamFormat, StreamTarget},
         telemetry::TelemetryBuffer,
         NetworkState, NetworkUsers,
     },

@@ -23,21 +23,19 @@
 //! A sample Python script is available in `scripts/stream_throughput.py` to demonstrate reception
 //! of streamed data.
 
+#![no_std]
 #![allow(non_camel_case_types)] // https://github.com/rust-embedded/heapless/issues/411
 
 use core::{fmt::Write, mem::MaybeUninit, net::SocketAddr};
 use heapless::{
-    box_pool,
+    String, box_pool,
     pool::boxed::{Box, BoxBlock},
     spsc::{Consumer, Producer, Queue},
-    String,
 };
 use num_enum::IntoPrimitive;
 use serde::Serialize;
 use serde_with::DeserializeFromStr;
-use smoltcp_nal::embedded_nal::{nb, UdpClientStack};
-
-use super::NetworkReference;
+use smoltcp_nal::embedded_nal::{UdpClientStack, nb};
 
 // Magic first bytes indicating a UDP frame of straming data
 const MAGIC: u16 = 0x057B;
@@ -134,9 +132,9 @@ pub enum StreamFormat {
 /// # Returns
 /// (generator, stream) where `generator` can be used to enqueue "batches" for transmission. The
 /// `stream` is the logically consumer (UDP transmitter) of the enqueued data.
-pub fn setup_streaming(
-    stack: NetworkReference,
-) -> (FrameGenerator, DataStream) {
+pub fn setup_streaming<N: UdpClientStack<Error = smoltcp_nal::NetworkError>>(
+    stack: N,
+) -> (FrameGenerator, DataStream<N>) {
     // The queue needs to be at least as large as the frame count to ensure that every allocated
     // frame can potentially be enqueued for transmission.
     let queue =
@@ -237,8 +235,7 @@ impl FrameGenerator {
     ///
     /// # Args
     /// * `format` - The desired format of the stream.
-    #[doc(hidden)]
-    pub(crate) fn configure(&mut self, format: impl Into<u8>) {
+    pub fn configure(&mut self, format: impl Into<u8>) {
         self.format = format.into();
     }
 
@@ -288,14 +285,14 @@ impl FrameGenerator {
 ///
 /// # Note
 /// This is responsible for consuming data and sending it over UDP.
-pub struct DataStream {
-    stack: NetworkReference,
-    socket: Option<<NetworkReference as UdpClientStack>::UdpSocket>,
+pub struct DataStream<N: UdpClientStack> {
+    stack: N,
+    socket: Option<<N as UdpClientStack>::UdpSocket>,
     queue: Consumer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
     remote: StreamTarget,
 }
 
-impl DataStream {
+impl<N: UdpClientStack<Error = smoltcp_nal::NetworkError>> DataStream<N> {
     /// Construct a new data streamer.
     ///
     /// # Args
@@ -303,7 +300,7 @@ impl DataStream {
     /// * `consumer` - The read side of the queue containing data to transmit.
     /// * `frame_pool` - The Pool to return stream frame objects into.
     fn new(
-        stack: NetworkReference,
+        stack: N,
         consumer: Consumer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
     ) -> Self {
         Self {

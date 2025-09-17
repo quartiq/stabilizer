@@ -20,7 +20,6 @@ pub mod platform;
 pub mod pounder;
 pub mod setup;
 pub mod shared_adc;
-pub mod signal_generator;
 pub mod timers;
 
 // Type alias for the analog front-end

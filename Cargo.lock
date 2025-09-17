@@ -1314,6 +1314,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
+name = "signal_generator"
+version = "0.1.0"
+dependencies = [
+ "idsp",
+ "miniconf",
+ "rand_core",
+ "rand_xorshift",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "smallvec"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1416,8 +1428,6 @@ dependencies = [
  "panic-persist",
  "paste",
  "postcard",
- "rand_core",
- "rand_xorshift",
  "rtic",
  "rtic-monotonics",
  "rtt-logger",
@@ -1428,9 +1438,11 @@ dependencies = [
  "serde_with",
  "serial-settings",
  "shared-bus",
+ "signal_generator",
  "smoltcp-nal",
  "spin 0.10.0",
  "stm32h7xx-hal",
+ "stream",
  "strum",
  "tca9539",
  "thiserror",
@@ -1476,6 +1488,21 @@ dependencies = [
  "stm32h7",
  "synopsys-usb-otg",
  "void",
+]
+
+[[package]]
+name = "stream"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "heapless 0.8.0",
+ "log",
+ "miniconf",
+ "num_enum",
+ "serde",
+ "serde_with",
+ "smoltcp-nal",
+ "thiserror",
 ]
 
 [[package]]

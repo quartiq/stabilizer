@@ -1,0 +1,30 @@
+[package]
+name = "stream"
+version = "0.1.0"
+edition = "2024"
+description = "UDP data stream"
+authors = ["Robert Jördens <rj@quartiq.de>"]
+categories = ["embedded", "no-std"]
+license = "MIT OR Apache-2.0"
+keywords = []
+repository = "https://github.com/quartiq/stabilizer"
+
+[dependencies]
+thiserror = { version = "2.0.11", default-features = false }
+miniconf = { version = "0.19", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"], default-features = false }
+heapless = { version = "0.8", features = ["serde"] }
+num_enum = { version = "0.7.3", default-features = false }
+serde_with = { version = "3.12", default-features = false, features = [
+	"macros",
+] }
+log = { version = "0.4" }
+cortex-m = { version = "0.7.7", features = [
+	"inline-asm",
+	"critical-section-single-core",
+] }
+
+[dependencies.smoltcp-nal]
+version = "0.6"
+features = ["shared-stack"]
+git = "https://github.com/quartiq/smoltcp-nal.git"
