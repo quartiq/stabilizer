@@ -13,26 +13,19 @@ use core::{fmt::Write, ptr, slice};
 use embedded_hal_compat::{markers::ForwardOutputPin, Forward, ForwardCompat};
 use grounded::uninit::GroundedCell;
 use heapless::String;
-use platform::{AppSettings, ApplicationMetadata, NetSettings};
-
 use smoltcp_nal::smoltcp;
 
+use platform::{AppSettings, ApplicationMetadata, NetSettings};
+
 use crate::design_parameters;
-use crate::hardware::delay::AsmDelay;
 
 use super::{
-    adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, eeprom,
-    input_stamper::InputStamper, pounder, pounder::dds_output::DdsOutput,
-    shared_adc::SharedAdc, timers, DigitalInput0, DigitalInput1, Eem,
-    EthernetPhy, Gpio, HardwareVersion, Pgia, SerialTerminal, SystemTimer,
-    Systick, UsbDevice,
+    adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, delay::AsmDelay,
+    eeprom, input_stamper::InputStamper, net::NetworkStack, pounder,
+    pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
+    DigitalInput0, DigitalInput1, Eem, EthernetPhy, Gpio, HardwareVersion,
+    Pgia, SerialTerminal, SystemTimer, Systick, UsbDevice,
 };
-
-use crate::net::NetworkStack;
-
-// fn delay_us(t: u32) {
-//     cortex_m::asm::delay(self.frequency_us * t)
-// }
 
 const NUM_TCP_SOCKETS: usize = 4;
 const NUM_UDP_SOCKETS: usize = 1;
@@ -140,8 +133,8 @@ pub struct PounderDevices {
 /// Static storage for the ethernet DMA descriptor ring.
 static DES_RING: GroundedCell<
     ethernet::DesRing<
-        { crate::net::TX_DESRING_CNT },
-        { crate::net::RX_DESRING_CNT },
+        { super::net::TX_DESRING_CNT },
+        { super::net::RX_DESRING_CNT },
     >,
 > = GroundedCell::uninit();
 

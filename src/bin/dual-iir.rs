@@ -41,17 +41,18 @@ use platform::{AppSettings, NetSettings};
 use serde::{Deserialize, Serialize};
 use signal_generator::{self, Source};
 use stabilizer::{
+    convert::{AdcCode, DacCode, Gain},
     hardware::{
         self,
-        adc::{Adc0Input, Adc1Input, AdcCode},
-        afe::Gain,
-        dac::{Dac0Output, Dac1Output, DacCode},
+        adc::{Adc0Input, Adc1Input},
+        dac::{Dac0Output, Dac1Output},
         hal,
+        net::{NetworkState, NetworkUsers},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, Pgia, SerialTerminal, SystemTimer,
         Systick, UsbDevice,
     },
-    net::{NetworkState, NetworkUsers, TelemetryBuffer},
+    telemetry::TelemetryBuffer,
 };
 use stream::FrameGenerator;
 

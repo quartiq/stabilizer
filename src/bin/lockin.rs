@@ -33,30 +33,27 @@ use core::{
     sync::atomic::{fence, Ordering},
 };
 
+use fugit::ExtU32;
+use idsp::{Accu, Complex, ComplexExt, Filter, Lowpass, Repeat, RPLL};
 use miniconf::{Leaf, Tree};
 use rtic_monotonics::Monotonic;
-
-use fugit::ExtU32;
-
-use idsp::{Accu, Complex, ComplexExt, Filter, Lowpass, Repeat, RPLL};
+use serde::{Deserialize, Serialize};
 use stream::FrameGenerator;
 
 use stabilizer::{
+    convert::{AdcCode, DacCode, Gain},
     hardware::{
         self,
-        adc::{Adc0Input, Adc1Input, AdcCode},
-        afe::Gain,
-        dac::{Dac0Output, Dac1Output, DacCode},
+        adc::{Adc0Input, Adc1Input},
+        dac::{Dac0Output, Dac1Output},
         hal,
         input_stamper::InputStamper,
+        net::{NetworkState, NetworkUsers},
         timers::SamplingTimer,
         DigitalInput0, DigitalInput1, Pgia, SerialTerminal, SystemTimer,
         Systick, UsbDevice,
     },
-    net::{
-        serde::{Deserialize, Serialize},
-        NetworkState, NetworkUsers, TelemetryBuffer,
-    },
+    telemetry::TelemetryBuffer,
 };
 
 use platform::{AppSettings, NetSettings};

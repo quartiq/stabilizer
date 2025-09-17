@@ -1,31 +1,8 @@
-use bitbybit::bitenum;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Serialize, Deserialize, Default)]
-#[bitenum(u2, exhaustive = true)]
-pub enum Gain {
-    #[default]
-    G1 = 0b00,
-    G2 = 0b01,
-    G5 = 0b10,
-    G10 = 0b11,
-}
+use crate::convert::Gain;
 
 /// A programmable gain amplifier that allows for setting the gain via GPIO.
 pub struct ProgrammableGainAmplifier<P> {
     a: [P; 2],
-}
-
-impl Gain {
-    /// Get the AFE gain as a numerical value.
-    pub const fn gain(self) -> f32 {
-        match self {
-            Gain::G1 => 1.0,
-            Gain::G2 => 2.0,
-            Gain::G5 => 5.0,
-            Gain::G10 => 10.0,
-        }
-    }
 }
 
 impl<P> ProgrammableGainAmplifier<P>

@@ -13,11 +13,10 @@ use fugit::ExtU32;
 use miniconf::Tree;
 use rtic_monotonics::Monotonic;
 
-use stabilizer::{
-    hardware::{
-        self, hal, SerialTerminal, SystemTimer, Systick, Urukul, UsbDevice,
-    },
+use stabilizer::hardware::{
+    self, hal,
     net::{NetworkState, NetworkUsers},
+    SerialTerminal, SystemTimer, Systick, Urukul, UsbDevice,
 };
 
 use platform::{AppSettings, NetSettings};

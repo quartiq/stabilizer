@@ -17,6 +17,7 @@ pub mod dac;
 pub mod delay;
 mod eeprom;
 pub mod input_stamper;
+pub mod net;
 pub mod pounder;
 pub mod setup;
 pub mod shared_adc;
@@ -64,9 +65,10 @@ pub const MONOTONIC_FREQUENCY: u32 = 1_000;
 rtic_monotonics::systick_monotonic!(Systick, MONOTONIC_FREQUENCY);
 pub type SystemTimer = mono_clock::MonoClock<u32, MONOTONIC_FREQUENCY>;
 
-pub type I2c1 = hal::i2c::I2c<hal::stm32::I2C1>;
-pub type I2c1Proxy =
-    shared_bus::I2cProxy<'static, shared_bus::AtomicCheckMutex<I2c1>>;
+pub type I2c1Proxy = shared_bus::I2cProxy<
+    'static,
+    shared_bus::AtomicCheckMutex<hal::i2c::I2c<hal::stm32::I2C1>>,
+>;
 
 pub type SerialPort = usbd_serial::SerialPort<
     'static,
