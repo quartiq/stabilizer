@@ -29,7 +29,7 @@
 #![no_main]
 
 use core::sync::atomic::{fence, Ordering};
-use miniconf::{Leaf, Tree};
+use miniconf::Tree;
 
 use rtic_monotonics::Monotonic;
 
@@ -100,7 +100,7 @@ impl Default for BiquadRepr {
         i.set_max(i16::MAX as _);
         Self {
             _typ: (),
-            repr: iir::BiquadRepr::Raw(Leaf(i)),
+            repr: iir::BiquadRepr::Raw(i),
         }
     }
 }
