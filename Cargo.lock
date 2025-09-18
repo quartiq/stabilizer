@@ -10,7 +10,7 @@ dependencies = [
  "bitbybit",
  "embedded-hal 1.0.0",
  "num-traits",
- "thiserror",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -269,6 +269,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dyn-clone"
+version = "1.0.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
+
+[[package]]
 name = "embassy-futures"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -381,6 +387,15 @@ name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
+
+[[package]]
+name = "erased-discriminant"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1a6df962265a53221f29081896c412ef325c17fa7d638cd9578febe53d3c82c"
+dependencies = [
+ "typeid",
+]
 
 [[package]]
 name = "fnv"
@@ -647,7 +662,7 @@ dependencies = [
  "num-traits",
  "serde",
  "strum",
- "thiserror",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -762,6 +777,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "memchr"
+version = "2.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32a282da65faaf38286cf3be983213fcf1d2e2a58700e808f83f4ea9a4804bc0"
+
+[[package]]
 name = "menu"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -779,9 +800,12 @@ dependencies = [
  "itoa",
  "miniconf_derive",
  "postcard",
+ "schemars",
  "serde",
  "serde-json-core",
- "thiserror",
+ "serde-reflection",
+ "serde_json",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -948,6 +972,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "once_cell"
+version = "1.21.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
+
+[[package]]
 name = "panic-persist"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1095,6 +1125,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ref-cast"
+version = "1.0.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a0ae411dbe946a674d89546582cea4ba2bb8defac896622d6496f14c23ba5cf"
+dependencies = [
+ "ref-cast-impl",
+]
+
+[[package]]
+name = "ref-cast-impl"
+version = "1.0.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1165225c21bff1f3bbce98f5a1f889949bc902d3575308cc7b0de30b4f6d27c7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
 name = "rtic"
 version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1214,6 +1264,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 
 [[package]]
+name = "schemars"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82d20c4491bc164fa2f6c5d44565947a52ad80b9505d8e36f8d54c27c739fcd0"
+dependencies = [
+ "dyn-clone",
+ "ref-cast",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1251,10 +1313,11 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.219"
+version = "1.0.225"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f0e2c6ed6606019b4e29e69dbaba95b11854410e5347d525002456dbbb786b6"
+checksum = "fd6c24dee235d0da097043389623fb913daddf92c76e9f5a1db88607a0bcbd1d"
 dependencies = [
+ "serde_core",
  "serde_derive",
 ]
 
@@ -1270,14 +1333,49 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_derive"
-version = "1.0.219"
+name = "serde-reflection"
+version = "0.5.0"
+source = "git+https://github.com/quartiq/serde-reflection.git?branch=pub-ser-de#2910c9c3422ee7b7fe2bffe7e1f929778b217607"
+dependencies = [
+ "erased-discriminant",
+ "once_cell",
+ "serde",
+ "thiserror 1.0.69",
+ "typeid",
+]
+
+[[package]]
+name = "serde_core"
+version = "1.0.225"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b0276cf7f2c73365f7157c8123c21cd9a50fbbd844757af28ca1f5925fc2a00"
+checksum = "659356f9a0cb1e529b24c01e43ad2bdf520ec4ceaf83047b83ddcc2251f96383"
+dependencies = [
+ "serde_derive",
+]
+
+[[package]]
+name = "serde_derive"
+version = "1.0.225"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ea936adf78b1f766949a4977b91d2f5595825bd6ec079aa9543ad2685fc4516"
 dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.101",
+]
+
+[[package]]
+name = "serde_json"
+version = "1.0.145"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "402a6f66d8c709116cf22f558eab210f5a50187f702eb4d7e5ef38d9a7f1c79c"
+dependencies = [
+ "indexmap",
+ "itoa",
+ "memchr",
+ "ryu",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -1343,7 +1441,7 @@ dependencies = [
  "rand_core",
  "rand_xorshift",
  "serde",
- "thiserror",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -1451,6 +1549,7 @@ dependencies = [
  "rtt-logger",
  "rtt-target",
  "serde",
+ "serde_json",
  "serial-settings",
  "shared-bus",
  "signal_generator",
@@ -1460,7 +1559,7 @@ dependencies = [
  "stream",
  "strum",
  "tca9539",
- "thiserror",
+ "thiserror 2.0.12",
  "urukul",
  "usb-device",
  "usbd-serial",
@@ -1610,11 +1709,31 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
+version = "1.0.69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
+dependencies = [
+ "thiserror-impl 1.0.69",
+]
+
+[[package]]
+name = "thiserror"
 version = "2.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "567b8a2dae586314f7be2a752ec7474332959c6460e02bde30d702a66d488708"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 2.0.12",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "1.0.69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
 ]
 
 [[package]]
@@ -1637,6 +1756,12 @@ dependencies = [
  "displaydoc",
  "zerovec",
 ]
+
+[[package]]
+name = "typeid"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc7d623258602320d5c55d1bc22793b57daff0ec7efc270ea7d55ce1d5f5471c"
 
 [[package]]
 name = "ufmt-write"
@@ -1674,7 +1799,7 @@ dependencies = [
  "log",
  "num-traits",
  "serde",
- "thiserror",
+ "thiserror 2.0.12",
 ]
 
 [[package]]

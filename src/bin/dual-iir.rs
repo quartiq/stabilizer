@@ -25,15 +25,10 @@
 //! ## Stream
 //! This application streams raw ADC and DAC data over UDP. Refer to
 //! [stabilizer::net::data_stream] for more information.
-#![no_std]
-#![no_main]
+#![cfg_attr(target_os = "none", no_std)]
+#![cfg_attr(target_os = "none", no_main)]
 
-use core::sync::atomic::{fence, Ordering};
 use miniconf::Tree;
-
-use rtic_monotonics::Monotonic;
-
-use fugit::ExtU32 as _;
 
 use idsp::iir;
 
@@ -55,7 +50,7 @@ const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 const SAMPLE_PERIOD: f32 =
     SAMPLE_TICKS as f32 * stabilizer::design_parameters::TIMER_PERIOD;
 
-#[derive(Clone, Debug, Tree)]
+#[derive(Clone, Debug, Tree, Default)]
 #[tree(meta(doc, typename))]
 pub struct Settings {
     dual_iir: DualIir,
@@ -85,7 +80,7 @@ impl serial_settings::Settings for Settings {
 }
 
 #[derive(Clone, Debug, Tree)]
-#[tree(meta(doc, typename))]
+#[tree(meta(doc, typename = "BiquadReprTree"))]
 pub struct BiquadRepr {
     /// Biquad parameters
     #[tree(rename="typ", typ="&str", with=miniconf::str_leaf, defer=self.repr)]
@@ -199,9 +194,23 @@ pub struct Active {
     source: Source,
 }
 
-#[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
+#[cfg(not(target_os = "none"))]
+fn main() {
+    use miniconf::json_schema::TreeJsonSchema;
+    let mut schema = TreeJsonSchema::<Settings>::new().unwrap();
+    schema
+        .root
+        .insert("title".to_string(), "Stabilizer dual-iir".into());
+    println!("{}", serde_json::to_string_pretty(&schema.root).unwrap());
+}
+
+#[cfg(target_os = "none")]
+#[cfg_attr(target_os = "none", rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC]))]
 mod app {
     use super::*;
+    use core::sync::atomic::{fence, Ordering};
+    use fugit::ExtU32 as _;
+    use rtic_monotonics::Monotonic;
 
     use stabilizer::{
         hardware::{

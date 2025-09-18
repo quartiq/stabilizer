@@ -24,8 +24,8 @@
 //! ## Stream
 //! This application streams raw ADC and DAC data over UDP. Refer to
 //! [stabilizer::net::data_stream] for more information.
-#![no_std]
-#![no_main]
+#![cfg_attr(target_os = "none", no_std)]
+#![cfg_attr(target_os = "none", no_main)]
 
 use core::{
     iter,
@@ -54,7 +54,7 @@ const BATCH_SIZE: usize = 1 << BATCH_SIZE_LOG2;
 const SAMPLE_TICKS_LOG2: u32 = 7;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 
-#[derive(Clone, Debug, Tree)]
+#[derive(Clone, Debug, Tree, Default)]
 #[tree(meta(doc, typename))]
 pub struct Settings {
     lockin: Lockin,
@@ -226,6 +226,17 @@ impl Default for Lockin {
     }
 }
 
+#[cfg(not(target_os = "none"))]
+fn main() {
+    use miniconf::json_schema::TreeJsonSchema;
+    let mut schema = TreeJsonSchema::<Settings>::new().unwrap();
+    schema
+        .root
+        .insert("title".to_string(), "Stabilizer lockin".into());
+    println!("{}", serde_json::to_string_pretty(&schema.root).unwrap());
+}
+
+#[cfg(target_os = "none")]
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, SDMMC])]
 mod app {
     use super::*;

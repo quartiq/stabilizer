@@ -16,9 +16,21 @@ pub struct NetSettings {
     /// An optional static IP address to use. An unspecified IP address (or malformed address) will
     /// use DHCP.
     pub ip: String<15>,
+
     #[tree(skip)]
     /// The MAC address of Stabilizer, which is used to reinitialize the ID to default settings.
     pub mac: EthernetAddress,
+}
+
+impl Default for NetSettings {
+    fn default() -> Self {
+        Self {
+            broker: String::try_from("mqtt").unwrap(),
+            ip: String::try_from("0.0.0.0").unwrap(),
+            id: String::try_from("<mac>").unwrap(),
+            mac: EthernetAddress::default(),
+        }
+    }
 }
 
 impl NetSettings {
@@ -27,10 +39,9 @@ impl NetSettings {
         write!(&mut id, "{mac}").unwrap();
 
         Self {
-            broker: String::try_from("mqtt").unwrap(),
-            ip: String::try_from("0.0.0.0").unwrap(),
             id,
             mac,
+            ..Default::default()
         }
     }
 }

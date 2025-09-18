@@ -5,8 +5,8 @@
 //!
 //! Note that several values are not range checked and out-of-range values
 //! will lead to panics.
-#![no_std]
-#![no_main]
+#![cfg_attr(target_os = "none", no_std)]
+#![cfg_attr(target_os = "none", no_main)]
 
 use arbitrary_int::{u2, u5};
 use fugit::ExtU32;
@@ -15,7 +15,7 @@ use rtic_monotonics::Monotonic;
 
 use platform::{AppSettings, NetSettings};
 
-#[derive(Clone, Debug, Tree)]
+#[derive(Clone, Debug, Tree, Default)]
 #[tree(meta(doc, typename))]
 pub struct Settings {
     urukul: App,
@@ -97,6 +97,17 @@ impl Default for App {
     }
 }
 
+#[cfg(not(target_os = "none"))]
+fn main() {
+    use miniconf::json_schema::TreeJsonSchema;
+    let mut schema = TreeJsonSchema::<Settings>::new().unwrap();
+    schema
+        .root
+        .insert("title".to_string(), "Stabilizer dds".into());
+    println!("{}", serde_json::to_string_pretty(&schema.root).unwrap());
+}
+
+#[cfg(target_os = "none")]
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
 mod app {
     use super::*;

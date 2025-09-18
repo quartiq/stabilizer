@@ -40,19 +40,12 @@ members = [
 panic-persist = { version = "0.3", features = ["utf8", "custom-panic-handler"] }
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"
-cortex-m = { version = "0.7.7", features = [
-	"inline-asm",
-	"critical-section-single-core",
-] }
-cortex-m-rt = { version = "0.7", features = ["device"] }
 log = { version = "0.4", features = [
 	"max_level_trace",
 	"release_max_level_info",
 ] }
-rtt-target = "0.3"
 serde = { version = "1.0", features = ["derive"], default-features = false }
 heapless = { version = "0.8", features = ["serde"] }
-rtic = { version = "2.1", features = ["thumbv7-backend"] }
 rtic-monotonics = { version = "2.0", features = ["cortex-m-systick"] }
 num_enum = { version = "0.7.3", default-features = false }
 paste = "1"
@@ -90,11 +83,6 @@ signal_generator = { version = "0.1", path = "signal_generator" }
 stream = { version = "0.1", path = "stream" }
 platform = { version = "0.1", path = "platform" }
 
-[dependencies.stm32h7xx-hal]
-version = "0.16.0"
-features = ["stm32h743v", "rt", "ethernet", "xspi", "usb_hs"]
-git = "https://github.com/stm32-rs/stm32h7xx-hal.git"
-
 [dependencies.smoltcp-nal]
 version = "0.6"
 features = ["shared-stack"]
@@ -102,6 +90,26 @@ git = "https://github.com/quartiq/smoltcp-nal.git"
 
 [build-dependencies]
 built = { version = "0.8", features = ["git2"], default-features = false }
+
+[target.'cfg(target_os = "none")'.dependencies]
+stm32h7xx-hal = { version = "0.16.0", features = [
+	"stm32h743v",
+	"rt",
+	"ethernet",
+	"xspi",
+	"usb_hs",
+], git = "https://github.com/stm32-rs/stm32h7xx-hal.git" }
+cortex-m = { version = "0.7.7", features = [
+	"inline-asm",
+	"critical-section-single-core",
+] }
+cortex-m-rt = { version = "0.7", features = ["device"] }
+rtic = { version = "2.1", features = ["thumbv7-backend"] }
+rtt-target = "0.3"
+
+[target.'cfg(not(target_os = "none"))'.dependencies]
+serde_json = { version = "1.0.133", features = ["preserve_order"] }
+miniconf = { version = "0.19", features = ["schema"] }
 
 [features]
 nightly = []
