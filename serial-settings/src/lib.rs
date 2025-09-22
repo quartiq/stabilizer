@@ -4,7 +4,7 @@
 use embedded_io::{ErrorType, Read, ReadReady, Write};
 use heapless::String;
 use miniconf::{
-    json, postcard, NodeIter, Path, SerdeError, TreeDeserializeOwned,
+    json_core, postcard, NodeIter, Path, SerdeError, TreeDeserializeOwned,
     TreeSchema, TreeSerialize, ValueError,
 };
 
@@ -144,35 +144,34 @@ impl<'a, P: Platform> Interface<'a, P> {
             settings,
             |key, interface, settings, defaults| {
                 // Get current
-                let check =
-                    match json::get_by_key(settings, key, interface.buffer) {
-                        Err(SerdeError::Value(ValueError::Absent)) => {
-                            return;
-                        }
-                        Err(e) => {
-                            writeln!(
-                                interface,
-                                "Failed to get `{}`: {e}",
-                                key.0
-                            )
+                let check = match json_core::get_by_key(
+                    settings,
+                    key,
+                    interface.buffer,
+                ) {
+                    Err(SerdeError::Value(ValueError::Absent)) => {
+                        return;
+                    }
+                    Err(e) => {
+                        writeln!(interface, "Failed to get `{}`: {e}", key.0)
                             .unwrap();
-                            return;
-                        }
-                        Ok(len) => {
-                            write!(
-                                interface.platform.interface_mut(),
-                                "{}: {}",
-                                key.0,
-                                core::str::from_utf8(&interface.buffer[..len])
-                                    .unwrap()
-                            )
-                            .unwrap();
-                            yafnv::fnv1a::<u32>(&interface.buffer[..len])
-                        }
-                    };
+                        return;
+                    }
+                    Ok(len) => {
+                        write!(
+                            interface.platform.interface_mut(),
+                            "{}: {}",
+                            key.0,
+                            core::str::from_utf8(&interface.buffer[..len])
+                                .unwrap()
+                        )
+                        .unwrap();
+                        yafnv::fnv1a::<u32>(&interface.buffer[..len])
+                    }
+                };
 
                 // Get default and compare
-                match json::get_by_key(defaults, key, interface.buffer) {
+                match json_core::get_by_key(defaults, key, interface.buffer) {
                     Err(SerdeError::Value(ValueError::Absent)) => {
                         write!(interface, " [default: absent]")
                     }
@@ -211,7 +210,7 @@ impl<'a, P: Platform> Interface<'a, P> {
                                 interface,
                                 " [stored deserialize error: {e}]"
                             ),
-                            Ok(_rest) => match json::get_by_key(
+                            Ok(_rest) => match json_core::get_by_key(
                                 defaults,
                                 key,
                                 interface.buffer,
@@ -489,7 +488,7 @@ impl<'a, P: Platform> Interface<'a, P> {
             menu::argument_finder(item, args, "value").unwrap().unwrap();
 
         // Now, write the new value into memory.
-        match json::set(settings, key, value.as_bytes()) {
+        match json_core::set(settings, key, value.as_bytes()) {
             Ok(_) => {
                 interface.updated = true;
                 writeln!(

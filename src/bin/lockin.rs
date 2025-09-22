@@ -228,8 +228,13 @@ impl Default for Lockin {
 
 #[cfg(not(target_os = "none"))]
 fn main() {
-    use miniconf::json_schema::TreeJsonSchema;
-    let mut schema = TreeJsonSchema::<Settings>::new().unwrap();
+    use miniconf::{json::to_json_value, json_schema::TreeJsonSchema};
+    let s = Settings::default();
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&to_json_value(&s).unwrap()).unwrap()
+    );
+    let mut schema = TreeJsonSchema::new(Some(&s)).unwrap();
     schema
         .root
         .insert("title".to_string(), "Stabilizer lockin".into());
