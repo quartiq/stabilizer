@@ -14,7 +14,7 @@
 //!
 //! * **Magic word 0x057B** (u16): a constant to identify Stabilizer streaming data.
 //! * **Format Code** (u8): a unique ID that indicates the serialization format of each batch of data
-//!   in the frame. Refer to [StreamFormat] for further information.
+//!   in the frame. Refer to [Format] for further information.
 //! * **Batch Count** (u8): the number of batches of data.
 //! * **Sequence Number** (u32): an the sequence number of the first batch in the frame.
 //!   This can be used to determine if and how many stream batches are lost.

@@ -19,11 +19,11 @@
 //! for this application.
 //!
 //! ## Telemetry
-//! Refer to [stabilizer::net::telemetry::Telemetry] for information about telemetry reported by this application.
+//! Refer to [stabilizer::telemetry::Telemetry] for information about telemetry reported by this application.
 //!
 //! ## Stream
 //! This application streams raw ADC and DAC data over UDP. Refer to
-//! [stabilizer::net::data_stream] for more information.
+//! [stream] for more information.
 #![cfg_attr(target_os = "none", no_std)]
 #![cfg_attr(target_os = "none", no_main)]
 
@@ -113,93 +113,39 @@ enum LockinMode {
 #[tree(meta(doc, typename))]
 pub struct Lockin {
     /// Configure the Analog Front End (AFE) gain.
-    ///
-    /// # Path
-    /// `afe/<n>`
-    ///
-    /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
-    ///
-    /// # Value
-    /// Any of the variants of [Gain] enclosed in double quotes.
     afe: [Leaf<Gain>; 2],
 
     /// Specifies the operational mode of the lockin.
-    ///
-    /// # Path
-    /// `lockin_mode`
-    ///
-    /// # Value
-    /// One of the variants of [LockinMode] enclosed in double quotes.
     #[tree(with=miniconf::leaf)]
     lockin_mode: LockinMode,
 
     /// Specifis the PLL time constant.
     ///
-    /// # Path
-    /// `pll_tc/<n>`
-    ///
-    /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
-    ///
-    /// # Value
     /// The PLL time constant exponent (1-31).
     pll_tc: [u32; 2],
 
     /// Specifies the lockin lowpass gains.
-    ///
-    /// # Path
-    /// `lockin_k`
-    ///
-    /// # Value
-    /// The lockin low-pass coefficients. See [`idsp::Lowpass`] for determining them.
     #[tree(with=miniconf::leaf)]
     lockin_k: <Lowpass<2> as Filter>::Config,
 
     /// Specifies which harmonic to use for the lockin.
     ///
-    /// # Path
-    /// `lockin_harmonic`
-    ///
-    /// # Value
     /// Harmonic index of the LO. -1 to _de_modulate the fundamental (complex conjugate)
     lockin_harmonic: i32,
 
     /// Specifies the LO phase offset.
     ///
-    /// # Path
-    /// `lockin_phase`
-    ///
-    /// # Value
     /// Demodulation LO phase offset. Units are in terms of i32, where [i32::MIN] is equivalent to
     /// -pi and [i32::MAX] is equivalent to +pi.
     lockin_phase: i32,
 
     /// Specifies DAC output mode.
-    ///
-    /// # Path
-    /// `output_conf/<n>`
-    ///
-    /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
-    ///
-    /// # Value
-    /// One of the variants of [Conf] enclosed in double quotes.
     output_conf: [Leaf<Conf>; 2],
 
     /// Specifies the telemetry output period in seconds.
-    ///
-    /// # Path
-    /// `telemetry_period`
-    ///
-    /// # Value
-    /// Any non-zero value less than 65536.
     telemetry_period: u16,
 
     /// Specifies the target for data streaming.
-    ///
-    /// # Path
-    /// `stream`
-    ///
-    /// # Value
-    /// See [StreamTarget#miniconf]
     #[tree(with=miniconf::leaf)]
     stream: stream::Target,
 }
