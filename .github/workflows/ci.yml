@@ -30,8 +30,7 @@ jobs:
             python -m pip install --upgrade pip
             pip install py/
             pip install pylint
-      - name: Run Pylint
-        run: |
+      - run: |
           pylint py/stabilizer
 
   compile:
@@ -90,8 +89,8 @@ jobs:
       # auto-generated code.
       - run: cargo deadlinks --dir target/thumbv7em-none-eabihf/doc --ignore-fragments --check-intra-doc-links
         continue-on-error: true
-      - run: |
-          # Install depedencies at our cache location
+      - name: build
+        run: |
           mv ../target/thumbv7em-none-eabihf/doc src/firmware
           mdbook build
         working-directory: book

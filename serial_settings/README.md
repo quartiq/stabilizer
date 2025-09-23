@@ -33,7 +33,7 @@ Available settings:
 ```
 
 ## Design
-Settings are specified in a [`miniconf::TreeSchema`] settings tree and are transferred over the
+Settings are specified in a [`miniconf`] settings tree and are transferred over the
 serial interface using JSON encoding. This means that things like strings must be encased in
 quotes.
 
