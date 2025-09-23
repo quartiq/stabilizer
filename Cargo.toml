@@ -147,10 +147,10 @@ debug = true
 lto = true
 
 [patch.crates-io]
-miniconf = { git = "https://github.com/quartiq/miniconf.git", branch = "tree-schema" }
-miniconf_derive = { git = "https://github.com/quartiq/miniconf.git", branch = "tree-schema" }
-miniconf_mqtt = { git = "https://github.com/quartiq/miniconf.git", branch = "tree-schema" }
-idsp = { git = "https://github.com/quartiq/idsp.git", branch = "miniconf-schema" }
+miniconf = { git = "https://github.com/quartiq/miniconf.git" }
+miniconf_derive = { git = "https://github.com/quartiq/miniconf.git" }
+miniconf_mqtt = { git = "https://github.com/quartiq/miniconf.git" }
+idsp = { git = "https://github.com/quartiq/idsp.git" }
 #miniconf = { path = "../miniconf/miniconf" }
 #miniconf_derive = { path = "../miniconf/miniconf_derive" }
 #miniconf_mqtt = { path = "../miniconf/miniconf_mqtt" }
