@@ -10,7 +10,7 @@ use super::hal::{
 use core::cell::RefCell;
 use core::sync::atomic::{self, AtomicBool, Ordering};
 use core::{fmt::Write, ptr, slice};
-use embedded_hal_compat::{markers::ForwardOutputPin, Forward, ForwardCompat};
+use embedded_hal_compat::{Forward, ForwardCompat, markers::ForwardOutputPin};
 use grounded::uninit::GroundedCell;
 use heapless::String;
 use smoltcp_nal::smoltcp;
@@ -20,11 +20,11 @@ use platform::{AppSettings, ApplicationMetadata, NetSettings};
 use crate::design_parameters;
 
 use super::{
-    adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, delay::AsmDelay,
-    eeprom, input_stamper::InputStamper, net::NetworkStack, pounder,
-    pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
     DigitalInput0, DigitalInput1, Eem, EthernetPhy, Gpio, HardwareVersion,
-    Pgia, SerialTerminal, SystemTimer, Systick, UsbDevice,
+    Pgia, SerialTerminal, SystemTimer, Systick, UsbDevice, adc, afe,
+    cpu_temp_sensor::CpuTempSensor, dac, delay, delay::AsmDelay, eeprom,
+    input_stamper::InputStamper, net::NetworkStack, pounder,
+    pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -129,7 +129,7 @@ pub struct PounderDevices {
     pub timestamper: pounder::timestamp::Timestamper,
 }
 
-#[link_section = ".sram3.eth"]
+#[unsafe(link_section = ".sram3.eth")]
 /// Static storage for the ethernet DMA descriptor ring.
 static DES_RING: GroundedCell<
     ethernet::DesRing<
@@ -149,7 +149,7 @@ static DES_RING: GroundedCell<
 /// Calling (through IRQ or directly) any code in ITCM before having called
 /// this method is undefined.
 fn load_itcm() {
-    extern "C" {
+    unsafe extern "C" {
         // ZST (`()`: not layout-stable. empty/zst struct in `repr(C)``: not "proper" C)
         static mut __sitcm: [u32; 0];
         static mut __eitcm: [u32; 0];
@@ -689,7 +689,9 @@ where
         {
             Ok(addr) => addr,
             Err(e) => {
-                log::warn!("Invalid IP address in settings: {e:?}. Defaulting to 0.0.0.0 (DHCP)");
+                log::warn!(
+                    "Invalid IP address in settings: {e:?}. Defaulting to 0.0.0.0 (DHCP)"
+                );
                 "0.0.0.0".parse().unwrap()
             }
         };

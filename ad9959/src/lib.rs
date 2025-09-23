@@ -1,6 +1,6 @@
 #![no_std]
 
-use arbitrary_int::{u10, u14, u2, u24, u3, u4, u5, Number};
+use arbitrary_int::{Number, u2, u3, u4, u5, u10, u14, u24};
 use bitbybit::{bitenum, bitfield};
 use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
 

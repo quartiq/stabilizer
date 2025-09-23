@@ -8,7 +8,7 @@
 use heapless;
 use miniconf;
 
-use crate::hardware::{hal::ethernet::EthernetDMA, EthernetPhy, SystemTimer};
+use crate::hardware::{EthernetPhy, SystemTimer, hal::ethernet::EthernetDMA};
 use platform::{ApplicationMetadata, NetSettings, TelemetryClient};
 use stream::{DataStream, FrameGenerator, Target};
 

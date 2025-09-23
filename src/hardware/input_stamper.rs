@@ -25,7 +25,7 @@
 //! This module only supports DI0 for timestamping due to trigger constraints on the DIx pins. If
 //! timestamping is desired in DI1, a separate timer + capture channel will be necessary.
 use super::{
-    hal::gpio::{gpioa::PA3, Alternate},
+    hal::gpio::{Alternate, gpioa::PA3},
     timers,
 };
 

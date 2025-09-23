@@ -75,10 +75,10 @@ use crate::design_parameters::SampleBuffer;
 use super::hal::{
     self,
     dma::{
+        DMAError, MemoryToPeripheral, PeripheralToMemory, Transfer,
         config::Priority,
         dma::{DMAReq, DmaConfig},
         traits::TargetAddress,
-        DMAError, MemoryToPeripheral, PeripheralToMemory, Transfer,
     },
     spi::{HalDisabledSpi, HalEnabledSpi, HalSpi},
 };
@@ -86,20 +86,20 @@ use super::hal::{
 // The following data is written by the timer ADC sample trigger into the SPI CR1 to start the
 // transfer. Data in AXI SRAM is not initialized on boot, so the contents are random. This value is
 // initialized during setup.
-#[link_section = ".axisram.buffers"]
+#[unsafe(link_section = ".axisram.buffers")]
 static SPI_START: GroundedCell<[u32; 1]> = GroundedCell::uninit();
 
 // The following data is written by the timer flag clear trigger into the SPI IFCR register to clear
 // the EOT flag. Data in AXI SRAM is not initialized on boot, so the contents are random. This
 // value is initialized during setup.
-#[link_section = ".axisram.buffers"]
+#[unsafe(link_section = ".axisram.buffers")]
 static SPI_EOT_CLEAR: GroundedCell<[u32; 1]> = GroundedCell::uninit();
 
 // The following global buffers are used for the ADC sample DMA transfers. Two buffers are used for
 // each transfer in a ping-pong buffer configuration (one is being acquired while the other is being
 // processed). Note that the contents of AXI SRAM is uninitialized, so the buffer contents on
 // startup are undefined. The dimensions are `ADC_BUF[adc_index][ping_pong_index][sample_index]`.
-#[link_section = ".axisram.buffers"]
+#[unsafe(link_section = ".axisram.buffers")]
 static ADC_BUF: GroundedArrayCell<[SampleBuffer; 2], 2> =
     GroundedArrayCell::uninit();
 

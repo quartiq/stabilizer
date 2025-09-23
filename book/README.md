@@ -14,7 +14,11 @@ To build the user manual locally, build docs for the firmware, copy them into th
 directory, and then serve the book:
 
 ```bash
-cargo doc --no-deps -p miniconf -p stabilizer -p idsp -p ad9959 -p urukul -p serial-settings
+cargo doc --no-deps \
+    -p miniconf -p idsp \
+    -p ad9959 -p ad9912 -p stream -p platform -p signal_generator \
+    -p encoded_pin -p serial_settings -p urukul \
+    -p stabilizer
 mv target/thumbv7em-none-eabihf/doc book/src/firmware
 mdbook serve book
 ```

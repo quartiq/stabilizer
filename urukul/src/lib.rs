@@ -1,6 +1,6 @@
 #![no_std]
 
-use arbitrary_int::{u2, u24, u3, u4, u7};
+use arbitrary_int::{u2, u3, u4, u7, u24};
 use bitbybit::{bitenum, bitfield};
 use embedded_hal::digital::OutputPin;
 use embedded_hal::spi::{self, SpiBus, SpiDevice};

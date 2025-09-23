@@ -1037,7 +1037,7 @@ dependencies = [
  "sequential-storage",
  "serde",
  "serde-json-core",
- "serial-settings",
+ "serial_settings",
  "smoltcp-nal",
 ]
 
@@ -1406,7 +1406,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "serial-settings"
+name = "serial_settings"
 version = "0.2.0"
 dependencies = [
  "embedded-io",
@@ -1554,7 +1554,7 @@ dependencies = [
  "rtt-target",
  "serde",
  "serde_json",
- "serial-settings",
+ "serial_settings",
  "shared-bus",
  "signal_generator",
  "smoltcp-nal",

@@ -118,9 +118,8 @@ mod app {
     use super::*;
 
     use stabilizer::hardware::{
-        self, hal,
+        self, SerialTerminal, SystemTimer, Systick, Urukul, UsbDevice, hal,
         net::{NetworkState, NetworkUsers},
-        SerialTerminal, SystemTimer, Systick, Urukul, UsbDevice,
     };
 
     #[shared]

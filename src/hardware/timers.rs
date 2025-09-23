@@ -219,12 +219,12 @@ macro_rules! timer_channels {
                     /// This is only safe to call once.
                     #[allow(dead_code)]
                     pub unsafe fn new() -> Self {
-                        Self {
+                        unsafe { Self {
                             ch1: Channel1::new(),
                             ch2: Channel2::new(),
                             ch3: Channel3::new(),
                             ch4: Channel4::new(),
-                        }
+                        } }
                     }
                 }
 

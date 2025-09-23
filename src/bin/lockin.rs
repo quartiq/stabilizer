@@ -30,11 +30,11 @@
 use core::{
     iter,
     mem::MaybeUninit,
-    sync::atomic::{fence, Ordering},
+    sync::atomic::{Ordering, fence},
 };
 
 use fugit::ExtU32;
-use idsp::{Accu, Complex, ComplexExt, Filter, Lowpass, Repeat, RPLL};
+use idsp::{Accu, Complex, ComplexExt, Filter, Lowpass, RPLL, Repeat};
 use miniconf::{Leaf, Tree};
 use rtic_monotonics::Monotonic;
 use serde::{Deserialize, Serialize};
@@ -193,15 +193,14 @@ mod app {
     use super::*;
     use stabilizer::{
         hardware::{
-            self,
+            self, DigitalInput0, DigitalInput1, Pgia, SerialTerminal,
+            SystemTimer, Systick, UsbDevice,
             adc::{Adc0Input, Adc1Input},
             dac::{Dac0Output, Dac1Output},
             hal,
             input_stamper::InputStamper,
             net::{NetworkState, NetworkUsers},
             timers::SamplingTimer,
-            DigitalInput0, DigitalInput1, Pgia, SerialTerminal, SystemTimer,
-            Systick, UsbDevice,
         },
         telemetry::TelemetryBuffer,
     };
@@ -321,7 +320,7 @@ mod app {
     /// It outputs either I/Q or power/phase on DAC0/DAC1. Data is normalized to full scale.
     /// PLL bandwidth, filter bandwidth, slope, and x/y or power/phase post-filters are available.
     #[task(binds=DMA1_STR4, shared=[active_settings, telemetry], local=[adcs, dacs, lockin, timestamper, pll, generator, source], priority=3)]
-    #[link_section = ".itcm.process"]
+    #[unsafe(link_section = ".itcm.process")]
     fn process(c: process::Context) {
         let process::SharedResources {
             active_settings,

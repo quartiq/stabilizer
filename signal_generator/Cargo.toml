@@ -1,15 +1,15 @@
 [package]
 name = "signal_generator"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 version = "0.1.0"
-edition = "2024"
 description = "Signal genrator DSP"
 authors = [
 	"Robert Jördens <rj@quartiq.de>",
 ]
 categories = ["embedded", "no-std"]
-license = "MIT OR Apache-2.0"
 keywords = []
-repository = "https://github.com/quartiq/stabilizer"
 
 [dependencies]
 rand_xorshift = "0.4.0"

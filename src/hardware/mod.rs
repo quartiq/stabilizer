@@ -1,7 +1,7 @@
 //! Module for all hardware-specific setup of Stabilizer
 
 pub use embedded_hal_02;
-use embedded_hal_compat::{markers::ForwardOutputPin, Forward};
+use embedded_hal_compat::{Forward, markers::ForwardOutputPin};
 use hal::{
     flash::{LockedFlashBank, UnlockedFlashBank},
     gpio::{self, ErasedPin, Input, Output},

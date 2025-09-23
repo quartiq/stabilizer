@@ -55,15 +55,15 @@ use rtic::Mutex;
 use super::timers;
 use crate::{
     convert::DacCode,
-    design_parameters::{SampleBuffer, MAX_SAMPLE_BUFFER_SIZE},
+    design_parameters::{MAX_SAMPLE_BUFFER_SIZE, SampleBuffer},
 };
 
 use super::hal::{
     self,
     dma::{
+        DMAError, MemoryToPeripheral, Transfer,
         dma::{DMAReq, DmaConfig},
         traits::TargetAddress,
-        DMAError, MemoryToPeripheral, Transfer,
     },
     spi::{HalDisabledSpi, HalEnabledSpi, HalSpi},
 };
@@ -72,7 +72,7 @@ use super::hal::{
 // each transfer in a ping-pong buffer configuration (one is being prepared while the other is being
 // processed). Note that the contents of AXI SRAM is uninitialized, so the buffer contents on
 // startup are undefined. The dimensions are `ADC_BUF[adc_index][ping_pong_index][sample_index]`.
-#[link_section = ".axisram.buffers"]
+#[unsafe(link_section = ".axisram.buffers")]
 static mut DAC_BUF: [[SampleBuffer; 2]; 2] =
     [[[0; MAX_SAMPLE_BUFFER_SIZE]; 2]; 2];
 

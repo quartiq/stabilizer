@@ -213,20 +213,19 @@ fn main() {
 #[cfg_attr(target_os = "none", rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC]))]
 mod app {
     use super::*;
-    use core::sync::atomic::{fence, Ordering};
+    use core::sync::atomic::{Ordering, fence};
     use fugit::ExtU32 as _;
     use rtic_monotonics::Monotonic;
 
     use stabilizer::{
         hardware::{
-            self,
+            self, DigitalInput0, DigitalInput1, Pgia, SerialTerminal,
+            SystemTimer, Systick, UsbDevice,
             adc::{Adc0Input, Adc1Input},
             dac::{Dac0Output, Dac1Output},
             hal,
             net::{NetworkState, NetworkUsers},
             timers::SamplingTimer,
-            DigitalInput0, DigitalInput1, Pgia, SerialTerminal, SystemTimer,
-            Systick, UsbDevice,
         },
         telemetry::TelemetryBuffer,
     };
@@ -345,7 +344,7 @@ mod app {
         local=[digital_inputs, adcs, dacs, generator, source: [[i16; BATCH_SIZE]; 2] = [[0; BATCH_SIZE]; 2]],
         shared=[active, telemetry],
         priority=3)]
-    #[link_section = ".itcm.process"]
+    #[unsafe(link_section = ".itcm.process")]
     fn process(c: process::Context) {
         let process::SharedResources {
             active, telemetry, ..

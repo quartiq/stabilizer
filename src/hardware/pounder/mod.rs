@@ -1,5 +1,5 @@
 use super::hal;
-use crate::hardware::{shared_adc::AdcChannel, I2c1Proxy};
+use crate::hardware::{I2c1Proxy, shared_adc::AdcChannel};
 use ad9959::Address;
 use embedded_hal_02::blocking::spi::Transfer;
 use serde::{Deserialize, Serialize};
@@ -254,13 +254,8 @@ impl ad9959::Interface for QspiInterface {
 
                 // Encode the address into the first 4 bytes.
                 for address_bit in 0..8 {
-                    let offset: u8 = {
-                        if address_bit % 2 != 0 {
-                            4
-                        } else {
-                            0
-                        }
-                    };
+                    let offset: u8 =
+                        { if address_bit % 2 != 0 { 4 } else { 0 } };
 
                     // Encode MSB first. Least significant bits are placed at the most significant
                     // byte.
@@ -275,13 +270,7 @@ impl ad9959::Interface for QspiInterface {
                 for byte_index in 0..data.len() {
                     let byte = data[byte_index];
                     for bit in 0..8 {
-                        let offset: u8 = {
-                            if bit % 2 != 0 {
-                                4
-                            } else {
-                                0
-                            }
-                        };
+                        let offset: u8 = { if bit % 2 != 0 { 4 } else { 0 } };
 
                         // Encode MSB first. Least significant bits are placed at the most
                         // significant byte.

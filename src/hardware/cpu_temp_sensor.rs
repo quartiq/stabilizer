@@ -5,7 +5,7 @@
 //! sensor measures the silicon junction temperature (Tj) and is connected via an internal ADC.
 use super::hal::{
     self,
-    signature::{TS_CAL_110, TS_CAL_30},
+    signature::{TS_CAL_30, TS_CAL_110},
 };
 
 use super::shared_adc::{AdcChannel, AdcError};

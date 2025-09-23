@@ -4,8 +4,8 @@
 use embedded_io::{ErrorType, Read, ReadReady, Write};
 use heapless::String;
 use miniconf::{
-    json_core, postcard, NodeIter, Path, SerdeError, TreeDeserializeOwned,
-    TreeSchema, TreeSerialize, ValueError,
+    NodeIter, Path, SerdeError, TreeDeserializeOwned, TreeSchema,
+    TreeSerialize, ValueError, json_core, postcard,
 };
 
 mod interface;
@@ -505,82 +505,95 @@ impl<'a, P: Platform> Interface<'a, P> {
 
     fn menu() -> menu::Menu<'a, Self, P::Settings> {
         menu::Menu {
-        label: "settings",
-        items: &[
-            &menu::Item {
-                command: "get",
-                help: Some("List paths and read current, default, and stored values"),
-                item_type: menu::ItemType::Callback {
-                    function: Self::handle_get,
-                    parameters: &[menu::Parameter::Optional {
-                        parameter_name: "path",
-                        help: Some("The path of the value or subtree to list/read."),
-                    }]
-                },
-            },
-            &menu::Item {
-                command: "set",
-                help: Some("Update a value"),
-                item_type: menu::ItemType::Callback {
-                    function: Self::handle_set,
-                    parameters: &[
-                        menu::Parameter::Mandatory {
+            label: "settings",
+            items: &[
+                &menu::Item {
+                    command: "get",
+                    help: Some(
+                        "List paths and read current, default, and stored values",
+                    ),
+                    item_type: menu::ItemType::Callback {
+                        function: Self::handle_get,
+                        parameters: &[menu::Parameter::Optional {
                             parameter_name: "path",
-                            help: Some("The path to set"),
-                        },
-                        menu::Parameter::Mandatory {
-                            parameter_name: "value",
-                            help: Some("The value to be written, JSON-encoded"),
-                        },
-                    ]
+                            help: Some(
+                                "The path of the value or subtree to list/read.",
+                            ),
+                        }],
+                    },
                 },
-            },
-            &menu::Item {
-                command: "store",
-                help: Some("Store values that differ from defaults"),
-                item_type: menu::ItemType::Callback {
-                    function: Self::handle_store,
-                    parameters: &[
-                        menu::Parameter::Named {
-                            parameter_name: "force",
-                            help: Some("Also store values that match defaults"),
-                        },
-                        menu::Parameter::Optional {
+                &menu::Item {
+                    command: "set",
+                    help: Some("Update a value"),
+                    item_type: menu::ItemType::Callback {
+                        function: Self::handle_set,
+                        parameters: &[
+                            menu::Parameter::Mandatory {
+                                parameter_name: "path",
+                                help: Some("The path to set"),
+                            },
+                            menu::Parameter::Mandatory {
+                                parameter_name: "value",
+                                help: Some(
+                                    "The value to be written, JSON-encoded",
+                                ),
+                            },
+                        ],
+                    },
+                },
+                &menu::Item {
+                    command: "store",
+                    help: Some("Store values that differ from defaults"),
+                    item_type: menu::ItemType::Callback {
+                        function: Self::handle_store,
+                        parameters: &[
+                            menu::Parameter::Named {
+                                parameter_name: "force",
+                                help: Some(
+                                    "Also store values that match defaults",
+                                ),
+                            },
+                            menu::Parameter::Optional {
+                                parameter_name: "path",
+                                help: Some(
+                                    "The path of the value or subtree to store.",
+                                ),
+                            },
+                        ],
+                    },
+                },
+                &menu::Item {
+                    command: "clear",
+                    help: Some(
+                        "Clear active to defaults and remove all stored values",
+                    ),
+                    item_type: menu::ItemType::Callback {
+                        function: Self::handle_clear,
+                        parameters: &[menu::Parameter::Optional {
                             parameter_name: "path",
-                            help: Some("The path of the value or subtree to store."),
-                        },
-
-                    ]
+                            help: Some(
+                                "The path of the value or subtree to clear",
+                            ),
+                        }],
+                    },
                 },
-            },
-            &menu::Item {
-                command: "clear",
-                help: Some("Clear active to defaults and remove all stored values"),
-                item_type: menu::ItemType::Callback {
-                    function: Self::handle_clear,
-                    parameters: &[
-                        menu::Parameter::Optional {
-                            parameter_name: "path",
-                            help: Some("The path of the value or subtree to clear"),
-                        },
-                    ]
+                &menu::Item {
+                    command: "platform",
+                    help: Some("Platform specific commands"),
+                    item_type: menu::ItemType::Callback {
+                        function: Self::handle_platform,
+                        parameters: &[menu::Parameter::Mandatory {
+                            parameter_name: "cmd",
+                            help: Some(
+                                "The name of the command (e.g. `reboot`, `service`, `dfu`).",
+                            ),
+                        }],
+                    },
                 },
-            },
-            &menu::Item {
-                command: "platform",
-                help: Some("Platform specific commands"),
-                item_type: menu::ItemType::Callback {
-                    function: Self::handle_platform,
-                    parameters: &[menu::Parameter::Mandatory {
-                        parameter_name: "cmd",
-                        help: Some("The name of the command (e.g. `reboot`, `service`, `dfu`)."),
-                    }]
-                },
-            },
-        ],
-        entry: None,
-        exit: None,
-    }
+            ],
+            entry: None,
+            exit: None,
+        }
     }
 }
 
