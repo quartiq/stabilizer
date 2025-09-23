@@ -21,7 +21,7 @@ jobs:
           targets: thumbv7em-none-eabihf
           components: clippy,rustfmt
       - run: cargo fmt --all -- --check
-      - run: cargo clippy --tests -- # -Dclippy::all -Dclippy::pedantic
+      - run: cargo clippy
       - run: cargo check --all --verbose
       - uses: actions/setup-python@v1
         with:
@@ -80,9 +80,9 @@ jobs:
           mdbook-version: '0.4.12'
       - run: cargo install cargo-deadlinks
       - run: cargo install mdbook-linkcheck
-      - run: |
-          cargo doc --no-deps 
-            -p miniconf -p idsp 
+      - run: >
+          cargo doc --no-deps
+            -p miniconf -p idsp
             -p ad9959 -p ad9912 -p stream -p platform -p signal_generator
             -p encoded_pin -p serial_settings -p urukul
             -p stabilizer
