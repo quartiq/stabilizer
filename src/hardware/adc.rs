@@ -65,105 +65,41 @@
 //! In this implementation, double buffer mode DMA transfers are used because the SPI RX FIFOs
 //! have finite depth, FIFO access is slower than AXISRAM access, and because the single
 //! buffer mode DMA disable/enable and buffer update sequence is slow.
-use stm32h7xx_hal as hal;
-
 use rtic::Mutex;
 
 use grounded::uninit::{GroundedArrayCell, GroundedCell};
 
-use super::design_parameters::SampleBuffer;
 use super::timers;
+use crate::design_parameters::SampleBuffer;
 
-use hal::{
+use super::hal::{
+    self,
     dma::{
+        DMAError, MemoryToPeripheral, PeripheralToMemory, Transfer,
         config::Priority,
         dma::{DMAReq, DmaConfig},
         traits::TargetAddress,
-        DMAError, MemoryToPeripheral, PeripheralToMemory, Transfer,
     },
     spi::{HalDisabledSpi, HalEnabledSpi, HalSpi},
 };
 
-/// A type representing an ADC sample.
-#[derive(Copy, Clone, Default)]
-pub struct AdcCode(pub u16);
-
-impl AdcCode {
-    // The ADC has a differential input with a range of +/- 4.096 V and 16-bit resolution.
-    // The gain into the two inputs is 1/5.
-    const FULL_SCALE: f32 = 5.0 / 2.0 * 4.096;
-    const VOLT_PER_LSB: f32 = -Self::FULL_SCALE / i16::MIN as f32;
-    const LSB_PER_VOLT: f32 = 1. / Self::VOLT_PER_LSB;
-}
-
-impl From<u16> for AdcCode {
-    /// Construct an ADC code from a provided binary (ADC-formatted) code.
-    fn from(value: u16) -> Self {
-        Self(value)
-    }
-}
-
-impl From<i16> for AdcCode {
-    /// Construct an ADC code from the stabilizer-defined code (i16 full range).
-    fn from(value: i16) -> Self {
-        Self(value as u16)
-    }
-}
-
-impl From<AdcCode> for i16 {
-    /// Get a stabilizer-defined code from the ADC code.
-    fn from(code: AdcCode) -> i16 {
-        code.0 as i16
-    }
-}
-
-impl From<AdcCode> for u16 {
-    /// Get an ADC-frmatted binary value from the code.
-    fn from(code: AdcCode) -> u16 {
-        code.0
-    }
-}
-
-impl From<AdcCode> for f32 {
-    /// Convert raw ADC codes to/from voltage levels.
-    ///
-    /// # Note
-    /// This does not account for the programmable gain amplifier at the signal input.
-    fn from(code: AdcCode) -> f32 {
-        i16::from(code) as f32 * AdcCode::VOLT_PER_LSB
-    }
-}
-
-impl TryFrom<f32> for AdcCode {
-    type Error = ();
-
-    fn try_from(voltage: f32) -> Result<AdcCode, ()> {
-        let code = voltage * Self::LSB_PER_VOLT;
-        if !(i16::MIN as f32..=i16::MAX as f32).contains(&code) {
-            Err(())
-        } else {
-            Ok(AdcCode::from(code as i16))
-        }
-    }
-}
-
 // The following data is written by the timer ADC sample trigger into the SPI CR1 to start the
 // transfer. Data in AXI SRAM is not initialized on boot, so the contents are random. This value is
 // initialized during setup.
-#[link_section = ".axisram.buffers"]
+#[unsafe(link_section = ".axisram.buffers")]
 static SPI_START: GroundedCell<[u32; 1]> = GroundedCell::uninit();
 
 // The following data is written by the timer flag clear trigger into the SPI IFCR register to clear
 // the EOT flag. Data in AXI SRAM is not initialized on boot, so the contents are random. This
 // value is initialized during setup.
-#[link_section = ".axisram.buffers"]
+#[unsafe(link_section = ".axisram.buffers")]
 static SPI_EOT_CLEAR: GroundedCell<[u32; 1]> = GroundedCell::uninit();
 
 // The following global buffers are used for the ADC sample DMA transfers. Two buffers are used for
 // each transfer in a ping-pong buffer configuration (one is being acquired while the other is being
 // processed). Note that the contents of AXI SRAM is uninitialized, so the buffer contents on
 // startup are undefined. The dimensions are `ADC_BUF[adc_index][ping_pong_index][sample_index]`.
-#[link_section = ".axisram.buffers"]
+#[unsafe(link_section = ".axisram.buffers")]
 static ADC_BUF: GroundedArrayCell<[SampleBuffer; 2], 2> =
     GroundedArrayCell::uninit();
 

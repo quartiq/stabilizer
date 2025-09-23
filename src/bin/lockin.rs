@@ -19,47 +19,29 @@
 //! for this application.
 //!
 //! ## Telemetry
-//! Refer to [stabilizer::net::telemetry::Telemetry] for information about telemetry reported by this application.
+//! Refer to [stabilizer::telemetry::Telemetry] for information about telemetry reported by this application.
 //!
 //! ## Stream
 //! This application streams raw ADC and DAC data over UDP. Refer to
-//! [stabilizer::net::data_stream] for more information.
-#![no_std]
-#![no_main]
+//! [stream] for more information.
+#![cfg_attr(target_os = "none", no_std)]
+#![cfg_attr(target_os = "none", no_main)]
 
 use core::{
     iter,
     mem::MaybeUninit,
-    sync::atomic::{fence, Ordering},
+    sync::atomic::{Ordering, fence},
 };
-
-use miniconf::{Leaf, Tree};
-use rtic_monotonics::Monotonic;
 
 use fugit::ExtU32;
+use idsp::{Accu, Complex, ComplexExt, Filter, Lowpass, RPLL, Repeat};
+use miniconf::{Leaf, Tree};
+use rtic_monotonics::Monotonic;
+use serde::{Deserialize, Serialize};
 
-use idsp::{Accu, Complex, ComplexExt, Filter, Lowpass, Repeat, RPLL};
+use stabilizer::convert::{AdcCode, DacCode, Gain};
 
-use stabilizer::{
-    hardware::{
-        self,
-        adc::{Adc0Input, Adc1Input, AdcCode},
-        afe::Gain,
-        dac::{Dac0Output, Dac1Output, DacCode},
-        hal,
-        input_stamper::InputStamper,
-        timers::SamplingTimer,
-        DigitalInput0, DigitalInput1, Pgia, SerialTerminal, SystemTimer,
-        Systick, UsbDevice,
-    },
-    net::{
-        data_stream::{FrameGenerator, StreamFormat, StreamTarget},
-        serde::{Deserialize, Serialize},
-        telemetry::TelemetryBuffer,
-        NetworkState, NetworkUsers,
-    },
-    settings::NetSettings,
-};
+use platform::{AppSettings, NetSettings};
 
 // The logarithm of the number of samples in each batch process. This corresponds with 2^3 samples
 // per batch = 8 samples
@@ -72,13 +54,14 @@ const BATCH_SIZE: usize = 1 << BATCH_SIZE_LOG2;
 const SAMPLE_TICKS_LOG2: u32 = 7;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 
-#[derive(Clone, Debug, Tree)]
+#[derive(Clone, Debug, Tree, Default)]
+#[tree(meta(doc, typename))]
 pub struct Settings {
     lockin: Lockin,
     net: NetSettings,
 }
 
-impl stabilizer::settings::AppSettings for Settings {
+impl AppSettings for Settings {
     fn new(net: NetSettings) -> Self {
         Self {
             net,
@@ -127,126 +110,106 @@ enum LockinMode {
 }
 
 #[derive(Clone, Debug, Tree)]
+#[tree(meta(doc, typename))]
 pub struct Lockin {
     /// Configure the Analog Front End (AFE) gain.
-    ///
-    /// # Path
-    /// `afe/<n>`
-    ///
-    /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
-    ///
-    /// # Value
-    /// Any of the variants of [Gain] enclosed in double quotes.
     afe: [Leaf<Gain>; 2],
 
     /// Specifies the operational mode of the lockin.
-    ///
-    /// # Path
-    /// `lockin_mode`
-    ///
-    /// # Value
-    /// One of the variants of [LockinMode] enclosed in double quotes.
-    lockin_mode: Leaf<LockinMode>,
+    #[tree(with=miniconf::leaf)]
+    lockin_mode: LockinMode,
 
     /// Specifis the PLL time constant.
     ///
-    /// # Path
-    /// `pll_tc/<n>`
-    ///
-    /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
-    ///
-    /// # Value
     /// The PLL time constant exponent (1-31).
-    pll_tc: [Leaf<u32>; 2],
+    pll_tc: [u32; 2],
 
     /// Specifies the lockin lowpass gains.
-    ///
-    /// # Path
-    /// `lockin_k`
-    ///
-    /// # Value
-    /// The lockin low-pass coefficients. See [`idsp::Lowpass`] for determining them.
-    lockin_k: Leaf<<Lowpass<2> as Filter>::Config>,
+    #[tree(with=miniconf::leaf)]
+    lockin_k: <Lowpass<2> as Filter>::Config,
 
     /// Specifies which harmonic to use for the lockin.
     ///
-    /// # Path
-    /// `lockin_harmonic`
-    ///
-    /// # Value
     /// Harmonic index of the LO. -1 to _de_modulate the fundamental (complex conjugate)
-    lockin_harmonic: Leaf<i32>,
+    lockin_harmonic: i32,
 
     /// Specifies the LO phase offset.
     ///
-    /// # Path
-    /// `lockin_phase`
-    ///
-    /// # Value
     /// Demodulation LO phase offset. Units are in terms of i32, where [i32::MIN] is equivalent to
     /// -pi and [i32::MAX] is equivalent to +pi.
-    lockin_phase: Leaf<i32>,
+    lockin_phase: i32,
 
     /// Specifies DAC output mode.
-    ///
-    /// # Path
-    /// `output_conf/<n>`
-    ///
-    /// * `<n>` specifies which channel to configure. `<n>` := [0, 1]
-    ///
-    /// # Value
-    /// One of the variants of [Conf] enclosed in double quotes.
     output_conf: [Leaf<Conf>; 2],
 
     /// Specifies the telemetry output period in seconds.
-    ///
-    /// # Path
-    /// `telemetry_period`
-    ///
-    /// # Value
-    /// Any non-zero value less than 65536.
-    telemetry_period: Leaf<u16>,
+    telemetry_period: u16,
 
     /// Specifies the target for data streaming.
-    ///
-    /// # Path
-    /// `stream`
-    ///
-    /// # Value
-    /// See [StreamTarget#miniconf]
-    stream: Leaf<StreamTarget>,
+    #[tree(with=miniconf::leaf)]
+    stream: stream::Target,
 }
 
 impl Default for Lockin {
     fn default() -> Self {
         Self {
-            afe: [Gain::G1.into(); 2],
+            afe: [Leaf(Gain::G1); 2],
 
-            lockin_mode: LockinMode::External.into(),
+            lockin_mode: LockinMode::External,
 
-            pll_tc: [21.into(), 21.into()], // frequency and phase settling time (log2 counter cycles)
+            pll_tc: [21, 21], // frequency and phase settling time (log2 counter cycles)
 
-            lockin_k: [0x8_0000, -0x400_0000].into(), // lockin lowpass gains
-            lockin_harmonic: (-1).into(), // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
-            lockin_phase: 0.into(),       // Demodulation LO phase offset
+            lockin_k: [0x8_0000, -0x400_0000], // lockin lowpass gains
+            lockin_harmonic: -1, // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
+            lockin_phase: 0,     // Demodulation LO phase offset
 
-            output_conf: [Conf::InPhase.into(), Conf::Quadrature.into()],
+            output_conf: [Leaf(Conf::InPhase), Leaf(Conf::Quadrature)],
             // The default telemetry period in seconds.
-            telemetry_period: 10.into(),
+            telemetry_period: 10,
 
             stream: Default::default(),
         }
     }
 }
 
+#[cfg(not(target_os = "none"))]
+fn main() {
+    use miniconf::{json::to_json_value, json_schema::TreeJsonSchema};
+    let s = Settings::default();
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&to_json_value(&s).unwrap()).unwrap()
+    );
+    let mut schema = TreeJsonSchema::new(Some(&s)).unwrap();
+    schema
+        .root
+        .insert("title".to_string(), "Stabilizer lockin".into());
+    println!("{}", serde_json::to_string_pretty(&schema.root).unwrap());
+}
+
+#[cfg(target_os = "none")]
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, SDMMC])]
 mod app {
     use super::*;
+    use stabilizer::{
+        hardware::{
+            self, DigitalInput0, DigitalInput1, Pgia, SerialTerminal,
+            SystemTimer, Systick, UsbDevice,
+            adc::{Adc0Input, Adc1Input},
+            dac::{Dac0Output, Dac1Output},
+            hal,
+            input_stamper::InputStamper,
+            net::{NetworkState, NetworkUsers},
+            timers::SamplingTimer,
+        },
+        telemetry::TelemetryBuffer,
+    };
+    use stream::FrameGenerator;
 
     #[shared]
     struct Shared {
         usb: UsbDevice,
-        network: NetworkUsers<Lockin, 2>,
+        network: NetworkUsers<Lockin>,
         settings: Settings,
         active_settings: Lockin,
         telemetry: TelemetryBuffer,
@@ -254,7 +217,7 @@ mod app {
 
     #[local]
     struct Local {
-        usb_terminal: SerialTerminal<Settings, 3>,
+        usb_terminal: SerialTerminal<Settings>,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         timestamper: InputStamper,
@@ -273,7 +236,7 @@ mod app {
         let clock = SystemTimer::new(|| Systick::now().ticks());
 
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) = hardware::setup::setup::<Settings, 3>(
+        let (mut stabilizer, _pounder) = hardware::setup::setup::<Settings>(
             c.core,
             c.device,
             clock,
@@ -290,7 +253,7 @@ mod app {
             stabilizer.metadata,
         );
 
-        let generator = network.configure_streaming(StreamFormat::AdcDacData);
+        let generator = network.configure_streaming(stream::Format::AdcDacData);
 
         let shared = Shared {
             network,
@@ -357,7 +320,7 @@ mod app {
     /// It outputs either I/Q or power/phase on DAC0/DAC1. Data is normalized to full scale.
     /// PLL bandwidth, filter bandwidth, slope, and x/y or power/phase post-filters are available.
     #[task(binds=DMA1_STR4, shared=[active_settings, telemetry], local=[adcs, dacs, lockin, timestamper, pll, generator, source], priority=3)]
-    #[link_section = ".itcm.process"]
+    #[unsafe(link_section = ".itcm.process")]
     fn process(c: process::Context) {
         let process::SharedResources {
             active_settings,
@@ -378,14 +341,14 @@ mod app {
 
         (active_settings, telemetry).lock(|settings, telemetry| {
             let (reference_phase, reference_frequency) =
-                match *settings.lockin_mode {
+                match settings.lockin_mode {
                     LockinMode::External => {
                         let timestamp =
                             timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
                         let (pll_phase, pll_frequency) = pll.update(
                             timestamp.map(|t| t as i32),
-                            *settings.pll_tc[0],
-                            *settings.pll_tc[1],
+                            settings.pll_tc[0],
+                            settings.pll_tc[1],
                         );
                         (pll_phase, (pll_frequency >> BATCH_SIZE_LOG2) as i32)
                     }
@@ -396,9 +359,9 @@ mod app {
                 };
 
             let sample_frequency =
-                reference_frequency.wrapping_mul(*settings.lockin_harmonic);
+                reference_frequency.wrapping_mul(settings.lockin_harmonic);
             let sample_phase = settings.lockin_phase.wrapping_add(
-                reference_phase.wrapping_mul(*settings.lockin_harmonic),
+                reference_phase.wrapping_mul(settings.lockin_harmonic),
             );
 
             (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
@@ -506,7 +469,7 @@ mod app {
 
             c.shared
                 .network
-                .lock(|net| net.direct_stream(*settings.lockin.stream));
+                .lock(|net| net.direct_stream(settings.lockin.stream));
 
             c.shared
                 .active_settings
@@ -527,7 +490,7 @@ mod app {
 
             let (gains, telemetry_period) =
                 c.shared.settings.lock(|settings| {
-                    (settings.lockin.afe, *settings.lockin.telemetry_period)
+                    (settings.lockin.afe, settings.lockin.telemetry_period)
                 });
 
             c.shared.network.lock(|net| {

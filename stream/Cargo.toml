@@ -1,0 +1,25 @@
+[package]
+name = "stream"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version = "0.1.0"
+description = "UDP data stream"
+authors = ["Robert Jördens <rj@quartiq.de>"]
+categories = ["embedded", "no-std"]
+keywords = []
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"], default-features = false }
+heapless = { version = "0.8", features = ["serde"] }
+num_enum = { version = "0.7.3", default-features = false }
+serde_with = { version = "3.12", default-features = false, features = [
+	"macros",
+] }
+log = { version = "0.4" }
+cortex-m = { version = "0.7.7" }
+
+[dependencies.smoltcp-nal]
+version = "0.6"
+features = ["shared-stack"]
+git = "https://github.com/quartiq/smoltcp-nal.git"

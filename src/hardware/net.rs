@@ -5,32 +5,40 @@
 //! telemetry (via MQTT), configuration of run-time settings (via MQTT + Miniconf), and data
 //! streaming over raw UDP/TCP sockets. This module encompasses the main processing routines
 //! related to Stabilizer networking operations.
-pub use heapless;
-pub use miniconf;
-pub use serde;
+use heapless;
+use miniconf;
 
-pub mod data_stream;
-pub mod network_processor;
-pub mod telemetry;
-
-use crate::hardware::{
-    metadata::ApplicationMetadata, EthernetPhy, NetworkManager, NetworkStack,
-    SystemTimer,
-};
-use crate::settings::NetSettings;
-use data_stream::{DataStream, FrameGenerator, StreamTarget};
-use network_processor::NetworkProcessor;
-use telemetry::TelemetryClient;
+use crate::hardware::{EthernetPhy, SystemTimer, hal::ethernet::EthernetDMA};
+use platform::{ApplicationMetadata, NetSettings, TelemetryClient};
+use stream::{DataStream, FrameGenerator, Target};
 
 use core::fmt::Write;
 use heapless::String;
-use miniconf::{TreeDeserializeOwned, TreeKey, TreeSerialize};
+use miniconf::{TreeDeserializeOwned, TreeSchema, TreeSerialize};
 use miniconf_mqtt::minimq;
 
 pub type NetworkReference =
     smoltcp_nal::shared::NetworkStackProxy<'static, NetworkStack>;
 
-pub struct MqttStorage {
+// Number of TX descriptors in the ethernet descriptor ring.
+pub const TX_DESRING_CNT: usize = 4;
+
+// Number of RX descriptors in the ethernet descriptor ring.
+pub const RX_DESRING_CNT: usize = 4;
+
+pub type NetworkStack = smoltcp_nal::NetworkStack<
+    'static,
+    EthernetDMA<TX_DESRING_CNT, RX_DESRING_CNT>,
+    SystemTimer,
+>;
+
+pub type NetworkManager = smoltcp_nal::shared::NetworkManager<
+    'static,
+    EthernetDMA<TX_DESRING_CNT, RX_DESRING_CNT>,
+    SystemTimer,
+>;
+
+struct MqttStorage {
     telemetry: [u8; 2048],
     settings: [u8; 1024],
 }
@@ -55,28 +63,30 @@ pub enum NetworkState {
     NoChange,
 }
 
+const MAX_DEPTH: usize = 16;
+
 /// A structure of Stabilizer's default network users.
-pub struct NetworkUsers<S, const Y: usize>
+pub struct NetworkUsers<S>
 where
     S: Default + TreeDeserializeOwned + TreeSerialize + Clone,
 {
-    pub miniconf: miniconf_mqtt::MqttClient<
+    miniconf: miniconf_mqtt::MqttClient<
         'static,
         S,
         NetworkReference,
         SystemTimer,
         minimq::broker::NamedBroker<NetworkReference>,
-        Y,
+        MAX_DEPTH,
     >,
     pub processor: NetworkProcessor,
-    stream: DataStream,
+    stream: DataStream<NetworkReference>,
     generator: Option<FrameGenerator>,
-    pub telemetry: TelemetryClient,
+    pub telemetry: TelemetryClient<SystemTimer, NetworkReference>,
 }
 
-impl<S, const Y: usize> NetworkUsers<S, Y>
+impl<S> NetworkUsers<S>
 where
-    S: Default + TreeDeserializeOwned + TreeSerialize + TreeKey + Clone,
+    S: Default + TreeDeserializeOwned + TreeSerialize + TreeSchema + Clone,
 {
     /// Construct Stabilizer's default network users.
     ///
@@ -116,7 +126,7 @@ where
             stack_manager.acquire_stack(),
         )
         .unwrap();
-        let settings = miniconf_mqtt::MqttClient::<_, _, _, _, Y>::new(
+        let miniconf = miniconf_mqtt::MqttClient::<_, _, _, _, MAX_DEPTH>::new(
             stack_manager.acquire_stack(),
             prefix.as_str(),
             clock,
@@ -144,11 +154,10 @@ where
 
         let telemetry = TelemetryClient::new(mqtt, prefix, metadata);
 
-        let (generator, stream) =
-            data_stream::setup_streaming(stack_manager.acquire_stack());
+        let (generator, stream) = stream::setup(stack_manager.acquire_stack());
 
         NetworkUsers {
-            miniconf: settings,
+            miniconf,
             processor,
             telemetry,
             stream,
@@ -173,7 +182,7 @@ where
     ///
     /// # Args
     /// * `remote` - The destination for the streamed data.
-    pub fn direct_stream(&mut self, remote: StreamTarget) {
+    pub fn direct_stream(&mut self, remote: Target) {
         if self.generator.is_none() {
             self.stream.set_remote(remote);
         }
@@ -229,11 +238,83 @@ fn get_client_id(id: &str, mode: &str) -> String<64> {
 ///
 /// # Returns
 /// The MQTT prefix used for this device.
-pub fn get_device_prefix(app: &str, id: &str) -> String<128> {
+fn get_device_prefix(app: &str, id: &str) -> String<128> {
     // Note(unwrap): The mac address + binary name must be short enough to fit into this string. If
     // they are defined too long, this will panic and the device will fail to boot.
     let mut prefix: String<128> = String::new();
     write!(&mut prefix, "dt/sinara/{app}/{id}").unwrap();
 
     prefix
+}
+
+// Task to process network hardware.
+//
+// # Design
+// The network processir is a small taks to regularly process incoming data over ethernet, handle
+// the ethernet PHY state, and reset the network as appropriate.
+
+/// Processor for managing network hardware.
+pub struct NetworkProcessor {
+    stack: NetworkReference,
+    phy: EthernetPhy,
+    network_was_reset: bool,
+}
+
+impl NetworkProcessor {
+    /// Construct a new network processor.
+    ///
+    /// # Args
+    /// * `stack` - A reference to the shared network stack
+    /// * `phy` - The ethernet PHY used for the network.
+    ///
+    /// # Returns
+    /// The newly constructed processor.
+    pub fn new(stack: NetworkReference, phy: EthernetPhy) -> Self {
+        Self {
+            stack,
+            phy,
+            network_was_reset: false,
+        }
+    }
+
+    /// Handle ethernet link connection status.
+    ///
+    /// # Note
+    /// This may take non-trivial amounts of time to communicate with the PHY. As such, this should
+    /// only be called as often as necessary (e.g. once per second or so).
+    pub fn handle_link(&mut self) {
+        // If the PHY indicates there's no more ethernet link, reset the DHCP server in the network
+        // stack.
+        let link_up = self.phy.poll_link();
+        match (link_up, self.network_was_reset) {
+            (true, true) => {
+                log::warn!("Network link UP");
+                self.network_was_reset = false;
+            }
+            // Only reset the network stack once per link reconnection. This prevents us from
+            // sending an excessive number of DHCP requests.
+            (false, false) => {
+                log::warn!("Network link DOWN");
+                self.network_was_reset = true;
+                self.stack.lock(|stack| stack.handle_link_reset());
+            }
+            _ => {}
+        };
+    }
+
+    /// Process and update the state of the network.
+    ///
+    /// # Note
+    /// This function should be called regularly before other network tasks to update the state of
+    /// all relevant network sockets.
+    ///
+    /// # Returns
+    /// An update state corresponding with any changes in the underlying network.
+    pub fn update(&mut self) -> UpdateState {
+        match self.stack.lock(|stack| stack.poll()) {
+            Ok(true) => UpdateState::Updated,
+            Ok(false) => UpdateState::NoChange,
+            Err(_) => UpdateState::Updated,
+        }
+    }
 }

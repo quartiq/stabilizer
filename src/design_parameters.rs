@@ -1,5 +1,5 @@
 use arbitrary_int::u5;
-use stm32h7xx_hal::time::MegaHertz;
+use fugit::MegahertzU32 as MegaHertz;
 
 /// The system clock, used in various timer calculations
 pub const SYSCLK: MegaHertz = MegaHertz::MHz(400);

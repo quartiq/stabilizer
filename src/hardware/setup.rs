@@ -1,31 +1,30 @@
 //! Stabilizer hardware configuration
 //!
 //! This file contains all of the hardware-specific configuration of Stabilizer.
-use core::cell::RefCell;
-use core::sync::atomic::{self, AtomicBool, Ordering};
-use core::{fmt::Write, ptr, slice};
-use embedded_hal_compat::{markers::ForwardOutputPin, Forward, ForwardCompat};
-use grounded::uninit::GroundedCell;
-use heapless::String;
-use stm32h7xx_hal::{
-    self as hal,
+use super::hal::{
+    self,
     ethernet::{self, PHY},
     gpio::Speed,
     prelude::*,
 };
-
+use core::cell::RefCell;
+use core::sync::atomic::{self, AtomicBool, Ordering};
+use core::{fmt::Write, ptr, slice};
+use embedded_hal_compat::{Forward, ForwardCompat, markers::ForwardOutputPin};
+use grounded::uninit::GroundedCell;
+use heapless::String;
 use smoltcp_nal::smoltcp;
 
-use crate::hardware::delay::AsmDelay;
-use crate::settings::{AppSettings, NetSettings};
+use platform::{AppSettings, ApplicationMetadata, NetSettings};
+
+use crate::design_parameters;
 
 use super::{
-    adc, afe, cpu_temp_sensor::CpuTempSensor, dac, delay, design_parameters,
-    eeprom, input_stamper::InputStamper, metadata::ApplicationMetadata,
-    platform, pounder, pounder::dds_output::DdsOutput, shared_adc::SharedAdc,
-    timers, DigitalInput0, DigitalInput1, Eem, EthernetPhy, Gpio,
-    HardwareVersion, NetworkStack, Pgia, SerialTerminal, SystemTimer, Systick,
-    UsbDevice,
+    DigitalInput0, DigitalInput1, Eem, EthernetPhy, Gpio, HardwareVersion,
+    Pgia, SerialTerminal, SystemTimer, Systick, UsbDevice, adc, afe,
+    cpu_temp_sensor::CpuTempSensor, dac, delay, delay::AsmDelay, eeprom,
+    input_stamper::InputStamper, net::NetworkStack, pounder,
+    pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -104,10 +103,7 @@ pub struct NetworkDevices {
 }
 
 /// The available hardware interfaces on Stabilizer.
-pub struct StabilizerDevices<
-    C: serial_settings::Settings + 'static,
-    const Y: usize,
-> {
+pub struct StabilizerDevices<C: serial_settings::Settings + 'static> {
     pub temperature_sensor: CpuTempSensor,
     pub afes: [Pgia; 2],
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
@@ -118,7 +114,7 @@ pub struct StabilizerDevices<
     pub net: NetworkDevices,
     pub digital_inputs: (DigitalInput0, DigitalInput1),
     pub eem: Eem,
-    pub usb_serial: SerialTerminal<C, Y>,
+    pub usb_serial: SerialTerminal<C>,
     pub usb: UsbDevice,
     pub metadata: &'static ApplicationMetadata,
     pub settings: C,
@@ -133,10 +129,13 @@ pub struct PounderDevices {
     pub timestamper: pounder::timestamp::Timestamper,
 }
 
-#[link_section = ".sram3.eth"]
+#[unsafe(link_section = ".sram3.eth")]
 /// Static storage for the ethernet DMA descriptor ring.
 static DES_RING: GroundedCell<
-    ethernet::DesRing<{ super::TX_DESRING_CNT }, { super::RX_DESRING_CNT }>,
+    ethernet::DesRing<
+        { super::net::TX_DESRING_CNT },
+        { super::net::RX_DESRING_CNT },
+    >,
 > = GroundedCell::uninit();
 
 /// Setup ITCM and load its code from flash.
@@ -150,7 +149,7 @@ static DES_RING: GroundedCell<
 /// Calling (through IRQ or directly) any code in ITCM before having called
 /// this method is undefined.
 fn load_itcm() {
-    extern "C" {
+    unsafe extern "C" {
         // ZST (`()`: not layout-stable. empty/zst struct in `repr(C)``: not "proper" C)
         static mut __sitcm: [u32; 0];
         static mut __eitcm: [u32; 0];
@@ -204,13 +203,13 @@ fn load_itcm() {
 /// stabilizer hardware interfaces in a disabled state. `pounder` is an `Option` containing
 /// `Some(devices)` if pounder is detected, where `devices` is a `PounderDevices` structure
 /// containing all of the pounder hardware interfaces in a disabled state.
-pub fn setup<C, const Y: usize>(
+pub fn setup<C>(
     mut core: stm32h7xx_hal::stm32::CorePeripherals,
     device: stm32h7xx_hal::stm32::Peripherals,
     clock: SystemTimer,
     batch_size: usize,
     sample_ticks: u32,
-) -> (StabilizerDevices<C, Y>, Option<PounderDevices>)
+) -> (StabilizerDevices<C>, Option<PounderDevices>)
 where
     C: serial_settings::Settings + AppSettings,
 {
@@ -258,8 +257,8 @@ where
     }
 
     // Check for a reboot to DFU before doing any system configuration.
-    if platform::dfu_bootflag() {
-        platform::execute_system_bootloader();
+    if platform::dfu_flag_is_set() {
+        platform::bootload_dfu();
     }
 
     let pwr = device.PWR.constrain();
@@ -616,7 +615,7 @@ where
                 gpiog.pg3.into_pull_down_input().is_high(),
             ][..],
         );
-        ApplicationMetadata::new(hardware_version)
+        crate::hardware::metadata(hardware_version.into())
     };
 
     let mac_addr = smoltcp::wire::EthernetAddress(eeprom::read_eui48(
@@ -625,19 +624,16 @@ where
     ));
     log::info!("EUI48: {}", mac_addr);
 
-    let (flash, mut settings) = {
-        let mut flash = {
-            let (_, flash_bank2) = device.FLASH.split();
-            super::flash::Flash(flash_bank2.unwrap())
-        };
-
-        let mut settings = C::new(NetSettings::new(mac_addr));
-        crate::settings::SerialSettingsPlatform::load(
-            &mut settings,
-            &mut flash,
-        );
-        (flash, settings)
+    let mut flash = {
+        let (_, flash_bank2) = device.FLASH.split();
+        platform::AsyncFlash(crate::hardware::Flash(flash_bank2.unwrap()))
     };
+
+    let mut settings = C::new(NetSettings::new(mac_addr));
+    platform::SerialSettingsPlatform::<_, _, ()>::load(
+        &mut settings,
+        &mut flash,
+    );
 
     let network_devices = {
         let ethernet_pins = {
@@ -693,7 +689,9 @@ where
         {
             Ok(addr) => addr,
             Err(e) => {
-                log::warn!("Invalid IP address in settings: {e:?}. Defaulting to 0.0.0.0 (DHCP)");
+                log::warn!(
+                    "Invalid IP address in settings: {e:?}. Defaulting to 0.0.0.0 (DHCP)"
+                );
                 "0.0.0.0".parse().unwrap()
             }
         };
@@ -849,7 +847,7 @@ where
 
     // Measure the Pounder PGOOD output to detect if pounder is present on Stabilizer.
     let pounder_pgood = gpiob.pb13.into_pull_down_input();
-    delay.delay_ms(2u8);
+    delay.delay_us(2000u32);
     let pounder = if pounder_pgood.is_high() {
         log::info!("Found Pounder");
 
@@ -938,7 +936,7 @@ where
             // time is not specified, but bench testing indicates it usually comes up within
             // 200-300uS. We do a larger delay to ensure that it comes up and is stable before
             // using it.
-            delay.delay_ms(10u32);
+            delay.delay_us(10_000u32);
 
             let mut ad9959 = ad9959::Ad9959::new(
                 qspi,
@@ -1074,10 +1072,10 @@ where
         delay: &mut AsmDelay,
     ) -> (hal::gpio::Pin<P, N, hal::gpio::Analog>, bool) {
         let pin = pin.into_pull_up_input();
-        delay.delay_ms(1u8);
+        delay.delay_us(1_000u32);
         is_floating &= pin.is_high();
         let pin = pin.into_pull_down_input();
-        delay.delay_ms(1u8);
+        delay.delay_us(1_000u32);
         is_floating &= pin.is_low();
         (pin.into_analog(), is_floating)
     }
@@ -1105,7 +1103,7 @@ where
             log::warn!("No 802.3at PoE. Powering up EEM anyway.");
         }
         force_eem_source.set_high();
-        delay.delay_ms(200u8);
+        delay.delay_us(200_000u32);
 
         let spi = device
             .SPI6
@@ -1215,7 +1213,7 @@ where
             cortex_m::singleton!(: [u8; 512] = [0u8; 512]).unwrap();
 
         serial_settings::Runner::new(
-            crate::settings::SerialSettingsPlatform {
+            platform::SerialSettingsPlatform {
                 interface: serial_settings::BestEffortInterface::new(
                     usb_serial,
                 ),

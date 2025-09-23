@@ -1,0 +1,20 @@
+[package]
+name = "signal_generator"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version = "0.1.0"
+description = "Signal genrator DSP"
+authors = [
+	"Robert Jördens <rj@quartiq.de>",
+]
+categories = ["embedded", "no-std"]
+keywords = []
+
+[dependencies]
+rand_xorshift = "0.4.0"
+rand_core = "0.9.0"
+thiserror = { version = "2.0.11", default-features = false }
+idsp = "0.18.0"
+miniconf = { version = "0.19", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"], default-features = false }

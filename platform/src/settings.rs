@@ -22,60 +22,19 @@
 //!    settings values
 //! 3. Unknown/unneeded settings values in flash can be actively ignored, facilitating simple flash
 //!    storage sharing.
-use crate::hardware::{flash::Flash, metadata::ApplicationMetadata, platform};
-use core::fmt::Write;
+use crate::{dfu, metadata::ApplicationMetadata};
 use embassy_futures::block_on;
-use embedded_io::Write as EioWrite;
+use embedded_io::{Read as EioRead, ReadReady, Write as EioWrite, WriteReady};
+use embedded_storage_async::nor_flash::NorFlash;
 use heapless::{String, Vec};
 use miniconf::{
-    postcard, Leaf, Path, Tree, TreeDeserializeOwned, TreeKey, TreeSerialize,
+    Path, TreeDeserializeOwned, TreeSchema, TreeSerialize, postcard,
 };
 use sequential_storage::{
     cache::NoCache,
-    map::{fetch_item, store_item, SerializationError},
+    map::{SerializationError, fetch_item, store_item},
 };
 use serial_settings::{BestEffortInterface, Platform, Settings};
-use smoltcp_nal::smoltcp::wire::EthernetAddress;
-use stm32h7xx_hal::flash::LockedFlashBank;
-
-/// Settings that are used for configuring the network interface to Stabilizer.
-#[derive(Clone, Debug, Tree)]
-pub struct NetSettings {
-    /// The broker domain name (or IP address) to use for MQTT connections.
-    pub broker: Leaf<String<255>>,
-
-    /// The MQTT ID to use upon connection with a broker.
-    pub id: Leaf<String<23>>,
-
-    /// An optional static IP address to use. An unspecified IP address (or malformed address) will
-    /// use DHCP.
-    pub ip: Leaf<String<15>>,
-    #[tree(skip)]
-    /// The MAC address of Stabilizer, which is used to reinitialize the ID to default settings.
-    pub mac: EthernetAddress,
-}
-
-impl NetSettings {
-    pub fn new(mac: EthernetAddress) -> Self {
-        let mut id = String::new();
-        write!(&mut id, "{mac}").unwrap();
-
-        Self {
-            broker: String::try_from("mqtt").unwrap().into(),
-            ip: String::try_from("0.0.0.0").unwrap().into(),
-            id: id.into(),
-            mac,
-        }
-    }
-}
-
-pub trait AppSettings {
-    /// Construct the settings given known network settings.
-    fn new(net: NetSettings) -> Self;
-
-    /// Get the network settings from the application settings.
-    fn net(&self) -> &NetSettings;
-}
 
 #[derive(
     Default, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq,
@@ -102,33 +61,36 @@ impl sequential_storage::map::Key for SettingsKey {
     }
 }
 
-pub struct SerialSettingsPlatform<C> {
+pub struct SerialSettingsPlatform<C, F, S> {
     /// The interface to read/write data to/from serially (via text) to the user.
-    pub interface: BestEffortInterface<crate::hardware::SerialPort>,
+    pub interface: BestEffortInterface<S>,
 
     pub _settings_marker: core::marker::PhantomData<C>,
 
     /// The storage mechanism used to persist settings to between boots.
-    pub storage: Flash,
+    pub storage: F,
 
     /// Metadata associated with the application
     pub metadata: &'static ApplicationMetadata,
 }
 
-impl<C> SerialSettingsPlatform<C>
+impl<C, F, S> SerialSettingsPlatform<C, F, S>
 where
-    C: TreeDeserializeOwned + TreeSerialize + TreeKey,
+    C: TreeDeserializeOwned + TreeSerialize + TreeSchema,
+    F: NorFlash,
 {
-    pub fn load(structure: &mut C, storage: &mut Flash) {
+    pub fn load(structure: &mut C, storage: &mut F) {
         // Loop over flash and read settings
         let mut buffer = [0u8; 512];
-        for path in C::nodes::<Path<String<128>, '/'>, 8>() {
-            let (path, _node) = path.unwrap();
+        for path in C::SCHEMA
+            .nodes::<Path<String<128>, '/'>, { serial_settings::MAX_DEPTH }>()
+        {
+            let path = path.unwrap();
 
             // Try to fetch the setting from flash.
             let value: &[u8] = match block_on(fetch_item(
                 storage,
-                storage.range(),
+                0..storage.capacity() as _,
                 &mut NoCache::new(),
                 &mut buffer,
                 &SettingsKey(path.clone().into_inner().into_bytes()),
@@ -136,7 +98,7 @@ where
                 Err(e) => {
                     log::warn!(
                         "Failed to fetch `{}` from flash: {e:?}",
-                        path.as_str()
+                        path.0.as_str()
                     );
                     continue;
                 }
@@ -150,35 +112,35 @@ where
                 continue;
             }
 
-            log::info!("Loading initial `{}` from flash", path.as_str());
+            log::info!("Loading initial `{}` from flash", path.0.as_str());
 
             let flavor = ::postcard::de_flavors::Slice::new(value);
             if let Err(e) = postcard::set_by_key(structure, &path, flavor) {
                 log::warn!(
                     "Failed to deserialize `{}` from flash: {e:?}",
-                    path.as_str()
+                    path.0.as_str()
                 );
             }
         }
     }
 }
 
-impl<C> Platform for SerialSettingsPlatform<C>
+impl<C, F, S> Platform for SerialSettingsPlatform<C, F, S>
 where
     C: Settings,
+    F: NorFlash,
+    S: EioWrite + WriteReady + ReadReady + EioRead,
 {
-    type Interface = BestEffortInterface<crate::hardware::SerialPort>;
+    type Interface = BestEffortInterface<S>;
     type Settings = C;
-    type Error = sequential_storage::Error<
-        <LockedFlashBank as embedded_storage::nor_flash::ErrorType>::Error,
-    >;
+    type Error = sequential_storage::Error<F::Error>;
 
     fn fetch<'a>(
         &mut self,
         buf: &'a mut [u8],
         key: &[u8],
     ) -> Result<Option<&'a [u8]>, Self::Error> {
-        let range = self.storage.range();
+        let range = 0..self.storage.capacity() as _;
         block_on(fetch_item(
             &mut self.storage,
             range,
@@ -195,7 +157,7 @@ where
         key: &[u8],
         value: &[u8],
     ) -> Result<(), Self::Error> {
-        let range = self.storage.range();
+        let range = 0..self.storage.capacity() as _;
         block_on(store_item(
             &mut self.storage,
             range,
@@ -213,40 +175,9 @@ where
     fn cmd(&mut self, cmd: &str) {
         match cmd {
             "reboot" => cortex_m::peripheral::SCB::sys_reset(),
-            "dfu" => platform::start_dfu_reboot(),
+            "dfu" => dfu::dfu_reboot(),
             "service" => {
-                writeln!(
-                    &mut self.interface,
-                    "{:<20}: {} [{}]",
-                    "Version",
-                    self.metadata.firmware_version,
-                    self.metadata.profile,
-                )
-                .unwrap();
-                writeln!(
-                    &mut self.interface,
-                    "{:<20}: {}",
-                    "Hardware Revision", self.metadata.hardware_version
-                )
-                .unwrap();
-                writeln!(
-                    &mut self.interface,
-                    "{:<20}: {}",
-                    "Rustc Version", self.metadata.rust_version
-                )
-                .unwrap();
-                writeln!(
-                    &mut self.interface,
-                    "{:<20}: {}",
-                    "Features", self.metadata.features
-                )
-                .unwrap();
-                writeln!(
-                    &mut self.interface,
-                    "{:<20}: {}",
-                    "Panic Info", self.metadata.panic_info
-                )
-                .unwrap();
+                write!(&mut self.interface, "{}", &self.metadata).unwrap();
             }
             _ => {
                 writeln!(

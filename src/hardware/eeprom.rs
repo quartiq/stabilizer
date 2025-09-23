@@ -1,4 +1,4 @@
-use embedded_hal_02::blocking::{delay::DelayMs, i2c::WriteRead};
+use embedded_hal_02::blocking::{delay::DelayUs, i2c::WriteRead};
 
 // The EEPROM is a variant without address bits, so the 3 LSB of this word are "dont-cares".
 const I2C_ADDR: u8 = 0x50;
@@ -6,7 +6,7 @@ const I2C_ADDR: u8 = 0x50;
 // The MAC address is stored in the last 6 bytes of the 256 byte address space.
 const MAC_POINTER: u8 = 0xFA;
 
-pub fn read_eui48<T>(i2c: &mut T, delay: &mut impl DelayMs<u8>) -> [u8; 6]
+pub fn read_eui48<T>(i2c: &mut T, delay: &mut impl DelayUs<u32>) -> [u8; 6]
 where
     T: WriteRead,
 {
@@ -35,7 +35,7 @@ where
             previous_read.take();
         }
 
-        delay.delay_ms(100);
+        delay.delay_us(100_000);
     }
 
     panic!("Failed to read MAC address");

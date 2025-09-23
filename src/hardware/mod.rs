@@ -1,26 +1,26 @@
 //! Module for all hardware-specific setup of Stabilizer
 
 pub use embedded_hal_02;
-use embedded_hal_compat::{markers::ForwardOutputPin, Forward};
-use hal::gpio::{self, ErasedPin, Input, Output};
+use embedded_hal_compat::{Forward, markers::ForwardOutputPin};
+use hal::{
+    flash::{LockedFlashBank, UnlockedFlashBank},
+    gpio::{self, ErasedPin, Input, Output},
+};
 pub use stm32h7xx_hal as hal;
+
+use platform::{ApplicationMetadata, AsyncFlash, UnlockFlash};
 
 pub mod adc;
 pub mod afe;
 pub mod cpu_temp_sensor;
 pub mod dac;
 pub mod delay;
-pub mod design_parameters;
-pub mod eem;
 mod eeprom;
-pub mod flash;
 pub mod input_stamper;
-pub mod metadata;
-pub mod platform;
+pub mod net;
 pub mod pounder;
 pub mod setup;
 pub mod shared_adc;
-pub mod signal_generator;
 pub mod timers;
 
 // Type alias for the analog front-end
@@ -58,24 +58,6 @@ pub type DigitalInput0 = hal::gpio::gpiog::PG9<hal::gpio::Input>;
 // Type alias for digital input 1 (DI1).
 pub type DigitalInput1 = hal::gpio::gpioc::PC15<hal::gpio::Input>;
 
-// Number of TX descriptors in the ethernet descriptor ring.
-const TX_DESRING_CNT: usize = 4;
-
-// Number of RX descriptors in the ethernet descriptor ring.
-const RX_DESRING_CNT: usize = 4;
-
-pub type NetworkStack = smoltcp_nal::NetworkStack<
-    'static,
-    hal::ethernet::EthernetDMA<TX_DESRING_CNT, RX_DESRING_CNT>,
-    SystemTimer,
->;
-
-pub type NetworkManager = smoltcp_nal::shared::NetworkManager<
-    'static,
-    hal::ethernet::EthernetDMA<TX_DESRING_CNT, RX_DESRING_CNT>,
-    SystemTimer,
->;
-
 pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
 
 /// System timer (RTIC Monotonic) tick frequency
@@ -83,9 +65,10 @@ pub const MONOTONIC_FREQUENCY: u32 = 1_000;
 rtic_monotonics::systick_monotonic!(Systick, MONOTONIC_FREQUENCY);
 pub type SystemTimer = mono_clock::MonoClock<u32, MONOTONIC_FREQUENCY>;
 
-pub type I2c1 = hal::i2c::I2c<hal::stm32::I2C1>;
-pub type I2c1Proxy =
-    shared_bus::I2cProxy<'static, shared_bus::AtomicCheckMutex<I2c1>>;
+pub type I2c1Proxy = shared_bus::I2cProxy<
+    'static,
+    shared_bus::AtomicCheckMutex<hal::i2c::I2c<hal::stm32::I2C1>>,
+>;
 
 pub type SerialPort = usbd_serial::SerialPort<
     'static,
@@ -94,12 +77,69 @@ pub type SerialPort = usbd_serial::SerialPort<
     &'static mut [u8],
 >;
 
-pub type SerialTerminal<C, const Y: usize> = serial_settings::Runner<
+pub type SerialTerminal<C> = serial_settings::Runner<
     'static,
-    crate::settings::SerialSettingsPlatform<C>,
-    Y,
+    platform::SerialSettingsPlatform<C, AsyncFlash<Flash>, SerialPort>,
 >;
 
+pub struct Flash(LockedFlashBank);
+
+impl embedded_storage::nor_flash::ErrorType for Flash {
+    type Error =
+        <LockedFlashBank as embedded_storage::nor_flash::ErrorType>::Error;
+}
+
+impl embedded_storage::nor_flash::ReadNorFlash for Flash {
+    const READ_SIZE: usize = LockedFlashBank::READ_SIZE;
+
+    fn capacity(&self) -> usize {
+        self.0.capacity()
+    }
+
+    fn read(
+        &mut self,
+        offset: u32,
+        bytes: &mut [u8],
+    ) -> Result<(), Self::Error> {
+        self.0.read(offset, bytes)
+    }
+}
+
+impl UnlockFlash for Flash {
+    type Unlocked<'a> = UnlockedFlashBank<'a>;
+    fn unlock(&mut self) -> Self::Unlocked<'_> {
+        self.0.unlocked()
+    }
+}
+
+mod build_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
+/// Construct the global metadata.
+///
+/// # Note
+/// This may only be called once.
+///
+/// # Args
+/// * `hardware_version` - The hardware version detected.
+///
+/// # Returns
+/// A reference to the global metadata.
+pub fn metadata(version: &'static str) -> &'static ApplicationMetadata {
+    cortex_m::singleton!(: ApplicationMetadata = ApplicationMetadata {
+        firmware_version: build_info::GIT_VERSION.unwrap_or("Unspecified"),
+        rust_version: build_info::RUSTC_VERSION,
+        profile: build_info::PROFILE,
+        git_dirty: build_info::GIT_DIRTY.unwrap_or(false),
+        features: build_info::FEATURES_STR,
+        hardware_version: version,
+        panic_info: panic_persist::get_panic_message_utf8().unwrap_or("None"),
+    })
+    .unwrap()
+}
+
+#[derive(strum::IntoStaticStr)]
 pub enum HardwareVersion {
     Rev1_0,
     Rev1_1,

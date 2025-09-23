@@ -55,7 +55,7 @@ for each application.
 The rules for constructing `path` values are documented in [`miniconf`'s
 documentation](https://github.com/quartiq/miniconf#settings-paths)
 
-Refer to the documentation for [Miniconf](firmware/miniconf/enum.Error.html) for a
+Refer to the documentation for [Miniconf](firmware/miniconf/enum.SerdeError.html) for a
 description of the possible error codes that Miniconf may return if the settings update was
 unsuccessful.
 

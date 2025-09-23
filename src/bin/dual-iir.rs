@@ -20,43 +20,22 @@
 //! application.
 //!
 //! ## Telemetry
-//! Refer to [stabilizer::net::telemetry::Telemetry] for information about telemetry reported by this application.
+//! Refer to [stabilizer::telemetry::Telemetry] for information about telemetry reported by this application.
 //!
 //! ## Stream
 //! This application streams raw ADC and DAC data over UDP. Refer to
-//! [stabilizer::net::data_stream] for more information.
-#![no_std]
-#![no_main]
+//! [stream] for more information.
+#![cfg_attr(target_os = "none", no_std)]
+#![cfg_attr(target_os = "none", no_main)]
 
-use core::sync::atomic::{fence, Ordering};
-use miniconf::{Leaf, Tree};
-
-use rtic_monotonics::Monotonic;
-
-use fugit::ExtU32 as _;
+use miniconf::Tree;
 
 use idsp::iir;
 
+use platform::{AppSettings, NetSettings};
 use serde::{Deserialize, Serialize};
-use stabilizer::{
-    hardware::{
-        self,
-        adc::{Adc0Input, Adc1Input, AdcCode},
-        afe::Gain,
-        dac::{Dac0Output, Dac1Output, DacCode},
-        hal,
-        signal_generator::{self, Source},
-        timers::SamplingTimer,
-        DigitalInput0, DigitalInput1, Pgia, SerialTerminal, SystemTimer,
-        Systick, UsbDevice,
-    },
-    net::{
-        data_stream::{FrameGenerator, StreamFormat, StreamTarget},
-        telemetry::TelemetryBuffer,
-        NetworkState, NetworkUsers,
-    },
-    settings::NetSettings,
-};
+use signal_generator::{self, Source};
+use stabilizer::convert::{AdcCode, DacCode, Gain};
 
 // The number of cascaded IIR biquads per channel. Select 1 or 2!
 const IIR_CASCADE_LENGTH: usize = 1;
@@ -69,15 +48,16 @@ const BATCH_SIZE: usize = 8;
 const SAMPLE_TICKS_LOG2: u8 = 7;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 const SAMPLE_PERIOD: f32 =
-    SAMPLE_TICKS as f32 * hardware::design_parameters::TIMER_PERIOD;
+    SAMPLE_TICKS as f32 * stabilizer::design_parameters::TIMER_PERIOD;
 
-#[derive(Clone, Debug, Tree)]
+#[derive(Clone, Debug, Tree, Default)]
+#[tree(meta(doc, typename))]
 pub struct Settings {
     dual_iir: DualIir,
     net: NetSettings,
 }
 
-impl stabilizer::settings::AppSettings for Settings {
+impl AppSettings for Settings {
     fn new(net: NetSettings) -> Self {
         Self {
             net,
@@ -100,12 +80,11 @@ impl serial_settings::Settings for Settings {
 }
 
 #[derive(Clone, Debug, Tree)]
+#[tree(meta(doc, typename = "BiquadReprTree"))]
 pub struct BiquadRepr {
     /// Biquad parameters
-    #[tree(typ="Leaf<iir::BiquadReprDiscriminants>", rename="typ",
-        with(serialize=self.repr.tag_serialize, deserialize=self.repr.tag_deserialize),
-        deny(ref_any="deny", mut_any="deny"))]
-    _tag: (),
+    #[tree(rename="typ", typ="&str", with=miniconf::str_leaf, defer=self.repr)]
+    _typ: (),
     repr: iir::BiquadRepr<f32, f32>,
 }
 
@@ -115,8 +94,8 @@ impl Default for BiquadRepr {
         i.set_min(-i16::MAX as _);
         i.set_max(i16::MAX as _);
         Self {
-            _tag: (),
-            repr: iir::BiquadRepr::Raw(Leaf(i)),
+            _typ: (),
+            repr: iir::BiquadRepr::Raw(i),
         }
     }
 }
@@ -142,14 +121,18 @@ impl Run {
     }
 }
 
+/// A ADC-DAC channel
 #[derive(Clone, Debug, Tree, Default)]
+#[tree(meta(doc, typename))]
 pub struct Channel {
     /// Analog Front End (AFE) gain.
-    gain: Leaf<Gain>,
+    #[tree(with=miniconf::leaf)]
+    gain: Gain,
     /// Biquad
     biquad: [BiquadRepr; IIR_CASCADE_LENGTH],
     /// Run/Hold behavior
-    run: Leaf<Run>,
+    #[tree(with=miniconf::leaf)]
+    run: Run,
     /// Signal generator configuration to add to the DAC0/DAC1 outputs
     source: signal_generator::Config,
 }
@@ -162,7 +145,7 @@ impl Channel {
                 .build(SAMPLE_PERIOD, DacCode::FULL_SCALE.recip())
                 .unwrap(),
             state: Default::default(),
-            run: *self.run,
+            run: self.run,
             biquad: self.biquad.each_ref().map(|biquad| {
                 biquad.repr.build::<f32>(
                     SAMPLE_PERIOD,
@@ -175,24 +158,28 @@ impl Channel {
 }
 
 #[derive(Clone, Debug, Tree)]
+#[tree(meta(doc, typename))]
 pub struct DualIir {
     /// Channel configuration
     ch: [Channel; 2],
     /// Trigger both signal sources
-    trigger: Leaf<bool>,
+    #[tree(with=miniconf::leaf)]
+    trigger: bool,
     /// Telemetry output period in seconds.
-    telemetry_period: Leaf<f32>,
+    #[tree(with=miniconf::leaf)]
+    telemetry_period: f32,
     /// Target IP and port for UDP streaming.
     ///
     /// Can be multicast.
-    stream: Leaf<StreamTarget>,
+    #[tree(with=miniconf::leaf)]
+    stream: stream::Target,
 }
 
 impl Default for DualIir {
     fn default() -> Self {
         Self {
-            telemetry_period: Leaf(10.0),
-            trigger: Leaf(false),
+            telemetry_period: 10.0,
+            trigger: false,
             stream: Default::default(),
             ch: Default::default(),
         }
@@ -207,14 +194,47 @@ pub struct Active {
     source: Source,
 }
 
-#[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC])]
+#[cfg(not(target_os = "none"))]
+fn main() {
+    use miniconf::{json::to_json_value, json_schema::TreeJsonSchema};
+    let s = Settings::default();
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&to_json_value(&s).unwrap()).unwrap()
+    );
+    let mut schema = TreeJsonSchema::new(Some(&s)).unwrap();
+    schema
+        .root
+        .insert("title".to_string(), "Stabilizer dual-iir".into());
+    println!("{}", serde_json::to_string_pretty(&schema.root).unwrap());
+}
+
+#[cfg(target_os = "none")]
+#[cfg_attr(target_os = "none", rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC]))]
 mod app {
     use super::*;
+    use core::sync::atomic::{Ordering, fence};
+    use fugit::ExtU32 as _;
+    use rtic_monotonics::Monotonic;
+
+    use stabilizer::{
+        hardware::{
+            self, DigitalInput0, DigitalInput1, Pgia, SerialTerminal,
+            SystemTimer, Systick, UsbDevice,
+            adc::{Adc0Input, Adc1Input},
+            dac::{Dac0Output, Dac1Output},
+            hal,
+            net::{NetworkState, NetworkUsers},
+            timers::SamplingTimer,
+        },
+        telemetry::TelemetryBuffer,
+    };
+    use stream::FrameGenerator;
 
     #[shared]
     struct Shared {
         usb: UsbDevice,
-        network: NetworkUsers<DualIir, 8>,
+        network: NetworkUsers<DualIir>,
         settings: Settings,
         active: [Active; 2],
         telemetry: TelemetryBuffer,
@@ -222,7 +242,7 @@ mod app {
 
     #[local]
     struct Local {
-        usb_terminal: SerialTerminal<Settings, 9>,
+        usb_terminal: SerialTerminal<Settings>,
         sampling_timer: SamplingTimer,
         digital_inputs: (DigitalInput0, DigitalInput1),
         afes: [Pgia; 2],
@@ -237,7 +257,7 @@ mod app {
         let clock = SystemTimer::new(|| Systick::now().ticks());
 
         // Configure the microcontroller
-        let (stabilizer, _pounder) = hardware::setup::setup::<Settings, 9>(
+        let (stabilizer, _pounder) = hardware::setup::setup::<Settings>(
             c.core,
             c.device,
             clock,
@@ -254,7 +274,7 @@ mod app {
             stabilizer.metadata,
         );
 
-        let generator = network.configure_streaming(StreamFormat::AdcDacData);
+        let generator = network.configure_streaming(stream::Format::AdcDacData);
 
         let shared = Shared {
             usb: stabilizer.usb,
@@ -324,7 +344,7 @@ mod app {
         local=[digital_inputs, adcs, dacs, generator, source: [[i16; BATCH_SIZE]; 2] = [[0; BATCH_SIZE]; 2]],
         shared=[active, telemetry],
         priority=3)]
-    #[link_section = ".itcm.process"]
+    #[unsafe(link_section = ".itcm.process")]
     fn process(c: process::Context) {
         let process::SharedResources {
             active, telemetry, ..
@@ -431,11 +451,11 @@ mod app {
     #[task(priority = 1, local=[afes], shared=[network, settings, active])]
     async fn settings_update(mut c: settings_update::Context) {
         c.shared.settings.lock(|settings| {
-            c.local.afes[0].set_gain(*settings.dual_iir.ch[0].gain);
-            c.local.afes[1].set_gain(*settings.dual_iir.ch[1].gain);
+            c.local.afes[0].set_gain(settings.dual_iir.ch[0].gain);
+            c.local.afes[1].set_gain(settings.dual_iir.ch[1].gain);
 
-            if *settings.dual_iir.trigger {
-                *settings.dual_iir.trigger = false;
+            if settings.dual_iir.trigger {
+                settings.dual_iir.trigger = false;
                 let s = settings.dual_iir.ch.each_ref().map(|ch| {
                     let s = ch
                         .source
@@ -455,7 +475,7 @@ mod app {
             }
             let b = settings.dual_iir.ch.each_ref().map(|ch| {
                 (
-                    *ch.run,
+                    ch.run,
                     ch.biquad.each_ref().map(|b| {
                         b.repr.build::<f32>(
                             SAMPLE_PERIOD,
@@ -472,7 +492,7 @@ mod app {
             });
             c.shared
                 .network
-                .lock(|net| net.direct_stream(*settings.dual_iir.stream));
+                .lock(|net| net.direct_stream(settings.dual_iir.stream));
         });
     }
 
@@ -485,8 +505,8 @@ mod app {
             let (gains, telemetry_period) =
                 c.shared.settings.lock(|settings| {
                     (
-                        settings.dual_iir.ch.each_ref().map(|ch| *ch.gain),
-                        *settings.dual_iir.telemetry_period,
+                        settings.dual_iir.ch.each_ref().map(|ch| ch.gain),
+                        settings.dual_iir.telemetry_period,
                     )
                 });
 

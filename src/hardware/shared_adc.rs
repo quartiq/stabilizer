@@ -1,3 +1,4 @@
+use super::hal;
 /// Shared Internal ADC Support
 ///
 /// # Description
@@ -16,7 +17,6 @@
 /// protected against through the use of an atomic bool. Attempting to utilize the ADC from a
 /// higher priority level while it is in use at a lower level will result in a [AdcError::InUse].
 use embedded_hal_02::adc::{Channel, OneShot};
-use stm32h7xx_hal as hal;
 
 #[derive(Debug, Copy, Clone)]
 pub enum AdcError {

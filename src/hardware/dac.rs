@@ -50,20 +50,20 @@
 //! While double-buffered mode is used for DMA to avoid lost DAC-update events, there is no check
 //! for re-use of a previously provided DAC output buffer. It is assumed that the DMA request is
 //! served promptly after the transfer completes.
-use stm32h7xx_hal as hal;
-
 use rtic::Mutex;
 
-use super::design_parameters::{SampleBuffer, MAX_SAMPLE_BUFFER_SIZE};
 use super::timers;
+use crate::{
+    convert::DacCode,
+    design_parameters::{MAX_SAMPLE_BUFFER_SIZE, SampleBuffer},
+};
 
-use core::convert::TryFrom;
-
-use hal::{
+use super::hal::{
+    self,
     dma::{
+        DMAError, MemoryToPeripheral, Transfer,
         dma::{DMAReq, DmaConfig},
         traits::TargetAddress,
-        DMAError, MemoryToPeripheral, Transfer,
     },
     spi::{HalDisabledSpi, HalEnabledSpi, HalSpi},
 };
@@ -72,60 +72,9 @@ use hal::{
 // each transfer in a ping-pong buffer configuration (one is being prepared while the other is being
 // processed). Note that the contents of AXI SRAM is uninitialized, so the buffer contents on
 // startup are undefined. The dimensions are `ADC_BUF[adc_index][ping_pong_index][sample_index]`.
-#[link_section = ".axisram.buffers"]
+#[unsafe(link_section = ".axisram.buffers")]
 static mut DAC_BUF: [[SampleBuffer; 2]; 2] =
     [[[0; MAX_SAMPLE_BUFFER_SIZE]; 2]; 2];
-
-/// Custom type for referencing DAC output codes.
-/// The internal integer is the raw code written to the DAC output register.
-#[derive(Copy, Clone, Default)]
-pub struct DacCode(pub u16);
-impl DacCode {
-    // The DAC output range in bipolar mode (including the external output op-amp) is +/- 4.096
-    // V with 16-bit resolution. The anti-aliasing filter has an additional gain of 2.5.
-    pub const FULL_SCALE: f32 = 4.096 * 2.5;
-    pub const VOLT_PER_LSB: f32 = -Self::FULL_SCALE / i16::MIN as f32;
-    pub const LSB_PER_VOLT: f32 = 1. / Self::VOLT_PER_LSB;
-}
-
-impl TryFrom<f32> for DacCode {
-    type Error = ();
-
-    fn try_from(voltage: f32) -> Result<DacCode, ()> {
-        let code = voltage * Self::LSB_PER_VOLT;
-        if !(i16::MIN as f32..=i16::MAX as f32).contains(&code) {
-            Err(())
-        } else {
-            Ok(DacCode::from(code as i16))
-        }
-    }
-}
-
-impl From<DacCode> for f32 {
-    fn from(code: DacCode) -> f32 {
-        i16::from(code) as f32 * DacCode::VOLT_PER_LSB
-    }
-}
-
-impl From<DacCode> for i16 {
-    fn from(code: DacCode) -> i16 {
-        (code.0 as i16).wrapping_sub(i16::MIN)
-    }
-}
-
-impl From<i16> for DacCode {
-    /// Encode signed 16-bit values into DAC offset binary for a bipolar output configuration.
-    fn from(value: i16) -> Self {
-        Self(value.wrapping_add(i16::MIN) as u16)
-    }
-}
-
-impl From<u16> for DacCode {
-    /// Create a dac code from the provided DAC output code.
-    fn from(value: u16) -> Self {
-        Self(value)
-    }
-}
 
 macro_rules! dac_output {
     ($name:ident, $index:literal, $data_stream:ident,

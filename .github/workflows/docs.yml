@@ -10,39 +10,30 @@ jobs:
   release-docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v5
         with:
             fetch-depth: 0
-
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          target: thumbv7em-none-eabihf
-          override: true
-
+          targets: thumbv7em-none-eabihf
       - uses: Swatinem/rust-cache@v1
-
-      - name: Install Linkcheck
-        uses: actions-rs/cargo@v1
+      - uses: actions-rs/cargo@v1
         with:
           command: install
           args: mdbook-linkcheck
-
       - uses: peaceiris/actions-mdbook@v1
         with:
           mdbook-version: '0.4.12'
-
-      - uses: actions-rs/cargo@v1
-        with:
-          command: doc
-          args: --no-deps -p miniconf -p ad9959 -p stabilizer -p idsp -p urukul -p serial-settings
-
-      - name: Build Book
-        working-directory: book
+      - run: |
+          cargo doc --no-deps \
+            -p miniconf -p idsp \
+            -p ad9959 -p ad9912 -p stream -p platform -p signal_generator \
+            -p encoded_pin -p serial_settings -p urukul \
+            -p stabilizer
+      - working-directory: book
         run: |
           mv ../target/thumbv7em-none-eabihf/doc src/firmware
           mdbook build
-
       - uses: peaceiris/actions-gh-pages@v3.8.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

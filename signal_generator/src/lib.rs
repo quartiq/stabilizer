@@ -1,7 +1,9 @@
+#![no_std]
+
 use core::iter::Take;
 
 use idsp::{AccuOsc, Sweep};
-use miniconf::{Leaf, Tree};
+use miniconf::Tree;
 use rand_core::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use serde::{Deserialize, Serialize};
@@ -36,49 +38,51 @@ impl Signal {
 
 /// Basic configuration for a generated signal.
 #[derive(Clone, Debug, Tree, Serialize, Deserialize)]
+#[tree(meta(doc, typename))]
 pub struct Config {
     /// The signal type that should be generated. See [Signal] variants.
-    signal: Leaf<Signal>,
+    #[tree(with=miniconf::leaf)]
+    signal: Signal,
 
     /// The frequency of the generated signal in Hertz.
-    frequency: Leaf<f32>,
+    frequency: f32,
 
     /// The normalized symmetry of the signal. At 0% symmetry, the duration of the first half oscillation is minimal.
     /// At 25% symmetry, the first half oscillation lasts for 25% of the signal period. For square wave output this
     /// symmetry is the duty cycle.
-    symmetry: Leaf<f32>,
+    symmetry: f32,
 
     /// The amplitude of the output signal
-    amplitude: Leaf<f32>,
+    amplitude: f32,
 
     /// Output offset
-    offset: Leaf<f32>,
+    offset: f32,
 
     /// The initial phase of the period output signal in turns
-    phase: Leaf<f32>,
+    phase: f32,
 
     /// Number of half periods (periodic) or samples (sweep and noise), 0 for infinte
-    length: Leaf<u32>,
+    length: u32,
 
     /// Sweep: initial state
-    state: Leaf<i64>,
+    state: i64,
 
     /// Sweep: Sweep rate
-    rate: Leaf<i32>,
+    rate: i32,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            frequency: Leaf(1.0e3),
-            symmetry: Leaf(0.5),
-            signal: Leaf(Signal::Cosine),
-            amplitude: Leaf(0.0),
-            phase: Leaf(0.0),
-            offset: Leaf(0.0),
-            state: Leaf(0),
-            rate: Leaf(0),
-            length: Leaf(0),
+            frequency: 1.0e3,
+            symmetry: 0.5,
+            signal: Signal::Cosine,
+            amplitude: 0.0,
+            phase: 0.0,
+            offset: 0.0,
+            state: 0,
+            rate: 0,
+            length: 0,
         }
     }
 }
@@ -119,15 +123,19 @@ impl Scaler {
 }
 
 /// Represents the errors that can occur when attempting to configure the signal generator.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, thiserror::Error)]
 pub enum Error {
     /// The provided amplitude is out-of-range.
+    #[error("Invalid amplitude")]
     Amplitude,
     /// The provided symmetry is out of range.
+    #[error("Invalid symmetry")]
     Symmetry,
     /// The provided frequency is out of range.
+    #[error("Invalid frequency")]
     Frequency,
     /// Sweep would wrap/invalid
+    #[error("Sweep would wrap")]
     Wrap,
 }
 
@@ -173,38 +181,34 @@ impl Iterator for Source {
 impl Config {
     /// Convert from SI config
     pub fn build(&self, period: f32, scale: f32) -> Result<Source, Error> {
-        if !(0.0..1.0).contains(&*self.symmetry) {
+        if !(0.0..1.0).contains(&self.symmetry) {
             return Err(Error::Symmetry);
         }
 
         const NYQUIST: f32 = (1u32 << 31) as _;
-        let ftw0 = *self.frequency * period * NYQUIST;
+        let ftw0 = self.frequency * period * NYQUIST;
         if !(0.0..2.0 * NYQUIST).contains(&ftw0) {
             return Err(Error::Frequency);
         }
 
         // Clip both frequency tuning words to within Nyquist before rounding.
         let ftw = [
-            if *self.symmetry * NYQUIST > ftw0 {
-                ftw0 / *self.symmetry
+            if self.symmetry * NYQUIST > ftw0 {
+                ftw0 / self.symmetry
             } else {
                 NYQUIST
             } as i32,
-            if (1.0 - *self.symmetry) * NYQUIST > ftw0 {
-                ftw0 / (1.0 - *self.symmetry)
+            if (1.0 - self.symmetry) * NYQUIST > ftw0 {
+                ftw0 / (1.0 - self.symmetry)
             } else {
                 NYQUIST
             } as i32,
         ];
 
-        let offset = *self.offset * scale;
-        let amplitude = *self.amplitude * scale;
+        let offset = self.offset * scale;
+        let amplitude = self.amplitude * scale;
         fn abs(x: f32) -> f32 {
-            if x.is_sign_negative() {
-                -x
-            } else {
-                x
-            }
+            if x.is_sign_negative() { -x } else { x }
         }
         if abs(offset) + abs(amplitude) >= 1.0 {
             return Err(Error::Amplitude);
@@ -214,27 +218,27 @@ impl Config {
             offset: (offset * NYQUIST) as _,
         };
 
-        Ok(match *self.signal {
+        Ok(match self.signal {
             signal @ (Signal::Cosine | Signal::Square | Signal::Triangle) => {
                 Source::Periodic {
                     accu: AsymmetricAccu {
                         ftw,
-                        pow: (*self.phase * NYQUIST) as i32,
+                        pow: (self.phase * NYQUIST) as i32,
                         accu: 0,
-                        count: *self.length,
+                        count: self.length,
                     },
                     signal,
                     amp,
                 }
             }
             Signal::SweptSine => Source::SweptSine {
-                sweep: AccuOsc::new(Sweep::new(*self.rate, *self.state))
-                    .take(*self.length as _),
+                sweep: AccuOsc::new(Sweep::new(self.rate, self.state))
+                    .take(self.length as _),
                 amp,
             },
             Signal::WhiteNoise => Source::WhiteNoise {
                 rng: XorShiftRng::from_seed(Default::default()),
-                count: *self.length,
+                count: self.length,
                 amp,
             },
         })

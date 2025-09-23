@@ -1,43 +1,13 @@
-//! Stabilizer data stream capabilities
-//!
-//! # Design
-//! Data streamining utilizes UDP packets to send data streams at high throughput.
-//! Packets are always sent in a best-effort fashion, and data may be dropped.
-//!
-//! Stabilizer organizes streamed data into batches within a "Frame" that will be sent as a UDP
-//! packet. Each frame consits of a header followed by sequential batch serializations. The packet
-//! header is constant for all streaming capabilities, but the serialization format after the header
-//! is application-defined.
-//!
-//! ## Frame Header
-//! The header consists of the following, all in little-endian.
-//!
-//! * **Magic word 0x057B** (u16): a constant to identify Stabilizer streaming data.
-//! * **Format Code** (u8): a unique ID that indicates the serialization format of each batch of data
-//!   in the frame. Refer to [StreamFormat] for further information.
-//! * **Batch Count** (u8): the number of batches of data.
-//! * **Sequence Number** (u32): an the sequence number of the first batch in the frame.
-//!   This can be used to determine if and how many stream batches are lost.
-//!
-//! # Example
-//! A sample Python script is available in `scripts/stream_throughput.py` to demonstrate reception
-//! of streamed data.
-
 #![allow(non_camel_case_types)] // https://github.com/rust-embedded/heapless/issues/411
 
-use core::{fmt::Write, mem::MaybeUninit, net::SocketAddr};
+use super::{Format, Target};
+use core::mem::MaybeUninit;
 use heapless::{
     box_pool,
     pool::boxed::{Box, BoxBlock},
     spsc::{Consumer, Producer, Queue},
-    String,
 };
-use num_enum::IntoPrimitive;
-use serde::Serialize;
-use serde_with::DeserializeFromStr;
-use smoltcp_nal::embedded_nal::{nb, UdpClientStack};
-
-use super::NetworkReference;
+use smoltcp_nal::embedded_nal::{UdpClientStack, nb};
 
 // Magic first bytes indicating a UDP frame of straming data
 const MAGIC: u16 = 0x057B;
@@ -63,69 +33,6 @@ type Frame = [MaybeUninit<u8>; FRAME_SIZE];
 
 box_pool!(FRAME_POOL: Frame);
 
-/// Represents the destination for the UDP stream to send data to.
-///
-/// # Miniconf
-/// `<addr>:<port>`
-///
-/// * `<addr>` is an IPv4 address. E.g. `192.168.0.1`
-/// * `<port>` is any unsigned 16-bit value.
-///
-/// ## Example
-/// `192.168.0.1:1234`
-#[derive(Copy, Clone, Debug, DeserializeFromStr, PartialEq, Eq)]
-pub struct StreamTarget(pub SocketAddr);
-
-impl Default for StreamTarget {
-    fn default() -> Self {
-        Self("0.0.0.0:0".parse().unwrap())
-    }
-}
-
-impl Serialize for StreamTarget {
-    fn serialize<S: serde::Serializer>(
-        &self,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
-        let mut display: String<30> = String::new();
-        write!(&mut display, "{}", self.0).unwrap();
-        serializer.serialize_str(&display)
-    }
-}
-
-impl core::str::FromStr for StreamTarget {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let addr = SocketAddr::from_str(s)
-            .map_err(|_| "Invalid socket address format")?;
-        Ok(Self(addr))
-    }
-}
-
-/// Specifies the format of streamed data
-#[repr(u8)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive)]
-pub enum StreamFormat {
-    /// Reserved, unused format specifier.
-    Unknown = 0,
-
-    /// ADC0, ADC1, DAC0, and DAC1 sequentially in little-endian format.
-    ///
-    /// # Example
-    /// With a batch size of 2, the serialization would take the following form:
-    /// ```
-    /// <ADC0[0]> <ADC0[1]> <ADC1[0]> <ADC1[1]> <DAC0[0]> <DAC0[1]> <DAC1[0]> <DAC1[1]>
-    /// ```
-    AdcDacData = 1,
-
-    /// FLS (fiber length stabilization) format. See the FLS application.
-    Fls = 2,
-
-    /// Thermostat-EEM data. See `thermostat-eem` repo and application.
-    ThermostatEem = 3,
-}
-
 /// Configure streaming on a device.
 ///
 /// # Args
@@ -134,9 +41,10 @@ pub enum StreamFormat {
 /// # Returns
 /// (generator, stream) where `generator` can be used to enqueue "batches" for transmission. The
 /// `stream` is the logically consumer (UDP transmitter) of the enqueued data.
-pub fn setup_streaming(
-    stack: NetworkReference,
-) -> (FrameGenerator, DataStream) {
+#[cfg(target_arch = "arm")]
+pub fn setup<N: UdpClientStack<Error = smoltcp_nal::NetworkError>>(
+    stack: N,
+) -> (FrameGenerator, DataStream<N>) {
     // The queue needs to be at least as large as the frame count to ensure that every allocated
     // frame can potentially be enqueued for transmission.
     let queue =
@@ -224,7 +132,7 @@ impl FrameGenerator {
     fn new(queue: Producer<'static, StreamFrame, FRAME_QUEUE_SIZE>) -> Self {
         Self {
             queue,
-            format: StreamFormat::Unknown.into(),
+            format: Format::Unknown.into(),
             current_frame: None,
             sequence_number: 0,
         }
@@ -237,8 +145,7 @@ impl FrameGenerator {
     ///
     /// # Args
     /// * `format` - The desired format of the stream.
-    #[doc(hidden)]
-    pub(crate) fn configure(&mut self, format: impl Into<u8>) {
+    pub fn configure(&mut self, format: impl Into<u8>) {
         self.format = format.into();
     }
 
@@ -288,14 +195,14 @@ impl FrameGenerator {
 ///
 /// # Note
 /// This is responsible for consuming data and sending it over UDP.
-pub struct DataStream {
-    stack: NetworkReference,
-    socket: Option<<NetworkReference as UdpClientStack>::UdpSocket>,
+pub struct DataStream<N: UdpClientStack> {
+    stack: N,
+    socket: Option<<N as UdpClientStack>::UdpSocket>,
     queue: Consumer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
-    remote: StreamTarget,
+    remote: Target,
 }
 
-impl DataStream {
+impl<N: UdpClientStack<Error = smoltcp_nal::NetworkError>> DataStream<N> {
     /// Construct a new data streamer.
     ///
     /// # Args
@@ -303,13 +210,13 @@ impl DataStream {
     /// * `consumer` - The read side of the queue containing data to transmit.
     /// * `frame_pool` - The Pool to return stream frame objects into.
     fn new(
-        stack: NetworkReference,
+        stack: N,
         consumer: Consumer<'static, StreamFrame, FRAME_QUEUE_SIZE>,
     ) -> Self {
         Self {
             stack,
             socket: None,
-            remote: StreamTarget::default(),
+            remote: Target::default(),
             queue: consumer,
         }
     }
@@ -349,7 +256,7 @@ impl DataStream {
     ///
     /// # Args
     /// * `remote` - The destination to send stream data to.
-    pub fn set_remote(&mut self, remote: StreamTarget) {
+    pub fn set_remote(&mut self, remote: Target) {
         // Close socket to be reopened if the remote has changed.
         if remote != self.remote {
             self.close();

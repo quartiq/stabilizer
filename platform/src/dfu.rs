@@ -1,30 +1,34 @@
-/// Flag used to indicate that a reboot to DFU is requested.
-const DFU_REBOOT_FLAG: u32 = 0xDEAD_BEEF;
+use core::{
+    ptr,
+    sync::atomic::{self, Ordering},
+};
 
-extern "C" {
-    static mut _bootflag: u8;
+/// Flag used to indicate that a reboot to DFU is requested.
+const DFU_FLAG: u32 = 0xDEAD_BEEF;
+
+unsafe extern "C" {
+    unsafe static mut _dfu_flag: u8;
 }
 
 /// Indicate a reboot to DFU is requested.
-pub fn start_dfu_reboot() {
+pub fn dfu_reboot() {
     unsafe {
-        core::ptr::write_unaligned(
-            core::ptr::addr_of_mut!(_bootflag).cast(),
-            DFU_REBOOT_FLAG,
-        );
+        ptr::write_unaligned(ptr::addr_of_mut!(_dfu_flag).cast(), DFU_FLAG);
     }
 
     cortex_m::peripheral::SCB::sys_reset();
 }
 
 /// Check if the DFU reboot flag is set, indicating a reboot to DFU is requested.
-pub fn dfu_bootflag() -> bool {
+pub fn dfu_flag_is_set() -> bool {
     unsafe {
-        let start_ptr = core::ptr::addr_of_mut!(_bootflag).cast();
-        let set = DFU_REBOOT_FLAG == core::ptr::read_unaligned(start_ptr);
+        let start_ptr = ptr::addr_of_mut!(_dfu_flag).cast();
+        let set = DFU_FLAG == ptr::read_unaligned(start_ptr);
 
         // Clear the boot flag after checking it to ensure it doesn't stick between reboots.
         core::ptr::write_unaligned(start_ptr, 0);
+        atomic::fence(Ordering::SeqCst);
+        cortex_m::asm::dsb();
         set
     }
 }
@@ -34,7 +38,7 @@ pub fn dfu_bootflag() -> bool {
 /// # Note
 /// This function must be called before any system configuration is performed, as the DFU
 /// bootloader expects the system in an uninitialized state.
-pub fn execute_system_bootloader() {
+pub fn bootload_dfu() {
     // This process is largely adapted from
     // https://community.st.com/t5/stm32-mcus/jump-to-bootloader-from-application-on-stm32h7-devices/ta-p/49510
     cortex_m::interrupt::disable();
@@ -63,11 +67,11 @@ pub fn execute_system_bootloader() {
 
     unsafe { cortex_m::interrupt::enable() };
 
+    log::info!("Jumping to DFU");
+
     // The chip does not provide a means to modify the BOOT pins during
     // run-time. Jump to the bootloader in system memory instead.
     unsafe {
-        let system_memory_address: *const u32 = 0x1FF0_9800 as *const u32;
-        log::info!("Jumping to DFU");
-        cortex_m::asm::bootload(system_memory_address);
+        cortex_m::asm::bootload(0x1FF0_9800 as _);
     }
 }

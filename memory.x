@@ -17,7 +17,7 @@ MEMORY
  * Persistent memory has a u32 bootflag at the beginning and then the remainder is used for
  * persisting panic information between boots.
  */
-_bootflag = ORIGIN(PERSISTENT_RAM);
+_dfu_flag = ORIGIN(PERSISTENT_RAM);
 _panic_dump_start = ORIGIN(PERSISTENT_RAM) + 4;
 _panic_dump_end = ORIGIN(PERSISTENT_RAM) + LENGTH(PERSISTENT_RAM) - 4;
 

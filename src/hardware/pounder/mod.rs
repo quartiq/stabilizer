@@ -1,16 +1,12 @@
-use self::attenuators::AttenuatorInterface;
-
 use super::hal;
-use crate::hardware::{shared_adc::AdcChannel, I2c1Proxy};
+use crate::hardware::{I2c1Proxy, shared_adc::AdcChannel};
 use ad9959::Address;
 use embedded_hal_02::blocking::spi::Transfer;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
-pub mod attenuators;
 pub mod dds_output;
 pub mod hrtimer;
-pub mod rf_power;
 
 #[cfg(not(feature = "pounder_v1_0"))]
 pub mod timestamp;
@@ -258,13 +254,8 @@ impl ad9959::Interface for QspiInterface {
 
                 // Encode the address into the first 4 bytes.
                 for address_bit in 0..8 {
-                    let offset: u8 = {
-                        if address_bit % 2 != 0 {
-                            4
-                        } else {
-                            0
-                        }
-                    };
+                    let offset: u8 =
+                        { if address_bit % 2 != 0 { 4 } else { 0 } };
 
                     // Encode MSB first. Least significant bits are placed at the most significant
                     // byte.
@@ -279,13 +270,7 @@ impl ad9959::Interface for QspiInterface {
                 for byte_index in 0..data.len() {
                     let byte = data[byte_index];
                     for bit in 0..8 {
-                        let offset: u8 = {
-                            if bit % 2 != 0 {
-                                4
-                            } else {
-                                0
-                            }
-                        };
+                        let offset: u8 = { if bit % 2 != 0 { 4 } else { 0 } };
 
                         // Encode MSB first. Least significant bits are placed at the most
                         // significant byte.
@@ -524,7 +509,7 @@ impl PounderDevices {
     }
 }
 
-impl attenuators::AttenuatorInterface for PounderDevices {
+impl PounderDevices {
     /// Reset all of the attenuators to a power-on default state.
     fn reset_attenuators(&mut self) -> Result<(), Error> {
         // Active low
@@ -562,9 +547,79 @@ impl attenuators::AttenuatorInterface for PounderDevices {
 
         Ok(())
     }
+
+    /// Set the attenuation of a single channel.
+    ///
+    /// Args:
+    /// * `channel` - The pounder channel to configure the attenuation of.
+    /// * `attenuation` - The desired attenuation of the channel in dB. This has a resolution of
+    ///   0.5dB.
+    pub fn set_attenuation(
+        &mut self,
+        channel: Channel,
+        attenuation: f32,
+    ) -> Result<f32, Error> {
+        let attenuation = Self::validate(attenuation)?;
+
+        // Calculate the attenuation code to program into the attenuator. The attenuator uses a
+        // code where the LSB is 0.5 dB.
+        let attenuation_code = (attenuation * 2.0) as u8;
+
+        // Read all the channels, modify the channel of interest, and write all the channels back.
+        // This ensures the staging register and the output register are always in sync.
+        let mut channels = [0_u8; 4];
+        self.transfer_attenuators(&mut channels)?;
+
+        // The lowest 2 bits of the 8-bit shift register on the attenuator are ignored. Shift the
+        // attenuator code into the upper 6 bits of the register value. Note that the attenuator
+        // treats inputs as active-low, so the code is inverted before writing.
+        channels[channel as usize] = !(attenuation_code << 2);
+        self.transfer_attenuators(&mut channels)?;
+
+        // Finally, latch the output of the updated channel to force it into an active state.
+        self.latch_attenuator(channel)?;
+
+        Ok(attenuation_code as f32 / 2.0)
+    }
+
+    /// Get the attenuation of a channel.
+    ///
+    /// Args:
+    /// * `channel` - The channel to get the attenuation of.
+    ///
+    /// Returns:
+    /// The programmed attenuation of the channel in dB.
+    pub fn get_attenuation(&mut self, channel: Channel) -> Result<f32, Error> {
+        let mut channels = [0_u8; 4];
+
+        // Reading the data always shifts data out of the staging registers, so we perform a
+        // duplicate write-back to ensure the staging register is always equal to the output
+        // register.
+        self.transfer_attenuators(&mut channels)?;
+        self.transfer_attenuators(&mut channels)?;
+
+        // The attenuation code is stored in the upper 6 bits of the register, where each LSB
+        // represents 0.5 dB. The attenuator stores the code as active-low, so inverting the result
+        // (before the shift) has the affect of transforming the bits of interest (and the
+        // dont-care bits) into an active-high state and then masking off the don't care bits. If
+        // the shift occurs before the inversion, the upper 2 bits (which would then be don't
+        // care) would contain erroneous data.
+        let attenuation_code = (!channels[channel as usize]) >> 2;
+
+        // Convert the desired channel code into dB of attenuation.
+        Ok(attenuation_code as f32 / 2.0)
+    }
+
+    pub fn validate(attenuation: f32) -> Result<f32, Error> {
+        if !(0.0..=31.5).contains(&attenuation) {
+            Err(Error::Bounds)
+        } else {
+            Ok(attenuation)
+        }
+    }
 }
 
-impl rf_power::PowerMeasurementInterface for PounderDevices {
+impl PounderDevices {
     /// Sample an ADC channel.
     ///
     /// Args:
@@ -582,5 +637,21 @@ impl rf_power::PowerMeasurementInterface for PounderDevices {
         // Convert analog percentage to voltage. Note that the ADC uses an external 2.048V analog
         // reference.
         Ok(adc_scale * 2.048)
+    }
+
+    /// Measure the power of an input channel in dBm.
+    ///
+    /// Args:
+    /// * `channel` - The pounder input channel to measure the power of.
+    ///
+    /// Returns:
+    /// Power in dBm after the digitally controlled attenuator before the amplifier.
+    pub fn measure_power(&mut self, channel: Channel) -> Result<f32, Error> {
+        let analog_measurement = self.sample_converter(channel)?;
+
+        // The AD8363 with VSET connected to VOUT provides an output voltage of 51.7 mV/dB at
+        // 100MHz with an intercept of -58 dBm.
+        // It is placed behind a 20 dB tap.
+        Ok(analog_measurement * (1. / 0.0517) + (-58. + 20.))
     }
 }
