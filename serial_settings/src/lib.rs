@@ -620,7 +620,8 @@ impl<P: Platform> Write for Interface<'_, P> {
     }
 }
 
-const MAX_DEPTH: usize = 10;
+/// Max settings depth
+pub const MAX_DEPTH: usize = 16;
 
 // The Menu runner
 pub struct Runner<'a, P: Platform>(

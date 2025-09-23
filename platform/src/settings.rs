@@ -82,7 +82,9 @@ where
     pub fn load(structure: &mut C, storage: &mut F) {
         // Loop over flash and read settings
         let mut buffer = [0u8; 512];
-        for path in C::SCHEMA.nodes::<Path<String<128>, '/'>, 8>() {
+        for path in C::SCHEMA
+            .nodes::<Path<String<128>, '/'>, { serial_settings::MAX_DEPTH }>()
+        {
             let path = path.unwrap();
 
             // Try to fetch the setting from flash.

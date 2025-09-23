@@ -63,7 +63,7 @@ pub enum NetworkState {
     NoChange,
 }
 
-const MAX_DEPTH: usize = 10;
+const MAX_DEPTH: usize = 16;
 
 /// A structure of Stabilizer's default network users.
 pub struct NetworkUsers<S>
