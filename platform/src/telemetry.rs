@@ -13,11 +13,12 @@
 use crate::ApplicationMetadata;
 use heapless::String;
 use minimq::{
-    Publication,
+    PubError, Publication,
     embedded_nal::{Dns, TcpClientStack},
     embedded_time::Clock,
 };
 use serde::Serialize;
+use smoltcp_nal::NetworkError;
 
 /// Default metadata message if formatting errors occur.
 const DEFAULT_METADATA: &str = "{\"message\":\"Truncated: See USB terminal\"}";
@@ -62,17 +63,24 @@ impl<C: Clock, S: TcpClientStack<Error = smoltcp_nal::NetworkError> + Dns>
     ///
     /// # Args
     /// * `telemetry` - The telemetry to report
-    pub fn publish<T: Serialize>(&mut self, telemetry: &T) {
+    pub fn publish_telemetry<T: Serialize>(&mut self, telemetry: &T) {
         let mut topic: String<128> = self.prefix.try_into().unwrap();
         topic.push_str("/telemetry").unwrap();
+        self.publish(&topic, telemetry)
+            .map_err(|e| log::error!("Telemetry publishing error: {:?}", e))
+            .ok();
+    }
 
+    pub fn publish<T: Serialize>(
+        &mut self,
+        topic: &str,
+        payload: &T,
+    ) -> Result<(), PubError<NetworkError, serde_json_core::ser::Error>> {
         self.mqtt
             .client()
             .publish(minimq::Publication::new(&topic, |buf: &mut [u8]| {
-                serde_json_core::to_slice(telemetry, buf)
+                serde_json_core::to_slice(payload, buf)
             }))
-            .map_err(|e| log::error!("Telemetry publishing error: {:?}", e))
-            .ok();
     }
 
     /// Update the telemetry client
