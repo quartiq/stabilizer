@@ -306,7 +306,8 @@ where
     // After ITCM loading.
     core.SCB.enable_icache();
 
-    let mut delay = delay::AsmDelay::new(ccdr.clocks.c_ck().to_Hz());
+    // Note: Frequencies are scaled by 2 to account for the M7 dual instruction pipeline.
+    let mut delay = delay::AsmDelay::new(ccdr.clocks.c_ck().to_Hz() * 2);
 
     let gpioa = device.GPIOA.split(ccdr.peripheral.GPIOA);
     let gpiob = device.GPIOB.split(ccdr.peripheral.GPIOB);
