@@ -71,7 +71,7 @@ pub type I2c1Proxy = shared_bus::I2cProxy<
 
 pub type SerialPort = usbd_serial::SerialPort<
     'static,
-    crate::hardware::UsbBus,
+    UsbBus,
     &'static mut [u8],
     &'static mut [u8],
 >;
@@ -170,19 +170,6 @@ impl core::fmt::Display for HardwareVersion {
                 write!(f, "Unknown ({:#b})", other)
             }
         }
-    }
-}
-
-impl serde::Serialize for HardwareVersion {
-    fn serialize<S: serde::Serializer>(
-        &self,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
-        use core::fmt::Write;
-
-        let mut version_string: heapless::String<32> = heapless::String::new();
-        write!(&mut version_string, "{}", self).unwrap();
-        serializer.serialize_str(&version_string)
     }
 }
 
