@@ -20,11 +20,16 @@ use platform::{AppSettings, ApplicationMetadata, NetSettings};
 use crate::design_parameters;
 
 use super::{
-    DigitalInput0, DigitalInput1, Eem, EthernetPhy, Gpio, HardwareVersion,
-    Pgia, SerialTerminal, SystemTimer, Systick, UsbDevice, adc, afe,
-    cpu_temp_sensor::CpuTempSensor, dac, eeprom, input_stamper::InputStamper,
-    net::NetworkStack, pounder, pounder::dds_output::DdsOutput,
-    shared_adc::SharedAdc, timers,
+    DigitalInput0, DigitalInput1, Eem, Gpio, HardwareVersion, Pgia,
+    SerialTerminal, SystemTimer, Systick, UsbDevice, adc, afe,
+    cpu_temp_sensor::CpuTempSensor,
+    dac, eeprom,
+    input_stamper::InputStamper,
+    net::{EthernetPhy, NetworkStack},
+    pounder,
+    pounder::dds_output::DdsOutput,
+    shared_adc::SharedAdc,
+    timers,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;

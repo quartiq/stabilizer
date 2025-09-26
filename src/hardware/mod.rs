@@ -57,8 +57,6 @@ pub type DigitalInput0 = hal::gpio::gpiog::PG9<hal::gpio::Input>;
 // Type alias for digital input 1 (DI1).
 pub type DigitalInput1 = hal::gpio::gpioc::PC15<hal::gpio::Input>;
 
-pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
-
 /// System timer (RTIC Monotonic) tick frequency
 pub const MONOTONIC_FREQUENCY: u32 = 1_000;
 rtic_monotonics::systick_monotonic!(Systick, MONOTONIC_FREQUENCY);
