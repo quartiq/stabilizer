@@ -14,7 +14,6 @@ pub mod adc;
 pub mod afe;
 pub mod cpu_temp_sensor;
 pub mod dac;
-pub mod delay;
 mod eeprom;
 pub mod input_stamper;
 pub mod net;
@@ -28,7 +27,7 @@ pub type Pgia = afe::ProgrammableGainAmplifier<
     Forward<ErasedPin<Output>, ForwardOutputPin>,
 >;
 
-pub type UsbBus = stm32h7xx_hal::usb_hs::UsbBus<stm32h7xx_hal::usb_hs::USB2>;
+pub type UsbBus = hal::usb_hs::UsbBus<hal::usb_hs::USB2>;
 
 // Type alias for the USB device.
 pub type UsbDevice = usb_device::device::UsbDevice<'static, UsbBus>;

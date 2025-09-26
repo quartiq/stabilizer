@@ -22,9 +22,9 @@ use crate::design_parameters;
 use super::{
     DigitalInput0, DigitalInput1, Eem, EthernetPhy, Gpio, HardwareVersion,
     Pgia, SerialTerminal, SystemTimer, Systick, UsbDevice, adc, afe,
-    cpu_temp_sensor::CpuTempSensor, dac, delay, delay::AsmDelay, eeprom,
-    input_stamper::InputStamper, net::NetworkStack, pounder,
-    pounder::dds_output::DdsOutput, shared_adc::SharedAdc, timers,
+    cpu_temp_sensor::CpuTempSensor, dac, eeprom, input_stamper::InputStamper,
+    net::NetworkStack, pounder, pounder::dds_output::DdsOutput,
+    shared_adc::SharedAdc, timers,
 };
 
 const NUM_TCP_SOCKETS: usize = 4;
@@ -204,8 +204,8 @@ fn load_itcm() {
 /// `Some(devices)` if pounder is detected, where `devices` is a `PounderDevices` structure
 /// containing all of the pounder hardware interfaces in a disabled state.
 pub fn setup<C>(
-    mut core: stm32h7xx_hal::stm32::CorePeripherals,
-    device: stm32h7xx_hal::stm32::Peripherals,
+    mut core: hal::stm32::CorePeripherals,
+    device: hal::stm32::Peripherals,
     clock: SystemTimer,
     batch_size: usize,
     sample_ticks: u32,
@@ -296,7 +296,7 @@ where
     // Set up USB clocks.
     ccdr.clocks.hsi48_ck().unwrap();
     ccdr.peripheral
-        .kernel_usb_clk_mux(stm32h7xx_hal::rcc::rec::UsbClkSel::Hsi48);
+        .kernel_usb_clk_mux(hal::rcc::rec::UsbClkSel::Hsi48);
 
     // Before being able to call any code in ITCM, load that code from flash.
     load_itcm();
@@ -307,7 +307,7 @@ where
     core.SCB.enable_icache();
 
     // Note: Frequencies are scaled by 2 to account for the M7 dual instruction pipeline.
-    let mut delay = delay::AsmDelay::new(ccdr.clocks.c_ck().to_Hz() * 2);
+    let mut delay = platform::AsmDelay::new(ccdr.clocks.c_ck().to_Hz() * 2);
 
     let gpioa = device.GPIOA.split(ccdr.peripheral.GPIOA);
     let gpiob = device.GPIOB.split(ccdr.peripheral.GPIOB);
@@ -805,14 +805,14 @@ where
         let (mut adc1, mut adc2) = hal::adc::adc12(
             device.ADC1,
             device.ADC2,
-            stm32h7xx_hal::time::Hertz::MHz(25),
+            hal::time::Hertz::MHz(25),
             &mut delay,
             ccdr.peripheral.ADC12,
             &ccdr.clocks,
         );
         let mut adc3 = hal::adc::Adc::adc3(
             device.ADC3,
-            stm32h7xx_hal::time::Hertz::MHz(25),
+            hal::time::Hertz::MHz(25),
             &mut delay,
             ccdr.peripheral.ADC3,
             &ccdr.clocks,
@@ -1070,7 +1070,7 @@ where
     fn check_input<const P: char, const N: u8>(
         pin: hal::gpio::Pin<P, N, hal::gpio::Analog>,
         mut is_floating: bool,
-        delay: &mut AsmDelay,
+        delay: &mut platform::AsmDelay,
     ) -> (hal::gpio::Pin<P, N, hal::gpio::Analog>, bool) {
         let pin = pin.into_pull_up_input();
         delay.delay_us(1_000u32);
@@ -1153,7 +1153,7 @@ where
         let _usb_id = gpioa.pa10.into_alternate::<10>();
         let usb_n = gpioa.pa11.into_alternate();
         let usb_p = gpioa.pa12.into_alternate();
-        let usb = stm32h7xx_hal::usb_hs::USB2::new(
+        let usb = hal::usb_hs::USB2::new(
             device.OTG2_HS_GLOBAL,
             device.OTG2_HS_DEVICE,
             device.OTG2_HS_PWRCLK,
@@ -1168,8 +1168,8 @@ where
         endpoint_memory.replace(
             &mut cortex_m::singleton!(: [u32; 1024] = [0; 1024]).unwrap()[..],
         );
-        let usb_bus = cortex_m::singleton!(: usb_device::bus::UsbBusAllocator<super::UsbBus> =
-        stm32h7xx_hal::usb_hs::UsbBus::new(
+        let usb_bus = cortex_m::singleton!(
+            : usb_device::bus::UsbBusAllocator<super::UsbBus> = hal::usb_hs::UsbBus::new(
             usb,
             endpoint_memory.take().unwrap(),
         ))

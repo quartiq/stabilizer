@@ -494,7 +494,7 @@ mod app {
                 });
 
             c.shared.network.lock(|net| {
-                net.telemetry.publish(&telemetry.finalize(
+                net.telemetry.publish_telemetry(&telemetry.finalize(
                     *gains[0],
                     *gains[1],
                     c.local.cpu_temp_sensor.get_temperature().unwrap(),

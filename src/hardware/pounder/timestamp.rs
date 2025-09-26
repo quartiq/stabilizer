@@ -16,8 +16,8 @@
 //! capture is simultaneously triggered. That trigger is prescaled (its rate is divided) by the
 //! batch size. This results in the input capture triggering identically to when the ADC samples
 //! the last sample of the batch. That sample is then available for processing by the user.
+use super::hal;
 use crate::hardware::timers;
-use stm32h7xx_hal as hal;
 
 /// Software unit to timestamp stabilizer ADC samples using an external pounder reference clock.
 pub struct Timestamper {

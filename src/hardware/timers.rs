@@ -172,9 +172,7 @@ macro_rules! timer_channels {
             }
 
             pub mod [< $TY:lower >] {
-                use stm32h7xx_hal as hal;
-                use hal::dma::{traits::TargetAddress, PeripheralToMemory, dma::DMAReq};
-                use hal::stm32::$TY;
+                use super::hal::{stm32::$TY, dma::{traits::TargetAddress, PeripheralToMemory, dma::DMAReq}};
 
                 pub struct UpdateEvent {}
 

@@ -1008,6 +1008,7 @@ version = "0.1.0"
 dependencies = [
  "cortex-m",
  "embassy-futures",
+ "embedded-hal 0.2.7",
  "embedded-io",
  "embedded-storage",
  "embedded-storage-async",

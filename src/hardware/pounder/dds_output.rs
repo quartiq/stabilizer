@@ -53,9 +53,8 @@
 //! process can be done once and then register values can be written into a pre-computed serialized
 //! buffer to avoid the software overhead of much of the serialization process.
 use log::warn;
-use stm32h7xx_hal as hal;
 
-use super::{QspiInterface, hrtimer::HighResTimerE};
+use super::{QspiInterface, hal, hrtimer::HighResTimerE};
 use ad9959::{Mode, ProfileSerializer};
 
 /// The DDS profile update stream.
