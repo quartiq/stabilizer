@@ -14,7 +14,7 @@ use stream::{DataStream, FrameGenerator, Target};
 
 use core::fmt::Write;
 use heapless::String;
-use miniconf::{TreeDeserializeOwned, TreeSchema, TreeSerialize};
+use miniconf::{TreeDeserializeOwned, TreeSerialize};
 use miniconf_mqtt::minimq;
 
 pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
@@ -68,10 +68,7 @@ pub enum NetworkState {
 const MAX_DEPTH: usize = 16;
 
 /// A structure of Stabilizer's default network users.
-pub struct NetworkUsers<S>
-where
-    S: Default + TreeDeserializeOwned + TreeSerialize + Clone,
-{
+pub struct NetworkUsers<S> {
     miniconf: miniconf_mqtt::MqttClient<
         'static,
         S,
@@ -88,7 +85,7 @@ where
 
 impl<S> NetworkUsers<S>
 where
-    S: Default + TreeDeserializeOwned + TreeSerialize + TreeSchema + Clone,
+    S: TreeDeserializeOwned + TreeSerialize,
 {
     /// Construct Stabilizer's default network users.
     ///
