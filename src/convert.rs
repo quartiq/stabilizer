@@ -137,3 +137,7 @@ impl From<u16> for DacCode {
         Self(value)
     }
 }
+
+pub fn att_is_valid(attenuation: f32) -> bool {
+    (0.0..=31.5).contains(&attenuation)
+}

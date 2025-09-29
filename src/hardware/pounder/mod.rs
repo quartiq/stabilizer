@@ -559,7 +559,9 @@ impl PounderDevices {
         channel: Channel,
         attenuation: f32,
     ) -> Result<f32, Error> {
-        let attenuation = Self::validate(attenuation)?;
+        if !crate::convert::att_is_valid(attenuation) {
+            return Err(Error::Bounds);
+        }
 
         // Calculate the attenuation code to program into the attenuator. The attenuator uses a
         // code where the LSB is 0.5 dB.
@@ -608,14 +610,6 @@ impl PounderDevices {
 
         // Convert the desired channel code into dB of attenuation.
         Ok(attenuation_code as f32 / 2.0)
-    }
-
-    pub fn validate(attenuation: f32) -> Result<f32, Error> {
-        if !(0.0..=31.5).contains(&attenuation) {
-            Err(Error::Bounds)
-        } else {
-            Ok(attenuation)
-        }
     }
 }
 
