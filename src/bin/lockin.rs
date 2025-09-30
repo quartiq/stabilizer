@@ -236,13 +236,14 @@ mod app {
         let clock = SystemTimer::new(|| Systick::now().ticks());
 
         // Configure the microcontroller
-        let (mut stabilizer, _pounder) = hardware::setup::setup::<Settings>(
-            c.core,
-            c.device,
-            clock,
-            BATCH_SIZE,
-            SAMPLE_TICKS,
-        );
+        let (mut stabilizer, _mezzanine, _eem) =
+            hardware::setup::setup::<Settings>(
+                c.core,
+                c.device,
+                clock,
+                BATCH_SIZE,
+                SAMPLE_TICKS,
+            );
 
         let mut network = NetworkUsers::new(
             stabilizer.net.stack,
@@ -263,9 +264,6 @@ mod app {
             settings: stabilizer.settings,
         };
 
-        let source =
-            idsp::AccuOsc::new(iter::repeat(1i64 << (64 - BATCH_SIZE_LOG2)));
-
         let mut local = Local {
             usb_terminal: stabilizer.usb_serial,
             sampling_timer: stabilizer.adc_dac_timer,
@@ -274,13 +272,15 @@ mod app {
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
             timestamper: stabilizer.timestamper,
+            cpu_temp_sensor: stabilizer.temperature_sensor,
 
             pll: RPLL::new(SAMPLE_TICKS_LOG2 + BATCH_SIZE_LOG2),
             lockin: idsp::Lockin::default(),
-            source,
+            source: idsp::AccuOsc::new(iter::repeat(
+                1i64 << (64 - BATCH_SIZE_LOG2),
+            )),
 
             generator,
-            cpu_temp_sensor: stabilizer.temperature_sensor,
         };
 
         // Enable ADC/DAC events
@@ -494,11 +494,14 @@ mod app {
                 });
 
             c.shared.network.lock(|net| {
-                net.telemetry.publish_telemetry(&telemetry.finalize(
-                    *gains[0],
-                    *gains[1],
-                    c.local.cpu_temp_sensor.get_temperature().unwrap(),
-                ))
+                net.telemetry.publish_telemetry(
+                    "/telemetry",
+                    &telemetry.finalize(
+                        *gains[0],
+                        *gains[1],
+                        c.local.cpu_temp_sensor.get_temperature().unwrap(),
+                    ),
+                )
             });
 
             // Schedule the telemetry task in the future.

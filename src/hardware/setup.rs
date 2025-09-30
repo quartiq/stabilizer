@@ -4,12 +4,12 @@
 use super::hal::{
     self,
     ethernet::{self, PHY},
-    gpio::Speed,
+    gpio::{self, Speed},
     prelude::*,
 };
 use core::cell::RefCell;
 use core::sync::atomic::{self, AtomicBool, Ordering};
-use core::{fmt::Write, ptr, slice};
+use core::{fmt::Write, ptr};
 use embedded_hal_compat::{Forward, ForwardCompat, markers::ForwardOutputPin};
 use grounded::uninit::GroundedCell;
 use heapless::String;
@@ -47,7 +47,7 @@ pub struct NetStorage {
     pub dns_storage: [Option<smoltcp::socket::dns::DnsQuery>; 1],
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct UdpSocketStorage {
     rx_storage: [u8; 1024],
     tx_storage: [u8; 2048],
@@ -59,8 +59,8 @@ pub struct UdpSocketStorage {
     >; 10],
 }
 
-impl UdpSocketStorage {
-    const fn new() -> Self {
+impl Default for UdpSocketStorage {
+    fn default() -> Self {
         Self {
             rx_storage: [0; 1024],
             tx_storage: [0; 2048],
@@ -70,14 +70,14 @@ impl UdpSocketStorage {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct TcpSocketStorage {
     rx_storage: [u8; 1024],
     tx_storage: [u8; 1024],
 }
 
-impl TcpSocketStorage {
-    const fn new() -> Self {
+impl Default for TcpSocketStorage {
+    fn default() -> Self {
         Self {
             rx_storage: [0; 1024],
             tx_storage: [0; 1024],
@@ -93,8 +93,8 @@ impl Default for NetStorage {
                 smoltcp::wire::Ipv6Cidr::SOLICITED_NODE_PREFIX,
             )],
             sockets: [smoltcp::iface::SocketStorage::EMPTY; NUM_SOCKETS + 2],
-            tcp_socket_storage: [TcpSocketStorage::new(); NUM_TCP_SOCKETS],
-            udp_socket_storage: [UdpSocketStorage::new(); NUM_UDP_SOCKETS],
+            tcp_socket_storage: Default::default(),
+            udp_socket_storage: Default::default(),
             dns_storage: [None; 1],
         }
     }
@@ -108,7 +108,7 @@ pub struct NetworkDevices {
 }
 
 /// The available hardware interfaces on Stabilizer.
-pub struct StabilizerDevices<C: serial_settings::Settings + 'static> {
+pub struct Stabilizer<C: serial_settings::Settings + 'static> {
     pub temperature_sensor: CpuTempSensor,
     pub afes: [Pgia; 2],
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
@@ -118,15 +118,20 @@ pub struct StabilizerDevices<C: serial_settings::Settings + 'static> {
     pub timestamp_timer: timers::TimestampTimer,
     pub net: NetworkDevices,
     pub digital_inputs: (DigitalInput0, DigitalInput1),
-    pub eem: Eem,
     pub usb_serial: SerialTerminal<C>,
     pub usb: UsbDevice,
+    pub fp_led: [gpio::ErasedPin<gpio::Output>; 4],
     pub metadata: &'static ApplicationMetadata,
     pub settings: C,
 }
 
+pub enum Mezzanine {
+    None,
+    Pounder(Pounder),
+}
+
 /// The available Pounder-specific hardware interfaces.
-pub struct PounderDevices {
+pub struct Pounder {
     pub pounder: pounder::PounderDevices,
     pub dds_output: DdsOutput,
 
@@ -156,33 +161,33 @@ static DES_RING: GroundedCell<
 fn load_itcm() {
     unsafe extern "C" {
         // ZST (`()`: not layout-stable. empty/zst struct in `repr(C)``: not "proper" C)
-        static mut __sitcm: [u32; 0];
-        static mut __eitcm: [u32; 0];
-        static mut __siitcm: [u32; 0];
+        unsafe static mut __sitcm: [u32; 0];
+        unsafe static mut __eitcm: [u32; 0];
+        unsafe static mut __siitcm: [u32; 0];
     }
     // NOTE(unsafe): Assuming the address symbols from the linker as well as
     // the source instruction data are all valid, this is safe as it only
     // copies linker-prepared data to where the code expects it to be.
     // Calling it multiple times is safe as well.
 
+    // ITCM is enabled on reset on our CPU but might not be on others.
+    // Keep for completeness.
+    const ITCMCR: *mut u32 = 0xE000_EF90usize as _;
     unsafe {
-        // ITCM is enabled on reset on our CPU but might not be on others.
-        // Keep for completeness.
-        const ITCMCR: *mut u32 = 0xE000_EF90usize as _;
         ptr::write_volatile(ITCMCR, ptr::read_volatile(ITCMCR) | 1);
+    }
 
-        // Ensure ITCM is enabled before loading.
-        atomic::fence(Ordering::SeqCst);
+    // Ensure ITCM is enabled before loading.
+    atomic::fence(Ordering::SeqCst);
 
-        let sitcm = core::ptr::addr_of_mut!(__sitcm) as *mut u32;
-        let eitcm = core::ptr::addr_of!(__eitcm) as *const u32;
-        let siitcm = core::ptr::addr_of!(__siitcm) as *const u32;
+    let sitcm = ptr::addr_of_mut!(__sitcm) as *mut u32;
+    let eitcm = ptr::addr_of!(__eitcm) as *const u32;
+    let siitcm = ptr::addr_of!(__siitcm) as *const u32;
 
+    unsafe {
         let len = eitcm.offset_from(sitcm) as usize;
-        let dst = slice::from_raw_parts_mut(sitcm, len);
-        let src = slice::from_raw_parts(siitcm, len);
         // Load code into ITCM.
-        dst.copy_from_slice(src);
+        ptr::copy(siitcm, sitcm, len);
     }
 
     // Ensure ITCM is loaded before potentially executing any instructions from it.
@@ -214,7 +219,7 @@ pub fn setup<C>(
     clock: SystemTimer,
     batch_size: usize,
     sample_ticks: u32,
-) -> (StabilizerDevices<C>, Option<PounderDevices>)
+) -> (Stabilizer<C>, Mezzanine, Eem)
 where
     C: serial_settings::Settings + AppSettings,
 {
@@ -796,15 +801,16 @@ where
         }
     };
 
-    let mut fp_led_0 = gpiod.pd5.into_push_pull_output();
-    let mut fp_led_1 = gpiod.pd6.into_push_pull_output();
-    let mut fp_led_2 = gpiog.pg4.into_push_pull_output();
-    let mut fp_led_3 = gpiod.pd12.into_push_pull_output();
+    let mut fp_led = [
+        gpiod.pd5.into_push_pull_output().erase(),
+        gpiod.pd6.into_push_pull_output().erase(),
+        gpiog.pg4.into_push_pull_output().erase(),
+        gpiod.pd12.into_push_pull_output().erase(),
+    ];
 
-    fp_led_0.set_low();
-    fp_led_1.set_low();
-    fp_led_2.set_low();
-    fp_led_3.set_low();
+    for fp_led in fp_led.iter_mut() {
+        fp_led.set_low();
+    }
 
     let (adc1, adc2, adc3) = {
         let (mut adc1, mut adc2) = hal::adc::adc12(
@@ -1039,7 +1045,7 @@ where
             )
         };
 
-        Some(PounderDevices {
+        Mezzanine::Pounder(Pounder {
             pounder: pounder_devices,
             dds_output,
 
@@ -1047,7 +1053,7 @@ where
             timestamper: pounder_stamper,
         })
     } else {
-        None
+        Mezzanine::None
     };
 
     #[derive(Copy, Clone, Debug, PartialEq)]
@@ -1069,33 +1075,33 @@ where
     };
     log::info!("PoE: {poe:?}",);
 
-    let mut force_eem_source = gpioe.pe0.into_push_pull_output();
-
-    // checks whether a pin can be weakly pulled high an low
+    // checks whether a pin can be weakly pulled high and low
     fn check_input<const P: char, const N: u8>(
         pin: hal::gpio::Pin<P, N, hal::gpio::Analog>,
-        mut is_floating: bool,
+        is_floating: &mut bool,
         delay: &mut platform::AsmDelay,
-    ) -> (hal::gpio::Pin<P, N, hal::gpio::Analog>, bool) {
-        let pin = pin.into_pull_up_input();
-        delay.delay_us(1_000u32);
-        is_floating &= pin.is_high();
-        let pin = pin.into_pull_down_input();
-        delay.delay_us(1_000u32);
-        is_floating &= pin.is_low();
-        (pin.into_analog(), is_floating)
+    ) -> hal::gpio::Pin<P, N, hal::gpio::Analog> {
+        if *is_floating {
+            let pin = pin.into_pull_up_input();
+            delay.delay_us(1_000u32);
+            *is_floating &= pin.is_high();
+            let pin = pin.into_pull_down_input();
+            delay.delay_us(1_000u32);
+            *is_floating &= pin.is_low();
+            pin.into_analog()
+        } else {
+            pin
+        }
     }
 
-    let mut lvds0 = gpiog.pg13;
-    let mut lvds1 = gpiob.pb5;
-    let mut lvds3 = gpiog.pg8;
     let mut is_floating = true;
     // Default EEM population: LVDS0/1/3 driven by LVDS receivers
-    (lvds0, is_floating) = check_input(lvds0, is_floating, &mut delay);
-    (lvds1, is_floating) = check_input(lvds1, is_floating, &mut delay);
-    (lvds3, is_floating) = check_input(lvds3, is_floating, &mut delay);
+    let lvds0 = check_input(gpiog.pg13, &mut is_floating, &mut delay);
+    let lvds1 = check_input(gpiob.pb5, &mut is_floating, &mut delay);
+    let lvds3 = check_input(gpiog.pg8, &mut is_floating, &mut delay);
+    let mut force_eem_source = gpioe.pe0.into_push_pull_output();
     let eem = if !is_floating {
-        log::info!("EEM population variant: Default detected");
+        log::info!("EEM population variant 'Gpio' detected");
         force_eem_source.set_low();
         Eem::Gpio(Gpio {
             lvds4: gpiod.pd1.into_floating_input(),
@@ -1104,8 +1110,8 @@ where
             lvds7: gpiod.pd4.into_push_pull_output(),
         })
     } else {
-        log::info!("EEM population variant: Output detected");
-        if poe != PoePower::Low {
+        log::info!("EEM population variant 'Urukul' detected");
+        if poe != PoePower::High {
             log::warn!("No 802.3at PoE. Powering up EEM anyway.");
         }
         force_eem_source.set_high();
@@ -1234,7 +1240,7 @@ where
         .unwrap()
     };
 
-    let stabilizer = StabilizerDevices {
+    let stabilizer = Stabilizer {
         afes,
         adcs,
         dacs,
@@ -1247,16 +1253,13 @@ where
         adc_dac_timer: sampling_timer,
         timestamp_timer,
         digital_inputs,
-        eem,
         usb: usb_device,
+        fp_led,
         metadata,
         settings,
     };
 
-    // info!("Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
-    // info!("Built on {}", build_info::BUILT_TIME_UTC);
-    // info!("{} {}", build_info::RUSTC_VERSION, build_info::TARGET);
     log::info!("setup() complete");
 
-    (stabilizer, pounder)
+    (stabilizer, pounder, eem)
 }

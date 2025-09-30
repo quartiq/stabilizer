@@ -139,7 +139,7 @@ mod app {
     fn init(c: init::Context) -> (Shared, Local) {
         let clock = SystemTimer::new(|| Systick::now().ticks());
 
-        let (stabilizer, _pounder) = hardware::setup::setup::<Settings>(
+        let (stabilizer, _mezzanine, eem) = hardware::setup::setup::<Settings>(
             c.core,
             c.device,
             clock,
@@ -147,7 +147,7 @@ mod app {
             1 << 7,
         );
 
-        let stabilizer::hardware::Eem::Urukul(urukul) = stabilizer.eem else {
+        let stabilizer::hardware::Eem::Urukul(urukul) = eem else {
             panic!("No Urukul detected.")
         };
 

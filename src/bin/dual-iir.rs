@@ -257,7 +257,7 @@ mod app {
         let clock = SystemTimer::new(|| Systick::now().ticks());
 
         // Configure the microcontroller
-        let (stabilizer, _pounder) = hardware::setup::setup::<Settings>(
+        let (stabilizer, _mezzanine, _eem) = hardware::setup::setup::<Settings>(
             c.core,
             c.device,
             clock,
@@ -511,11 +511,14 @@ mod app {
                 });
 
             c.shared.network.lock(|net| {
-                net.telemetry.publish_telemetry(&telemetry.finalize(
-                    gains[0],
-                    gains[1],
-                    c.local.cpu_temp_sensor.get_temperature().unwrap(),
-                ))
+                net.telemetry.publish_telemetry(
+                    "/telemetry",
+                    &telemetry.finalize(
+                        gains[0],
+                        gains[1],
+                        c.local.cpu_temp_sensor.get_temperature().unwrap(),
+                    ),
+                )
             });
 
             Systick::delay(((telemetry_period * 1000.0) as u32).millis()).await;

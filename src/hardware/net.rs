@@ -8,7 +8,7 @@
 use heapless;
 use miniconf;
 
-use crate::hardware::{SystemTimer, hal};
+use crate::hardware::{SystemTimer, hal::ethernet};
 use platform::{ApplicationMetadata, NetSettings, TelemetryClient};
 use stream::{DataStream, FrameGenerator, Target};
 
@@ -17,7 +17,7 @@ use heapless::String;
 use miniconf::{TreeDeserializeOwned, TreeSerialize};
 use miniconf_mqtt::minimq;
 
-pub type EthernetPhy = hal::ethernet::phy::LAN8742A<hal::ethernet::EthernetMAC>;
+pub type EthernetPhy = ethernet::phy::LAN8742A<ethernet::EthernetMAC>;
 
 pub type NetworkReference =
     smoltcp_nal::shared::NetworkStackProxy<'static, NetworkStack>;
@@ -30,13 +30,13 @@ pub const RX_DESRING_CNT: usize = 4;
 
 pub type NetworkStack = smoltcp_nal::NetworkStack<
     'static,
-    hal::ethernet::EthernetDMA<TX_DESRING_CNT, RX_DESRING_CNT>,
+    ethernet::EthernetDMA<TX_DESRING_CNT, RX_DESRING_CNT>,
     SystemTimer,
 >;
 
 pub type NetworkManager = smoltcp_nal::shared::NetworkManager<
     'static,
-    hal::ethernet::EthernetDMA<TX_DESRING_CNT, RX_DESRING_CNT>,
+    ethernet::EthernetDMA<TX_DESRING_CNT, RX_DESRING_CNT>,
     SystemTimer,
 >;
 

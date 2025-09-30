@@ -63,9 +63,13 @@ impl<C: Clock, S: TcpClientStack<Error = smoltcp_nal::NetworkError> + Dns>
     ///
     /// # Args
     /// * `telemetry` - The telemetry to report
-    pub fn publish_telemetry<T: Serialize>(&mut self, telemetry: &T) {
+    pub fn publish_telemetry<T: Serialize>(
+        &mut self,
+        suffix: &str,
+        telemetry: &T,
+    ) {
         let mut topic: String<128> = self.prefix.try_into().unwrap();
-        topic.push_str("/telemetry").unwrap();
+        topic.push_str(suffix).unwrap();
         self.publish(&topic, telemetry)
             .map_err(|e| log::error!("Telemetry publishing error: {:?}", e))
             .ok();
