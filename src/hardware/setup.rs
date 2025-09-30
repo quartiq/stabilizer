@@ -113,10 +113,10 @@ pub struct Stabilizer<C: serial_settings::Settings + 'static> {
     pub afes: [Pgia; 2],
     pub adcs: (adc::Adc0Input, adc::Adc1Input),
     pub dacs: (dac::Dac0Output, dac::Dac1Output),
-    pub timestamper: InputStamper,
-    pub adc_dac_timer: timers::SamplingTimer,
+    pub input_stamper: InputStamper,
+    pub sampling_timer: timers::SamplingTimer,
     pub timestamp_timer: timers::TimestampTimer,
-    pub net: NetworkDevices,
+    pub network_devices: NetworkDevices,
     pub digital_inputs: (DigitalInput0, DigitalInput1),
     pub usb_serial: SerialTerminal<C>,
     pub usb: UsbDevice,
@@ -857,6 +857,9 @@ where
         )
     };
 
+    let temperature_sensor =
+        CpuTempSensor::new(adc3.create_channel(hal::adc::Temperature::new()));
+
     // Measure the Pounder PGOOD output to detect if pounder is present on Stabilizer.
     let pounder_pgood = gpiob.pb13.into_pull_down_input();
     delay.delay_us(2000u32);
@@ -1075,32 +1078,46 @@ where
     };
     log::info!("PoE: {poe:?}",);
 
-    // checks whether a pin can be weakly pulled high and low
-    fn check_input<const P: char, const N: u8>(
-        pin: hal::gpio::Pin<P, N, hal::gpio::Analog>,
-        is_floating: &mut bool,
-        delay: &mut platform::AsmDelay,
-    ) -> hal::gpio::Pin<P, N, hal::gpio::Analog> {
-        if *is_floating {
-            let pin = pin.into_pull_up_input();
-            delay.delay_us(1_000u32);
-            *is_floating &= pin.is_high();
-            let pin = pin.into_pull_down_input();
-            delay.delay_us(1_000u32);
-            *is_floating &= pin.is_low();
-            pin.into_analog()
-        } else {
-            pin
+    let mut force_eem_source = gpioe.pe0.into_push_pull_output();
+
+    struct Floating<'a> {
+        is_floating: bool,
+        delay: &'a mut platform::AsmDelay,
+    }
+
+    impl<'a> Floating<'a> {
+        // checks whether a pin can be weakly pulled high and low
+        fn check_input<const P: char, const N: u8>(
+            &mut self,
+            pin: hal::gpio::Pin<P, N, hal::gpio::Analog>,
+        ) -> hal::gpio::Pin<P, N, hal::gpio::Analog> {
+            if self.is_floating {
+                let pin = pin.into_pull_up_input();
+                self.delay.delay_us(1_000u32);
+                self.is_floating &= pin.is_high();
+                let pin = pin.into_pull_down_input();
+                self.delay.delay_us(1_000u32);
+                self.is_floating &= pin.is_low();
+                pin.into_analog()
+            } else {
+                pin
+            }
+        }
+
+        fn finish(self) -> bool {
+            self.is_floating
         }
     }
 
-    let mut is_floating = true;
+    let mut is_floating = Floating {
+        is_floating: true,
+        delay: &mut delay,
+    };
     // Default EEM population: LVDS0/1/3 driven by LVDS receivers
-    let lvds0 = check_input(gpiog.pg13, &mut is_floating, &mut delay);
-    let lvds1 = check_input(gpiob.pb5, &mut is_floating, &mut delay);
-    let lvds3 = check_input(gpiog.pg8, &mut is_floating, &mut delay);
-    let mut force_eem_source = gpioe.pe0.into_push_pull_output();
-    let eem = if !is_floating {
+    let lvds0 = is_floating.check_input(gpiog.pg13);
+    let lvds1 = is_floating.check_input(gpiob.pb5);
+    let lvds3 = is_floating.check_input(gpiog.pg8);
+    let eem = if !is_floating.finish() {
         log::info!("EEM population variant 'Gpio' detected");
         force_eem_source.set_low();
         Eem::Gpio(Gpio {
@@ -1112,7 +1129,7 @@ where
     } else {
         log::info!("EEM population variant 'Urukul' detected");
         if poe != PoePower::High {
-            log::warn!("No 802.3at PoE. Powering up EEM anyway.");
+            log::warn!("No 802.3at PoE detected. Powering up EEM anyway.");
         }
         force_eem_source.set_high();
         delay.delay_us(200_000u32);
@@ -1218,7 +1235,7 @@ where
         (usb_device, serial)
     };
 
-    let usb_terminal = {
+    let usb_serial = {
         let input_buffer =
             cortex_m::singleton!(: [u8; 128] = [0u8; 128]).unwrap();
         let serialize_buffer =
@@ -1244,13 +1261,11 @@ where
         afes,
         adcs,
         dacs,
-        temperature_sensor: CpuTempSensor::new(
-            adc3.create_channel(hal::adc::Temperature::new()),
-        ),
-        usb_serial: usb_terminal,
-        timestamper: input_stamper,
-        net: network_devices,
-        adc_dac_timer: sampling_timer,
+        temperature_sensor,
+        usb_serial,
+        input_stamper,
+        network_devices,
+        sampling_timer,
         timestamp_timer,
         digital_inputs,
         usb: usb_device,

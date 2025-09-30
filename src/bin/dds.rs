@@ -152,8 +152,8 @@ mod app {
         };
 
         let network = NetworkUsers::new(
-            stabilizer.net.stack,
-            stabilizer.net.phy,
+            stabilizer.network_devices.stack,
+            stabilizer.network_devices.phy,
             clock,
             env!("CARGO_BIN_NAME"),
             &stabilizer.settings.net,

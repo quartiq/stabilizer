@@ -246,8 +246,8 @@ mod app {
             );
 
         let mut network = NetworkUsers::new(
-            stabilizer.net.stack,
-            stabilizer.net.phy,
+            stabilizer.network_devices.stack,
+            stabilizer.network_devices.phy,
             clock,
             env!("CARGO_BIN_NAME"),
             &stabilizer.settings.net,
@@ -266,12 +266,12 @@ mod app {
 
         let mut local = Local {
             usb_terminal: stabilizer.usb_serial,
-            sampling_timer: stabilizer.adc_dac_timer,
+            sampling_timer: stabilizer.sampling_timer,
             digital_inputs: stabilizer.digital_inputs,
             afes: stabilizer.afes,
             adcs: stabilizer.adcs,
             dacs: stabilizer.dacs,
-            timestamper: stabilizer.timestamper,
+            timestamper: stabilizer.input_stamper,
             cpu_temp_sensor: stabilizer.temperature_sensor,
 
             pll: RPLL::new(SAMPLE_TICKS_LOG2 + BATCH_SIZE_LOG2),
