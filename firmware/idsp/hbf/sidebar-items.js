@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["HBF_CASCADE_BLOCK","HBF_PASSBAND","HBF_TAPS","HBF_TAPS_98"],"struct":["HbfDec","HbfDecCascade","HbfInt","HbfIntCascade","SymFir"],"trait":["Filter"]};
