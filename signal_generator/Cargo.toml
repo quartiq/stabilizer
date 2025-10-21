@@ -16,5 +16,5 @@ rand_xorshift = "0.4.0"
 rand_core = "0.9.0"
 thiserror = { version = "2.0.11", default-features = false }
 idsp = "0.18.0"
-miniconf = { version = "0.19", features = ["derive"] }
+miniconf = { version = "0.20", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"], default-features = false }
