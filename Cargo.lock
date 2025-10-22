@@ -199,36 +199,12 @@ checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 
 [[package]]
 name = "darling"
-version = "0.20.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc7f46116c46ff9ab3eb1597a45688b6715c6e628b5c133e288e709a29bcb4ee"
-dependencies = [
- "darling_core 0.20.11",
- "darling_macro 0.20.11",
-]
-
-[[package]]
-name = "darling"
 version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9cdf337090841a411e2a7f3deb9187445851f91b309c0c0a29e05f74a00a48c0"
 dependencies = [
- "darling_core 0.21.3",
- "darling_macro 0.21.3",
-]
-
-[[package]]
-name = "darling_core"
-version = "0.20.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d00b9596d185e565c2207a0b01f8bd1a135483d02d9b7b0a54b11da8d53412e"
-dependencies = [
- "fnv",
- "ident_case",
- "proc-macro2",
- "quote",
- "strsim",
- "syn 2.0.107",
+ "darling_core",
+ "darling_macro",
 ]
 
 [[package]]
@@ -247,22 +223,11 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
-version = "0.20.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead"
-dependencies = [
- "darling_core 0.20.11",
- "quote",
- "syn 2.0.107",
-]
-
-[[package]]
-name = "darling_macro"
 version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d38308df82d1080de0afee5d069fa14b0326a88c14f15c5ccda35b4a6c414c81"
 dependencies = [
- "darling_core 0.21.3",
+ "darling_core",
  "quote",
  "syn 2.0.107",
 ]
@@ -671,25 +636,11 @@ dependencies = [
 
 [[package]]
 name = "idsp"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0aff21db97b9679ca4b7534008aea7acdd1c11fea5d42b2a0ed50bd655d68fcf"
-dependencies = [
- "miniconf 0.19.0",
- "num-complex 0.4.6",
- "num-traits",
- "serde",
- "strum",
- "thiserror 2.0.17",
-]
-
-[[package]]
-name = "idsp"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16d1e6135ee1f9e22ef8c3ade3f851c8af40f4bb472c5c7739fd7254035fff2e"
 dependencies = [
- "miniconf 0.20.0",
+ "miniconf",
  "num-complex 0.4.6",
  "num-traits",
  "serde",
@@ -825,25 +776,13 @@ dependencies = [
 
 [[package]]
 name = "miniconf"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba8be0161220741600b1780aeb762e495612923a28aa63824e6598cbdb2c8c15"
-dependencies = [
- "itoa",
- "miniconf_derive 0.19.0",
- "serde",
- "thiserror 2.0.17",
-]
-
-[[package]]
-name = "miniconf"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "111e5168eaece53a023515c386ebe4581e382a21cb91f1134c3a2efcddb9bf71"
 dependencies = [
  "heapless 0.8.0",
  "itoa",
- "miniconf_derive 0.20.0",
+ "miniconf_derive",
  "postcard",
  "schemars",
  "serde",
@@ -855,23 +794,11 @@ dependencies = [
 
 [[package]]
 name = "miniconf_derive"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a85197d39f81603fd67a8b4cba3e35c879133aa3044ee7d953e2526f5edbe258"
-dependencies = [
- "darling 0.20.11",
- "proc-macro2",
- "quote",
- "syn 2.0.107",
-]
-
-[[package]]
-name = "miniconf_derive"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9826a0808d011e3217d93fd84ac670d75782d1f5962438b53a3f580f4dc14016"
 dependencies = [
- "darling 0.21.3",
+ "darling",
  "proc-macro2",
  "quote",
  "syn 2.0.107",
@@ -886,7 +813,7 @@ dependencies = [
  "embedded-io",
  "heapless 0.8.0",
  "log",
- "miniconf 0.20.0",
+ "miniconf",
  "minimq",
  "serde-json-core",
  "smlang",
@@ -1090,7 +1017,7 @@ dependencies = [
  "embedded-storage-async",
  "heapless 0.8.0",
  "log",
- "miniconf 0.20.0",
+ "miniconf",
  "minimq",
  "postcard",
  "sequential-storage",
@@ -1458,7 +1385,7 @@ version = "3.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b91a903660542fced4e99881aa481bdbaec1634568ee02e0b8bd57c64cb38955"
 dependencies = [
- "darling 0.21.3",
+ "darling",
  "proc-macro2",
  "quote",
  "syn 2.0.107",
@@ -1472,7 +1399,7 @@ dependencies = [
  "heapless 0.8.0",
  "log",
  "menu",
- "miniconf 0.20.0",
+ "miniconf",
  "postcard",
  "yafnv",
 ]
@@ -1499,8 +1426,8 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 name = "signal_generator"
 version = "0.1.0"
 dependencies = [
- "idsp 0.18.0",
- "miniconf 0.20.0",
+ "idsp",
+ "miniconf",
  "rand_core",
  "rand_xorshift",
  "serde",
@@ -1596,11 +1523,11 @@ dependencies = [
  "fugit",
  "grounded",
  "heapless 0.8.0",
- "idsp 0.19.0",
+ "idsp",
  "lm75",
  "log",
  "mcp230xx",
- "miniconf 0.20.0",
+ "miniconf",
  "miniconf_mqtt",
  "mono-clock",
  "num_enum",
