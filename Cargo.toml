@@ -81,12 +81,21 @@ embedded-hal-1 = { package = "embedded-hal", version = "1.0" }
 embedded-hal-bus = "0.3.0"
 urukul = { version = "0.1.1", path = "urukul" }
 ad9912 = { version = "0.1.1", path = "ad9912" }
-bytemuck = { version = "1.21.0", features = ["zeroable_maybe_uninit"] }
+bytemuck = { version = "1.21.0", features = [
+	"zeroable_maybe_uninit",
+	"derive",
+] }
+num-complex = { version = "0.4", features = [
+	"bytemuck",
+	"serde",
+], default-features = false }
+num-traits = { version = "0.2.19", default-features = false }
 strum = { version = "0.27.1", default-features = false, features = ["derive"] }
 grounded = "0.2.0"
 signal_generator = { version = "0.1", path = "signal_generator" }
 stream = { version = "0.1", path = "stream" }
 platform = { version = "0.1", path = "platform" }
+libm = "0.2.15"
 
 [dependencies.smoltcp-nal]
 version = "0.6"
@@ -128,9 +137,6 @@ incremental = false
 [profile.release.package.idsp]
 opt-level = 3
 
-[profile.release.package.stabilizer]
-opt-level = 3
-
 [profile.release.package.ad9959]
 opt-level = 3
 
@@ -138,6 +144,15 @@ opt-level = 3
 opt-level = 3
 
 [profile.release.package.stream]
+opt-level = 3
+
+[profile.release.package.urukul]
+opt-level = 3
+
+[profile.release.package.encoded_pin]
+opt-level = 3
+
+[profile.release.package.ad9912]
 opt-level = 3
 
 [profile.release]
