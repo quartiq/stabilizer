@@ -680,7 +680,7 @@ fn main() {
     let mut schema = TreeJsonSchema::new(Some(&s)).unwrap();
     schema
         .root
-        .insert("title".to_string(), "Stabilizer dual-iir".into());
+        .insert("title".to_string(), "Stabilizer fls".into());
     println!("{}", serde_json::to_string_pretty(&schema.root).unwrap());
 }
 
