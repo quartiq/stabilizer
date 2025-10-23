@@ -71,7 +71,7 @@ miniconf = { version = "0.20", features = ["json-core", "derive", "postcard"] }
 miniconf_mqtt = { version = "0.20" }
 tca9539 = "0.2"
 bitbybit = "1.3.3"
-arbitrary-int = { version = "2.0.0", features = ["serde", "hint"] }
+arbitrary-int = { version = "1.3.0", features = ["serde", "hint"] }
 thiserror = { version = "2.0.11", default-features = false }
 embedded-hal-compat = "0.13.0"
 embedded-hal-02 = { package = "embedded-hal", version = "0.2.7", features = [
