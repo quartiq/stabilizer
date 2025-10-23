@@ -146,13 +146,7 @@ opt-level = 3
 [profile.release.package.stream]
 opt-level = 3
 
-[profile.release.package.urukul]
-opt-level = 3
-
-[profile.release.package.encoded_pin]
-opt-level = 3
-
-[profile.release.package.ad9912]
+[profile.release.package.stabilizer]
 opt-level = 3
 
 [profile.release]
