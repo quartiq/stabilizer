@@ -82,7 +82,7 @@ impl<C: Clock, S: TcpClientStack<Error = smoltcp_nal::NetworkError> + Dns>
     ) -> Result<(), PubError<NetworkError, serde_json_core::ser::Error>> {
         self.mqtt
             .client()
-            .publish(minimq::Publication::new(&topic, |buf: &mut [u8]| {
+            .publish(minimq::Publication::new(topic, |buf: &mut [u8]| {
                 serde_json_core::to_slice(payload, buf)
             }))
     }

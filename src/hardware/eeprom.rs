@@ -23,10 +23,10 @@ where
             .write_read(I2C_ADDR, &[MAC_POINTER], &mut buffer)
             .is_ok()
         {
-            if let Some(old_read) = previous_read {
-                if old_read == buffer {
-                    return buffer;
-                }
+            if let Some(old_read) = previous_read
+                && old_read == buffer
+            {
+                return buffer;
             }
 
             previous_read.replace(buffer);

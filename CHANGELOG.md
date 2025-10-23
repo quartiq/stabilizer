@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   and distortion measurement
 * Support for "cooked" PID biquad and standard biquad filter prototypes from `idsp`
 * Defaulting to `s` optimization for debug and release
+* `fls`: application for fiber length stabilization and phase/frequency measurement/control
 
 ### Changed
 
