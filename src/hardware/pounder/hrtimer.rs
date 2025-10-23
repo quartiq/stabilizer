@@ -1,7 +1,7 @@
 //! The HRTimer (High Resolution Timer) is used to generate IO_Update pulses to the Pounder DDS.
 use super::hal::{
     self,
-    rcc::{CoreClocks, ResetEnable, rec},
+    rcc::{ResetEnable, rec},
 };
 
 /// A HRTimer output channel.
@@ -16,8 +16,6 @@ pub struct HighResTimerE {
     master: hal::stm32::HRTIM_MASTER,
     timer: hal::stm32::HRTIM_TIME,
     common: hal::stm32::HRTIM_COMMON,
-
-    clocks: CoreClocks,
 }
 
 impl HighResTimerE {
@@ -26,7 +24,6 @@ impl HighResTimerE {
         timer_regs: hal::stm32::HRTIM_TIME,
         master_regs: hal::stm32::HRTIM_MASTER,
         common_regs: hal::stm32::HRTIM_COMMON,
-        clocks: CoreClocks,
         prec: rec::Hrtim,
     ) -> Self {
         prec.reset().enable();
@@ -35,7 +32,6 @@ impl HighResTimerE {
             master: master_regs,
             timer: timer_regs,
             common: common_regs,
-            clocks,
         }
     }
 
@@ -56,6 +52,7 @@ impl HighResTimerE {
         channel: Channel,
         delay: f32,
         duration: f32,
+        clk: f32,
     ) {
         // Disable the timer before configuration.
         self.master.mcr.modify(|_, w| w.tecen().clear_bit());
@@ -63,7 +60,6 @@ impl HighResTimerE {
         // Configure the desired timer for single shot mode with set and reset of the specified
         // channel at the desired durations. The HRTIM is on APB2 (D2 domain), and the kernel clock
         // is the APB bus clock.
-        let clk = self.clocks.timy_ker_ck().to_Hz() as f32;
         let end = ((delay + duration) * clk) as u32 + 1;
 
         // Determine the clock divider, which may be 1, 2, or 4. We will choose a clock divider that

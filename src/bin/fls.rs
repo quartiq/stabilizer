@@ -175,7 +175,7 @@ mod biquad_update {
         deny::{mut_any_by_key, ref_any_by_key},
         leaf::SCHEMA,
     };
-    use serde::{Deserializer, Serializer};
+    use serde::{Deserialize, Deserializer, Serializer};
 
     pub fn serialize_by_key<S, T>(
         _value: &BiquadRepr<T>,
@@ -212,14 +212,16 @@ mod biquad_update {
         Ok(())
     }
 
+    #[allow(clippy::extra_unused_type_parameters)]
     pub fn probe_by_key<'de, T, D>(
         keys: impl Keys,
         de: D,
     ) -> Result<(), SerdeError<D::Error>>
     where
+        T: Deserialize<'de>,
         D: Deserializer<'de>,
     {
-        leaf::probe_by_key::<'_, (), _>(keys, de)
+        leaf::probe_by_key::<'_, T, _>(keys, de)
     }
 }
 
@@ -450,7 +452,7 @@ mod phase_scale {
         deny::{mut_any_by_key, ref_any_by_key},
         leaf::{self, SCHEMA},
     };
-    use serde::{Deserializer, Serializer};
+    use serde::{Deserialize, Deserializer, Serializer};
 
     pub fn serialize_by_key<S: Serializer>(
         value: &ChannelSettings,
@@ -470,11 +472,11 @@ mod phase_scale {
         Ok(())
     }
 
-    pub fn probe_by_key<'de, T, D: Deserializer<'de>>(
+    pub fn probe_by_key<'de, T: Deserialize<'de>, D: Deserializer<'de>>(
         keys: impl Keys,
         de: D,
     ) -> Result<(), SerdeError<D::Error>> {
-        leaf::probe_by_key::<'de, [[i32; 2]; 2], _>(keys, de)
+        leaf::probe_by_key::<'de, T, _>(keys, de)
     }
 }
 

@@ -982,7 +982,6 @@ where
                     device.HRTIM_TIME,
                     device.HRTIM_MASTER,
                     device.HRTIM_COMMON,
-                    ccdr.clocks,
                     ccdr.peripheral.HRTIM,
                 );
 
@@ -993,6 +992,7 @@ where
                     pounder::hrtimer::Channel::Two,
                     design_parameters::POUNDER_IO_UPDATE_DELAY,
                     design_parameters::POUNDER_IO_UPDATE_DURATION,
+                    ccdr.clocks.timy_ker_ck().to_Hz() as _,
                 );
 
                 // Ensure that we have enough time for an IO-update every batch.
