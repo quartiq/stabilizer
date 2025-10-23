@@ -19,7 +19,7 @@ sequential-storage = "5"
 serial_settings = { version = "0.2", path = "../serial_settings" }
 embedded-storage = "0.3"
 embedded-storage-async = "0.4"
-postcard = "1"
+postcard = { version = "1", default-features = false }
 embedded-io = "0.6"
 embassy-futures = { version = "0.1", default-features = false }
 serde-json-core = "0.6"

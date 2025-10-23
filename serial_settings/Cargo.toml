@@ -22,7 +22,7 @@ menu = { version = "0.6.1", features = ["echo"] }
 heapless = "0.8"
 embedded-io = "0.6"
 yafnv = "3.0"
-postcard = "1"
+postcard = { version = "1", default-features = false }
 log = { version = "0.4", features = [
 	"max_level_trace",
 	"release_max_level_info",

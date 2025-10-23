@@ -1,6 +1,6 @@
 #![no_std]
 
-use arbitrary_int::{traits::Integer, u5, u10, u14, u48};
+use arbitrary_int::{Number, u5, u10, u14, u48};
 use bitbybit::{bitenum, bitfield};
 use embedded_hal::spi::{self, Operation, SpiDevice};
 use num_traits::float::FloatCore;
