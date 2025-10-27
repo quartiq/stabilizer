@@ -99,6 +99,29 @@ class ThermostatEem:
         )
 
 
+class Fls:
+    """FLS application stream format"""
+    format_id = 2
+
+    def __init__(self, header, body):
+        self.header = header
+        self.body = body
+
+    def size(self):
+        """Return the data size of the frame in bytes"""
+        return len(self.body)
+
+    def to_mu(self):
+        """Return the raw data in machine units"""
+        data = np.frombuffer(self.body, "<i4")
+        data = data.reshape(-1, 2, 7)
+        return data
+
+    def demod(self):
+        """Return baseband signal"""
+        return self.to_mu()[:, :, :2]
+
+
 class Frame:
     """Stream frame constisting of a header and multiple data batches"""
 
@@ -109,6 +132,7 @@ class Frame:
     parsers = {
         AdcDac.format_id: AdcDac,
         ThermostatEem.format_id: ThermostatEem,
+        Fls.format_id: Fls,
     }
 
     @classmethod

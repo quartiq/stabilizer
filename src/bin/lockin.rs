@@ -478,7 +478,7 @@ mod app {
     }
 
     #[task(priority = 1, local=[digital_inputs, cpu_temp_sensor], shared=[network, settings, telemetry])]
-    async fn telemetry(mut c: telemetry::Context) {
+    async fn telemetry(mut c: telemetry::Context) -> ! {
         loop {
             let mut telemetry =
                 c.shared.telemetry.lock(|telemetry| telemetry.clone());
@@ -510,7 +510,7 @@ mod app {
     }
 
     #[task(priority = 1, shared=[usb, settings], local=[usb_terminal])]
-    async fn usb(mut c: usb::Context) {
+    async fn usb(mut c: usb::Context) -> ! {
         loop {
             // Handle the USB serial terminal.
             c.shared.usb.lock(|usb| {
@@ -532,7 +532,7 @@ mod app {
     }
 
     #[task(priority = 1, shared=[network])]
-    async fn ethernet_link(mut c: ethernet_link::Context) {
+    async fn ethernet_link(mut c: ethernet_link::Context) -> ! {
         loop {
             c.shared.network.lock(|net| net.processor.handle_link());
             Systick::delay(1.secs()).await;
