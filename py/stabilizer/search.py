@@ -77,7 +77,7 @@ async def main():
 
         conf = miniconf.Miniconf(client, prefix)
         local_ip = get_local_ip(args.broker)
-        _transport, stream = await Stream.open(args.port, local_ip, args.broker)
+        _transport, stream = await Stream.open(args.port, local_ip)
 
         f2w = (1 << 32) / 500e6
         f2s = 4 * 8 * 128 / 400e6
