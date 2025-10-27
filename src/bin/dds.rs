@@ -254,7 +254,7 @@ mod app {
     }
 
     #[task(priority = 1, shared=[usb, settings], local=[usb_terminal])]
-    async fn usb(mut c: usb::Context) {
+    async fn usb(mut c: usb::Context) -> ! {
         loop {
             c.shared.usb.lock(|usb| {
                 usb.poll(&mut [c
@@ -275,7 +275,7 @@ mod app {
     }
 
     #[task(priority = 1, shared=[network])]
-    async fn ethernet_link(mut c: ethernet_link::Context) {
+    async fn ethernet_link(mut c: ethernet_link::Context) -> ! {
         loop {
             c.shared.network.lock(|net| net.processor.handle_link());
             Systick::delay(1.secs()).await;
