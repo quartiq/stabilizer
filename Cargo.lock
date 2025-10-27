@@ -855,9 +855,9 @@ dependencies = [
 
 [[package]]
 name = "nanorand"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a51313c5820b0b02bd422f4b44776fbf47961755c74ce64afc73bfad10226c3"
+checksum = "6e3d189da485332e96ba8a5ef646a311871abd7915bf06ac848a9117f19cf6e4"
 
 [[package]]
 name = "nb"
@@ -1485,8 +1485,9 @@ dependencies = [
 
 [[package]]
 name = "smoltcp-nal"
-version = "0.6.0"
-source = "git+https://github.com/quartiq/smoltcp-nal.git#bb415665334c34f7434d51edb20793e36dc7f0cd"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5715732514e3a32e087ac50564aeb62bb0212268b704b401b57ed47cd63566aa"
 dependencies = [
  "embedded-nal",
  "embedded-time",

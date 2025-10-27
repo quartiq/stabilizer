@@ -98,9 +98,8 @@ platform = { version = "0.1", path = "platform" }
 libm = "0.2.15"
 
 [dependencies.smoltcp-nal]
-version = "0.6"
+version = "0.7"
 features = ["shared-stack"]
-git = "https://github.com/quartiq/smoltcp-nal.git"
 
 [build-dependencies]
 built = { version = "0.8", features = ["git2"], default-features = false }
