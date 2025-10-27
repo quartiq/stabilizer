@@ -18,8 +18,4 @@ serde_with = { version = "3.12", default-features = false, features = [
 ] }
 log = { version = "0.4" }
 cortex-m = { version = "0.7.7" }
-
-[dependencies.smoltcp-nal]
-version = "0.6"
-features = ["shared-stack"]
-git = "https://github.com/quartiq/smoltcp-nal.git"
+smoltcp-nal = { version = "0.7", features = ["shared-stack"] }

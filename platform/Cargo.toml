@@ -27,8 +27,4 @@ minimq = "0.10.0"
 embedded-hal-02 = { package = "embedded-hal", version = "0.2.7", features = [
 	"unproven",
 ] }
-
-[dependencies.smoltcp-nal]
-version = "0.6"
-features = ["shared-stack"]
-git = "https://github.com/quartiq/smoltcp-nal.git"
+smoltcp-nal = { version = "0.7", features = ["shared-stack"] }
