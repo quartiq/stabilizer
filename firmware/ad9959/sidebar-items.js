@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Address","Error","Mode"],"struct":["Acr","Ad9959","Csr","Fr1","PartialAcr","PartialCsr","PartialFr1","ProfileSerializer"],"trait":["Interface"],"type":["Channel"]};
