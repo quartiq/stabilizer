@@ -7,3 +7,4 @@
 - [Application: Lockin](./firmware/lockin/index.html)
 - [Application: Urukul DDS](./firmware/dds/index.html)
 - [Application: Fiber Length Stabilization](./firmware/fls/index.html)
+- [Application: Dispersive PLL](./firmware/mpll/index.html)

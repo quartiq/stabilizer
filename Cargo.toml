@@ -156,3 +156,4 @@ lto = true
 
 [patch.crates-io]
 serde-reflection = { git = "https://github.com/quartiq/serde-reflection.git", branch = "pub-ser-de" }
+idsp = { path = "../idsp" }

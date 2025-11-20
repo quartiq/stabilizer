@@ -38,6 +38,7 @@ information.
 | [`lockin`](firmware/lockin/index.html) | Lockin amplifier support various various reference sources |
 | [`dds`](firmware/dds/index.html) | Urukul-AD9912 control over MQTT |
 | [`fls`](firmware/fls/index.html) | Fiber length stabilizer/Phase-Frequency Metrology and control |
+| [`mpll`](firmware/mpll/index.html) | Dispersive PLL |
 
 ## Library Documentation
 

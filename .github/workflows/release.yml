@@ -27,6 +27,7 @@ jobs:
           target/*/release/lockin
           target/*/release/fls
           target/*/release/dds
+          target/*/release/mpll
       - id: create_release
         uses: actions/create-release@v1
         env:
