@@ -6,6 +6,7 @@
 //! streaming over raw UDP/TCP sockets. This module encompasses the main processing routines
 //! related to Stabilizer networking operations.
 use heapless;
+use log::info;
 use miniconf;
 
 use crate::hardware::{SystemTimer, hal::ethernet};
@@ -107,6 +108,8 @@ where
         net_settings: &NetSettings,
         metadata: &'static ApplicationMetadata,
     ) -> Self {
+        info!("Application: {}", app);
+
         let stack_manager =
             cortex_m::singleton!(: NetworkManager = NetworkManager::new(stack))
                 .unwrap();

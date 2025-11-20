@@ -10,7 +10,7 @@ use rtic_monotonics::Monotonic;
 
 use serde::Serialize;
 use stabilizer::{
-    convert::{DacCode, Gain},
+    convert::{Gain},
     statistics,
 };
 
@@ -123,10 +123,10 @@ impl Default for Mpll {
         let mut pid = idsp::iir::PidBuilder::default();
         pid.order(idsp::iir::Order::I);
         pid.period(1.0 / BATCH_SIZE as f32);
-        pid.gain(idsp::iir::Action::P, -6e-3); // fs/turn
-        pid.gain(idsp::iir::Action::I, -8e-4); // fs/turn/ts = 1/turn
-        pid.gain(idsp::iir::Action::D, -5e-3); // fs/turn*ts = turn
-        pid.limit(idsp::iir::Action::D, -0.3);
+        pid.gain(idsp::iir::Action::P, -2e-3); // fs/turn
+        pid.gain(idsp::iir::Action::I, -1e-4); // fs/turn/ts = 1/turn
+        //pid.gain(idsp::iir::Action::D, -5e-3); // fs/turn*ts = turn
+        //pid.limit(idsp::iir::Action::D, -0.3);
         let mut iir: SosClamp<_> = pid.build().into();
         iir.min = (-0.3 * (1u64 << 32) as f32) as _;
         iir.max = (-0.005 * (1u64 << 32) as f32) as _;
@@ -186,7 +186,7 @@ impl Mpll {
                 (*y0, *y1) = idsp::cossin(p);
                 let y =
                     ((*y0 as i64 * self.amp as i64) >> (31 + 31 - 15)) as i16;
-                *yo = DacCode::from(y).0;
+                *yo = y.wrapping_add(i16::MIN) as u16;
                 p
             },
         );
@@ -358,7 +358,6 @@ mod app {
         local.dacs.0.start();
         local.dacs.1.start();
 
-        // Spawn a settings and telemetry update for default settings.
         settings_update::spawn().unwrap();
         telemetry::spawn().unwrap();
         ethernet_link::spawn().unwrap();
@@ -375,13 +374,6 @@ mod app {
         c.local.sampling_timer.start();
     }
 
-    /// Main DSP processing routine.
-    ///
-    /// See `dual-iir` for general notes on processing time and timing.
-    ///
-    /// This is an implementation of a externally (DI0) referenced PLL lockin on the ADC0 signal.
-    /// It outputs either I/Q or power/phase on DAC0/DAC1. Data is normalized to full scale.
-    /// PLL bandwidth, filter bandwidth, slope, and x/y or power/phase post-filters are available.
     #[task(binds=DMA1_STR4, shared=[active_settings, telemetry], local=[adcs, dacs, state, generator], priority=3)]
     #[unsafe(link_section = ".itcm.process")]
     fn process(c: process::Context) {
@@ -410,17 +402,17 @@ mod app {
                 let mut dac: [&mut [u16; BATCH_SIZE]; 2] =
                     [(*dac0).try_into().unwrap(), (*dac1).try_into().unwrap()];
 
-                let mut stream = [Stream::default(); 2];
+                let mut streams = [Stream::default(); 2];
 
                 for (((mpll, state), (a, d)), (stream, tele)) in settings
                     .ch
                     .iter()
                     .zip(state.into_iter())
                     .zip(adc.iter().zip(dac.iter_mut()))
-                    .zip(stream.iter_mut().zip(telemetry))
+                    .zip(streams.iter_mut().zip(telemetry))
                     .take(1)
                 {
-                    stream.demod = mpll.process(state, *a, *d);
+                    stream.demod = mpll.process(state, a, d);
                     stream.frequency = state.iir.xy[2];
                     tele.frequency.update(state.iir.xy[2]);
                     tele.phase.update(state.iir.xy[0]);
@@ -434,7 +426,7 @@ mod app {
 
                 const N: usize = core::mem::size_of::<[Stream; 2]>();
                 generator.add(|buf| {
-                    buf[..N].copy_from_slice(bytemuck::cast_slice(&stream));
+                    buf[..N].copy_from_slice(bytemuck::cast_slice(&streams));
                     N
                 });
 
@@ -499,9 +491,8 @@ mod app {
                 net.telemetry.publish_telemetry("/telemetry", &tele)
             });
 
-            let telemetry_period =
-                c.shared.settings.lock(|s| s.mpll.telemetry_period);
-            Systick::delay(((telemetry_period * 1000.0) as u32).millis()).await;
+            let delay = c.shared.settings.lock(|s| s.mpll.telemetry_period);
+            Systick::delay(((delay * 1000.0) as u32).millis()).await;
         }
     }
 
