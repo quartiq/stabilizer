@@ -16,9 +16,7 @@ use platform::{AppSettings, NetSettings};
 const BATCH_SIZE_LOG2: u32 = 3;
 const BATCH_SIZE: usize = 1 << BATCH_SIZE_LOG2;
 
-// The logarithm of the number of 100MHz timer ticks between each sample. This corresponds with a
-// sampling period of 2^7 = 128 ticks. At 100MHz, 10ns per tick, this corresponds to a sampling
-// period of 1.28 uS or 781.25 KHz.
+// 100 MHz timer, 128 divider: period of 1.28 µs, ~781.25 KHz.
 const SAMPLE_TICKS_LOG2: u32 = 7;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 
@@ -54,9 +52,9 @@ impl serial_settings::Settings for Settings {
 const LP: usize = 4;
 
 #[derive(Debug, Clone, Default)]
-struct MpllState {
+pub struct MpllState {
     /// Lowpass state
-    lp: [[SosState; LP]; 2],
+    lp: [[SosState; LP]; 4],
     /// Phase clamp
     ///
     /// Makes the phase wrap monotonic by clamping it.
@@ -72,7 +70,7 @@ struct MpllState {
 
 #[derive(Debug, Clone, Tree)]
 #[tree(meta(doc, typename))]
-struct Mpll {
+pub struct Mpll {
     /// Lowpass
     ///
     /// * `2*LP` order second order section
@@ -86,7 +84,13 @@ struct Mpll {
     /// Includes frequency limits.
     iir: SosClamp<30>,
     /// Output amplitude scale
-    amp: i32,
+    amp: [i32; 2],
+}
+
+impl Mpll {
+    fn new(config: &Self) -> Self {
+        config.clone()
+    }
 }
 
 impl Default for Mpll {
@@ -132,7 +136,7 @@ impl Default for Mpll {
             lp: lp.map(|c| Sos::from(&c)),
             phase: (0.0 * (1u64 << 32) as f32) as _,
             iir,
-            amp: (0.1 * (1u64 << 31) as f32) as _, // 1 V
+            amp: [(0.1 * (1u64 << 31) as f32) as _; 2], // 1 V
         }
     }
 }
@@ -142,34 +146,48 @@ impl Mpll {
     pub fn process(
         &self,
         state: &mut MpllState,
-        x: &[u16; BATCH_SIZE],
-        y: &mut [u16; BATCH_SIZE],
-    ) -> [i32; 2] {
+        x: &[&[u16; BATCH_SIZE]; 2],
+        y: &mut [&mut [u16; BATCH_SIZE]; 2],
+    ) -> Stream {
         // scratch
-        let mut m = [[0; BATCH_SIZE]; 2];
+        let mut m = [[0; BATCH_SIZE]; 4];
         // mix
-        let [m0, m1] = m.each_mut();
-        for (x, (m, y)) in x.iter().zip(
-            m0.iter_mut()
-                .zip(m1)
+        let [m0i, m0q, m1i, m1q] = m.each_mut();
+        for (x, (m, y)) in x[0].iter().zip(x[1].iter()).zip(
+            m0i.iter_mut()
+                .zip(m0q)
+                .zip(m1i.iter_mut().zip(m1q))
                 .zip(state.lo[0].iter().zip(&state.lo[1])),
         ) {
             // ADC encoding
-            let x = (*x as i16 as i32) << 16;
-            *m.0 = (((x as i64) * *y.0 as i64) >> 32) as i32;
-            *m.1 = (((x as i64) * *y.1 as i64) >> 32) as i32;
+            let x0 = (*x.0 as i16 as i32) << 16;
+            *m.0.0 = (((x0 as i64) * *y.0 as i64) >> 32) as i32;
+            *m.0.1 = (((x0 as i64) * *y.1 as i64) >> 32) as i32;
+            let x1 = (*x.1 as i16 as i32) << 16;
+            *m.1.0 = (((x1 as i64) * *y.0 as i64) >> 32) as i32;
+            *m.1.1 = (((x1 as i64) * *y.1 as i64) >> 32) as i32;
         }
         // lowpass
-        let [s0, s1] = state.lp.each_mut();
-        for ((s0, s1), lp) in s0.iter_mut().zip(s1).zip(&self.lp) {
-            StatefulRef(lp, s0).process_in_place(&mut m[0]);
-            StatefulRef(lp, s1).process_in_place(&mut m[1]);
+        let [s0i, s0q, s1i, s1q] = state.lp.each_mut();
+        for (s, lp) in s0i
+            .iter_mut()
+            .zip(s0q)
+            .zip(s1i.iter_mut().zip(s1q))
+            .zip(&self.lp)
+        {
+            StatefulRef(lp, s.0.0).process_in_place(&mut m[0]);
+            StatefulRef(lp, s.0.1).process_in_place(&mut m[1]);
+            StatefulRef(lp, s.1.0).process_in_place(&mut m[2]);
+            StatefulRef(lp, s.1.1).process_in_place(&mut m[3]);
         }
         // decimate
-        let m = [m[0][BATCH_SIZE - 1], m[1][BATCH_SIZE - 1]];
+        let m = [
+            [m[0][BATCH_SIZE - 1], m[1][BATCH_SIZE - 1]],
+            [m[2][BATCH_SIZE - 1], m[3][BATCH_SIZE - 1]],
+        ];
         // phase
-        // need full atan2 to support any phase offset
-        let p = idsp::atan2(m[1], m[0]);
+        // need full atan2 or addtl osc to support any phase offset
+        let p = idsp::atan2(m[0][1], m[0][0]);
         // phase offset before clamp to maximize working range
         // clamp
         let c = state.clamp.update(p.wrapping_add(self.phase));
@@ -177,25 +195,33 @@ impl Mpll {
         let f = StatefulRef(&self.iir, &mut state.iir).process(c);
         // modulate
         let [y0, y1] = state.lo.each_mut();
-        state.phase = y0.iter_mut().zip(y1).zip(y).fold(
-            state.phase,
-            |mut p, ((y0, y1), yo)| {
+        let [yo0, yo1] = y;
+        state.phase = y0
+            .iter_mut()
+            .zip(y1)
+            .zip((*yo0).iter_mut().zip((*yo1).iter_mut()))
+            .fold(state.phase, |mut p, (y, yo)| {
                 p = p.wrapping_add(f);
-                (*y0, *y1) = idsp::cossin(p);
-                let y =
-                    ((*y0 as i64 * self.amp as i64) >> (31 + 31 - 15)) as i16;
-                *yo = y.wrapping_add(i16::MIN) as u16; // DAC encoding
+                (*y.0, *y.1) = idsp::cossin(p);
+                *yo.0 = (((*y.0 as i64 * self.amp[0] as i64) >> (31 + 31 - 15))
+                    as i16)
+                    .wrapping_add(i16::MIN) as u16; // DAC encoding
+                *yo.1 = (((*y.1 as i64 * self.amp[1] as i64) >> (31 + 31 - 15))
+                    as i16)
+                    .wrapping_add(i16::MIN) as u16; // DAC encoding
                 p
-            },
-        );
-        m
+            });
+        Stream {
+            demod: m,
+            frequency: state.iir.xy[2],
+        }
     }
 }
 
 #[derive(Clone, Debug, Tree)]
 #[tree(meta(doc, typename))]
 pub struct App {
-    ch: [Mpll; 2],
+    mpll: Mpll,
 
     /// Specifies the telemetry output period in seconds.
     telemetry_period: f32,
@@ -210,7 +236,7 @@ impl Default for App {
         Self {
             telemetry_period: 10.,
             stream: Default::default(),
-            ch: Default::default(),
+            mpll: Default::default(),
         }
     }
 }
@@ -221,31 +247,30 @@ impl Default for App {
 )]
 #[repr(C)]
 pub struct Stream {
-    raw: [u16; BATCH_SIZE],
-    demod: [i16; 2],
+    demod: [[i32; 2]; 2],
     frequency: i32,
 }
 
 /// Channel Telemetry
 #[derive(Default, Clone)]
 pub struct TelemetryState {
-    power: statistics::State,
-    phase: statistics::State,
+    demod: [[statistics::State; 2]; 2],
     frequency: statistics::State,
 }
 
 #[derive(Default, Clone, Serialize)]
 pub struct TelemetryCooked {
-    power: statistics::ScaledStatistics,
-    phase: statistics::ScaledStatistics,
+    demod: [[statistics::ScaledStatistics; 2]; 2],
     frequency: statistics::ScaledStatistics,
 }
 
 impl From<TelemetryState> for TelemetryCooked {
     fn from(t: TelemetryState) -> Self {
         Self {
-            phase: t.phase.get_scaled(1.0 / (1u64 << 32) as f32),
-            power: t.power.get_scaled(2.0 / (1u64 << 32) as f32),
+            // G10, 1 V fs
+            demod: t
+                .demod
+                .map(|d| d.map(|p| p.get_scaled(1.0 / (1u64 << 31) as f32))),
             frequency: t
                 .frequency
                 .get_scaled(100e6 / SAMPLE_TICKS as f32 / (1u64 << 32) as f32),
@@ -255,7 +280,7 @@ impl From<TelemetryState> for TelemetryCooked {
 
 #[derive(Default, Clone, Serialize)]
 pub struct Telemetry {
-    ch: [TelemetryCooked; 2],
+    mpll: TelemetryCooked,
     cpu_temp: f32,
 }
 
@@ -293,8 +318,8 @@ mod app {
         usb: UsbDevice,
         network: NetworkUsers<App>,
         settings: Settings,
-        active_settings: App,
-        telemetry: [TelemetryState; 2],
+        active_settings: Mpll,
+        telemetry: TelemetryState,
     }
 
     #[local]
@@ -303,7 +328,7 @@ mod app {
         sampling_timer: SamplingTimer,
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
-        state: [MpllState; 2],
+        state: MpllState,
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
     }
@@ -339,7 +364,7 @@ mod app {
             network,
             usb: carrier.usb,
             telemetry: Default::default(),
-            active_settings: carrier.settings.mpll.clone(),
+            active_settings: carrier.settings.mpll.mpll.clone(),
             settings: carrier.settings,
         };
 
@@ -403,32 +428,19 @@ mod app {
                 let mut dac: [&mut [u16; BATCH_SIZE]; 2] =
                     [(*dac0).try_into().unwrap(), (*dac1).try_into().unwrap()];
 
-                let mut streams = [Stream::default(); 2];
+                let stream = settings.process(state, &adc, &mut dac);
+                telemetry.frequency.update(stream.frequency);
 
-                for (((mpll, state), (a, d)), (stream, tele)) in settings
-                    .ch
-                    .iter()
-                    .zip(state.into_iter())
-                    .zip(adc.iter().zip(dac.iter_mut()))
-                    .zip(streams.iter_mut().zip(telemetry))
-                    .take(1)
-                // TODO: relax
-                {
-                    stream.raw = (*a).clone();
-                    let demod = mpll.process(state, a, d);
-                    stream.demod = demod.map(|d| (d >> 16) as _);
-                    stream.frequency = state.iir.xy[2];
-                    tele.frequency.update(state.iir.xy[2]);
-                    tele.phase.update(state.iir.xy[0]);
-                    tele.power.update(
-                        stream.demod[0] as i32 * stream.demod[0] as i32
-                            + stream.demod[1] as i32 * stream.demod[1] as i32,
-                    );
-                }
+                telemetry.demod[0][0].update(stream.demod[0][0]);
+                telemetry.demod[0][1].update(stream.demod[0][1]);
+                telemetry.demod[1][0].update(stream.demod[1][0]);
+                telemetry.demod[1][1].update(stream.demod[1][1]);
 
-                const N: usize = core::mem::size_of::<[Stream; 2]>();
+                const N: usize = core::mem::size_of::<Stream>();
                 generator.add(|buf| {
-                    buf[..N].copy_from_slice(bytemuck::cast_slice(&streams));
+                    buf[..N].copy_from_slice(bytemuck::cast_slice(
+                        bytemuck::bytes_of(&stream),
+                    ));
                     N
                 });
 
@@ -467,10 +479,8 @@ mod app {
             c.shared
                 .network
                 .lock(|net| net.direct_stream(settings.mpll.stream));
-
-            c.shared
-                .active_settings
-                .lock(|current| *current = settings.mpll.clone());
+            let new = Mpll::new(&settings.mpll.mpll);
+            c.shared.active_settings.lock(|current| *current = new);
         });
     }
 
@@ -478,11 +488,7 @@ mod app {
     async fn telemetry(mut c: telemetry::Context) -> ! {
         loop {
             let tele = Telemetry {
-                ch: c
-                    .shared
-                    .telemetry
-                    .lock(|t| core::mem::take(t))
-                    .map(Into::into),
+                mpll: c.shared.telemetry.lock(|t| core::mem::take(t)).into(),
                 cpu_temp: c
                     .local
                     .cpu_temp_sensor
