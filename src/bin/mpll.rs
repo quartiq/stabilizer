@@ -9,10 +9,7 @@ use miniconf::Tree;
 use rtic_monotonics::Monotonic;
 
 use serde::Serialize;
-use stabilizer::{
-    convert::{Gain},
-    statistics,
-};
+use stabilizer::{convert::Gain, statistics};
 
 use platform::{AppSettings, NetSettings};
 
@@ -123,13 +120,13 @@ impl Default for Mpll {
         let mut pid = idsp::iir::PidBuilder::default();
         pid.order(idsp::iir::Order::I);
         pid.period(1.0 / BATCH_SIZE as f32);
-        pid.gain(idsp::iir::Action::P, -2e-3); // fs/turn
-        pid.gain(idsp::iir::Action::I, -1e-4); // fs/turn/ts = 1/turn
-        //pid.gain(idsp::iir::Action::D, -5e-3); // fs/turn*ts = turn
-        //pid.limit(idsp::iir::Action::D, -0.3);
+        pid.gain(idsp::iir::Action::P, -6e-3); // fs/turn
+        pid.gain(idsp::iir::Action::I, -8e-4); // fs/turn/ts = 1/turn
+        pid.gain(idsp::iir::Action::D, -5e-3); // fs/turn*ts = turn
+        pid.limit(idsp::iir::Action::D, -0.3);
         let mut iir: SosClamp<_> = pid.build().into();
-        iir.min = (-0.3 * (1u64 << 32) as f32) as _;
-        iir.max = (-0.005 * (1u64 << 32) as f32) as _;
+        iir.max = (0.3 * (1u64 << 32) as f32) as _;
+        iir.min = (0.005 * (1u64 << 32) as f32) as _;
 
         Self {
             lp: lp.map(|c| Sos::from(&c)),
@@ -157,6 +154,7 @@ impl Mpll {
                 .zip(m1)
                 .zip(state.lo[0].iter().zip(&state.lo[1])),
         ) {
+            // ADC encoding
             let x = (*x as i16 as i32) << 16;
             *m.0 = (((x as i64) * *y.0 as i64) >> 32) as i32;
             *m.1 = (((x as i64) * *y.1 as i64) >> 32) as i32;
@@ -186,7 +184,7 @@ impl Mpll {
                 (*y0, *y1) = idsp::cossin(p);
                 let y =
                     ((*y0 as i64 * self.amp as i64) >> (31 + 31 - 15)) as i16;
-                *yo = y.wrapping_add(i16::MIN) as u16;
+                *yo = y.wrapping_add(i16::MIN) as u16; // DAC encoding
                 p
             },
         );
@@ -223,7 +221,8 @@ impl Default for App {
 )]
 #[repr(C)]
 pub struct Stream {
-    demod: [i32; 2],
+    raw: [u16; BATCH_SIZE],
+    demod: [i16; 2],
     frequency: i32,
 }
 
@@ -247,7 +246,9 @@ impl From<TelemetryState> for TelemetryCooked {
         Self {
             phase: t.phase.get_scaled(1.0 / (1u64 << 32) as f32),
             power: t.power.get_scaled(2.0 / (1u64 << 32) as f32),
-            frequency: t.frequency.get_scaled(1.0 / (1u64 << 32) as f32),
+            frequency: t
+                .frequency
+                .get_scaled(100e6 / SAMPLE_TICKS as f32 / (1u64 << 32) as f32),
         }
     }
 }
@@ -411,16 +412,17 @@ mod app {
                     .zip(adc.iter().zip(dac.iter_mut()))
                     .zip(streams.iter_mut().zip(telemetry))
                     .take(1)
+                // TODO: relax
                 {
-                    stream.demod = mpll.process(state, a, d);
+                    stream.raw = (*a).clone();
+                    let demod = mpll.process(state, a, d);
+                    stream.demod = demod.map(|d| (d >> 16) as _);
                     stream.frequency = state.iir.xy[2];
                     tele.frequency.update(state.iir.xy[2]);
                     tele.phase.update(state.iir.xy[0]);
                     tele.power.update(
-                        (((stream.demod[0] as i64 * stream.demod[0] as i64)
-                            + (stream.demod[1] as i64
-                                * stream.demod[1] as i64))
-                            >> 32) as i32,
+                        stream.demod[0] as i32 * stream.demod[0] as i32
+                            + stream.demod[1] as i32 * stream.demod[1] as i32,
                     );
                 }
 
