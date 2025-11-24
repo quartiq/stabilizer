@@ -55,11 +55,6 @@ const LP: usize = 4;
 pub struct MpllState {
     /// Lowpass state
     lp: [[SosState; LP]; 4],
-    /// Phase clamp
-    ///
-    /// Makes the phase wrap monotonic by clamping it.
-    /// Aids capture/pull-in.
-    clamp: idsp::Clamp<i32>,
     /// PID state
     iir: SosState,
     /// Current output phase
@@ -114,8 +109,8 @@ impl Default for Mpll {
                 [1., -1.9856932107, 0.9870289918],
             ],
         ];
-        // add 2*2 gain to compensate mix and reject
-        for i in [0, 3] {
+        // add 2 gain to compensate mix shift
+        for i in [0] {
             for i in lp[i][0].iter_mut() {
                 *i *= 2.0;
             }
@@ -136,7 +131,7 @@ impl Default for Mpll {
             lp: lp.map(|c| Sos::from(&c)),
             phase: (0.0 * (1u64 << 32) as f32) as _,
             iir,
-            amp: [(0.1 * (1u64 << 31) as f32) as _; 2], // 1 V
+            amp: [(0.09 * (1u64 << 31) as f32) as _; 2], // ~0.9 V
         }
     }
 }
@@ -153,19 +148,17 @@ impl Mpll {
         let mut m = [[0; BATCH_SIZE]; 4];
         // mix
         let [m0i, m0q, m1i, m1q] = m.each_mut();
-        for (x, (m, y)) in x[0].iter().zip(x[1].iter()).zip(
+        for (x, (m, lo)) in x[0].iter().zip(x[1].iter()).zip(
             m0i.iter_mut()
                 .zip(m0q)
                 .zip(m1i.iter_mut().zip(m1q))
                 .zip(state.lo[0].iter().zip(&state.lo[1])),
         ) {
-            // ADC encoding
-            let x0 = (*x.0 as i16 as i32) << 16;
-            *m.0.0 = (((x0 as i64) * *y.0 as i64) >> 32) as i32;
-            *m.0.1 = (((x0 as i64) * *y.1 as i64) >> 32) as i32;
-            let x1 = (*x.1 as i16 as i32) << 16;
-            *m.1.0 = (((x1 as i64) * *y.0 as i64) >> 32) as i32;
-            *m.1.1 = (((x1 as i64) * *y.1 as i64) >> 32) as i32;
+            // ADC encoding, mix
+            *m.0.0 = ((*x.0 as i16 as i64 * *lo.0 as i64) >> 16) as i32;
+            *m.0.1 = ((*x.0 as i16 as i64 * *lo.1 as i64) >> 16) as i32;
+            *m.1.0 = ((*x.1 as i16 as i64 * *lo.0 as i64) >> 16) as i32;
+            *m.1.1 = ((*x.1 as i16 as i64 * *lo.1 as i64) >> 16) as i32;
         }
         // lowpass
         let [s0i, s0q, s1i, s1q] = state.lp.each_mut();
@@ -189,8 +182,7 @@ impl Mpll {
         // need full atan2 or addtl osc to support any phase offset
         let p = idsp::atan2(m[0][1], m[0][0]);
         // phase offset before clamp to maximize working range
-        // clamp
-        let c = state.clamp.update(p.wrapping_add(self.phase));
+        let c = p.wrapping_add(self.phase);
         // pid
         let f = StatefulRef(&self.iir, &mut state.iir).process(c);
         // modulate
