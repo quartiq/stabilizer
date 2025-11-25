@@ -55,12 +55,18 @@ const LP: usize = 4;
 pub struct MpllState {
     /// Lowpass state
     lp: [[SosState; LP]; 4],
+    // /// Phase clamp
+    // ///
+    // /// Makes the phase wrap monotonic by clamping it.
+    // /// Aids capture/pull-in.
+    // clamp: idsp::Clamp<i32>,
     /// PID state
     iir: SosState,
     /// Current output phase
     phase: i32,
     /// Current LO samples for downconverting the next batch
     lo: [[i32; BATCH_SIZE]; 2],
+    // TODO: investigate matched LO delay: 20 samples
 }
 
 #[derive(Debug, Clone, Tree)]
@@ -71,8 +77,8 @@ pub struct Mpll {
     /// * `2*LP` order second order section
     /// * after demodulation before decimation
     lp: [Sos<30>; LP],
-    /// Input phase offset
-    phase: i32,
+    // /// Input phase offset
+    // phase: i32,
     /// PID IIR filter
     ///
     /// Do not use the iir offset as phase offset.
@@ -90,23 +96,23 @@ impl Mpll {
 
 impl Default for Mpll {
     fn default() -> Self {
-        // Cheby2, -100 dB @ 0.014, scaled
+        // Cheby2, -100 dB @ 0.012, scaled
         let mut lp = [
             [
-                [0.0079552215, -0.0143694552, 0.0079552215],
-                [1., -1.9232316595, 0.9247726472],
+                [0.0080039091, -0.0141593181, 0.0080039091],
+                [1., -1.9159128964, 0.9177613957],
             ],
             [
-                [0.0589409927, -0.1164117092, 0.0589409927],
-                [1., -1.9376814971, 0.9391517732],
+                [0.0588374268, -0.1159099406, 0.0588374268],
+                [1., -1.93166913, 0.9334340431],
             ],
             [
-                [0.1238200795, -0.2462564036, 0.1238200795],
-                [1., -1.9603512995, 0.9617350549],
+                [0.1236517783, -0.2456406737, 0.1236517783],
+                [1., -1.9564304454, 0.9580933293],
             ],
             [
-                [0.1661807159, -0.3310256507, 0.1661807159],
-                [1., -1.9856932107, 0.9870289918],
+                [0.1661327109, -0.3306582132, 0.1661327109],
+                [1., -1.9841698138, 0.9857770223],
             ],
         ];
         // add 2 gain to compensate mix shift
@@ -120,16 +126,16 @@ impl Default for Mpll {
         pid.order(idsp::iir::Order::I);
         pid.period(1.0 / BATCH_SIZE as f32);
         pid.gain(idsp::iir::Action::P, -6e-3); // fs/turn
-        pid.gain(idsp::iir::Action::I, -8e-4); // fs/turn/ts = 1/turn
-        pid.gain(idsp::iir::Action::D, -5e-3); // fs/turn*ts = turn
-        pid.limit(idsp::iir::Action::D, -0.3);
+        pid.gain(idsp::iir::Action::I, -5e-4); // fs/turn/ts = 1/turn
+        pid.gain(idsp::iir::Action::D, -4e-3); // fs/turn*ts = turn
+        pid.limit(idsp::iir::Action::D, -0.2);
         let mut iir: SosClamp<_> = pid.build().into();
         iir.max = (0.3 * (1u64 << 32) as f32) as _;
         iir.min = (0.005 * (1u64 << 32) as f32) as _;
 
         Self {
             lp: lp.map(|c| Sos::from(&c)),
-            phase: (0.0 * (1u64 << 32) as f32) as _,
+            // phase: (0.0 * (1u64 << 32) as f32) as _,
             iir,
             amp: [(0.09 * (1u64 << 31) as f32) as _; 2], // ~0.9 V
         }
@@ -182,9 +188,9 @@ impl Mpll {
         // need full atan2 or addtl osc to support any phase offset
         let p = idsp::atan2(m[0][1], m[0][0]);
         // phase offset before clamp to maximize working range
-        let c = p.wrapping_add(self.phase);
+        // let c = state.clamp.update(p.wrapping_add(self.phase));
         // pid
-        let f = StatefulRef(&self.iir, &mut state.iir).process(c);
+        let f = StatefulRef(&self.iir, &mut state.iir).process(p);
         // modulate
         let [y0, y1] = state.lo.each_mut();
         let [yo0, yo1] = y;
@@ -234,9 +240,7 @@ impl Default for App {
 }
 
 /// Stream data format.
-#[derive(
-    Clone, Copy, Debug, Default, Serialize, bytemuck::Zeroable, bytemuck::Pod,
-)]
+#[derive(Clone, Copy, Debug, Default, bytemuck::Zeroable, bytemuck::Pod)]
 #[repr(C)]
 pub struct Stream {
     demod: [[i32; 2]; 2],
