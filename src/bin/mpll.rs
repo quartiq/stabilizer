@@ -96,23 +96,23 @@ impl Mpll {
 
 impl Default for Mpll {
     fn default() -> Self {
-        // Cheby2, -100 dB @ 0.012, scaled
+        // Cheby2, -3 dB @ 0.005*1.28, -120 dB @ 0.017*1.28, Chebychev norm scaled, quantized
         let mut lp = [
             [
-                [0.0080039091, -0.0141593181, 0.0080039091],
-                [1., -1.9159128964, 0.9177613957],
+                [0.0045134034, -0.0073064622, 0.0045134034],
+                [1., -1.91874131, 0.9204616547],
             ],
             [
-                [0.0588374268, -0.1159099406, 0.0588374268],
-                [1., -1.93166913, 0.9334340431],
+                [0.0327912588, -0.0639008116, 0.0327912588],
+                [1., -1.9324034546, 0.9340851586],
             ],
             [
-                [0.1236517783, -0.2456406737, 0.1236517783],
-                [1., -1.9564304454, 0.9580933293],
+                [0.0708566532, -0.140079312, 0.0708566532],
+                [1., -1.9555726107, 0.9572066069],
             ],
             [
-                [0.1661327109, -0.3306582132, 0.1661327109],
-                [1., -1.9841698138, 0.9857770223],
+                [0.0971013568, -0.1925907861, 0.0971013568],
+                [1., -1.9835639875, 0.9851759151],
             ],
         ];
         // add 2 gain to compensate mix shift
@@ -189,6 +189,8 @@ impl Mpll {
         let p = idsp::atan2(m[0][1], m[0][0]);
         // phase offset before clamp to maximize working range
         // let c = state.clamp.update(p.wrapping_add(self.phase));
+        // Delay correction
+        let p = p.wrapping_sub(state.iir.xy[2].wrapping_mul(10));
         // pid
         let f = StatefulRef(&self.iir, &mut state.iir).process(p);
         // modulate
@@ -211,6 +213,7 @@ impl Mpll {
             });
         Stream {
             demod: m,
+            phase: state.iir.xy[0],
             frequency: state.iir.xy[2],
         }
     }
@@ -244,6 +247,7 @@ impl Default for App {
 #[repr(C)]
 pub struct Stream {
     demod: [[i32; 2]; 2],
+    phase: i32,
     frequency: i32,
 }
 
@@ -251,12 +255,14 @@ pub struct Stream {
 #[derive(Default, Clone)]
 pub struct TelemetryState {
     demod: [[statistics::State; 2]; 2],
+    phase: statistics::State,
     frequency: statistics::State,
 }
 
 #[derive(Default, Clone, Serialize)]
 pub struct TelemetryCooked {
     demod: [[statistics::ScaledStatistics; 2]; 2],
+    phase: statistics::ScaledStatistics,
     frequency: statistics::ScaledStatistics,
 }
 
@@ -267,6 +273,7 @@ impl From<TelemetryState> for TelemetryCooked {
             demod: t
                 .demod
                 .map(|d| d.map(|p| p.get_scaled(1.0 / (1u64 << 31) as f32))),
+            phase: t.phase.get_scaled(1.0 / (1u64 << 32) as f32),
             frequency: t
                 .frequency
                 .get_scaled(100e6 / SAMPLE_TICKS as f32 / (1u64 << 32) as f32),
@@ -425,6 +432,7 @@ mod app {
                     [(*dac0).try_into().unwrap(), (*dac1).try_into().unwrap()];
 
                 let stream = settings.process(state, &adc, &mut dac);
+                telemetry.phase.update(stream.phase);
                 telemetry.frequency.update(stream.frequency);
 
                 telemetry.demod[0][0].update(stream.demod[0][0]);
