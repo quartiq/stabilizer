@@ -4,7 +4,7 @@
 use core::sync::atomic::{Ordering, fence};
 
 use fugit::ExtU32;
-use idsp::iir::{Process, Sos, SosClamp, State as SosState, StatefulRef};
+use idsp::iir::{Process, Sos, SosClamp, SosState, StatefulRef};
 use miniconf::Tree;
 use rtic_monotonics::Monotonic;
 
@@ -77,8 +77,8 @@ pub struct Mpll {
     /// * `2*LP` order second order section
     /// * after demodulation before decimation
     lp: [Sos<30>; LP],
-    // /// Input phase offset
-    // phase: i32,
+    /// Input phase offset
+    phase: i32,
     /// PID IIR filter
     ///
     /// Do not use the iir offset as phase offset.
@@ -135,7 +135,7 @@ impl Default for Mpll {
 
         Self {
             lp: lp.map(|c| Sos::from(&c)),
-            // phase: (0.0 * (1u64 << 32) as f32) as _,
+            phase: (0.0 * (1u64 << 32) as f32) as _,
             iir,
             amp: [(0.09 * (1u64 << 31) as f32) as _; 2], // ~0.9 V
         }
@@ -174,10 +174,10 @@ impl Mpll {
             .zip(s1i.iter_mut().zip(s1q))
             .zip(&self.lp)
         {
-            StatefulRef(lp, s.0.0).process_in_place(&mut m[0]);
-            StatefulRef(lp, s.0.1).process_in_place(&mut m[1]);
-            StatefulRef(lp, s.1.0).process_in_place(&mut m[2]);
-            StatefulRef(lp, s.1.1).process_in_place(&mut m[3]);
+            StatefulRef::new(lp, s.0.0).process_in_place(&mut m[0]);
+            StatefulRef::new(lp, s.0.1).process_in_place(&mut m[1]);
+            StatefulRef::new(lp, s.1.0).process_in_place(&mut m[2]);
+            StatefulRef::new(lp, s.1.1).process_in_place(&mut m[3]);
         }
         // decimate
         let m = [
@@ -187,12 +187,13 @@ impl Mpll {
         // phase
         // need full atan2 or addtl osc to support any phase offset
         let p = idsp::atan2(m[0][1], m[0][0]);
-        // phase offset before clamp to maximize working range
-        // let c = state.clamp.update(p.wrapping_add(self.phase));
         // Delay correction
-        let p = p.wrapping_sub(state.iir.xy[2].wrapping_mul(10));
+        let p = p
+            .wrapping_add(self.phase)
+            .wrapping_sub(state.iir.xy[2].wrapping_mul(10));
+        // let p = state.clamp.update(p);
         // pid
-        let f = StatefulRef(&self.iir, &mut state.iir).process(p);
+        let f = StatefulRef::new(&self.iir, &mut state.iir).process(p);
         // modulate
         let [y0, y1] = state.lo.each_mut();
         let [yo0, yo1] = y;
