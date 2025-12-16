@@ -4,7 +4,10 @@
 use core::sync::atomic::{Ordering, fence};
 
 use fugit::ExtU32;
-use idsp::iir::{Process, Sos, SosClamp, SosState, StatefulRef};
+use idsp::{
+    iir::{SosClamp, SosState, Wdf, WdfState},
+    process::{Inplace, Pair, Parallel, Process, Split},
+};
 use miniconf::Tree;
 use rtic_monotonics::Monotonic;
 
@@ -49,17 +52,17 @@ impl serial_settings::Settings for Settings {
     }
 }
 
-const LP: usize = 4;
-
 #[derive(Debug, Clone, Default)]
 pub struct MpllState {
     /// Lowpass state
-    lp: [[SosState; LP]; 4],
-    // /// Phase clamp
-    // ///
-    // /// Makes the phase wrap monotonic by clamping it.
-    // /// Aids capture/pull-in.
-    // clamp: idsp::Clamp<i32>,
+    lp: [(((), ([WdfState<2>; 2], (WdfState<2>, WdfState<1>))), ()); 4],
+    /// Phase clamp
+    ///
+    /// Makes the phase wrap monotonic by clamping it.
+    /// Aids capture/pull-in with external modulation.
+    ///
+    /// TODO: Remove this for modulation drive.
+    clamp: idsp::Clamp<i32>,
     /// PID state
     iir: SosState,
     /// Current output phase
@@ -73,10 +76,8 @@ pub struct MpllState {
 #[tree(meta(doc, typename))]
 pub struct Mpll {
     /// Lowpass
-    ///
-    /// * `2*LP` order second order section
-    /// * after demodulation before decimation
-    lp: [Sos<30>; LP],
+    #[tree(skip)]
+    lp: Pair<[Wdf<2, 0xad>; 2], (Wdf<2, 0xad>, Wdf<1, 0xa>), i32>,
     /// Input phase offset
     phase: i32,
     /// PID IIR filter
@@ -96,45 +97,46 @@ impl Mpll {
 
 impl Default for Mpll {
     fn default() -> Self {
-        // Cheby2, -3 dB @ 0.005*1.28, -120 dB @ 0.017*1.28, Chebychev norm scaled, quantized
-        let mut lp = [
-            [
-                [0.0045134034, -0.0073064622, 0.0045134034],
-                [1., -1.91874131, 0.9204616547],
-            ],
-            [
-                [0.0327912588, -0.0639008116, 0.0327912588],
-                [1., -1.9324034546, 0.9340851586],
-            ],
-            [
-                [0.0708566532, -0.140079312, 0.0708566532],
-                [1., -1.9555726107, 0.9572066069],
-            ],
-            [
-                [0.0971013568, -0.1925907861, 0.0971013568],
-                [1., -1.9835639875, 0.9851759151],
-            ],
-        ];
-        // add 2 gain to compensate mix shift
-        for i in [0] {
-            for i in lp[i][0].iter_mut() {
-                *i *= 2.0;
-            }
-        }
+        // 7th order Cheby2 as WDF-CA, -3 dB @ 0.005*1.28, -112 dB @ 0.018*1.28
+        let lp = Pair::new((
+            (
+                Default::default(),
+                Parallel((
+                    [
+                        Wdf::quantize(&[
+                            -0.9866183703960676,
+                            0.9995042973541263,
+                        ])
+                        .unwrap(),
+                        Wdf::quantize(&[-0.94357710177202, 0.9994723555364557])
+                            .unwrap(),
+                    ],
+                    (
+                        Wdf::quantize(&[
+                            -0.9619459355859967,
+                            0.9994905727027024,
+                        ])
+                        .unwrap(),
+                        Wdf::quantize(&[0.9677764552414969]).unwrap(),
+                    ),
+                )),
+            ),
+            Default::default(),
+        ));
 
         let mut pid = idsp::iir::PidBuilder::default();
         pid.order(idsp::iir::Order::I);
         pid.period(1.0 / BATCH_SIZE as f32);
-        pid.gain(idsp::iir::Action::P, -6e-3); // fs/turn
-        pid.gain(idsp::iir::Action::I, -5e-4); // fs/turn/ts = 1/turn
+        pid.gain(idsp::iir::Action::P, -5e-3); // fs/turn
+        pid.gain(idsp::iir::Action::I, -4e-4); // fs/turn/ts = 1/turn
         pid.gain(idsp::iir::Action::D, -4e-3); // fs/turn*ts = turn
-        pid.limit(idsp::iir::Action::D, -0.2);
+        //pid.limit(idsp::iir::Action::D, -0.2);
         let mut iir: SosClamp<_> = pid.build().into();
         iir.max = (0.3 * (1u64 << 32) as f32) as _;
         iir.min = (0.005 * (1u64 << 32) as f32) as _;
 
         Self {
-            lp: lp.map(|c| Sos::from(&c)),
+            lp,
             phase: (0.0 * (1u64 << 32) as f32) as _,
             iir,
             amp: [(0.09 * (1u64 << 31) as f32) as _; 2], // ~0.9 V
@@ -149,51 +151,44 @@ impl Mpll {
         state: &mut MpllState,
         x: &[&[u16; BATCH_SIZE]; 2],
         y: &mut [&mut [u16; BATCH_SIZE]; 2],
-    ) -> Stream {
+    ) -> (Stream, i32) {
         // scratch
-        let mut m = [[0; BATCH_SIZE]; 4];
+        let mut mix = [[0; BATCH_SIZE]; 4];
+        let [m00, m01, m10, m11] = mix.each_mut();
         // mix
-        let [m0i, m0q, m1i, m1q] = m.each_mut();
-        for (x, (m, lo)) in x[0].iter().zip(x[1].iter()).zip(
-            m0i.iter_mut()
-                .zip(m0q)
-                .zip(m1i.iter_mut().zip(m1q))
+        for (x, (mix, lo)) in x[0].iter().zip(x[1].iter()).zip(
+            m00.iter_mut()
+                .zip(m01.iter_mut())
+                .zip(m10.iter_mut().zip(m11.iter_mut()))
                 .zip(state.lo[0].iter().zip(&state.lo[1])),
         ) {
             // ADC encoding, mix
-            *m.0.0 = ((*x.0 as i16 as i64 * *lo.0 as i64) >> 16) as i32;
-            *m.0.1 = ((*x.0 as i16 as i64 * *lo.1 as i64) >> 16) as i32;
-            *m.1.0 = ((*x.1 as i16 as i64 * *lo.0 as i64) >> 16) as i32;
-            *m.1.1 = ((*x.1 as i16 as i64 * *lo.1 as i64) >> 16) as i32;
+            *mix.0.0 = ((*x.0 as i16 as i64 * *lo.0 as i64) >> 16) as i32;
+            *mix.0.1 = ((*x.0 as i16 as i64 * *lo.1 as i64) >> 16) as i32;
+            *mix.1.0 = ((*x.1 as i16 as i64 * *lo.0 as i64) >> 16) as i32;
+            *mix.1.1 = ((*x.1 as i16 as i64 * *lo.1 as i64) >> 16) as i32;
         }
         // lowpass
-        let [s0i, s0q, s1i, s1q] = state.lp.each_mut();
-        for (s, lp) in s0i
-            .iter_mut()
-            .zip(s0q)
-            .zip(s1i.iter_mut().zip(s1q))
-            .zip(&self.lp)
-        {
-            StatefulRef::new(lp, s.0.0).process_in_place(&mut m[0]);
-            StatefulRef::new(lp, s.0.1).process_in_place(&mut m[1]);
-            StatefulRef::new(lp, s.1.0).process_in_place(&mut m[2]);
-            StatefulRef::new(lp, s.1.1).process_in_place(&mut m[3]);
+        for (mix, state) in mix.iter_mut().zip(state.lp.iter_mut()) {
+            Split::new(&self.lp, state).inplace(mix);
         }
         // decimate
-        let m = [
-            [m[0][BATCH_SIZE - 1], m[1][BATCH_SIZE - 1]],
-            [m[2][BATCH_SIZE - 1], m[3][BATCH_SIZE - 1]],
+        let demod = [
+            mix[0][BATCH_SIZE - 1],
+            mix[1][BATCH_SIZE - 1],
+            mix[2][BATCH_SIZE - 1],
+            mix[3][BATCH_SIZE - 1],
         ];
         // phase
         // need full atan2 or addtl osc to support any phase offset
-        let p = idsp::atan2(m[0][1], m[0][0]);
+        let p = idsp::atan2(demod[1], demod[0]);
         // Delay correction
         let p = p
             .wrapping_add(self.phase)
             .wrapping_sub(state.iir.xy[2].wrapping_mul(10));
-        // let p = state.clamp.update(p);
+        let p = state.clamp.process(p);
         // pid
-        let f = StatefulRef::new(&self.iir, &mut state.iir).process(p);
+        let f = Split::new(&self.iir, &mut state.iir).process(p);
         // modulate
         let [y0, y1] = state.lo.each_mut();
         let [yo0, yo1] = y;
@@ -212,12 +207,24 @@ impl Mpll {
                     .wrapping_add(i16::MIN) as u16; // DAC encoding
                 p
             });
-        Stream {
-            demod: m,
-            phase: state.iir.xy[0],
-            frequency: state.iir.xy[2],
-        }
+        (
+            Stream {
+                demod,
+                phase_in: p,
+                phase_out: state.phase,
+            },
+            f,
+        )
     }
+}
+
+/// Stream data format.
+#[derive(Clone, Copy, Debug, Default, bytemuck::Zeroable, bytemuck::Pod)]
+#[repr(C)]
+pub struct Stream {
+    demod: [i32; 4],
+    phase_in: i32,
+    phase_out: i32,
 }
 
 #[derive(Clone, Debug, Tree)]
@@ -241,15 +248,6 @@ impl Default for App {
             mpll: Default::default(),
         }
     }
-}
-
-/// Stream data format.
-#[derive(Clone, Copy, Debug, Default, bytemuck::Zeroable, bytemuck::Pod)]
-#[repr(C)]
-pub struct Stream {
-    demod: [[i32; 2]; 2],
-    phase: i32,
-    frequency: i32,
 }
 
 /// Channel Telemetry
@@ -432,14 +430,15 @@ mod app {
                 let mut dac: [&mut [u16; BATCH_SIZE]; 2] =
                     [(*dac0).try_into().unwrap(), (*dac1).try_into().unwrap()];
 
-                let stream = settings.process(state, &adc, &mut dac);
-                telemetry.phase.update(stream.phase);
-                telemetry.frequency.update(stream.frequency);
+                let (stream, frequency) =
+                    settings.process(state, &adc, &mut dac);
+                telemetry.phase.update(stream.phase_in);
+                telemetry.frequency.update(frequency);
 
-                telemetry.demod[0][0].update(stream.demod[0][0]);
-                telemetry.demod[0][1].update(stream.demod[0][1]);
-                telemetry.demod[1][0].update(stream.demod[1][0]);
-                telemetry.demod[1][1].update(stream.demod[1][1]);
+                telemetry.demod[0][0].update(stream.demod[0]);
+                telemetry.demod[0][1].update(stream.demod[1]);
+                telemetry.demod[1][0].update(stream.demod[2]);
+                telemetry.demod[1][1].update(stream.demod[3]);
 
                 const N: usize = core::mem::size_of::<Stream>();
                 generator.add(|buf| {
