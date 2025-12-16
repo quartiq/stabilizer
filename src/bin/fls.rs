@@ -81,6 +81,7 @@ use ad9959::Acr;
 use arbitrary_int::{u14, u24};
 use idsp::{
     Accu, Complex, ComplexExt, Filter, Lockin, Lowpass, PLL, Unwrapper, iir,
+    process::{Process, Split},
 };
 use miniconf::Tree;
 use platform::NetSettings;
@@ -303,8 +304,6 @@ mod validate_att {
     }
 }
 
-type LockinLowpass = Lowpass<2>;
-
 #[derive(Clone, Debug, Tree)]
 struct ChannelSettings {
     /// Input (demodulation) DDS settings
@@ -338,7 +337,7 @@ struct ChannelSettings {
     /// # Default
     /// `lockin_k = [0x200_0000, -0x2000_0000]`
     #[tree(with=miniconf::leaf)]
-    lockin_k: <LockinLowpass as Filter>::Config,
+    lockin_k: [i32; 2],
     /// Minimum demodulated signal power to enable feedback.
     /// Note that this is RMS and that the signal peak must not clip.
     ///
@@ -658,7 +657,7 @@ pub struct CookedTelemetry {
 
 #[derive(Clone, Default)]
 pub struct ChannelState {
-    lockin: Lockin<LockinLowpass>,
+    lockin: Lockin<Lowpass<2>>,
     x0: i32,
     t0: i32,
     t: i64,
@@ -863,7 +862,7 @@ mod app {
             .lock(|state, settings, dds_output, telemetry| {
                 // Reconstruct frequency and phase using a lowpass that is aware of phase and frequency
                 // wraps.
-                pll.update(timestamp, settings.pll_k);
+                Split::new(&settings.pll_k, pll).process(timestamp);
                 // TODO: implement clear
                 stream[0].pll = pll.frequency() as _;
                 stream[1].pll = pll.phase() as _;
@@ -906,7 +905,7 @@ mod app {
                                 // Demodulate the ADC sample `a0` with the sample's phase `p` and
                                 // filter it with the lowpass.
                                 // zero(s) at fs/2 (Nyquist) by lowpass
-                                let y = state.lockin.update_iq(
+                                let y = state.lockin.process(
                                     // 3 bit headroom for coeff sum minus one bit gain for filter
                                     (*a as i16 as i32) << 14,
                                     *p,
@@ -989,7 +988,7 @@ mod app {
                         state.y = state.y.wrapping_add(
                             dphase as i64 * settings.phase_scale[0][0] as i64,
                         );
-                        state.unwrapper.update(
+                        state.unwrapper.process(
                             ((state.y >> settings.phase_scale[0][1]) as i32)
                                 .wrapping_add(
                                     (state.t >> settings.phase_scale[1][1])
