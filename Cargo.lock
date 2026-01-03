@@ -252,6 +252,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "dsp-fixedpoint"
+version = "0.1.0"
+dependencies = [
+ "num-traits",
+ "serde",
+]
+
+[[package]]
+name = "dsp-process"
+version = "0.1.0"
+
+[[package]]
 name = "dyn-clone"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -641,6 +653,8 @@ dependencies = [
 name = "idsp"
 version = "0.19.0"
 dependencies = [
+ "dsp-fixedpoint",
+ "dsp-process",
  "miniconf",
  "num-complex 0.4.6",
  "num-traits",
@@ -1518,6 +1532,7 @@ dependencies = [
  "bytemuck",
  "cortex-m",
  "cortex-m-rt",
+ "dsp-process",
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0",
  "embedded-hal-bus",

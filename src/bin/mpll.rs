@@ -3,11 +3,11 @@
 
 use core::sync::atomic::{Ordering, fence};
 
-use fugit::ExtU32;
-use idsp::{
-    iir::{SosClamp, SosState, Wdf, WdfState},
-    process::{Inplace, Pair, Parallel, Process, Split},
+use dsp_process::{
+    Add, Identity, Inplace, Pair, Parallel, Process, Split, Unsplit,
 };
+use fugit::ExtU32;
+use idsp::iir::{SosClamp, SosState, Wdf, WdfState};
 use miniconf::Tree;
 use rtic_monotonics::Monotonic;
 
@@ -84,6 +84,7 @@ pub struct Mpll {
     ///
     /// Do not use the iir offset as phase offset.
     /// Includes frequency limits.
+    #[tree(skip)]
     iir: SosClamp<30>,
     /// Output amplitude scale
     amp: [i32; 2],
@@ -100,7 +101,7 @@ impl Default for Mpll {
         // 7th order Cheby2 as WDF-CA, -3 dB @ 0.005*1.28, -112 dB @ 0.018*1.28
         let lp = Pair::new((
             (
-                Default::default(),
+                Unsplit(&Identity),
                 Parallel((
                     [
                         Wdf::quantize(&[
@@ -121,7 +122,7 @@ impl Default for Mpll {
                     ),
                 )),
             ),
-            Default::default(),
+            Unsplit(&Add),
         ));
 
         let mut pid = idsp::iir::PidBuilder::default();
@@ -130,7 +131,7 @@ impl Default for Mpll {
         pid.gain(idsp::iir::Action::P, -5e-3); // fs/turn
         pid.gain(idsp::iir::Action::I, -4e-4); // fs/turn/ts = 1/turn
         pid.gain(idsp::iir::Action::D, -4e-3); // fs/turn*ts = turn
-        //pid.limit(idsp::iir::Action::D, -0.2);
+        pid.limit(idsp::iir::Action::D, -0.2);
         let mut iir: SosClamp<_> = pid.build().into();
         iir.max = (0.3 * (1u64 << 32) as f32) as _;
         iir.min = (0.005 * (1u64 << 32) as f32) as _;
@@ -149,8 +150,8 @@ impl Mpll {
     pub fn process(
         &self,
         state: &mut MpllState,
-        x: &[&[u16; BATCH_SIZE]; 2],
-        y: &mut [&mut [u16; BATCH_SIZE]; 2],
+        x: [&[u16; BATCH_SIZE]; 2],
+        y: [&mut [u16; BATCH_SIZE]; 2],
     ) -> (Stream, i32) {
         // scratch
         let mut mix = [[0; BATCH_SIZE]; 4];
@@ -427,11 +428,10 @@ mod app {
                     (**adc0).try_into().unwrap(),
                     (**adc1).try_into().unwrap(),
                 ];
-                let mut dac: [&mut [u16; BATCH_SIZE]; 2] =
+                let dac: [&mut [u16; BATCH_SIZE]; 2] =
                     [(*dac0).try_into().unwrap(), (*dac1).try_into().unwrap()];
 
-                let (stream, frequency) =
-                    settings.process(state, &adc, &mut dac);
+                let (stream, frequency) = settings.process(state, adc, dac);
                 telemetry.phase.update(stream.phase_in);
                 telemetry.frequency.update(frequency);
 

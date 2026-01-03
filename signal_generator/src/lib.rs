@@ -162,7 +162,9 @@ impl Iterator for Source {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let (s, a) = match self {
-            Self::SweptSine { sweep, amp } => (sweep.next().map(|c| c.im), amp),
+            Self::SweptSine { sweep, amp } => {
+                (sweep.next().map(|c| c.im()), amp)
+            }
             Self::Periodic { accu, signal, amp } => {
                 (accu.next().map(|p| signal.map(p)), amp)
             }
