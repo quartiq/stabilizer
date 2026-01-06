@@ -33,8 +33,9 @@ use core::{
     sync::atomic::{Ordering, fence},
 };
 
+use dsp_process::SplitProcess;
 use fugit::ExtU32;
-use idsp::{Accu, Complex, ComplexExt, Filter, Lowpass, RPLL, Repeat};
+use idsp::{Accu, Complex, ComplexExt, Lowpass, RPLL, RPLLConfig};
 use miniconf::{Leaf, Tree};
 use rtic_monotonics::Monotonic;
 use serde::{Deserialize, Serialize};
@@ -122,11 +123,12 @@ pub struct Lockin {
     /// Specifis the PLL time constant.
     ///
     /// The PLL time constant exponent (1-31).
-    pll_tc: [u32; 2],
+    #[tree(with=miniconf::leaf)]
+    pll_tc: RPLLConfig,
 
     /// Specifies the lockin lowpass gains.
-    #[tree(with=miniconf::leaf)]
-    lockin_k: <Lowpass<2> as Filter>::Config,
+    #[tree(skip)] // TODO
+    lockin_k: idsp::Lockin<Lowpass<2>>,
 
     /// Specifies which harmonic to use for the lockin.
     ///
@@ -157,9 +159,13 @@ impl Default for Lockin {
 
             lockin_mode: LockinMode::External,
 
-            pll_tc: [21, 21], // frequency and phase settling time (log2 counter cycles)
+            pll_tc: RPLLConfig {
+                dt2: (SAMPLE_TICKS_LOG2 + BATCH_SIZE_LOG2) as _,
+                shift_frequency: 21,
+                shift_phase: 21,
+            }, // frequency and phase settling time (log2 counter cycles)
 
-            lockin_k: [0x8_0000, -0x400_0000], // lockin lowpass gains
+            lockin_k: idsp::Lockin(Lowpass([0x8_0000, -0x400_0000])), // lockin lowpass gains
             lockin_harmonic: -1, // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
             lockin_phase: 0,     // Demodulation LO phase offset
 
@@ -191,6 +197,7 @@ fn main() {
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, SDMMC])]
 mod app {
     use super::*;
+    use idsp::LowpassState;
     use stabilizer::{
         hardware::{
             self, DigitalInput0, DigitalInput1, Pgia, SerialTerminal,
@@ -225,7 +232,7 @@ mod app {
         adcs: (Adc0Input, Adc1Input),
         dacs: (Dac0Output, Dac1Output),
         pll: RPLL,
-        lockin: idsp::Lockin<Repeat<2, Lowpass<2>>>,
+        lockin: [LowpassState<2>; 2],
         source: idsp::AccuOsc<iter::Repeat<i64>>,
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
@@ -274,8 +281,8 @@ mod app {
             timestamper: stabilizer.input_stamper,
             cpu_temp_sensor: stabilizer.temperature_sensor,
 
-            pll: RPLL::new(SAMPLE_TICKS_LOG2 + BATCH_SIZE_LOG2),
-            lockin: idsp::Lockin::default(),
+            pll: RPLL::default(),
+            lockin: Default::default(),
             source: idsp::AccuOsc::new(iter::repeat(
                 1i64 << (64 - BATCH_SIZE_LOG2),
             )),
@@ -345,11 +352,9 @@ mod app {
                     LockinMode::External => {
                         let timestamp =
                             timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
-                        let (pll_phase, pll_frequency) = pll.update(
-                            timestamp.map(|t| t as i32),
-                            settings.pll_tc[0],
-                            settings.pll_tc[1],
-                        );
+                        let (pll_phase, pll_frequency) = settings
+                            .pll_tc
+                            .process(pll, timestamp.map(|t| t as i32));
                         (pll_phase, (pll_frequency >> BATCH_SIZE_LOG2) as i32)
                     }
                     LockinMode::Internal => {
@@ -378,7 +383,7 @@ mod app {
                     // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
                     .map(|(&sample, phase)| {
                         let s = (sample as i16 as i32) << 16;
-                        lockin.update(s, phase, &settings.lockin_k)
+                        settings.lockin_k.process(lockin, (s, phase))
                     })
                     // Decimate
                     .last()
@@ -389,16 +394,16 @@ mod app {
                 for (channel, samples) in dac_samples.iter_mut().enumerate() {
                     for sample in samples.iter_mut() {
                         let value = match *settings.output_conf[channel] {
-                            Conf::Magnitude => output.abs_sqr() as i32 >> 16,
+                            Conf::Magnitude => output.norm_sqr() as i32 >> 16,
                             Conf::Phase => output.arg() >> 16,
                             Conf::LogPower => output.log2() << 8,
                             Conf::ReferenceFrequency => {
                                 reference_frequency >> 16
                             }
-                            Conf::InPhase => output.re >> 16,
-                            Conf::Quadrature => output.im >> 16,
+                            Conf::InPhase => output.re() >> 16,
+                            Conf::Quadrature => output.im() >> 16,
 
-                            Conf::Modulation => source.next().unwrap().re,
+                            Conf::Modulation => source.next().unwrap().re(),
                         };
 
                         *sample = DacCode::from(value as i16).0;

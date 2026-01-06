@@ -653,6 +653,7 @@ dependencies = [
 name = "idsp"
 version = "0.19.0"
 dependencies = [
+ "bytemuck",
  "dsp-fixedpoint",
  "dsp-process",
  "miniconf",

@@ -79,9 +79,10 @@
 
 use ad9959::Acr;
 use arbitrary_int::{u14, u24};
+use dsp_process::{Process, SplitProcess};
 use idsp::{
-    Accu, Complex, ComplexExt, Filter, Lockin, Lowpass, PLL, Unwrapper, iir,
-    process::{Process, Split},
+    Accu, Complex, ComplexExt, Lockin, Lowpass, LowpassState, PLL, Unwrapper,
+    iir,
 };
 use miniconf::Tree;
 use platform::NetSettings;
@@ -336,8 +337,8 @@ struct ChannelSettings {
     ///
     /// # Default
     /// `lockin_k = [0x200_0000, -0x2000_0000]`
-    #[tree(with=miniconf::leaf)]
-    lockin_k: [i32; 2],
+    #[tree(skip)] // TODO
+    lockin_k: Lockin<Lowpass<2>>,
     /// Minimum demodulated signal power to enable feedback.
     /// Note that this is RMS and that the signal peak must not clip.
     ///
@@ -415,7 +416,7 @@ impl Default for ChannelSettings {
                 att: 6.0,
                 phase: u14::new(0),
             },
-            lockin_k: [-(i32::MIN >> 6), i32::MIN >> 2],
+            lockin_k: Lockin(Lowpass([-(i32::MIN >> 6), i32::MIN >> 2])),
             amp: u24::new(0),
             min_power: -24,
             clear: true,
@@ -657,7 +658,7 @@ pub struct CookedTelemetry {
 
 #[derive(Clone, Default)]
 pub struct ChannelState {
-    lockin: Lockin<Lowpass<2>>,
+    lockin: [LowpassState<2>; 2],
     x0: i32,
     t0: i32,
     t: i64,
@@ -862,7 +863,7 @@ mod app {
             .lock(|state, settings, dds_output, telemetry| {
                 // Reconstruct frequency and phase using a lowpass that is aware of phase and frequency
                 // wraps.
-                Split::new(&settings.pll_k, pll).process(timestamp);
+                settings.pll_k.process(pll, timestamp);
                 // TODO: implement clear
                 stream[0].pll = pll.frequency() as _;
                 stream[1].pll = pll.phase() as _;
@@ -905,14 +906,13 @@ mod app {
                                 // Demodulate the ADC sample `a0` with the sample's phase `p` and
                                 // filter it with the lowpass.
                                 // zero(s) at fs/2 (Nyquist) by lowpass
-                                let y = state.lockin.process(
+                                let y = settings.lockin_k.process(
+                                    &mut state.lockin,
                                     // 3 bit headroom for coeff sum minus one bit gain for filter
-                                    (*a as i16 as i32) << 14,
-                                    *p,
-                                    &settings.lockin_k,
+                                    ((*a as i16 as i32) << 14, *p),
                                 );
                                 // Convert quadrature demodulated output to DAC data for monitoring
-                                *d = DacCode::from((y.im >> 13) as i16).0;
+                                *d = DacCode::from((y.im() >> 13) as i16).0;
                                 y
                             })
                             // Add more zeros at fs/2, fs/4, and fs/8 by rectangular window.
@@ -996,11 +996,11 @@ mod app {
                                 ),
                         );
 
-                        stream.phase = bytemuck::cast(state.unwrapper.y());
-                        telemetry.phase = state.unwrapper.y();
+                        stream.phase = bytemuck::cast(state.unwrapper.y);
+                        telemetry.phase = state.unwrapper.y;
                         let phase_err = state
                             .unwrapper
-                            .y()
+                            .y
                             .clamp(-i32::MAX as _, i32::MAX as _)
                             as _;
 
