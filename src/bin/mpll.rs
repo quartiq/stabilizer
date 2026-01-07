@@ -3,11 +3,12 @@
 
 use core::sync::atomic::{Ordering, fence};
 
+use dsp_fixedpoint::Q32;
 use dsp_process::{
     Add, Identity, Inplace, Pair, Parallel, Process, Split, Unsplit,
 };
 use fugit::ExtU32;
-use idsp::iir::{SosClamp, SosState, Wdf, WdfState};
+use idsp::iir::{DirectForm1, SosClamp, Wdf, WdfState};
 use miniconf::Tree;
 use rtic_monotonics::Monotonic;
 
@@ -64,7 +65,7 @@ pub struct MpllState {
     /// TODO: Remove this for modulation drive.
     clamp: idsp::Clamp<i32>,
     /// PID state
-    iir: SosState,
+    iir: DirectForm1<i32>,
     /// Current output phase
     phase: i32,
     /// Current LO samples for downconverting the next batch
@@ -85,7 +86,7 @@ pub struct Mpll {
     /// Do not use the iir offset as phase offset.
     /// Includes frequency limits.
     #[tree(skip)]
-    iir: SosClamp<30>,
+    iir: SosClamp<Q32<30>, i32>,
     /// Output amplitude scale
     amp: [i32; 2],
 }
@@ -132,7 +133,7 @@ impl Default for Mpll {
         pid.gain(idsp::iir::Action::I, -4e-4); // fs/turn/ts = 1/turn
         pid.gain(idsp::iir::Action::D, -4e-3); // fs/turn*ts = turn
         pid.limit(idsp::iir::Action::D, -0.2);
-        let mut iir: SosClamp<_> = pid.build().into();
+        let mut iir: SosClamp<_, _> = pid.build().into();
         iir.max = (0.3 * (1u64 << 32) as f32) as _;
         iir.min = (0.005 * (1u64 << 32) as f32) as _;
 

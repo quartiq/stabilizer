@@ -295,12 +295,12 @@ mod validate_att {
     ) -> Result<(), SerdeError<D::Error>> {
         let mut att = *value;
         leaf::deserialize_by_key(&mut att, keys, de)?;
-        if !stabilizer::convert::att_is_valid(att) {
-            Err(ValueError::Access("Attenuation out of range (0..=31.5 dB)")
-                .into())
-        } else {
+        if stabilizer::convert::att_is_valid(att) {
             *value = att;
             Ok(())
+        } else {
+            Err(ValueError::Access("Attenuation out of range (0..=31.5 dB)")
+                .into())
         }
     }
 }
