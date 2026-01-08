@@ -30,6 +30,7 @@
 
 use miniconf::Tree;
 
+use dsp_process::SplitProcess;
 use idsp::iir;
 
 use platform::{AppSettings, NetSettings};
@@ -90,9 +91,9 @@ pub struct BiquadRepr {
 
 impl Default for BiquadRepr {
     fn default() -> Self {
-        let mut i = iir::Biquad::IDENTITY;
-        i.set_min(-i16::MAX as _);
-        i.set_max(i16::MAX as _);
+        let mut i = iir::BiquadClamp::from(iir::Biquad::IDENTITY);
+        i.min = -i16::MAX as _;
+        i.max = i16::MAX as _;
         Self {
             _typ: (),
             repr: iir::BiquadRepr::Raw(i),
@@ -147,11 +148,7 @@ impl Channel {
             state: Default::default(),
             run: self.run,
             biquad: self.biquad.each_ref().map(|biquad| {
-                biquad.repr.build::<f32>(
-                    SAMPLE_PERIOD,
-                    1.0,
-                    DacCode::LSB_PER_VOLT,
-                )
+                biquad.repr.build(SAMPLE_PERIOD, 1.0, DacCode::LSB_PER_VOLT)
             }),
         })
     }
@@ -189,8 +186,8 @@ impl Default for DualIir {
 #[derive(Clone, Debug)]
 pub struct Active {
     run: Run,
-    biquad: [iir::Biquad<f32>; IIR_CASCADE_LENGTH],
-    state: [[f32; 4]; IIR_CASCADE_LENGTH],
+    biquad: [iir::BiquadClamp<f32, f32>; IIR_CASCADE_LENGTH],
+    state: [iir::DirectForm1<f32>; IIR_CASCADE_LENGTH],
     source: Source,
 }
 
@@ -386,12 +383,11 @@ mod app {
                             .iter()
                             .zip(active.state.iter_mut())
                             .fold(x, |y, (ch, state)| {
-                                let filter = if active.run.run(di) {
-                                    ch
+                                if active.run.run(di) {
+                                    ch.process(state, y)
                                 } else {
-                                    &iir::Biquad::HOLD
-                                };
-                                filter.update(state, y)
+                                    iir::Biquad::<f32>::HOLD.process(state, y)
+                                }
                             });
 
                         // Note(unsafe): The filter limits must ensure that the value is in range.
@@ -477,7 +473,7 @@ mod app {
                 (
                     ch.run,
                     ch.biquad.each_ref().map(|b| {
-                        b.repr.build::<f32>(
+                        b.repr.build(
                             SAMPLE_PERIOD,
                             1.0,
                             DacCode::LSB_PER_VOLT,
