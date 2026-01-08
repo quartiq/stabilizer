@@ -8,7 +8,7 @@ use dsp_process::{
     Add, Identity, Inplace, Pair, Parallel, Process, Split, Unsplit,
 };
 use fugit::ExtU32;
-use idsp::iir::{DirectForm1, SosClamp, Wdf, WdfState};
+use idsp::iir::{DirectForm1, BiquadClamp, Wdf, WdfState};
 use miniconf::Tree;
 use rtic_monotonics::Monotonic;
 
@@ -86,7 +86,7 @@ pub struct Mpll {
     /// Do not use the iir offset as phase offset.
     /// Includes frequency limits.
     #[tree(skip)]
-    iir: SosClamp<Q32<30>, i32>,
+    iir: BiquadClamp<Q32<30>, i32>,
     /// Output amplitude scale
     amp: [i32; 2],
 }
@@ -126,14 +126,14 @@ impl Default for Mpll {
             Unsplit(&Add),
         ));
 
-        let mut pid = idsp::iir::PidBuilder::default();
-        pid.order(idsp::iir::Order::I);
-        pid.period(1.0 / BATCH_SIZE as f32);
-        pid.gain(idsp::iir::Action::P, -5e-3); // fs/turn
-        pid.gain(idsp::iir::Action::I, -4e-4); // fs/turn/ts = 1/turn
-        pid.gain(idsp::iir::Action::D, -4e-3); // fs/turn*ts = turn
-        pid.limit(idsp::iir::Action::D, -0.2);
-        let mut iir: SosClamp<_, _> = pid.build().into();
+        let mut iir: BiquadClamp<_, _> = idsp::iir::PidBuilder::default()
+            .order(idsp::iir::Order::I)
+            .period(1.0 / BATCH_SIZE as f32)
+            .gain(idsp::iir::Action::P, -5e-3) // fs/turn
+            .gain(idsp::iir::Action::I, -4e-4) // fs/turn/ts = 1/turn
+            .gain(idsp::iir::Action::D, -4e-3) // fs/turn*ts = turn
+            .limit(idsp::iir::Action::D, -0.2)
+            .into();
         iir.max = (0.3 * (1u64 << 32) as f32) as _;
         iir.min = (0.005 * (1u64 << 32) as f32) as _;
 
