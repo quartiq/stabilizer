@@ -79,12 +79,16 @@
 
 use ad9959::Acr;
 use arbitrary_int::{u14, u24};
+use dsp_fixedpoint::{Const, Q32};
 use dsp_process::{Process, SplitProcess};
 use idsp::{
     Accu, Complex, ComplexExt, Lockin, Lowpass, LowpassState, PLL, Unwrapper,
-    iir,
+    iir::{
+        Biquad, BiquadClamp, BiquadRepr, DirectForm1, DirectForm1Dither, Pid,
+    },
 };
 use miniconf::Tree;
+use num_traits::AsPrimitive;
 use platform::NetSettings;
 use serde::{Deserialize, Serialize};
 use stabilizer::{
@@ -142,12 +146,14 @@ const PHASE_SCALE_SHIFT: u32 = 12;
 const F_DEMOD: u32 = 0x5200_0000;
 
 #[derive(Clone, Debug, Tree)]
-pub struct BiquadRepr<T>
+pub struct BiquadReprTree<T, Y>
 where
-    T: idsp::Coefficient
-        + num_traits::AsPrimitive<f32>
-        + num_traits::AsPrimitive<T>,
-    f32: num_traits::AsPrimitive<T>,
+    T: 'static + Const + Copy,
+    Y: 'static + Copy,
+    f32: AsPrimitive<T> + AsPrimitive<Y>,
+    BiquadClamp<T, Y>: Default,
+    BiquadRepr<f32, T, Y>: Default,
+    Pid<f32>: Default + Into<BiquadClamp<T, Y>>,
 {
     // Order matters
     /// Biquad representation type
@@ -155,13 +161,13 @@ where
     _typ: (),
     /// Biquad parameters
     /// Biquad representation subtree access
-    repr: iir::BiquadRepr<f32, T>,
+    repr: BiquadRepr<f32, T, Y>,
     /// Update trigger. TODO: Needs explicit trigger for serial-settings
     #[tree(rename="update", with=biquad_update, defer=*self)]
     _update: (),
     /// Built raw IIR
     #[tree(skip)]
-    iir: iir::Biquad<T>,
+    iir: BiquadClamp<T, Y>,
     #[tree(skip)]
     period: f32,
     #[tree(skip)]
@@ -171,46 +177,51 @@ where
 }
 
 mod biquad_update {
-    use super::BiquadRepr;
+    use super::BiquadReprTree;
+    use dsp_fixedpoint::Const;
+    use idsp::iir::{BiquadClamp, BiquadRepr, Pid};
     use miniconf::{Keys, SerdeError, leaf};
     pub use miniconf::{
         deny::{mut_any_by_key, ref_any_by_key},
         leaf::SCHEMA,
     };
+    use num_traits::AsPrimitive;
     use serde::{Deserialize, Deserializer, Serializer};
 
-    pub fn serialize_by_key<S, T>(
-        _value: &BiquadRepr<T>,
+    pub fn serialize_by_key<S, T, Y>(
+        _value: &BiquadReprTree<T, Y>,
         keys: impl Keys,
         ser: S,
     ) -> Result<S::Ok, SerdeError<S::Error>>
     where
         S: Serializer,
-        T: idsp::Coefficient
-            + num_traits::AsPrimitive<f32>
-            + num_traits::AsPrimitive<T>,
-        f32: num_traits::AsPrimitive<T>,
+        T: 'static + Const + Copy,
+        Y: 'static + Copy,
+        f32: AsPrimitive<T> + AsPrimitive<Y>,
+        BiquadRepr<f32, T, Y>: Default,
+        BiquadClamp<T, Y>: Default,
+        Pid<f32>: Into<BiquadClamp<T, Y>>,
     {
         leaf::serialize_by_key(&(), keys, ser)
     }
 
-    pub fn deserialize_by_key<'de, D, T>(
-        value: &mut BiquadRepr<T>,
+    pub fn deserialize_by_key<'de, D, T, Y>(
+        value: &mut BiquadReprTree<T, Y>,
         keys: impl Keys,
         de: D,
     ) -> Result<(), SerdeError<D::Error>>
     where
         D: Deserializer<'de>,
-        T: idsp::Coefficient
-            + num_traits::AsPrimitive<f32>
-            + num_traits::AsPrimitive<T>,
-        f32: num_traits::AsPrimitive<T>,
+        T: 'static + Const + Copy,
+        Y: 'static + Copy,
+        f32: AsPrimitive<T> + AsPrimitive<Y>,
+        BiquadRepr<f32, T, Y>: Default,
+        BiquadClamp<T, Y>: Default,
+        Pid<f32>: Into<BiquadClamp<T, Y>>,
     {
         leaf::deserialize_by_key(&mut (), keys, de)?;
         value.iir =
-            value
-                .repr
-                .build::<f32>(value.period, value.b_scale, value.y_scale);
+            value.repr.build(value.period, value.b_scale, value.y_scale);
         Ok(())
     }
 
@@ -227,19 +238,21 @@ mod biquad_update {
     }
 }
 
-impl<T> Default for BiquadRepr<T>
+impl<T, Y> Default for BiquadReprTree<T, Y>
 where
-    T: idsp::Coefficient
-        + num_traits::AsPrimitive<f32>
-        + num_traits::AsPrimitive<T>,
-    f32: num_traits::AsPrimitive<T>,
+    T: 'static + Const + Copy,
+    Y: 'static + Copy,
+    f32: AsPrimitive<T> + AsPrimitive<Y>,
+    BiquadClamp<T, Y>: Default,
+    Pid<f32>: Into<BiquadClamp<T, Y>>,
+    BiquadRepr<f32, T, Y>: Default,
 {
     fn default() -> Self {
         Self {
             _typ: (),
-            repr: iir::BiquadRepr::Raw(iir::Biquad::IDENTITY),
+            repr: BiquadRepr::Raw(Biquad::IDENTITY.into()),
             _update: (),
-            iir: iir::Biquad::IDENTITY,
+            iir: Biquad::IDENTITY.into(),
             period: 1.0,
             b_scale: 1.0,
             y_scale: 1.0,
@@ -371,7 +384,7 @@ struct ChannelSettings {
     ///
     /// # Default
     /// A proportional gain=-1 filter.
-    iir: BiquadRepr<i32>,
+    iir: BiquadReprTree<Q32<29>, i32>,
     /// Phase offset feedback gain.
     /// Phase feedback is a proportional bypass of the unwrapper, the IIR
     /// (including its input and output scaling) and the frequency feedback path.
@@ -389,7 +402,7 @@ struct ChannelSettings {
     ///
     /// # Default
     /// No feedback
-    iir_amp: BiquadRepr<f32>,
+    iir_amp: BiquadReprTree<f32, f32>,
 }
 
 const DDS_LSB_PER_HZ: f32 = (1i64 << 32) as f32
@@ -397,14 +410,14 @@ const DDS_LSB_PER_HZ: f32 = (1i64 << 32) as f32
 
 impl Default for ChannelSettings {
     fn default() -> Self {
-        let mut iir_prop = iir::Biquad::IDENTITY;
-        iir_prop.ba_mut()[0] *= -1;
-        iir_prop.set_min(-0x4_0000);
-        iir_prop.set_max(0x4_0000);
-        let mut iir_amp = iir::Biquad::default();
-        iir_amp.set_u(0x3ff as _);
-        iir_amp.set_min(0.0);
-        iir_amp.set_max(0x3ff as _);
+        let mut iir_prop = BiquadClamp::from(Biquad::IDENTITY);
+        iir_prop.coeff.ba[0] *= -1;
+        iir_prop.min = -0x4_0000;
+        iir_prop.max = 0x4_0000;
+        let mut iir_amp = BiquadClamp::default();
+        iir_amp.u = 0x3ff as _;
+        iir_amp.min = 0.0;
+        iir_amp.max = 0x3ff as _;
         let mut s = Self {
             input: DdsSettings {
                 freq: F_DEMOD,
@@ -421,9 +434,9 @@ impl Default for ChannelSettings {
             min_power: -24,
             clear: true,
             phase_scale: [[1, 16], [0, 0]],
-            iir: BiquadRepr {
-                repr: iir::BiquadRepr::Raw(iir_prop.clone()),
-                iir: iir_prop,
+            iir: BiquadReprTree {
+                repr: BiquadRepr::Raw(iir_prop.clone()),
+                iir: iir_prop.clone(),
                 period: stabilizer::design_parameters::TIMER_PERIOD
                     * (SAMPLE_TICKS * BATCH_SIZE as u32) as f32,
                 y_scale: DDS_LSB_PER_HZ,
@@ -431,12 +444,12 @@ impl Default for ChannelSettings {
             },
             pow_gain: 0,
             hold_en: false,
-            iir_amp: BiquadRepr {
-                repr: iir::BiquadRepr::Raw(iir_amp.clone()),
+            iir_amp: BiquadReprTree {
+                repr: BiquadRepr::Raw(iir_amp.clone()),
                 iir: iir_amp.clone(),
                 period: 10e-3,
-                b_scale: iir_amp.max(),
-                y_scale: iir_amp.max(),
+                b_scale: iir_amp.max,
+                y_scale: iir_amp.max,
                 ..Default::default()
             },
         };
@@ -664,8 +677,8 @@ pub struct ChannelState {
     t: i64,
     y: i64,
     unwrapper: Unwrapper<i64>,
-    iir: [i32; 5],
-    iir_amp: [f32; 4],
+    iir: DirectForm1Dither,
+    iir_amp: DirectForm1<f32>,
     hold: bool,
 }
 
@@ -1007,7 +1020,7 @@ mod app {
                         stats.update(phase_err);
                         // TODO; unchecked_shr
                         let delta_ftw =
-                            settings.iir.iir.update(&mut state.iir, phase_err);
+                            settings.iir.iir.process(&mut state.iir, phase_err);
                         let delta_pow = ((phase_err >> 16)
                             .wrapping_mul(settings.pow_gain as _)
                             >> 16) as _;
@@ -1150,10 +1163,10 @@ mod app {
                     .zip(y.iter_mut())
                 {
                     *y = if c.hold {
-                        iir::Biquad::HOLD.update(&mut c.iir_amp, *x);
+                        Biquad::<f32>::HOLD.process(&mut c.iir_amp, *x);
                         0
                     } else {
-                        s.iir_amp.iir.update(&mut c.iir_amp, *x) as u16
+                        s.iir_amp.iir.process(&mut c.iir_amp, *x) as u16
                     };
                 }
             });

@@ -473,11 +473,7 @@ mod app {
                 (
                     ch.run,
                     ch.biquad.each_ref().map(|b| {
-                        b.repr.build(
-                            SAMPLE_PERIOD,
-                            1.0,
-                            DacCode::LSB_PER_VOLT,
-                        )
+                        b.repr.build(SAMPLE_PERIOD, 1.0, DacCode::LSB_PER_VOLT)
                     }),
                 )
             });

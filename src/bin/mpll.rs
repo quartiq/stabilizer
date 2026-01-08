@@ -8,7 +8,7 @@ use dsp_process::{
     Add, Identity, Inplace, Pair, Parallel, Process, Split, Unsplit,
 };
 use fugit::ExtU32;
-use idsp::iir::{DirectForm1, BiquadClamp, Wdf, WdfState};
+use idsp::iir::{BiquadClamp, DirectForm1, Wdf, WdfState};
 use miniconf::Tree;
 use rtic_monotonics::Monotonic;
 
