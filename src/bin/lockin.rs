@@ -196,6 +196,8 @@ fn main() {
 #[cfg(target_os = "none")]
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, SDMMC])]
 mod app {
+    use core::num::Wrapping;
+
     use super::*;
     use idsp::LowpassState;
     use stabilizer::{
@@ -379,11 +381,14 @@ mod app {
                 let output: Complex<i32> = adc_samples[0]
                     .iter()
                     // Zip in the LO phase.
-                    .zip(Accu::new(sample_phase, sample_frequency))
+                    .zip(Accu::new(
+                        Wrapping(sample_phase),
+                        Wrapping(sample_frequency),
+                    ))
                     // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
                     .map(|(&sample, phase)| {
                         let s = (sample as i16 as i32) << 16;
-                        settings.lockin_k.process(lockin, (s, phase))
+                        settings.lockin_k.process(lockin, (s, phase.0))
                     })
                     // Decimate
                     .last()

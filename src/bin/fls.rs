@@ -702,7 +702,10 @@ fn main() {
 #[cfg_attr(target_os = "none", rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC]))]
 mod app {
     use arbitrary_int::u10;
-    use core::sync::atomic::{Ordering, fence};
+    use core::{
+        num::Wrapping,
+        sync::atomic::{Ordering, fence},
+    };
     use fugit::ExtU32 as _;
     use rtic_monotonics::Monotonic;
 
@@ -887,11 +890,15 @@ mod app {
                 let mut demod = [Complex::<i32>::default(); BATCH_SIZE];
                 // TODO: fixed lockin_freq, const 5/16 frequency table (80 entries), then rotate each by pll phase
                 for (d, p) in demod.iter_mut().zip(Accu::new(
-                    (pll.phase() << BATCH_SIZE_LOG2)
-                        .wrapping_mul(settings.lockin_freq as _),
-                    pll.frequency().wrapping_mul(settings.lockin_freq as _),
+                    Wrapping(
+                        (pll.phase() << BATCH_SIZE_LOG2)
+                            .wrapping_mul(settings.lockin_freq as _),
+                    ),
+                    Wrapping(
+                        pll.frequency().wrapping_mul(settings.lockin_freq as _),
+                    ),
                 )) {
-                    *d = Complex::from_angle(p);
+                    *d = Complex::from_angle(p.0);
                 }
 
                 (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
