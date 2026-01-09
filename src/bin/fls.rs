@@ -79,8 +79,9 @@
 
 use ad9959::Acr;
 use arbitrary_int::{u14, u24};
-use dsp_fixedpoint::{Const, Q32};
+use dsp_fixedpoint::Q32;
 use dsp_process::{Process, SplitProcess};
+use idsp::Const;
 use idsp::{
     Accu, Complex, ComplexExt, Lockin, Lowpass, LowpassState, PLL, Unwrapper,
     iir::{
@@ -178,7 +179,7 @@ where
 
 mod biquad_update {
     use super::BiquadReprTree;
-    use dsp_fixedpoint::Const;
+    use idsp::Const;
     use idsp::iir::{BiquadClamp, BiquadRepr, Pid};
     use miniconf::{Keys, SerdeError, leaf};
     pub use miniconf::{
