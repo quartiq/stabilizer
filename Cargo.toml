@@ -157,7 +157,8 @@ debug = true
 lto = true
 
 [patch.crates-io]
-serde-reflection = { git = "https://github.com/quartiq/serde-reflection.git", branch = "pub-ser-de" }
+miniconf = { git = "https://github.com/quartiq/miniconf.git" }
+serde-reflection = { git = "https://github.com/zefchain/serde-reflection.git" }
 idsp = { path = "../idsp" }
 dsp-process = { path = "../idsp/dsp-process" }
 dsp-fixedpoint = { path = "../idsp/dsp-fixedpoint" }
