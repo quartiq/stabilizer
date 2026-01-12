@@ -30,6 +30,7 @@
 use core::{
     iter,
     mem::MaybeUninit,
+    num::Wrapping,
     sync::atomic::{Ordering, fence},
 };
 
@@ -133,13 +134,15 @@ pub struct Lockin {
     /// Specifies which harmonic to use for the lockin.
     ///
     /// Harmonic index of the LO. -1 to _de_modulate the fundamental (complex conjugate)
-    lockin_harmonic: i32,
+    #[tree(with=miniconf::leaf)]
+    lockin_harmonic: Wrapping<i32>,
 
     /// Specifies the LO phase offset.
     ///
     /// Demodulation LO phase offset. Units are in terms of i32, where [i32::MIN] is equivalent to
     /// -pi and [i32::MAX] is equivalent to +pi.
-    lockin_phase: i32,
+    #[tree(with=miniconf::leaf)]
+    lockin_phase: Wrapping<i32>,
 
     /// Specifies DAC output mode.
     output_conf: [Leaf<Conf>; 2],
@@ -166,8 +169,8 @@ impl Default for Lockin {
             }, // frequency and phase settling time (log2 counter cycles)
 
             lockin_k: idsp::Lockin(Lowpass([0x8_0000, -0x400_0000])), // lockin lowpass gains
-            lockin_harmonic: -1, // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
-            lockin_phase: 0,     // Demodulation LO phase offset
+            lockin_harmonic: Wrapping(-1), // Harmonic index of the LO: -1 to _de_modulate the fundamental (complex conjugate)
+            lockin_phase: Wrapping(0),     // Demodulation LO phase offset
 
             output_conf: [Leaf(Conf::InPhase), Leaf(Conf::Quadrature)],
             // The default telemetry period in seconds.
@@ -196,9 +199,8 @@ fn main() {
 #[cfg(target_os = "none")]
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, SDMMC])]
 mod app {
-    use core::num::Wrapping;
-
     use super::*;
+    use core::num::Wrapping;
     use idsp::LowpassState;
     use stabilizer::{
         hardware::{
@@ -349,27 +351,30 @@ mod app {
         } = c.local;
 
         (active_settings, telemetry).lock(|settings, telemetry| {
-            let (reference_phase, reference_frequency) =
-                match settings.lockin_mode {
-                    LockinMode::External => {
-                        let timestamp =
-                            timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
-                        let (pll_phase, pll_frequency) = settings
-                            .pll_tc
-                            .process(pll, timestamp.map(|t| t as i32));
-                        (pll_phase, (pll_frequency >> BATCH_SIZE_LOG2) as i32)
-                    }
-                    LockinMode::Internal => {
-                        // Reference phase and frequency are known.
-                        (1i32 << 30, 1i32 << (32 - BATCH_SIZE_LOG2))
-                    }
-                };
+            let (reference_phase, reference_frequency) = match settings
+                .lockin_mode
+            {
+                LockinMode::External => {
+                    let timestamp =
+                        timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
+                    let accu = settings
+                        .pll_tc
+                        .process(pll, timestamp.map(|t| Wrapping(t as i32)));
+                    (accu.state, (accu.step >> BATCH_SIZE_LOG2 as usize))
+                }
+                LockinMode::Internal => {
+                    // Reference phase and frequency are known.
+                    (
+                        Wrapping(1i32 << 30),
+                        Wrapping(1i32 << (32 - BATCH_SIZE_LOG2)),
+                    )
+                }
+            };
 
             let sample_frequency =
-                reference_frequency.wrapping_mul(settings.lockin_harmonic);
-            let sample_phase = settings.lockin_phase.wrapping_add(
-                reference_phase.wrapping_mul(settings.lockin_harmonic),
-            );
+                reference_frequency * settings.lockin_harmonic;
+            let sample_phase = settings.lockin_phase
+                + reference_phase * settings.lockin_harmonic;
 
             (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
                 let adc_samples = [adc0, adc1];
@@ -381,10 +386,7 @@ mod app {
                 let output: Complex<i32> = adc_samples[0]
                     .iter()
                     // Zip in the LO phase.
-                    .zip(Accu::new(
-                        Wrapping(sample_phase),
-                        Wrapping(sample_frequency),
-                    ))
+                    .zip(Accu::new(sample_phase, sample_frequency))
                     // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
                     .map(|(&sample, phase)| {
                         let s = (sample as i16 as i32) << 16;
@@ -405,7 +407,7 @@ mod app {
                             Conf::Phase => output.arg().0 >> 16,
                             Conf::LogPower => output.log2() << 8,
                             Conf::ReferenceFrequency => {
-                                reference_frequency >> 16
+                                reference_frequency.0 >> 16
                             }
                             Conf::InPhase => output.re() >> 16,
                             Conf::Quadrature => output.im() >> 16,
