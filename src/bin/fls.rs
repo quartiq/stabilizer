@@ -77,15 +77,17 @@
 //! See [stream]. To view and analyze noise spectra the graphical application
 //! [`stabilizer-stream`](https://github.com/quartiq/stabilizer-stream) can be used.
 
+use core::num::Wrapping as W;
+
 use ad9959::Acr;
 use arbitrary_int::{u14, u24};
-use dsp_fixedpoint::Q32;
+use dsp_fixedpoint::{Q32, W32};
 use dsp_process::{Process, SplitProcess};
-use idsp::Const;
 use idsp::{
-    Accu, Complex, ComplexExt, Lockin, Lowpass, LowpassState, PLL, Unwrapper,
+    Clamp, Complex, Lockin, Lowpass, LowpassState, PLL, Unwrapper,
     iir::{
-        Biquad, BiquadClamp, BiquadRepr, DirectForm1, DirectForm1Dither, Pid,
+        Biquad, BiquadClamp, DirectForm1, DirectForm1Dither, pid::Pid,
+        repr::BiquadRepr,
     },
 };
 use miniconf::Tree;
@@ -149,7 +151,7 @@ const F_DEMOD: u32 = 0x5200_0000;
 #[derive(Clone, Debug, Tree)]
 pub struct BiquadReprTree<T, Y>
 where
-    T: 'static + Const + Copy,
+    T: 'static + Clamp + Copy,
     Y: 'static + Copy,
     f32: AsPrimitive<T> + AsPrimitive<Y>,
     BiquadClamp<T, Y>: Default,
@@ -179,8 +181,8 @@ where
 
 mod biquad_update {
     use super::BiquadReprTree;
-    use idsp::Const;
-    use idsp::iir::{BiquadClamp, BiquadRepr, Pid};
+    use idsp::Clamp;
+    use idsp::iir::{BiquadClamp, pid::Pid, repr::BiquadRepr};
     use miniconf::{Keys, SerdeError, leaf};
     pub use miniconf::{
         deny::{mut_any_by_key, ref_any_by_key},
@@ -196,7 +198,7 @@ mod biquad_update {
     ) -> Result<S::Ok, SerdeError<S::Error>>
     where
         S: Serializer,
-        T: 'static + Const + Copy,
+        T: 'static + Clamp + Copy,
         Y: 'static + Copy,
         f32: AsPrimitive<T> + AsPrimitive<Y>,
         BiquadRepr<f32, T, Y>: Default,
@@ -213,7 +215,7 @@ mod biquad_update {
     ) -> Result<(), SerdeError<D::Error>>
     where
         D: Deserializer<'de>,
-        T: 'static + Const + Copy,
+        T: 'static + Clamp + Copy,
         Y: 'static + Copy,
         f32: AsPrimitive<T> + AsPrimitive<Y>,
         BiquadRepr<f32, T, Y>: Default,
@@ -241,7 +243,7 @@ mod biquad_update {
 
 impl<T, Y> Default for BiquadReprTree<T, Y>
 where
-    T: 'static + Const + Copy,
+    T: 'static + Clamp + Copy,
     Y: 'static + Copy,
     f32: AsPrimitive<T> + AsPrimitive<Y>,
     BiquadClamp<T, Y>: Default,
@@ -537,7 +539,8 @@ pub struct Fls {
     ///
     /// # Default
     /// `/pll_k = 0x4_0000` corresponds to to a time constant of about 0.4 s.
-    pll_k: i32,
+    #[tree(with=miniconf::leaf)]
+    pll_k: W32<32>,
     /// Telemetry output period in seconds
     ///
     /// # Default
@@ -557,7 +560,7 @@ impl Default for Fls {
             ch: Default::default(),
             ext_clk: false,
             lockin_freq: 0x40,
-            pll_k: 0x4_0000,
+            pll_k: W32::new(W(0x4_0000)),
             telemetry_period: 10,
             stream: Default::default(),
         }
@@ -673,10 +676,10 @@ pub struct CookedTelemetry {
 #[derive(Clone, Default)]
 pub struct ChannelState {
     lockin: [LowpassState<2>; 2],
-    x0: i32,
-    t0: i32,
-    t: i64,
-    y: i64,
+    x0: W<i32>,
+    t0: W<i32>,
+    t: W<i64>,
+    y: W<i64>,
     unwrapper: Unwrapper<i64>,
     iir: DirectForm1Dither,
     iir_amp: DirectForm1<f32>,
@@ -702,11 +705,9 @@ fn main() {
 #[cfg_attr(target_os = "none", rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC]))]
 mod app {
     use arbitrary_int::u10;
-    use core::{
-        num::Wrapping,
-        sync::atomic::{Ordering, fence},
-    };
+    use core::sync::atomic::{Ordering, fence};
     use fugit::ExtU32 as _;
+    use num_traits::ConstZero;
     use rtic_monotonics::Monotonic;
 
     use stabilizer::hardware::{
@@ -869,7 +870,7 @@ mod app {
         let timestamp = timestamper
             .latest_timestamp()
             .unwrap_or(None)
-            .map(|t| ((t as u32) << 16) as i32);
+            .map(|t| W(((t as u32) << 16) as i32));
 
         (
             c.shared.state,
@@ -880,25 +881,20 @@ mod app {
             .lock(|state, settings, dds_output, telemetry| {
                 // Reconstruct frequency and phase using a lowpass that is aware of phase and frequency
                 // wraps.
-                settings.pll_k.process(pll, timestamp);
+                let mut accu = settings.pll_k.process(pll, timestamp);
                 // TODO: implement clear
-                stream[0].pll = pll.frequency() as _;
-                stream[1].pll = pll.phase() as _;
+                stream[0].pll = accu.step.0 as _;
+                stream[1].pll = accu.state.0 as _;
                 telemetry.pll_time =
-                    telemetry.pll_time.wrapping_add(pll.frequency() as _);
+                    telemetry.pll_time.wrapping_add(pll.frequency().0 as _);
 
-                let mut demod = [Complex::<i32>::default(); BATCH_SIZE];
+                let mut demod = [Complex::<Q32<31>>::default(); BATCH_SIZE];
+                accu.state <<= BATCH_SIZE_LOG2 as usize;
+                accu.state *= W(settings.lockin_freq as i32);
+                accu.step *= W(settings.lockin_freq as i32);
                 // TODO: fixed lockin_freq, const 5/16 frequency table (80 entries), then rotate each by pll phase
-                for (d, p) in demod.iter_mut().zip(Accu::new(
-                    Wrapping(
-                        (pll.phase() << BATCH_SIZE_LOG2)
-                            .wrapping_mul(settings.lockin_freq as _),
-                    ),
-                    Wrapping(
-                        pll.frequency().wrapping_mul(settings.lockin_freq as _),
-                    ),
-                )) {
-                    *d = Complex::from_angle(p.0);
+                for (d, p) in demod.iter_mut().zip(accu) {
+                    *d = Complex::from_angle(p);
                 }
 
                 (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
@@ -947,8 +943,8 @@ mod app {
                 let di =
                     [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
                 // TODO: pll.frequency()?
-                let time = pll.phase() & (-1 << PHASE_SCALE_SHIFT);
-                let dtime = time.wrapping_sub(state[0].t0) >> PHASE_SCALE_SHIFT;
+                let time = pll.phase() & W(-1 << PHASE_SCALE_SHIFT);
+                let dtime = (time - state[0].t0) >> PHASE_SCALE_SHIFT as usize;
                 state[0].t0 = time;
                 state[1].t0 = time;
 
@@ -972,8 +968,8 @@ mod app {
 
                     if settings.clear {
                         state.unwrapper = Unwrapper::default();
-                        state.t = 0;
-                        state.y = 0;
+                        state.t = W(0);
+                        state.y = W(0);
                         settings.clear = false;
                     }
 
@@ -993,37 +989,38 @@ mod app {
                         (0, stream.delta_pow)
                     } else {
                         let phase = stream.demod.arg();
-                        let dphase = phase.wrapping_sub(state.x0);
+                        let dphase = phase - state.x0;
                         state.x0 = phase;
 
                         // |dphi| > pi/2 indicates a possible undetected phase slip.
                         // Neither a necessary nor a sufficient condition though.
-                        if dphase.wrapping_add(1 << 30) < 0 {
+                        if dphase + W(1 << 30) < W::ZERO {
                             telemetry.slips = telemetry.slips.wrapping_add(1);
                         }
 
                         // Scale, offset and unwrap phase
-                        state.t = state.t.wrapping_add(
-                            dtime as i64 * settings.phase_scale[1][0] as i64,
-                        );
-                        state.y = state.y.wrapping_add(
-                            dphase as i64 * settings.phase_scale[0][0] as i64,
-                        );
+                        state.t +=
+                            dtime.0 as i64 * settings.phase_scale[1][0] as i64;
+                        state.y +=
+                            dphase.0 as i64 * settings.phase_scale[0][0] as i64;
                         state.unwrapper.process(
-                            ((state.y >> settings.phase_scale[0][1]) as i32)
+                            ((state.y >> settings.phase_scale[0][1] as usize).0
+                                as i32)
                                 .wrapping_add(
-                                    (state.t >> settings.phase_scale[1][1])
+                                    (state.t
+                                        >> settings.phase_scale[1][1] as usize)
+                                        .0
                                         as i32,
                                 ),
                         );
 
                         stream.phase = bytemuck::cast(state.unwrapper.y);
                         telemetry.phase = state.unwrapper.y;
-                        let phase_err = state
-                            .unwrapper
-                            .y
-                            .clamp(-i32::MAX as _, i32::MAX as _)
-                            as _;
+                        let phase_err = Clamp::clamp(
+                            state.unwrapper.y,
+                            -i32::MAX as _,
+                            i32::MAX as _,
+                        ) as _;
 
                         stats.update(phase_err);
                         // TODO; unchecked_shr
@@ -1054,9 +1051,11 @@ mod app {
                         )),
                         Some(
                             Acr::DEFAULT
-                                .with_asf(u10::new(
-                                    telemetry.mod_amp.clamp(0, 0x3ff),
-                                ))
+                                .with_asf(u10::new(Clamp::clamp(
+                                    telemetry.mod_amp,
+                                    0,
+                                    0x3ff,
+                                )))
                                 .with_multiplier(true),
                         ),
                     );

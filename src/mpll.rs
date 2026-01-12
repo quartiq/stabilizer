@@ -2,7 +2,10 @@ use dsp_fixedpoint::Q32;
 use dsp_process::{
     Add, Identity, Inplace, Pair, Parallel, Process, Split, Unsplit,
 };
-use idsp::iir::{BiquadClamp, DirectForm1, Wdf, WdfState};
+use idsp::iir::{
+    BiquadClamp, DirectForm1,
+    wdf::{Wdf, WdfState},
+};
 use miniconf::Tree;
 
 pub const BATCH_SIZE: usize = 8;
@@ -17,7 +20,7 @@ pub struct MpllState {
     /// Aids capture/pull-in with external modulation.
     ///
     /// TODO: Remove this for modulation drive.
-    clamp: idsp::Clamp<i32>,
+    clamp: idsp::ClampWrap<i32>,
     /// PID state
     pub iir: DirectForm1<i32>,
     /// Current output phase
@@ -80,13 +83,13 @@ impl Default for Mpll {
             Unsplit(&Add),
         ));
 
-        let mut iir: BiquadClamp<_, _> = idsp::iir::PidBuilder::default()
-            .order(idsp::iir::Order::I)
+        let mut iir: BiquadClamp<_, _> = idsp::iir::pid::Builder::default()
+            .order(idsp::iir::pid::Order::I)
             .period(1.0 / BATCH_SIZE as f32)
-            .gain(idsp::iir::Action::P, -5e-3) // fs/turn
-            .gain(idsp::iir::Action::I, -4e-4) // fs/turn/ts = 1/turn
-            .gain(idsp::iir::Action::D, -4e-3) // fs/turn*ts = turn
-            .limit(idsp::iir::Action::D, -0.2)
+            .gain(idsp::iir::pid::Action::P, -5e-3) // fs/turn
+            .gain(idsp::iir::pid::Action::I, -4e-4) // fs/turn/ts = 1/turn
+            .gain(idsp::iir::pid::Action::D, -4e-3) // fs/turn*ts = turn
+            .limit(idsp::iir::pid::Action::D, -0.2)
             .into();
         iir.max = (0.3 * (1u64 << 32) as f32) as _;
         iir.min = (0.005 * (1u64 << 32) as f32) as _;

@@ -35,7 +35,7 @@ use core::{
 
 use dsp_process::SplitProcess;
 use fugit::ExtU32;
-use idsp::{Accu, Complex, ComplexExt, Lowpass, RPLL, RPLLConfig};
+use idsp::{Accu, Complex, Lowpass, RPLL, RPLLConfig};
 use miniconf::{Leaf, Tree};
 use rtic_monotonics::Monotonic;
 use serde::{Deserialize, Serialize};
@@ -388,7 +388,7 @@ mod app {
                     // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
                     .map(|(&sample, phase)| {
                         let s = (sample as i16 as i32) << 16;
-                        settings.lockin_k.process(lockin, (s, phase.0))
+                        settings.lockin_k.process(lockin, (s, phase))
                     })
                     // Decimate
                     .last()
@@ -399,8 +399,10 @@ mod app {
                 for (channel, samples) in dac_samples.iter_mut().enumerate() {
                     for sample in samples.iter_mut() {
                         let value = match *settings.output_conf[channel] {
-                            Conf::Magnitude => output.norm_sqr() as i32 >> 16,
-                            Conf::Phase => output.arg() >> 16,
+                            Conf::Magnitude => {
+                                output.norm_sqr().inner as i32 >> 16
+                            }
+                            Conf::Phase => output.arg().0 >> 16,
                             Conf::LogPower => output.log2() << 8,
                             Conf::ReferenceFrequency => {
                                 reference_frequency >> 16

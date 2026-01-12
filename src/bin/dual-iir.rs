@@ -86,7 +86,7 @@ pub struct BiquadRepr {
     /// Biquad parameters
     #[tree(rename="typ", typ="&str", with=miniconf::str_leaf, defer=self.repr)]
     _typ: (),
-    repr: iir::BiquadRepr<f32, f32>,
+    repr: iir::repr::BiquadRepr<f32, f32>,
 }
 
 impl Default for BiquadRepr {
@@ -96,7 +96,7 @@ impl Default for BiquadRepr {
         i.max = i16::MAX as _;
         Self {
             _typ: (),
-            repr: iir::BiquadRepr::Raw(i),
+            repr: iir::repr::BiquadRepr::Raw(i),
         }
     }
 }
