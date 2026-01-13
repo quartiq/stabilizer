@@ -3,7 +3,7 @@ use dsp_process::{
     Add, Identity, Inplace, Pair, Parallel, Process, Split, Unsplit,
 };
 use idsp::iir::{
-    BiquadClamp, DirectForm1,
+    BiquadClamp, DirectForm1, pid,
     wdf::{Wdf, WdfState},
 };
 use miniconf::Tree;
@@ -83,13 +83,13 @@ impl Default for Mpll {
             Unsplit(&Add),
         ));
 
-        let mut iir: BiquadClamp<_, _> = idsp::iir::pid::Builder::default()
-            .order(idsp::iir::pid::Order::I)
+        let mut iir: BiquadClamp<_, _> = pid::Builder::default()
+            .order(pid::Order::I)
             .period(1.0 / BATCH_SIZE as f32)
-            .gain(idsp::iir::pid::Action::P, -5e-3) // fs/turn
-            .gain(idsp::iir::pid::Action::I, -4e-4) // fs/turn/ts = 1/turn
-            .gain(idsp::iir::pid::Action::D, -4e-3) // fs/turn*ts = turn
-            .limit(idsp::iir::pid::Action::D, -0.2)
+            .gain(pid::Action::P, -5e-3) // fs/turn
+            .gain(pid::Action::I, -4e-4) // fs/turn/ts = 1/turn
+            .gain(pid::Action::D, -4e-3) // fs/turn*ts = turn
+            .limit(pid::Action::D, -0.2)
             .into();
         iir.max = (0.3 * (1u64 << 32) as f32) as _;
         iir.min = (0.005 * (1u64 << 32) as f32) as _;
