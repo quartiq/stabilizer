@@ -17,9 +17,9 @@ keywords = ["serial", "settings", "cli", "management", "async"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-miniconf = { version = "0.20", features = ["json-core", "postcard"] }
+miniconf.workspace = true
 menu = { version = "0.6.1", features = ["echo"] }
-heapless = "0.8"
+heapless.workspace = true
 embedded-io = "0.6"
 yafnv = "3.0"
 postcard = { version = "1", default-features = false }

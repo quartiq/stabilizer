@@ -10,9 +10,9 @@ categories = ["embedded", "no-std"]
 keywords = []
 
 [dependencies]
-miniconf = { version = "0.20", features = ["derive", "heapless", "postcard"] }
+miniconf.workspace = true
 serde = { version = "1.0", features = ["derive"], default-features = false }
-heapless = { version = "0.8", features = ["serde"] }
+heapless.workspace = true
 log = { version = "0.4" }
 cortex-m = { version = "0.7.7" }
 sequential-storage = "5"
