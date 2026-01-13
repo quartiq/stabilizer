@@ -4,11 +4,15 @@ use dsp_process::{
 };
 use idsp::iir::{
     BiquadClamp, DirectForm1, pid,
+    repr::BiquadRepr,
     wdf::{Wdf, WdfState},
 };
 use miniconf::Tree;
 
 pub const BATCH_SIZE: usize = 8;
+pub const S: f32 = 128.0 / 100e6; // seconds per sample
+pub const LSB_PER_TURN: f32 = (1u64 << 32) as f32;
+pub const LSB_PER_HZ: f32 = (1u64 << 32) as f32 * S;
 
 #[derive(Debug, Clone, Default)]
 pub struct MpllState {
@@ -30,11 +34,9 @@ pub struct MpllState {
     // TODO: investigate matched LO delay: 20 samples
 }
 
-#[derive(Debug, Clone, Tree)]
-#[tree(meta(doc, typename))]
+#[derive(Debug, Clone)]
 pub struct Mpll {
     /// Lowpass
-    #[tree(skip)]
     lp: Pair<[Wdf<2, 0xad>; 2], (Wdf<2, 0xad>, Wdf<1, 0xa>), i32>,
     /// Input phase offset
     phase: i32,
@@ -42,20 +44,21 @@ pub struct Mpll {
     ///
     /// Do not use the iir offset as phase offset.
     /// Includes frequency limits.
-    #[tree(skip)]
     iir: BiquadClamp<Q32<30>, i32>,
     /// Output amplitude scale
     amp: [i32; 2],
 }
 
-impl Mpll {
-    pub fn new(config: &Self) -> Self {
-        config.clone()
-    }
+#[derive(Debug, Clone, Tree)]
+#[tree(meta(doc, typename))]
+pub struct MpllConfig {
+    iir: BiquadRepr<f32, Q32<30>, i32>,
+    amp: [f32; 2],
+    phase: f32,
 }
 
-impl Default for Mpll {
-    fn default() -> Self {
+impl MpllConfig {
+    pub fn build(&self) -> Mpll {
         // 7th order Cheby2 as WDF-CA, -3 dB @ 0.005*1.28, -112 dB @ 0.018*1.28
         let lp = Pair::new((
             (
@@ -83,6 +86,21 @@ impl Default for Mpll {
             Unsplit(&Add),
         ));
 
+        Mpll {
+            iir: self.iir.build(
+                BATCH_SIZE as f32 * S,
+                LSB_PER_HZ / LSB_PER_TURN,
+                LSB_PER_HZ,
+            ),
+            amp: self.amp.map(|a| (a * ((1 << 31) as f32 / 10.0)) as _),
+            phase: (self.phase * (1u64 << 32) as f32) as _,
+            lp,
+        }
+    }
+}
+
+impl Default for MpllConfig {
+    fn default() -> Self {
         let mut iir: BiquadClamp<_, _> = pid::Builder::default()
             .order(pid::Order::I)
             .period(1.0 / BATCH_SIZE as f32)
@@ -95,10 +113,9 @@ impl Default for Mpll {
         iir.min = (0.005 * (1u64 << 32) as f32) as _;
 
         Self {
-            lp,
-            phase: (0.0 * (1u64 << 32) as f32) as _,
-            iir,
-            amp: [(0.09 * (1u64 << 31) as f32) as _; 2], // ~0.9 V
+            phase: 0.0,
+            iir: BiquadRepr::Raw(iir),
+            amp: [0.95, 0.0],
         }
     }
 }

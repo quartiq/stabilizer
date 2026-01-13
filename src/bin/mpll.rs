@@ -48,7 +48,7 @@ impl serial_settings::Settings for Settings {
 #[derive(Clone, Debug, Tree)]
 #[tree(meta(doc, typename))]
 pub struct App {
-    mpll: Mpll,
+    mpll: MpllConfig,
 
     /// Specifies the telemetry output period in seconds.
     telemetry_period: f32,
@@ -86,14 +86,15 @@ pub struct TelemetryCooked {
 impl From<TelemetryState> for TelemetryCooked {
     fn from(t: TelemetryState) -> Self {
         Self {
-            // G10, 1 V fs
-            demod: t
-                .demod
-                .map(|d| d.map(|p| p.get_scaled(1.0 / (1u64 << 31) as f32))),
-            phase: t.phase.get_scaled(1.0 / (1u64 << 32) as f32),
-            frequency: t
-                .frequency
-                .get_scaled(100e6 / SAMPLE_TICKS as f32 / (1u64 << 32) as f32),
+            demod: t.demod.map(|d| {
+                d.map(|p| {
+                    p.get_scaled(
+                        10.24 /* V*/ / 10.0 /* G10 */ / (1u64 << 31) as f32,
+                    )
+                })
+            }),
+            phase: t.phase.get_scaled(1.0 / LSB_PER_TURN),
+            frequency: t.frequency.get_scaled(1.0 / LSB_PER_HZ),
         }
     }
 }
@@ -184,7 +185,7 @@ mod app {
             network,
             usb: carrier.usb,
             telemetry: Default::default(),
-            active_settings: carrier.settings.mpll.mpll.clone(),
+            active_settings: carrier.settings.mpll.mpll.build(),
             settings: carrier.settings,
         };
 
@@ -300,7 +301,7 @@ mod app {
             c.shared
                 .network
                 .lock(|net| net.direct_stream(settings.mpll.stream));
-            let new = Mpll::new(&settings.mpll.mpll);
+            let new = settings.mpll.mpll.build();
             c.shared.active_settings.lock(|current| *current = new);
         });
     }
