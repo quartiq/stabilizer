@@ -85,16 +85,12 @@ pub struct TelemetryCooked {
 
 impl From<TelemetryState> for TelemetryCooked {
     fn from(t: TelemetryState) -> Self {
+        const VOLT_PER_LSB: f32 =
+            10.24 /* V*/ / 10.0 /* G10 */ / (1u64 << 31) as f32;
         Self {
-            demod: t.demod.map(|d| {
-                d.map(|p| {
-                    p.get_scaled(
-                        10.24 /* V*/ / 10.0 /* G10 */ / (1u64 << 31) as f32,
-                    )
-                })
-            }),
-            phase: t.phase.get_scaled(1.0 / LSB_PER_TURN),
-            frequency: t.frequency.get_scaled(1.0 / LSB_PER_HZ),
+            demod: t.demod.map(|d| d.map(|p| p.get_scaled(VOLT_PER_LSB))),
+            phase: t.phase.get_scaled(TURN_PER_LSB),
+            frequency: t.frequency.get_scaled(HZ_PER_LSB),
         }
     }
 }
@@ -250,7 +246,7 @@ mod app {
                     [(*dac0).try_into().unwrap(), (*dac1).try_into().unwrap()];
 
                 let (stream, frequency) = settings.process(state, adc, dac);
-                telemetry.phase.update(stream.phase_in);
+                telemetry.phase.update(stream.phase_in.0);
                 telemetry.frequency.update(frequency);
 
                 telemetry.demod[0][0].update(stream.demod[0]);
@@ -301,8 +297,10 @@ mod app {
             c.shared
                 .network
                 .lock(|net| net.direct_stream(settings.mpll.stream));
-            let new = settings.mpll.mpll.build();
-            c.shared.active_settings.lock(|current| *current = new);
+            if settings.mpll.mpll.activate {
+                let new = settings.mpll.mpll.build();
+                c.shared.active_settings.lock(|current| *current = new);
+            }
         });
     }
 

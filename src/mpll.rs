@@ -1,3 +1,5 @@
+use core::num::Wrapping;
+
 use dsp_fixedpoint::Q32;
 use dsp_process::{
     Add, Identity, Inplace, Pair, Parallel, Process, Split, Unsplit,
@@ -10,55 +12,69 @@ use idsp::iir::{
 use miniconf::Tree;
 
 pub const BATCH_SIZE: usize = 8;
-pub const S: f32 = 128.0 / 100e6; // seconds per sample
-pub const LSB_PER_TURN: f32 = (1u64 << 32) as f32;
-pub const LSB_PER_HZ: f32 = (1u64 << 32) as f32 * S;
+pub const S_PER_SAMPLE: f32 = 128.0 / 100e6;
+pub const TURN_PER_LSB: f32 = ((1u64 << 32) as f32).recip();
+pub const HZ_PER_LSB: f32 = ((1u64 << 32) as f32 * S_PER_SAMPLE).recip();
 
 #[derive(Debug, Clone, Default)]
 pub struct MpllState {
     /// Lowpass state
     lp: [(((), ([WdfState<2>; 2], (WdfState<2>, WdfState<1>))), ()); 4],
     /// Phase clamp
-    ///
-    /// Makes the phase wrap monotonic by clamping it.
-    /// Aids capture/pull-in with external modulation.
-    ///
-    /// TODO: Remove this for modulation drive.
     clamp: idsp::ClampWrap<i32>,
     /// PID state
-    pub iir: DirectForm1<i32>,
+    iir: DirectForm1<i32>,
     /// Current output phase
-    phase: i32,
+    phase: Wrapping<i32>,
     /// Current LO samples for downconverting the next batch
     lo: [[i32; BATCH_SIZE]; 2],
     // TODO: investigate matched LO delay: 20 samples
 }
 
+impl MpllState {
+    pub fn set_frequency(&mut self, f: f32) {
+        self.iir.xy[2] = (f * HZ_PER_LSB.recip()) as _;
+        self.iir.xy[3] = self.iir.xy[2];
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Mpll {
-    /// Lowpass
-    lp: Pair<[Wdf<2, 0xad>; 2], (Wdf<2, 0xad>, Wdf<1, 0xa>), i32>,
-    /// Input phase offset
-    phase: i32,
-    /// PID IIR filter
-    ///
-    /// Do not use the iir offset as phase offset.
-    /// Includes frequency limits.
+    lp: Lowpass,
+    phase: Option<Wrapping<i32>>,
     iir: BiquadClamp<Q32<30>, i32>,
-    /// Output amplitude scale
-    amp: [i32; 2],
+    amplitude: [Q32<16>; 2],
 }
+
+#[derive(Debug, Clone)]
+struct Lowpass(Pair<[Wdf<2, 0xad>; 2], (Wdf<2, 0xad>, Wdf<1, 0xa>), i32>);
 
 #[derive(Debug, Clone, Tree)]
 #[tree(meta(doc, typename))]
 pub struct MpllConfig {
+    /// Lowpass filter configuration
+    #[tree(skip)]
+    lp: Lowpass,
+    /// Input phase offset (turns) and clamp
+    ///
+    /// Makes the phase wrap monotonic by clamping it to aid capture/pull-in with external modulation.
+    /// Disable for modulation drive and use biquad offset/pid setpoint
+    phase: Option<f32>,
+    /// Filter representation
+    #[tree(rename="repr", typ="&str", with=miniconf::str_leaf, defer=self.iir)]
+    _repr: (), // before iir
+    /// Phase-to-frequency filter (units Hz/turn, s)
+    ///
+    /// Do not use the IIR offset as phase offset with clamp=true
     iir: BiquadRepr<f32, Q32<30>, i32>,
-    amp: [f32; 2],
-    phase: f32,
+    /// Output amplitude (Volt)
+    amplitude: [f32; 2],
+    /// Activate settings
+    pub activate: bool,
 }
 
-impl MpllConfig {
-    pub fn build(&self) -> Mpll {
+impl Default for MpllConfig {
+    fn default() -> Self {
         // 7th order Cheby2 as WDF-CA, -3 dB @ 0.005*1.28, -112 dB @ 0.018*1.28
         let lp = Pair::new((
             (
@@ -86,36 +102,41 @@ impl MpllConfig {
             Unsplit(&Add),
         ));
 
-        Mpll {
-            iir: self.iir.build(
-                BATCH_SIZE as f32 * S,
-                LSB_PER_HZ / LSB_PER_TURN,
-                LSB_PER_HZ,
-            ),
-            amp: self.amp.map(|a| (a * ((1 << 31) as f32 / 10.0)) as _),
-            phase: (self.phase * (1u64 << 32) as f32) as _,
-            lp,
+        let mut pid = pid::Pid::default();
+        pid.order = pid::Order::I;
+        pid.gains.value[pid::Action::P as usize] = -3.9e3;
+        pid.gains.value[pid::Action::I as usize] = -3.8e6;
+        pid.gains.value[pid::Action::D as usize] = -0.25;
+        pid.limits.value[pid::Action::D as usize] = -150e3;
+        pid.min = 5e3;
+        pid.max = 300e3;
+
+        Self {
+            lp: Lowpass(lp),
+            phase: Some(0.0),
+            iir: BiquadRepr::Pid(pid),
+            _repr: (),
+            amplitude: [0.95, 0.0],
+            activate: true,
         }
     }
 }
 
-impl Default for MpllConfig {
-    fn default() -> Self {
-        let mut iir: BiquadClamp<_, _> = pid::Builder::default()
-            .order(pid::Order::I)
-            .period(1.0 / BATCH_SIZE as f32)
-            .gain(pid::Action::P, -5e-3) // fs/turn
-            .gain(pid::Action::I, -4e-4) // fs/turn/ts = 1/turn
-            .gain(pid::Action::D, -4e-3) // fs/turn*ts = turn
-            .limit(pid::Action::D, -0.2)
-            .into();
-        iir.max = (0.3 * (1u64 << 32) as f32) as _;
-        iir.min = (0.005 * (1u64 << 32) as f32) as _;
-
-        Self {
-            phase: 0.0,
-            iir: BiquadRepr::Raw(iir),
-            amp: [0.95, 0.0],
+impl MpllConfig {
+    pub fn build(&self) -> Mpll {
+        Mpll {
+            lp: self.lp.clone(),
+            phase: self
+                .phase
+                .map(|p| Wrapping((p * TURN_PER_LSB.recip()) as _)),
+            iir: self.iir.build(pid::Units {
+                t: BATCH_SIZE as f32 * S_PER_SAMPLE,
+                x: TURN_PER_LSB,
+                y: HZ_PER_LSB,
+            }),
+            amplitude: self
+                .amplitude
+                .map(|a| Q32::from_f32(a * 10.24f32.recip())),
         }
     }
 }
@@ -136,7 +157,7 @@ impl Mpll {
             m00.iter_mut()
                 .zip(m01.iter_mut())
                 .zip(m10.iter_mut().zip(m11.iter_mut()))
-                .zip(state.lo[0].iter().zip(&state.lo[1])),
+                .zip(state.lo[0].iter().zip(state.lo[1].iter())),
         ) {
             // ADC encoding, mix
             *mix.0.0 = ((*x.0 as i16 as i64 * *lo.0 as i64) >> 16) as i32;
@@ -146,7 +167,7 @@ impl Mpll {
         }
         // lowpass
         for (mix, state) in mix.iter_mut().zip(state.lp.iter_mut()) {
-            Split::new(&self.lp, state).inplace(mix);
+            Split::new(&self.lp.0, state).inplace(mix);
         }
         // decimate
         let demod = [
@@ -157,14 +178,15 @@ impl Mpll {
         ];
         // phase
         // need full atan2 or addtl osc to support any phase offset
-        let p = idsp::atan2(demod[1], demod[0]);
+        let mut p = Wrapping(idsp::atan2(demod[1], demod[0]));
         // Delay correction
-        let p = p
-            .wrapping_add(self.phase)
-            .wrapping_sub(state.iir.xy[2].wrapping_mul(10));
-        let p = state.clamp.process(p);
-        // pid
-        let f = Split::new(&self.iir, &mut state.iir).process(p);
+        p -= Wrapping(state.iir.xy[2]) * Wrapping(10);
+        // Offset and clamp
+        if let Some(offset) = self.phase {
+            p.0 = state.clamp.process((p + offset).0);
+        }
+        // PID
+        let f = Split::new(&self.iir, &mut state.iir).process(p.0);
         // modulate
         let [y0, y1] = state.lo.each_mut();
         let [yo0, yo1] = y;
@@ -173,12 +195,12 @@ impl Mpll {
             .zip(y1)
             .zip((*yo0).iter_mut().zip((*yo1).iter_mut()))
             .fold(state.phase, |mut p, (y, yo)| {
-                p = p.wrapping_add(f);
-                (*y.0, *y.1) = idsp::cossin(p);
-                *yo.0 = (((*y.0 as i64 * self.amp[0] as i64) >> (31 + 31 - 15))
+                p += Wrapping(f);
+                (*y.0, *y.1) = idsp::cossin(p.0);
+                *yo.0 = ((((*y.0 >> 16) * self.amplitude[0].inner) >> 16)
                     as i16)
                     .wrapping_add(i16::MIN) as u16; // DAC encoding
-                *yo.1 = (((*y.1 as i64 * self.amp[1] as i64) >> (31 + 31 - 15))
+                *yo.1 = ((((*y.1 >> 16) * self.amplitude[1].inner) >> 16)
                     as i16)
                     .wrapping_add(i16::MIN) as u16; // DAC encoding
                 p
@@ -199,6 +221,6 @@ impl Mpll {
 #[repr(C)]
 pub struct Stream {
     pub demod: [i32; 4],
-    pub phase_in: i32,  // after clamping and offset
-    pub phase_out: i32, // derivative is output frequency
+    pub phase_in: Wrapping<i32>, // after offset and clamping
+    pub phase_out: Wrapping<i32>, // derivative is output frequency
 }

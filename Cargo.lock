@@ -288,8 +288,6 @@ dependencies = [
 [[package]]
 name = "dsp-fixedpoint"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c71e6691b4edb40c0a1bd948fa524482e3f36f690d782fcabdc39b5d52f6dcf8"
 dependencies = [
  "num-traits",
  "serde",
@@ -298,8 +296,6 @@ dependencies = [
 [[package]]
 name = "dsp-process"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f999350286aca82b7fb79f05318f2abe0967b1f068d7a24c573c02369d1153f5"
 
 [[package]]
 name = "dyn-clone"
@@ -701,8 +697,6 @@ dependencies = [
 [[package]]
 name = "idsp"
 version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f514ce6181d9bf2385f0a0ba7df1d63ea4c561ac7b86067345a9e73fba5c15f7"
 dependencies = [
  "bytemuck",
  "dsp-fixedpoint",
