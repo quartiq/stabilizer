@@ -69,8 +69,6 @@ pub struct MpllConfig {
     iir: BiquadRepr<f32, Q32<30>, i32>,
     /// Output amplitude (Volt)
     amplitude: [f32; 2],
-    /// Activate settings
-    pub activate: bool,
 }
 
 impl Default for MpllConfig {
@@ -104,20 +102,19 @@ impl Default for MpllConfig {
 
         let mut pid = pid::Pid::default();
         pid.order = pid::Order::I;
-        pid.gains.value[pid::Action::P as usize] = -3.9e3;
-        pid.gains.value[pid::Action::I as usize] = -3.8e6;
-        pid.gains.value[pid::Action::D as usize] = -0.25;
-        pid.limits.value[pid::Action::D as usize] = -150e3;
-        pid.min = 5e3;
-        pid.max = 300e3;
+        pid.gains.value[pid::Action::P as usize] = -3.9e3; // Hz/turn
+        pid.gains.value[pid::Action::I as usize] = -3.8e6; // Hz/sturn
+        pid.gains.value[pid::Action::D as usize] = -0.25; // sHz/turn
+        pid.limits.value[pid::Action::D as usize] = -150e3; // Hz/turn
+        pid.min = 5e3; // Hz
+        pid.max = 300e3; // Hz
 
         Self {
             lp: Lowpass(lp),
             phase: Some(0.0),
             iir: BiquadRepr::Pid(pid),
             _repr: (),
-            amplitude: [0.95, 0.0],
-            activate: true,
+            amplitude: [1.0, 0.0], // V
         }
     }
 }
@@ -148,7 +145,7 @@ impl Mpll {
         state: &mut MpllState,
         x: [&[u16; BATCH_SIZE]; 2],
         y: [&mut [u16; BATCH_SIZE]; 2],
-    ) -> (Stream, i32) {
+    ) -> Stream {
         // scratch
         let mut mix = [[0; BATCH_SIZE]; 4];
         let [m00, m01, m10, m11] = mix.each_mut();
@@ -177,7 +174,7 @@ impl Mpll {
             mix[3][BATCH_SIZE - 1],
         ];
         // phase
-        // need full atan2 or addtl osc to support any phase offset
+        // need full atan2, rotation, or addtl osc to support any phase offset
         let mut p = Wrapping(idsp::atan2(demod[1], demod[0]));
         // Delay correction
         p -= Wrapping(state.iir.xy[2]) * Wrapping(10);
@@ -186,7 +183,7 @@ impl Mpll {
             p.0 = state.clamp.process((p + offset).0);
         }
         // PID
-        let f = Split::new(&self.iir, &mut state.iir).process(p.0);
+        let f = Wrapping(Split::new(&self.iir, &mut state.iir).process(p.0));
         // modulate
         let [y0, y1] = state.lo.each_mut();
         let [yo0, yo1] = y;
@@ -195,7 +192,7 @@ impl Mpll {
             .zip(y1)
             .zip((*yo0).iter_mut().zip((*yo1).iter_mut()))
             .fold(state.phase, |mut p, (y, yo)| {
-                p += Wrapping(f);
+                p += f;
                 (*y.0, *y.1) = idsp::cossin(p.0);
                 *yo.0 = ((((*y.0 >> 16) * self.amplitude[0].inner) >> 16)
                     as i16)
@@ -205,14 +202,11 @@ impl Mpll {
                     .wrapping_add(i16::MIN) as u16; // DAC encoding
                 p
             });
-        (
-            Stream {
-                demod,
-                phase_in: p,
-                phase_out: state.phase,
-            },
-            f,
-        )
+        Stream {
+            demod,
+            phase: p,
+            frequency: f,
+        }
     }
 }
 
@@ -220,7 +214,10 @@ impl Mpll {
 #[derive(Clone, Copy, Debug, Default, bytemuck::Zeroable, bytemuck::Pod)]
 #[repr(C)]
 pub struct Stream {
+    /// Demodulated inputs `[0.i, 0.q, 1.i, 1.q]`
     pub demod: [i32; 4],
-    pub phase_in: Wrapping<i32>, // after offset and clamping
-    pub phase_out: Wrapping<i32>, // derivative is output frequency
+    /// Input phase after delay compensation and offset
+    pub phase: Wrapping<i32>,
+    /// Output frequency
+    pub frequency: Wrapping<i32>,
 }

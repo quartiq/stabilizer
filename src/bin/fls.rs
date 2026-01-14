@@ -86,7 +86,8 @@ use dsp_process::{Process, SplitProcess};
 use idsp::{
     Clamp, Complex, Lockin, Lowpass, LowpassState, PLL, Unwrapper,
     iir::{
-        Biquad, BiquadClamp, DirectForm1, DirectForm1Dither, pid::Pid,
+        Biquad, BiquadClamp, DirectForm1, DirectForm1Dither,
+        pid::{Pid, Units},
         repr::BiquadRepr,
     },
 };
@@ -172,11 +173,7 @@ where
     #[tree(skip)]
     iir: BiquadClamp<T, Y>,
     #[tree(skip)]
-    period: f32,
-    #[tree(skip)]
-    b_scale: f32,
-    #[tree(skip)]
-    y_scale: f32,
+    units: Units<f32>,
 }
 
 mod biquad_update {
@@ -223,8 +220,7 @@ mod biquad_update {
         Pid<f32>: Into<BiquadClamp<T, Y>>,
     {
         leaf::deserialize_by_key(&mut (), keys, de)?;
-        value.iir =
-            value.repr.build(value.period, value.b_scale, value.y_scale);
+        value.iir = value.repr.build(value.units.clone());
         Ok(())
     }
 
@@ -256,9 +252,7 @@ where
             repr: BiquadRepr::Raw(Biquad::IDENTITY.into()),
             _update: (),
             iir: Biquad::IDENTITY.into(),
-            period: 1.0,
-            b_scale: 1.0,
-            y_scale: 1.0,
+            units: Default::default(),
         }
     }
 }
@@ -440,9 +434,12 @@ impl Default for ChannelSettings {
             iir: BiquadReprTree {
                 repr: BiquadRepr::Raw(iir_prop.clone()),
                 iir: iir_prop.clone(),
-                period: stabilizer::design_parameters::TIMER_PERIOD
-                    * (SAMPLE_TICKS * BATCH_SIZE as u32) as f32,
-                y_scale: DDS_LSB_PER_HZ,
+                units: Units {
+                    t: stabilizer::design_parameters::TIMER_PERIOD
+                        * (SAMPLE_TICKS * BATCH_SIZE as u32) as f32,
+                    y: DDS_LSB_PER_HZ.recip(),
+                    x: 1.0,
+                },
                 ..Default::default()
             },
             pow_gain: 0,
@@ -450,9 +447,11 @@ impl Default for ChannelSettings {
             iir_amp: BiquadReprTree {
                 repr: BiquadRepr::Raw(iir_amp.clone()),
                 iir: iir_amp.clone(),
-                period: 10e-3,
-                b_scale: iir_amp.max,
-                y_scale: iir_amp.max,
+                units: Units {
+                    t: 10e-3,
+                    x: iir_amp.max.recip(),
+                    y: iir_amp.max.recip(),
+                },
                 ..Default::default()
             },
         };
@@ -500,9 +499,9 @@ impl ChannelSettings {
     fn update_phase_scale(&mut self) {
         // Units: [x] = turns, [y] = Hz
         // TODO: verify
-        let phase_lsb_per_turn =
-            (self.phase_scale[0][0] << (32 - self.phase_scale[0][1])) as f32;
-        self.iir.b_scale = DDS_LSB_PER_HZ / phase_lsb_per_turn;
+        self.iir.units.x =
+            ((self.phase_scale[0][0] << (32 - self.phase_scale[0][1])) as f32)
+                .recip();
     }
 }
 

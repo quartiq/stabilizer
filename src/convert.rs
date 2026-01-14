@@ -31,9 +31,9 @@ pub struct AdcCode(pub u16);
 impl AdcCode {
     // The ADC has a differential input with a range of +/- 4.096 V and 16-bit resolution.
     // The gain into the two inputs is 1/5.
-    const FULL_SCALE: f32 = 5.0 / 2.0 * 4.096;
-    const VOLT_PER_LSB: f32 = -Self::FULL_SCALE / i16::MIN as f32;
-    const LSB_PER_VOLT: f32 = 1. / Self::VOLT_PER_LSB;
+    pub const FULL_SCALE: f32 = 5.0 / 2.0 * 4.096;
+    pub const VOLT_PER_LSB: f32 = -Self::FULL_SCALE / i16::MIN as f32;
+    pub const LSB_PER_VOLT: f32 = 1. / Self::VOLT_PER_LSB;
 }
 
 impl From<u16> for AdcCode {

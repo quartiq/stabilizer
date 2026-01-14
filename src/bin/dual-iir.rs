@@ -31,7 +31,7 @@
 use miniconf::Tree;
 
 use dsp_process::SplitProcess;
-use idsp::iir;
+use idsp::iir::{self, pid::Units};
 
 use platform::{AppSettings, NetSettings};
 use serde::{Deserialize, Serialize};
@@ -50,6 +50,12 @@ const SAMPLE_TICKS_LOG2: u8 = 7;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 const SAMPLE_PERIOD: f32 =
     SAMPLE_TICKS as f32 * stabilizer::design_parameters::TIMER_PERIOD;
+
+const UNITS: Units<f32> = Units {
+    t: SAMPLE_PERIOD,
+    x: AdcCode::VOLT_PER_LSB,
+    y: DacCode::VOLT_PER_LSB,
+};
 
 #[derive(Clone, Debug, Tree, Default)]
 #[tree(meta(doc, typename))]
@@ -147,9 +153,10 @@ impl Channel {
                 .unwrap(),
             state: Default::default(),
             run: self.run,
-            biquad: self.biquad.each_ref().map(|biquad| {
-                biquad.repr.build(SAMPLE_PERIOD, 1.0, DacCode::LSB_PER_VOLT)
-            }),
+            biquad: self
+                .biquad
+                .each_ref()
+                .map(|biquad| biquad.repr.build(UNITS)),
         })
     }
 }
@@ -470,12 +477,7 @@ mod app {
                 });
             }
             let b = settings.dual_iir.ch.each_ref().map(|ch| {
-                (
-                    ch.run,
-                    ch.biquad.each_ref().map(|b| {
-                        b.repr.build(SAMPLE_PERIOD, 1.0, DacCode::LSB_PER_VOLT)
-                    }),
-                )
+                (ch.run, ch.biquad.each_ref().map(|b| b.repr.build(UNITS)))
             });
             c.shared.active.lock(|active| {
                 for (a, b) in active.iter_mut().zip(b) {
