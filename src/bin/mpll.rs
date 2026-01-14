@@ -58,7 +58,10 @@ pub struct App {
     stream: stream::Target,
 
     /// Activate settings
-    pub activate: bool,
+    ///
+    /// If `activate = true` each `mpll` settings change immediately results
+    /// in activation.
+    activate: bool,
 }
 
 impl Default for App {
@@ -89,8 +92,7 @@ pub struct TelemetryCooked {
 
 impl From<TelemetryState> for TelemetryCooked {
     fn from(t: TelemetryState) -> Self {
-        const VOLT_PER_LSB: f32 =
-            10.24 /* V*/ / 10.0 /* G10 */ / (1u64 << 31) as f32 * 2.0 /* conversion */;
+        const VOLT_PER_LSB: f32 = 10.24 /* V FS */ / Gain::G10.gain() * 2.0 /* conversion */ / (1u64 << 31) as f32;
         Self {
             demod: t.demod.map(|d| d.map(|p| p.get_scaled(VOLT_PER_LSB))),
             phase: t.phase.get_scaled(TURN_PER_LSB),

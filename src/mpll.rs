@@ -2,7 +2,7 @@ use core::num::Wrapping;
 
 use dsp_fixedpoint::Q32;
 use dsp_process::{
-    Add, Identity, Inplace, Pair, Parallel, Process, Split, Unsplit,
+    Add, Identity, Pair, Parallel, Process, SplitInplace, SplitProcess, Unsplit,
 };
 use idsp::iir::{
     BiquadClamp, DirectForm1, pid,
@@ -26,9 +26,9 @@ pub struct MpllState {
     iir: DirectForm1<i32>,
     /// Current output phase
     phase: Wrapping<i32>,
-    /// Current LO samples for downconverting the next batch
+    /// LO samples for downconverting the next batch
     lo: [[i32; BATCH_SIZE]; 2],
-    // TODO: investigate matched LO delay: 20 samples
+    // TODO: investigate matched LO delay instead of 10*f: 20 samples
 }
 
 impl MpllState {
@@ -152,19 +152,19 @@ impl Mpll {
         // mix
         for (x, (mix, lo)) in x[0].iter().zip(x[1].iter()).zip(
             m00.iter_mut()
-                .zip(m01.iter_mut())
-                .zip(m10.iter_mut().zip(m11.iter_mut()))
+                .zip(m01)
+                .zip(m10.iter_mut().zip(m11))
                 .zip(state.lo[0].iter().zip(state.lo[1].iter())),
         ) {
-            // ADC encoding, mix
+            // ADC encoding, mix, 1 bit loss (headroom)
             *mix.0.0 = ((*x.0 as i16 as i64 * *lo.0 as i64) >> 16) as i32;
             *mix.0.1 = ((*x.0 as i16 as i64 * *lo.1 as i64) >> 16) as i32;
             *mix.1.0 = ((*x.1 as i16 as i64 * *lo.0 as i64) >> 16) as i32;
             *mix.1.1 = ((*x.1 as i16 as i64 * *lo.1 as i64) >> 16) as i32;
         }
-        // lowpass
+        // lowpass, 1 bit gain
         for (mix, state) in mix.iter_mut().zip(state.lp.iter_mut()) {
-            Split::new(&self.lp.0, state).inplace(mix);
+            self.lp.0.inplace(state, mix);
         }
         // decimate
         let demod = [
@@ -183,25 +183,20 @@ impl Mpll {
             p.0 = state.clamp.process((p + offset).0);
         }
         // PID
-        let f = Wrapping(Split::new(&self.iir, &mut state.iir).process(p.0));
+        let f = Wrapping(self.iir.process(&mut state.iir, p.0));
         // modulate
         let [y0, y1] = state.lo.each_mut();
         let [yo0, yo1] = y;
-        state.phase = y0
-            .iter_mut()
-            .zip(y1)
-            .zip((*yo0).iter_mut().zip((*yo1).iter_mut()))
-            .fold(state.phase, |mut p, (y, yo)| {
-                p += f;
-                (*y.0, *y.1) = idsp::cossin(p.0);
-                *yo.0 = ((((*y.0 >> 16) * self.amplitude[0].inner) >> 16)
-                    as i16)
-                    .wrapping_add(i16::MIN) as u16; // DAC encoding
-                *yo.1 = ((((*y.1 >> 16) * self.amplitude[1].inner) >> 16)
-                    as i16)
-                    .wrapping_add(i16::MIN) as u16; // DAC encoding
-                p
-            });
+        for (y, yo) in y0.iter_mut().zip(y1).zip(yo0.iter_mut().zip(yo1)) {
+            state.phase += f;
+            (*y.0, *y.1) = idsp::cossin(state.phase.0);
+            *yo.0 = (((*y.0 as i64 * self.amplitude[0].inner as i64) >> 32)
+                as i16)
+                .wrapping_add(i16::MIN) as u16; // DAC encoding
+            *yo.1 = (((*y.1 as i64 * self.amplitude[1].inner as i64) >> 32)
+                as i16)
+                .wrapping_add(i16::MIN) as u16; // DAC encoding
+        }
         Stream {
             demod,
             phase: p,
