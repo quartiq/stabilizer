@@ -24,11 +24,10 @@ pub struct MpllState {
     clamp: idsp::ClampWrap<i32>,
     /// PID state
     iir: DirectForm1<i32>,
-    /// Current output phase
+    /// Current modulation phase
     phase: Wrapping<i32>,
     /// LO samples for downconverting the next batch
     lo: [[i32; BATCH_SIZE]; 2],
-    // TODO: investigate matched LO delay instead of 10*f: 20 samples
 }
 
 impl MpllState {
@@ -41,7 +40,7 @@ impl MpllState {
 #[derive(Debug, Clone)]
 pub struct Mpll {
     lp: Lowpass,
-    phase: Option<Wrapping<i32>>,
+    offset: Option<Wrapping<i32>>,
     iir: BiquadClamp<Q32<30>, i32>,
     amplitude: [Q32<16>; 2],
 }
@@ -59,7 +58,7 @@ pub struct MpllConfig {
     ///
     /// Makes the phase wrap monotonic by clamping it to aid capture/pull-in with external modulation.
     /// Disable for modulation drive and use biquad offset/pid setpoint
-    phase: Option<f32>,
+    offset: Option<f32>,
     /// Filter representation
     #[tree(rename="repr", typ="&str", with=miniconf::str_leaf, defer=self.iir)]
     _repr: (), // before iir
@@ -111,7 +110,7 @@ impl Default for MpllConfig {
 
         Self {
             lp: Lowpass(lp),
-            phase: Some(0.0),
+            offset: Some(0.0),
             iir: BiquadRepr::Pid(pid),
             _repr: (),
             amplitude: [1.0, 0.0], // V
@@ -123,8 +122,8 @@ impl MpllConfig {
     pub fn build(&self) -> Mpll {
         Mpll {
             lp: self.lp.clone(),
-            phase: self
-                .phase
+            offset: self
+                .offset
                 .map(|p| Wrapping((p * TURN_PER_LSB.recip()) as _)),
             iir: self.iir.build(pid::Units {
                 t: BATCH_SIZE as f32 * S_PER_SAMPLE,
@@ -175,32 +174,33 @@ impl Mpll {
         ];
         // phase
         // need full atan2, rotation, or addtl osc to support any phase offset
-        let mut p = Wrapping(idsp::atan2(demod[1], demod[0]));
+        let mut phase = Wrapping(idsp::atan2(demod[1], demod[0]));
         // Delay correction
-        p -= Wrapping(state.iir.xy[2]) * Wrapping(10);
+        // TODO: consider delayed LO. This might add some frequency noise.
+        phase -= Wrapping(state.iir.xy[2]) * Wrapping(10);
         // Offset and clamp
-        if let Some(offset) = self.phase {
-            p.0 = state.clamp.process((p + offset).0);
+        if let Some(offset) = self.offset {
+            phase.0 = state.clamp.process((phase + offset).0);
         }
         // PID
-        let f = Wrapping(self.iir.process(&mut state.iir, p.0));
+        let frequency = Wrapping(self.iir.process(&mut state.iir, phase.0));
         // modulate
         let [y0, y1] = state.lo.each_mut();
         let [yo0, yo1] = y;
         for (y, yo) in y0.iter_mut().zip(y1).zip(yo0.iter_mut().zip(yo1)) {
-            state.phase += f;
+            state.phase += frequency;
             (*y.0, *y.1) = idsp::cossin(state.phase.0);
             *yo.0 = (((*y.0 as i64 * self.amplitude[0].inner as i64) >> 32)
                 as i16)
                 .wrapping_add(i16::MIN) as u16; // DAC encoding
-            *yo.1 = (((*y.1 as i64 * self.amplitude[1].inner as i64) >> 32)
+            *yo.1 = (((phase.0 as i64 * self.amplitude[1].inner as i64) >> 32)
                 as i16)
                 .wrapping_add(i16::MIN) as u16; // DAC encoding
         }
         Stream {
             demod,
-            phase: p,
-            frequency: f,
+            phase,
+            frequency,
         }
     }
 }

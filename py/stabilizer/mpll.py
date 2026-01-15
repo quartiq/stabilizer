@@ -1,4 +1,4 @@
-"""Stabilizer FLS signal searcher"""
+"""MPLL calibration/sweep/searcher"""
 
 # pylint: disable=logging-fstring-interpolation,too-many-statements,too-many-locals,duplicate-code
 
@@ -90,7 +90,8 @@ async def main():
         u = 1 << 32
         try:
             await conf.set("/stream", f"{local_ip}:{args.port}")
-            await conf.set("/mpll/phase", None)
+            await conf.set("/activate", False)
+            await conf.set("/mpll/offset", None)
             await conf.set("/mpll/repr", "Ba")
             await conf.set("/mpll/iir/Ba/max", args.fmin)
             await conf.set("/mpll/iir/Ba/min", args.fmin)
@@ -103,7 +104,7 @@ async def main():
                 frame = await stream.queue.get()
                 body = frame.to_mu()
                 frames.append(body)
-                f = body["frequency"] / u / t
+                f = body["frequency"] / (u * t)
                 demod = (body["demod"][:, :, 0] + 1j * body["demod"][:, :, 1]) * (
                     20.48 / 10 / u * 2
                 )
@@ -113,7 +114,7 @@ async def main():
                     np.absolute(demod[:, 0]).mean(),
                     body["phase"].mean() / u,
                 )
-                if f.mean() > args.fmax - 1:
+                if f[-1] > args.fmax - 1:
                     break
         finally:
             await conf.set("/stream", "0.0.0.0:0")
