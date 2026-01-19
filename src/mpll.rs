@@ -9,12 +9,19 @@ use idsp::iir::{
     repr::BiquadRepr,
     wdf::{Wdf, WdfState},
 };
-use miniconf::Tree;
 
 pub const BATCH_SIZE: usize = 8;
-pub const S_PER_SAMPLE: f32 = 128.0 / 100e6;
-pub const TURN_PER_LSB: f32 = ((1u64 << 32) as f32).recip();
-pub const HZ_PER_LSB: f32 = ((1u64 << 32) as f32 * S_PER_SAMPLE).recip();
+// 100 MHz timer, 128 divider: period of 1.28 µs, ~781.25 KHz.
+pub const SAMPLE_TICKS: u32 = 1 << 7;
+const S_PER_SAMPLE: f32 = SAMPLE_TICKS as f32 / 100e6;
+const TURN_PER_LSB: f32 = ((1u64 << 32) as f32).recip();
+const HZ_PER_LSB: f32 = ((1u64 << 32) as f32 * S_PER_SAMPLE).recip();
+
+pub const UNITS: pid::Units<f32> = pid::Units {
+    t: BATCH_SIZE as f32 * S_PER_SAMPLE,
+    x: TURN_PER_LSB,
+    y: HZ_PER_LSB,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct MpllState {
@@ -32,11 +39,12 @@ pub struct MpllState {
 
 impl MpllState {
     pub fn set_frequency(&mut self, f: f32) {
-        self.iir.xy[2] = (f * HZ_PER_LSB.recip()) as _;
+        self.iir.xy[2] = (f * UNITS.y.recip()) as _;
         self.iir.xy[3] = self.iir.xy[2];
     }
 }
 
+/// Runtime active settings
 #[derive(Debug, Clone)]
 pub struct Mpll {
     lp: Lowpass,
@@ -48,10 +56,10 @@ pub struct Mpll {
 #[derive(Debug, Clone)]
 struct Lowpass(Pair<[Wdf<2, 0xad>; 2], (Wdf<2, 0xad>, Wdf<1, 0xa>), i32>);
 
-#[derive(Debug, Clone, Tree)]
+#[derive(Debug, Clone, miniconf::Tree)]
 #[tree(meta(doc, typename))]
 pub struct MpllConfig {
-    /// Lowpass filter poles (7th order coupled allpass)
+    /// Lowpass filter poles (7th order wave digital filter allpass pair)
     #[tree(with=miniconf::leaf)]
     lp: (([f64; 2], [f64; 2]), ([f64; 2], [f64; 1])),
     /// Input phase offset (turns) and clamp
@@ -63,10 +71,11 @@ pub struct MpllConfig {
     #[tree(rename="repr", typ="&str", with=miniconf::str_leaf, defer=self.iir)]
     _repr: (), // before iir
     /// Phase-to-frequency filter (units Hz/turn, s)
-    ///
-    /// Do not use the IIR offset as phase offset with clamp=true
     iir: BiquadRepr<f32, Q32<30>, i32>,
     /// Output amplitude (Volt)
+    ///
+    /// DAC0: in-phase modulation amplitude in V
+    /// DAC1: in-loop phase error in V/turn
     amplitude: [f32; 2],
 }
 
@@ -135,14 +144,8 @@ impl MpllConfig {
                 ),
                 Unsplit(&Add),
             ))),
-            offset: self
-                .offset
-                .map(|p| Wrapping((p * TURN_PER_LSB.recip()) as _)),
-            iir: self.iir.build(pid::Units {
-                t: BATCH_SIZE as f32 * S_PER_SAMPLE,
-                x: TURN_PER_LSB,
-                y: HZ_PER_LSB,
-            }),
+            offset: self.offset.map(|p| Wrapping((p * UNITS.x.recip()) as _)),
+            iir: self.iir.build(UNITS),
             amplitude: self
                 .amplitude
                 .map(|a| Q32::from_f32(a * 10.24f32.recip())),

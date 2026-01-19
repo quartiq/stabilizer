@@ -12,10 +12,6 @@ use stabilizer::{convert::Gain, mpll::*, statistics};
 
 use platform::{AppSettings, NetSettings};
 
-// 100 MHz timer, 128 divider: period of 1.28 µs, ~781.25 KHz.
-const SAMPLE_TICKS_LOG2: u32 = 7;
-const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
-
 #[derive(Clone, Debug, Tree, Default)]
 #[tree(meta(doc, typename))]
 pub struct Settings {
@@ -95,8 +91,8 @@ impl From<TelemetryState> for TelemetryCooked {
         const VOLT_PER_LSB: f32 = 10.24 /* V FS */ / Gain::G10.gain() * 2.0 /* conversion */ / (1u64 << 31) as f32;
         Self {
             demod: t.demod.map(|d| d.map(|p| p.get_scaled(VOLT_PER_LSB))),
-            phase: t.phase.get_scaled(TURN_PER_LSB),
-            frequency: t.frequency.get_scaled(HZ_PER_LSB),
+            phase: t.phase.get_scaled(UNITS.x),
+            frequency: t.frequency.get_scaled(UNITS.y),
         }
     }
 }
