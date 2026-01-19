@@ -51,9 +51,9 @@ struct Lowpass(Pair<[Wdf<2, 0xad>; 2], (Wdf<2, 0xad>, Wdf<1, 0xa>), i32>);
 #[derive(Debug, Clone, Tree)]
 #[tree(meta(doc, typename))]
 pub struct MpllConfig {
-    /// Lowpass filter configuration
-    #[tree(skip)]
-    lp: Lowpass,
+    /// Lowpass filter poles (7th order coupled allpass)
+    #[tree(with=miniconf::leaf)]
+    lp: (([f64; 2], [f64; 2]), ([f64; 2], [f64; 1])),
     /// Input phase offset (turns) and clamp
     ///
     /// Makes the phase wrap monotonic by clamping it to aid capture/pull-in with external modulation.
@@ -73,43 +73,41 @@ pub struct MpllConfig {
 impl Default for MpllConfig {
     fn default() -> Self {
         // 7th order Cheby2 as WDF-CA, -3 dB @ 0.005*1.28, -112 dB @ 0.018*1.28
-        let lp = Pair::new((
+        let _lp = (
             (
-                Unsplit(&Identity),
-                Parallel((
-                    [
-                        Wdf::quantize(&[
-                            -0.9866183703960676,
-                            0.9995042973541263,
-                        ])
-                        .unwrap(),
-                        Wdf::quantize(&[-0.94357710177202, 0.9994723555364557])
-                            .unwrap(),
-                    ],
-                    (
-                        Wdf::quantize(&[
-                            -0.9619459355859967,
-                            0.9994905727027024,
-                        ])
-                        .unwrap(),
-                        Wdf::quantize(&[0.9677764552414969]).unwrap(),
-                    ),
-                )),
+                [-0.9866183703960676, 0.9995042973541263],
+                [-0.94357710177202, 0.9994723555364557],
             ),
-            Unsplit(&Add),
-        ));
+            (
+                [-0.9619459355859967, 0.9994905727027024],
+                [0.9677764552414969],
+            ),
+        );
+        // 7th order Cheby2 as WDF-CA, -3 dB @ 0.002*1.28, -112 dB @ 0.008*1.28
+        let lp = (
+            (
+                [-0.9957982894290341, 0.9999515878962579],
+                [-0.9820161777415592, 0.9999484676006056],
+            ),
+            (
+                [-0.9879486197839881, 0.999950247189272],
+                [0.9898181025252286],
+            ),
+        );
 
         let mut pid = pid::Pid::default();
         pid.order = pid::Order::I;
-        pid.gains.value[pid::Action::P as usize] = -3.9e3; // Hz/turn
-        pid.gains.value[pid::Action::I as usize] = -3.8e6; // Hz/sturn
-        pid.gains.value[pid::Action::D as usize] = -0.25; // sHz/turn
-        pid.limits.value[pid::Action::D as usize] = -150e3; // Hz/turn
+        pid.gains.value[pid::Action::P as usize] = -1e3; // Hz/turn
+        pid.gains.value[pid::Action::I as usize] = -5e5; // Hz/sturn
+        // pid.gains.value[pid::Action::P as usize] = -1.2e3; // Hz/turn
+        // pid.gains.value[pid::Action::I as usize] = -5e5; // Hz/sturn
+        // pid.gains.value[pid::Action::D as usize] = -0.15; // sHz/turn
+        // pid.limits.value[pid::Action::D as usize] = -20e3; // Hz/turn
         pid.min = 5e3; // Hz
         pid.max = 300e3; // Hz
 
         Self {
-            lp: Lowpass(lp),
+            lp,
             offset: Some(0.0),
             iir: BiquadRepr::Pid(pid),
             _repr: (),
@@ -121,7 +119,22 @@ impl Default for MpllConfig {
 impl MpllConfig {
     pub fn build(&self) -> Mpll {
         Mpll {
-            lp: self.lp.clone(),
+            lp: Lowpass(Pair::new((
+                (
+                    Unsplit(&Identity),
+                    Parallel((
+                        [
+                            Wdf::quantize(&self.lp.0.0).unwrap(),
+                            Wdf::quantize(&self.lp.0.1).unwrap(),
+                        ],
+                        (
+                            Wdf::quantize(&self.lp.1.0).unwrap(),
+                            Wdf::quantize(&self.lp.1.1).unwrap(),
+                        ),
+                    )),
+                ),
+                Unsplit(&Add),
+            ))),
             offset: self
                 .offset
                 .map(|p| Wrapping((p * TURN_PER_LSB.recip()) as _)),

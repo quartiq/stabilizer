@@ -58,7 +58,7 @@ async def main():
     parser.add_argument(
         "--sweep",
         type=float,
-        default=100e3,
+        default=10e3,
         help="Sweep (Hz per s) (%(default)s)",
     )
     parser.add_argument(
@@ -128,20 +128,36 @@ async def main():
             * np.exp(-20j * np.pi / u * body["frequency"][:, None])
         )
         mean = demod[:, 0].mean()
+        angle = np.angle(mean) / (2 * np.pi)
+        _logger.warning("IQ mean %g V @ %g turns", np.absolute(mean), angle)
+        # algebraic least squares circle
+        x = demod[:, 0]
+        b = np.vstack((x.real**2 + x.imag**2, x.real, x.imag, np.ones_like(x.real)))
+        _bu, bs, bv = np.linalg.svd(b.T, full_matrices=False)
+        # assert np.fabs(bs[-1]) < 1 / 10.0
+        b = bv[-1]  # right singular vector to lowest singular value
+        center = -(b[1] + 1j * b[2]) / (2 * b[0])
+        distance2 = (center * center.conj()).real
+        radius = np.sqrt(distance2 - b[3] / b[0])
+        angle = np.angle(center) / (2 * np.pi)
         _logger.warning(
-            "IQ mean %g V @ %g turns", np.absolute(mean), np.angle(mean) / (2 * np.pi)
+            "IQ resonance %g V radius, center %g V @ %g turns",
+            radius,
+            np.sqrt(distance2),
+            angle,
         )
+
         power = np.absolute(demod[:, 0]) ** 2
         fmean = (body["frequency"] * power).sum() / (power.sum() * t * u)
         _logger.warning("frequency mean %g kHz", fmean / 1e3)
 
         await conf.set("/activate", False)
         await conf.set("/mpll/iir/Pid/order", "I")
-        await conf.set("/mpll/iir/Pid/gains/p", -3.9e3)
-        await conf.set("/mpll/iir/Pid/gains/i", -3.8e6)
-        await conf.set("/mpll/iir/Pid/gains/d", -0.25)
-        await conf.set("/mpll/iir/Pid/limits/d", -150e3)
-        await conf.set("/mpll/iir/Pid/setpoint", np.angle(mean) / (2 * np.pi))
+        await conf.set("/mpll/iir/Pid/gains/p", -1e3)
+        await conf.set("/mpll/iir/Pid/gains/i", -5e5)
+        # await conf.set("/mpll/iir/Pid/gains/d", -0.25)
+        # await conf.set("/mpll/iir/Pid/limits/d", -150e3)
+        await conf.set("/mpll/iir/Pid/setpoint", angle)
         await conf.set("/mpll/iir/Pid/min", fmean)
         await conf.set("/mpll/iir/Pid/max", fmean)
         await conf.set("/activate", True)
