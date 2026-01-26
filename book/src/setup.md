@@ -262,3 +262,6 @@ def flatten(k, v):
   return l
 '''
 ```
+
+Within telegraf the mqtt telemetry data can then be routed to e.g. influxdb,
+prometheus or grafana live.
