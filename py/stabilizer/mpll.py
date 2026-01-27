@@ -8,7 +8,6 @@ import argparse
 import logging
 
 import numpy as np
-from tqdm.asyncio import tqdm
 
 import miniconf
 from miniconf.common import MQTTv5, one
@@ -60,6 +59,9 @@ async def main():
         type=float,
         default=10e3,
         help="Sweep (Hz per s) (%(default)s)",
+    )
+    parser.add_argument(
+        "--plot", type=str, default=None, help="Plot filename (%(default)s)"
     )
 
     args = parser.parse_args()
@@ -127,8 +129,7 @@ async def main():
         # algebraic least squares circle
         x = demod[:, 0]
         b = np.vstack((x.real**2 + x.imag**2, x.real, x.imag, np.ones_like(x.real)))
-        _bu, bs, bv = np.linalg.svd(b.T, full_matrices=False)
-        # assert np.fabs(bs[-1]) < 1 / 10.0
+        _bu, _bs, bv = np.linalg.svd(b.T, full_matrices=False)
         b = bv[-1]  # right singular vector to lowest singular value
         center = -(b[1] + 1j * b[2]) / (2 * b[0])
         distance2 = (center * center.conj()).real
@@ -140,6 +141,15 @@ async def main():
             np.sqrt(distance2),
             angle,
         )
+
+        if args.plot is not None:
+            from matplotlib import pyplot as plt
+
+            fig, ax = plt.subplots()
+            ax.plot(x.real, x.imag)
+            ax.set_aspect("equal")
+            ax.grid()
+            fig.savefig(args.plot)
 
         power = np.absolute(demod[:, 0]) ** 2
         fmean = (body["frequency"] * power).sum() / (power.sum() * t * u)
