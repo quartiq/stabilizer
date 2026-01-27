@@ -61,12 +61,6 @@ async def main():
         default=10e3,
         help="Sweep (Hz per s) (%(default)s)",
     )
-    parser.add_argument(
-        "--amplitude",
-        type=float,
-        default=1.0,
-        help="Amplitude (V) (%(default)s)",
-    )
 
     args = parser.parse_args()
     logging.basicConfig(
@@ -89,6 +83,7 @@ async def main():
         t = 1.28e-6
         u = 1 << 32
         try:
+            orig_stream = await conf.get("/stream")
             await conf.set("/stream", f"{local_ip}:{args.port}")
             await conf.set("/activate", False)
             await conf.set("/mpll/offset", None)
@@ -96,7 +91,6 @@ async def main():
             await conf.set("/mpll/iir/Ba/max", args.fmin)
             await conf.set("/mpll/iir/Ba/min", args.fmin)
             await conf.set("/mpll/iir/Ba/ba", [[0, 0, 0], [1, -1, 0]])
-            await conf.set("/mpll/amplitude/0", args.amplitude)
             await conf.set("/activate", True)
             await conf.set("/mpll/iir/Ba/max", args.fmax)
             await conf.set("/mpll/iir/Ba/u", args.sweep * t * 8)
@@ -117,7 +111,7 @@ async def main():
                 if f[-1] > args.fmax - 1:
                     break
         finally:
-            await conf.set("/stream", "0.0.0.0:0")
+            await conf.set("/stream", orig_stream)
             await conf.set("/mpll/repr", "Pid")
 
         body = np.concatenate(frames)
@@ -155,8 +149,6 @@ async def main():
         await conf.set("/mpll/iir/Pid/order", "I")
         await conf.set("/mpll/iir/Pid/gains/p", -1e3)
         await conf.set("/mpll/iir/Pid/gains/i", -5e5)
-        # await conf.set("/mpll/iir/Pid/gains/d", -0.25)
-        # await conf.set("/mpll/iir/Pid/limits/d", -150e3)
         await conf.set("/mpll/iir/Pid/setpoint", angle)
         await conf.set("/mpll/iir/Pid/min", fmean)
         await conf.set("/mpll/iir/Pid/max", fmean)
