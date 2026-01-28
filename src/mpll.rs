@@ -98,8 +98,8 @@ impl Default for MpllConfig {
 
         let mut pid = pid::Pid::default();
         pid.order = pid::Order::I;
-        pid.gains.value[pid::Action::P as usize] = -4e3; // Hz/turn
-        pid.gains.value[pid::Action::I as usize] = -10e6; // Hz/sturn
+        pid.gains.value[pid::Action::P as usize] = -3e3; // Hz/turn
+        pid.gains.value[pid::Action::I as usize] = -7e6; // Hz/sturn
         // pid.gains.value[pid::Action::P as usize] = -1.2e3; // Hz/turn
         // pid.gains.value[pid::Action::I as usize] = -5e5; // Hz/sturn
         // pid.gains.value[pid::Action::D as usize] = -0.15; // sHz/turn
