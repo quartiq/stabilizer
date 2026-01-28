@@ -4,7 +4,7 @@
 use core::sync::atomic::{Ordering, fence};
 
 use fugit::ExtU32;
-use miniconf::Tree;
+use miniconf::{Leaf, Tree};
 use rtic_monotonics::Monotonic;
 
 use serde::Serialize;
@@ -44,6 +44,9 @@ impl serial_settings::Settings for Settings {
 #[derive(Clone, Debug, Tree)]
 #[tree(meta(doc, typename))]
 pub struct App {
+    /// AFE gain
+    afe: [Leaf<Gain>; 2],
+
     mpll: MpllConfig,
 
     /// Specifies the telemetry output period in seconds.
@@ -63,6 +66,7 @@ pub struct App {
 impl Default for App {
     fn default() -> Self {
         Self {
+            afe: [Leaf(Gain::G10); 2],
             telemetry_period: 10.,
             stream: Default::default(),
             mpll: Default::default(),
@@ -150,6 +154,7 @@ mod app {
         state: MpllState,
         generator: FrameGenerator,
         cpu_temp_sensor: stabilizer::hardware::cpu_temp_sensor::CpuTempSensor,
+        afes: [stabilizer::hardware::Pgia; 2],
     }
 
     #[init]
@@ -165,8 +170,8 @@ mod app {
             SAMPLE_TICKS,
         );
 
-        carrier.afes[0].set_gain(Gain::G10);
-        carrier.afes[1].set_gain(Gain::G10);
+        carrier.afes[0].set_gain(carrier.settings.mpll.afe[0].0);
+        carrier.afes[1].set_gain(carrier.settings.mpll.afe[1].0);
 
         let mut network = NetworkUsers::new(
             carrier.network_devices.stack,
@@ -195,6 +200,7 @@ mod app {
             cpu_temp_sensor: carrier.temperature_sensor,
             state: Default::default(),
             generator,
+            afes: carrier.afes,
         };
 
         // Enable ADC/DAC events
@@ -293,12 +299,14 @@ mod app {
         }
     }
 
-    #[task(priority = 1, shared=[network, settings, active_settings])]
+    #[task(priority = 1, shared=[network, settings, active_settings], local=[afes])]
     async fn settings_update(mut c: settings_update::Context) {
         c.shared.settings.lock(|settings| {
             c.shared
                 .network
                 .lock(|net| net.direct_stream(settings.mpll.stream));
+            c.local.afes[0].set_gain(settings.mpll.afe[0].0);
+            c.local.afes[1].set_gain(settings.mpll.afe[1].0);
             if settings.mpll.activate {
                 let new = settings.mpll.mpll.build();
                 c.shared.active_settings.lock(|current| *current = new);

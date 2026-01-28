@@ -2,7 +2,7 @@ use core::num::Wrapping;
 
 use dsp_fixedpoint::Q32;
 use dsp_process::{
-    Add, Identity, Pair, Parallel, Process, SplitInplace, SplitProcess, Unsplit,
+    Add, Identity, Pair, Parallel, SplitInplace, SplitProcess, Unsplit,
 };
 use idsp::iir::{
     BiquadClamp, DirectForm1, pid,
@@ -27,8 +27,6 @@ pub const UNITS: pid::Units<f32> = pid::Units {
 pub struct MpllState {
     /// Lowpass state
     lp: [(((), ([WdfState<2>; 2], (WdfState<2>, WdfState<1>))), ()); 4],
-    /// Phase clamp
-    clamp: idsp::ClampWrap<i32>,
     /// PID state
     iir: DirectForm1<i32>,
     /// Current modulation phase
@@ -48,7 +46,6 @@ impl MpllState {
 #[derive(Debug, Clone)]
 pub struct Mpll {
     lp: Lowpass,
-    offset: Option<Wrapping<i32>>,
     iir: BiquadClamp<Q32<30>, i32>,
     amplitude: [Q32<16>; 2],
 }
@@ -62,11 +59,6 @@ pub struct MpllConfig {
     /// Lowpass filter poles (7th order wave digital filter allpass pair)
     #[tree(with=miniconf::leaf)]
     lp: (([f64; 2], [f64; 2]), ([f64; 2], [f64; 1])),
-    /// Input phase offset (turns) and clamp
-    ///
-    /// Makes the phase wrap monotonic by clamping it to aid capture/pull-in with external modulation.
-    /// Disable for modulation drive and use biquad offset/pid setpoint
-    offset: Option<f32>,
     /// Filter representation
     #[tree(rename="repr", typ="&str", with=miniconf::str_leaf, defer=self.iir)]
     _repr: (), // before iir
@@ -82,7 +74,7 @@ pub struct MpllConfig {
 impl Default for MpllConfig {
     fn default() -> Self {
         // 7th order Cheby2 as WDF-CA, -3 dB @ 0.005*1.28, -112 dB @ 0.018*1.28
-        let _lp = (
+        let lp = (
             (
                 [-0.982905335393602, 0.9991878840149784],
                 [-0.9283527198560211, 0.9991355621411774],
@@ -93,7 +85,7 @@ impl Default for MpllConfig {
             ),
         );
         // 7th order Cheby2 as WDF-CA, -3 dB @ 0.002*1.28, -112 dB @ 0.008*1.28
-        let lp = (
+        let _lp = (
             (
                 [-0.9931253245194313, 0.9998700465308578],
                 [-0.9707043427084593, 0.9998616710293764],
@@ -106,8 +98,8 @@ impl Default for MpllConfig {
 
         let mut pid = pid::Pid::default();
         pid.order = pid::Order::I;
-        pid.gains.value[pid::Action::P as usize] = -1e3; // Hz/turn
-        pid.gains.value[pid::Action::I as usize] = -5e5; // Hz/sturn
+        pid.gains.value[pid::Action::P as usize] = -4e3; // Hz/turn
+        pid.gains.value[pid::Action::I as usize] = -10e6; // Hz/sturn
         // pid.gains.value[pid::Action::P as usize] = -1.2e3; // Hz/turn
         // pid.gains.value[pid::Action::I as usize] = -5e5; // Hz/sturn
         // pid.gains.value[pid::Action::D as usize] = -0.15; // sHz/turn
@@ -117,10 +109,9 @@ impl Default for MpllConfig {
 
         Self {
             lp,
-            offset: Some(0.0),
             iir: BiquadRepr::Pid(pid),
             _repr: (),
-            amplitude: [1.0, 0.0], // V
+            amplitude: [1.0, 1.0],
         }
     }
 }
@@ -144,7 +135,6 @@ impl MpllConfig {
                 ),
                 Unsplit(&Add),
             ))),
-            offset: self.offset.map(|p| Wrapping((p * UNITS.x.recip()) as _)),
             iir: self.iir.build(UNITS),
             amplitude: self
                 .amplitude
@@ -194,10 +184,6 @@ impl Mpll {
         // Delay correction
         // TODO: consider delayed LO. This might add some frequency noise.
         phase -= Wrapping(state.iir.xy[2]) * Wrapping(10);
-        // Offset and clamp
-        if let Some(offset) = self.offset {
-            phase.0 = state.clamp.process((phase + offset).0);
-        }
         // PID
         let frequency = Wrapping(self.iir.process(&mut state.iir, phase.0));
         // modulate
