@@ -88,7 +88,6 @@ async def main():
             orig_stream = await conf.get("/stream")
             await conf.set("/stream", f"{local_ip}:{args.port}")
             await conf.set("/activate", False)
-            await conf.set("/mpll/offset", None)
             await conf.set("/mpll/repr", "Ba")
             await conf.set("/mpll/iir/Ba/max", args.fmin)
             await conf.set("/mpll/iir/Ba/min", args.fmin)
@@ -110,6 +109,11 @@ async def main():
                     np.absolute(demod[:, 0]).mean(),
                     body["phase"].mean() / u,
                 )
+                _logger.debug(
+                    "phase %s p %s d",
+                    body["phase"] / u,
+                    np.angle(demod[:, 0]) / (2 * np.pi),
+                )
                 if f[-1] > args.fmax - 1:
                     break
         finally:
@@ -125,7 +129,6 @@ async def main():
         )
         mean = demod[:, 0].mean()
         angle = np.angle(mean) / (2 * np.pi)
-        _logger.warning("IQ mean %g V @ %g turns", np.absolute(mean), angle)
         # algebraic least squares circle
         x = demod[:, 0]
         b = np.vstack((x.real**2 + x.imag**2, x.real, x.imag, np.ones_like(x.real)))
@@ -157,8 +160,8 @@ async def main():
 
         await conf.set("/activate", False)
         await conf.set("/mpll/iir/Pid/order", "I")
-        await conf.set("/mpll/iir/Pid/gains/p", -1e3)
-        await conf.set("/mpll/iir/Pid/gains/i", -5e5)
+        await conf.set("/mpll/iir/Pid/gains/p", -3e3)
+        await conf.set("/mpll/iir/Pid/gains/i", -7e6)
         await conf.set("/mpll/iir/Pid/setpoint", angle)
         await conf.set("/mpll/iir/Pid/min", fmean)
         await conf.set("/mpll/iir/Pid/max", fmean)
