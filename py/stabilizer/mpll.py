@@ -128,41 +128,47 @@ async def main():
             * (20.48 / 10 / u * 2)
             * np.exp(-20j * np.pi / u * body["frequency"][:, None])
         )
-        mean = demod[:, 0].mean()
-        angle = np.angle(mean) / (2 * np.pi)
-        g = demod[:, 0]
-        f = np.absolute(g)
-        s = body["frequency"] * (2j * np.pi / u)
-        b = np.array([f * g * s, f * g / s, -1 * f, -1j * f])
-        b = np.linalg.pinv(np.hstack((b.real, b.imag)).T) @ -np.hstack(
-            (g.real * f, g.imag * f)
-        )
-        q = b[2] + 1j * b[3]
-        g1 = q / (s * b[0] + b[1] / s + 1)
-        angle = np.angle(q) / (2 * np.pi)
-        fmean = np.sqrt(b[1] / b[0]) / (2 * np.pi * t)
-        _logger.warning(
-            "IQ resonance %g V, %g kHz, %g turns, %g kHz FWHM",
-            np.absolute(q),
-            fmean / 1e3,
-            angle,
-            fmean / 1e3 / b[0],
-        )
 
         if args.plot is not None:
             from matplotlib import pyplot as plt
 
-            fig, ax = plt.subplots(1, 2, figsize=(10, 6))
-            f = s.imag / (2 * np.pi * t)
-            ax[0].semilogx(f, g.real)
-            ax[0].semilogx(f, g.imag)
-            ax[0].semilogx(f, g1.real)
-            ax[0].semilogx(f, g1.imag)
-            ax[0].grid()
-            ax[1].plot(g.real, g.imag)
-            ax[1].plot(g1.real, g1.imag)
-            ax[1].set_aspect("equal")
-            ax[1].grid()
+            fig, ax = plt.subplots(2, 2, figsize=(10, 6))
+
+        for ch in reversed(range(2)):
+            s = body["frequency"] * (2j * np.pi / u)
+            g = demod[:, ch]
+            f = np.absolute(g)
+            gf = g * f
+            b = np.array([gf * s, gf / s, -f, -1j * f])
+            b = np.linalg.pinv(np.hstack((b.real, b.imag)).T) @ -np.hstack(
+                (gf.real, gf.imag)
+            )
+            q = b[2] + 1j * b[3]
+            g1 = q / (s * b[0] + b[1] / s + 1)
+            angle = np.angle(q) / (2 * np.pi)
+            fmean = np.sqrt(b[1] / b[0]) / (2 * np.pi * t)
+            _logger.warning(
+                "ch%i IQ resonance %g V, %g kHz, %g turns, %g kHz FWHM",
+                ch,
+                np.absolute(q),
+                fmean / 1e3,
+                angle,
+                fmean / 1e3 / b[0],
+            )
+
+            if args.plot is not None:
+                f = s.imag / (2 * np.pi * t)
+                ax[ch, 0].semilogx(f, g.real)
+                ax[ch, 0].semilogx(f, g.imag)
+                ax[ch, 0].semilogx(f, g1.real)
+                ax[ch, 0].semilogx(f, g1.imag)
+                ax[ch, 0].grid()
+                ax[ch, 1].plot(g.real, g.imag)
+                ax[ch, 1].plot(g1.real, g1.imag)
+                ax[ch, 1].set_aspect("equal")
+                ax[ch, 1].grid()
+
+        if args.plot is not None:
             fig.savefig(args.plot)
 
         await conf.set("/activate", False)
