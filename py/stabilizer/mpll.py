@@ -87,6 +87,7 @@ async def main():
         try:
             orig_stream = await conf.get("/stream")
             await conf.set("/stream", f"{local_ip}:{args.port}")
+            await asyncio.sleep(1)
             await conf.set("/activate", False)
             await conf.set("/mpll/repr", "Ba")
             await conf.set("/mpll/iir/Ba/max", args.fmin)
@@ -130,9 +131,12 @@ async def main():
         mean = demod[:, 0].mean()
         angle = np.angle(mean) / (2 * np.pi)
         g = demod[:, 0]
+        f = np.absolute(g)
         s = body["frequency"] * (2j * np.pi / u)
-        b = np.array([g * s, g / s, -1 + 0 * g, -1j + 0 * g])
-        b = np.linalg.pinv(np.hstack((b.real, b.imag)).T) @ -np.hstack((g.real, g.imag))
+        b = np.array([f * g * s, f * g / s, -1 * f, -1j * f])
+        b = np.linalg.pinv(np.hstack((b.real, b.imag)).T) @ -np.hstack(
+            (g.real * f, g.imag * f)
+        )
         q = b[2] + 1j * b[3]
         g1 = q / (s * b[0] + b[1] / s + 1)
         angle = np.angle(q) / (2 * np.pi)
