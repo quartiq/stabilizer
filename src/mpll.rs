@@ -26,7 +26,13 @@ pub const UNITS: pid::Units<f32> = pid::Units {
 #[derive(Debug, Clone, Default)]
 pub struct MpllState {
     /// Lowpass state
-    lp: [(((), ([WdfState<2>; 2], (WdfState<2>, WdfState<1>))), ()); 4],
+    lp: [(
+        (
+            Unsplit<Identity>,
+            ([WdfState<2>; 2], (WdfState<2>, WdfState<1>)),
+        ),
+        Unsplit<Add>,
+    ); 4],
     /// PID state
     iir: DirectForm1<i32>,
     /// Current modulation phase
@@ -121,7 +127,7 @@ impl MpllConfig {
         Mpll {
             lp: Lowpass(Pair::new((
                 (
-                    Unsplit(&Identity),
+                    (),
                     Parallel((
                         [
                             Wdf::quantize(&self.lp.0.0).unwrap(),
@@ -133,7 +139,7 @@ impl MpllConfig {
                         ),
                     )),
                 ),
-                Unsplit(&Add),
+                (),
             ))),
             iir: self.iir.build(UNITS),
             amplitude: self
