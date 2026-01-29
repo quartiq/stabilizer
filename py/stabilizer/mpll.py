@@ -129,34 +129,37 @@ async def main():
         )
         mean = demod[:, 0].mean()
         angle = np.angle(mean) / (2 * np.pi)
-        # algebraic least squares circle
-        x = demod[:, 0]
-        b = np.vstack((x.real**2 + x.imag**2, x.real, x.imag, np.ones_like(x.real)))
-        _bu, _bs, bv = np.linalg.svd(b.T, full_matrices=False)
-        b = bv[-1]  # right singular vector to lowest singular value
-        center = -(b[1] + 1j * b[2]) / (2 * b[0])
-        distance2 = (center * center.conj()).real
-        radius = np.sqrt(distance2 - b[3] / b[0])
-        angle = np.angle(center) / (2 * np.pi)
+        g = demod[:, 0]
+        s = body["frequency"] * (2j * np.pi / u)
+        b = np.array([g * s, g / s, -1 + 0 * g, -1j + 0 * g])
+        b = np.linalg.pinv(np.hstack((b.real, b.imag)).T) @ -np.hstack((g.real, g.imag))
+        q = b[2] + 1j * b[3]
+        g1 = q / (s * b[0] + b[1] / s + 1)
+        angle = np.angle(q) / (2 * np.pi)
+        fmean = np.sqrt(b[1] / b[0]) / (2 * np.pi * t)
         _logger.warning(
-            "IQ resonance %g V radius, center %g V @ %g turns",
-            radius,
-            np.sqrt(distance2),
+            "IQ resonance %g V, %g kHz, %g turns, %g kHz FWHM",
+            np.absolute(q),
+            fmean / 1e3,
             angle,
+            fmean / 1e3 / b[0],
         )
 
         if args.plot is not None:
             from matplotlib import pyplot as plt
 
-            fig, ax = plt.subplots()
-            ax.plot(x.real, x.imag)
-            ax.set_aspect("equal")
-            ax.grid()
+            fig, ax = plt.subplots(1, 2, figsize=(10, 6))
+            f = s.imag / (2 * np.pi * t)
+            ax[0].semilogx(f, g.real)
+            ax[0].semilogx(f, g.imag)
+            ax[0].semilogx(f, g1.real)
+            ax[0].semilogx(f, g1.imag)
+            ax[0].grid()
+            ax[1].plot(g.real, g.imag)
+            ax[1].plot(g1.real, g1.imag)
+            ax[1].set_aspect("equal")
+            ax[1].grid()
             fig.savefig(args.plot)
-
-        power = np.absolute(demod[:, 0]) ** 2
-        fmean = (body["frequency"] * power).sum() / (power.sum() * t * u)
-        _logger.warning("frequency mean %g kHz", fmean / 1e3)
 
         await conf.set("/activate", False)
         await conf.set("/mpll/iir/Pid/order", "I")
