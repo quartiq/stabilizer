@@ -43,16 +43,16 @@ async def main():
         help="Local port to listen on for streaming data (%(default)s)",
     )
     parser.add_argument(
-        "--fmin",
+        "--fstart",
         type=float,
         default=7e3,
-        help="Low frequency (Hz) (%(default)s)",
+        help="Start frequency (Hz) (%(default)s)",
     )
     parser.add_argument(
-        "--fmax",
+        "--fstop",
         type=float,
         default=300e3,
-        help="High frequency (Hz) (%(default)s)",
+        help="Stop frequency (Hz) (%(default)s)",
     )
     parser.add_argument(
         "--sweep",
@@ -90,11 +90,14 @@ async def main():
             await asyncio.sleep(1)
             await conf.set("/activate", False)
             await conf.set("/mpll/repr", "Ba")
-            await conf.set("/mpll/iir/Ba/max", args.fmin)
-            await conf.set("/mpll/iir/Ba/min", args.fmin)
+            await conf.set("/mpll/iir/Ba/max", args.fstart)
+            await conf.set("/mpll/iir/Ba/min", args.fstart)
             await conf.set("/mpll/iir/Ba/ba", [[0, 0, 0], [1, -1, 0]])
             await conf.set("/activate", True)
-            await conf.set("/mpll/iir/Ba/max", args.fmax)
+            if args.sweep >= 0:
+                await conf.set("/mpll/iir/Ba/max", args.fstop)
+            else:
+                await conf.set("/mpll/iir/Ba/min", args.fstop)
             await conf.set("/mpll/iir/Ba/u", args.sweep * t * 8)
             while True:
                 frame = await stream.queue.get()
@@ -115,7 +118,7 @@ async def main():
                     body["phase"] / u,
                     np.angle(demod[:, 0]) / (2 * np.pi),
                 )
-                if f[-1] > args.fmax - 1:
+                if abs(f[-1] - args.fstop) <= 1:
                     break
         finally:
             await conf.set("/stream", orig_stream)
@@ -147,13 +150,14 @@ async def main():
             g1 = q / (s * b[0] + b[1] / s + 1)
             angle = np.angle(q) / (2 * np.pi)
             fmean = np.sqrt(b[1] / b[0]) / (2 * np.pi * t)
+            width = 1 / b[0] / (2 * np.pi * t)
             _logger.warning(
                 "ch%i IQ resonance %g V, %g kHz, %g turns, %g kHz FWHM",
                 ch,
                 np.absolute(q),
                 fmean / 1e3,
                 angle,
-                fmean / 1e3 / b[0],
+                width / 1e3,
             )
 
             if args.plot is not None:
@@ -179,8 +183,8 @@ async def main():
         await conf.set("/mpll/iir/Pid/min", fmean)
         await conf.set("/mpll/iir/Pid/max", fmean)
         await conf.set("/activate", True)
-        await conf.set("/mpll/iir/Pid/min", args.fmin)
-        await conf.set("/mpll/iir/Pid/max", args.fmax)
+        await conf.set("/mpll/iir/Pid/min", min(args.fstart, args.fstop))
+        await conf.set("/mpll/iir/Pid/max", max(args.fstart, args.fstop))
 
 
 if __name__ == "__main__":
