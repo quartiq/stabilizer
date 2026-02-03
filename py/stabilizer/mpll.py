@@ -137,35 +137,41 @@ async def main():
 
             fig, ax = plt.subplots(2, 2, figsize=(10, 6))
 
-        for ch in reversed(range(2)):
-            s = body["frequency"] * (2j * np.pi / u)
+        for ch in reversed(range(2)):  # ch0 last to set fmean/angle
+            s = body["frequency"] / u
             g = demod[:, ch]
-            f = np.absolute(g)
-            gf = g * f
-            b = np.array([gf * s, gf / s, -f, -1j * f])
-            b = np.linalg.pinv(np.hstack((b.real, b.imag)).T) @ -np.hstack(
-                (gf.real, gf.imag)
+            b = np.array([g * s, g / s, 1 / s, 1j / s, 1 + 0 * s, 1j + 0 * s])
+            b = (
+                np.linalg.pinv(np.hstack((b.real * g.real, b.imag * g.imag)).T)
+                @ np.hstack((g.real, g.imag)) ** 2
             )
-            q = b[2] + 1j * b[3]
-            g1 = q / (s * b[0] + b[1] / s + 1)
-            angle = np.angle(q) / (2 * np.pi)
-            fmean = np.sqrt(b[1] / b[0]) / (2 * np.pi * t)
-            width = 1 / b[0] / (2 * np.pi * t)
+            # f1b = 1/(2*b[0])
+            r2 = b[4] ** 2 + b[5] ** 2
+            f1 = -(b[2] * b[4] + b[3] * b[5]) / r2
+            d1 = (b[2] * b[5] - b[3] * b[4]) / r2
+            q1 = 2 * (-b[5] + 1j * b[4]) * f1 / d1
+            b1 = (b[2] / d1 - b[5]) / b[4]
+            a1 = (-2 * b[1] / d1 - b1) * b1
+            x1 = (s - f1) / d1
+            g1 = q1 * (1 + 1j * x1) / (x1**2 + a1)
+
+            angle = np.angle(q1) / (2 * np.pi)
+            fmean = f1 / t
+            width = d1 / t
             _logger.warning(
                 "ch%i IQ resonance %g V, %g kHz, %g turns, %g kHz FWHM",
                 ch,
-                np.absolute(q),
+                np.absolute(q1),
                 fmean / 1e3,
                 angle,
                 width / 1e3,
             )
 
             if args.plot is not None:
-                f = s.imag / (2 * np.pi * t)
-                ax[ch, 0].semilogx(f, g.real)
-                ax[ch, 0].semilogx(f, g.imag)
-                ax[ch, 0].semilogx(f, g1.real)
-                ax[ch, 0].semilogx(f, g1.imag)
+                ax[ch, 0].semilogx(s / t, g.real)
+                ax[ch, 0].semilogx(s / t, g.imag)
+                ax[ch, 0].semilogx(s / t, g1.real)
+                ax[ch, 0].semilogx(s / t, g1.imag)
                 ax[ch, 0].grid()
                 ax[ch, 1].plot(g.real, g.imag)
                 ax[ch, 1].plot(g1.real, g1.imag)
