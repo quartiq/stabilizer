@@ -150,9 +150,11 @@ async def main():
             g1 = q / (s * b[0] + b[1] / s + 1)
             angle = np.angle(q) / (2 * np.pi)
             fmean = np.sqrt(b[1] / b[0]) / (2 * np.pi * t)
-            width = 1 / b[0] / (2 * np.pi * t)
+            width = (1 - np.sqrt(4 * b[0] * b[1] + 1)) / (2 * b[0]) / (
+                2 * np.pi * t
+            ) - fmean
             _logger.warning(
-                "ch%i IQ resonance %g V, %g kHz, %g turns, %g kHz FWHM",
+                "ch%i IQ resonance %g V, %g kHz, %g turns, %g kHz half 1/sqrt(2) width",
                 ch,
                 np.absolute(q),
                 fmean / 1e3,
