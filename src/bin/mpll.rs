@@ -257,10 +257,10 @@ mod app {
 
                 telemetry.phase.update(stream.phase.0);
                 telemetry.frequency.update(stream.frequency.0);
-                telemetry.demod[0][0].update(stream.demod[0]);
-                telemetry.demod[0][1].update(stream.demod[1]);
-                telemetry.demod[1][0].update(stream.demod[2]);
-                telemetry.demod[1][1].update(stream.demod[3]);
+                telemetry.demod[0][0].update(stream.demod[0][0]);
+                telemetry.demod[0][1].update(stream.demod[0][1]);
+                telemetry.demod[1][0].update(stream.demod[1][0]);
+                telemetry.demod[1][1].update(stream.demod[1][1]);
 
                 const N: usize = core::mem::size_of::<Stream>();
                 generator.add(|buf| {

@@ -179,17 +179,14 @@ impl Mpll {
         }
         // decimate
         let demod = [
-            mix[0][BATCH_SIZE - 1],
-            mix[1][BATCH_SIZE - 1],
-            mix[2][BATCH_SIZE - 1],
-            mix[3][BATCH_SIZE - 1],
+            [mix[0][BATCH_SIZE - 1], mix[1][BATCH_SIZE - 1]],
+            [mix[2][BATCH_SIZE - 1], mix[3][BATCH_SIZE - 1]],
         ];
         // phase
         // need full atan2, rotation, or addtl osc to support any phase offset
-        let mut phase = Wrapping(idsp::atan2(demod[1], demod[0]));
+        let mut phase = Wrapping(idsp::atan2(demod[0][1], demod[0][0]));
         // Delay correction
-        // TODO: consider delayed LO. This might add some frequency noise.
-        phase -= Wrapping(state.iir.xy[2]) * Wrapping(10);
+        phase += Wrapping(-10) * Wrapping(state.iir.xy[2]);
         // PID
         let frequency = Wrapping(self.iir.process(&mut state.iir, phase.0));
         // modulate
@@ -218,7 +215,7 @@ impl Mpll {
 #[repr(C)]
 pub struct Stream {
     /// Demodulated inputs `[0.i, 0.q, 1.i, 1.q]`
-    pub demod: [i32; 4],
+    pub demod: [[i32; 2]; 2],
     /// Input phase after delay compensation and offset
     pub phase: Wrapping<i32>,
     /// Output frequency
