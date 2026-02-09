@@ -87,7 +87,6 @@ async def main():
         try:
             orig_stream = await conf.get("/stream")
             await conf.set("/stream", f"{local_ip}:{args.port}")
-            await asyncio.sleep(1)
             await conf.set("/activate", False)
             await conf.set("/mpll/repr", "Ba")
             await conf.set("/mpll/iir/Ba/max", args.fstart)
@@ -98,6 +97,7 @@ async def main():
                 await conf.set("/mpll/iir/Ba/max", args.fstop)
             else:
                 await conf.set("/mpll/iir/Ba/min", args.fstop)
+            await stream.queue.get()  # ensure ARP
             await conf.set("/mpll/iir/Ba/u", args.sweep * t * 8)
             while True:
                 frame = await stream.queue.get()
