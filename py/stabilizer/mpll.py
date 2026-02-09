@@ -163,7 +163,7 @@ async def main():
             )
 
             if args.plot is not None:
-                f = s.imag / (2 * np.pi * t)
+                f = np.fabs(s.imag) / (2 * np.pi * t)
                 ax[ch, 0].semilogx(f, g.real)
                 ax[ch, 0].semilogx(f, g.imag)
                 ax[ch, 0].semilogx(f, g1.real)
