@@ -179,8 +179,8 @@ async def main():
 
         await conf.set("/activate", False)
         await conf.set("/mpll/iir/Pid/order", "I")
-        await conf.set("/mpll/iir/Pid/gains/p", -3e3)
-        await conf.set("/mpll/iir/Pid/gains/i", -7e6)
+        await conf.set("/mpll/iir/Pid/gain/p", -3e3)
+        await conf.set("/mpll/iir/Pid/gain/i", -7e6)
         await conf.set("/mpll/iir/Pid/setpoint", angle)
         await conf.set("/mpll/iir/Pid/min", fmean)
         await conf.set("/mpll/iir/Pid/max", fmean)
