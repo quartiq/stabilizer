@@ -1,6 +1,6 @@
 """MPLL calibration/sweep/searcher"""
 
-# pylint: disable=logging-fstring-interpolation,too-many-statements,too-many-locals,duplicate-code
+# pylint: disable=logging-fstring-interpolation,too-many-statements,too-many-locals,duplicate-code,used-before-assignment,import-outside-toplevel
 
 
 import asyncio
