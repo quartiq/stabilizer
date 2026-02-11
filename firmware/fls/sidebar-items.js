@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BATCH_SIZE","BATCH_SIZE_LOG2","DDS_LSB_PER_HZ","F_DEMOD","MULT_SHIFT","PHASE_SCALE_SHIFT","SAMPLE_TICKS","SAMPLE_TICKS_LOG2"],"mod":["app","biquad_update","phase_scale","validate_att"],"struct":["BiquadReprTree","ChannelSettings","ChannelState","ChannelTelemetry","CookedTelemetry","DdsSettings","Fls","Settings","Stream","Telemetry"]};

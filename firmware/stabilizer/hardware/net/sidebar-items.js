@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["RX_DESRING_CNT","TX_DESRING_CNT"],"enum":["NetworkState","UpdateState"],"struct":["NetworkProcessor","NetworkUsers"],"type":["EthernetPhy","NetworkManager","NetworkReference","NetworkStack"]};

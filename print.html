@@ -1,0 +1,642 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Stabilizer</title>
+                <meta name="robots" content="noindex" />
+                
+
+        <!-- Custom HTML head -->
+        
+
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+                        <link rel="shortcut icon" href="favicon.png">
+                <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+                <link rel="stylesheet" href="css/print.css" media="print">
+        
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+                <link rel="stylesheet" href="fonts/fonts.css">
+        
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        
+            </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="setup.html"><strong aria-hidden="true">2.</strong> Setup</a></li><li class="chapter-item expanded "><a href="usage.html"><strong aria-hidden="true">3.</strong> Usage</a></li><li class="chapter-item expanded "><a href="firmware/dual_iir/index.html"><strong aria-hidden="true">4.</strong> Application: Dual-IIR</a></li><li class="chapter-item expanded "><a href="firmware/lockin/index.html"><strong aria-hidden="true">5.</strong> Application: Lockin</a></li><li class="chapter-item expanded "><a href="firmware/dds/index.html"><strong aria-hidden="true">6.</strong> Application: Urukul DDS</a></li><li class="chapter-item expanded "><a href="firmware/fls/index.html"><strong aria-hidden="true">7.</strong> Application: Fiber Length Stabilization</a></li><li class="chapter-item expanded "><a href="firmware/mpll/index.html"><strong aria-hidden="true">8.</strong> Application: Dispersive PLL</a></li></ol>            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                                                <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                                            </div>
+
+                    <h1 class="menu-title">Stabilizer</h1>
+
+                    <div class="right-buttons">
+                                                <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                                                                        <a href="https://github.com/quartiq/stabilizer" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                                                
+                    </div>
+                </div>
+
+                                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="stabilizer"><a class="header" href="#stabilizer">Stabilizer</a></h1>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p>Stabilizer is a flexible tool designed for quantum physics experiments. Fundamentally, Stabilizer
+samples up two two analog input signals, performs digital signal processing internally, and then
+generates up to two output signals.</p>
+<p>Stabilizer firmware supports run-time configuration of the internal signal processing algorithms,
+which allows for a wide variety of experimental uses, such as digital filter design or
+implementation of digital lockin schemes.</p>
+<p>This documentation is intended to bring a user up to speed on using Stabilizer and the firmware
+provided by QUARTIQ and contributors.</p>
+<h2 id="hardware"><a class="header" href="#hardware">Hardware</a></h2>
+<p>The Stabilizer hardware is managed via a <a href="https://github.com/sinara-hw/Stabilizer">separate repository</a>.
+Some information about the hardware is gathered in the <a href="https://github.com/sinara-hw/Stabilizer/wiki">Stabilizer wiki</a>. More detailed data, measurements, discussions, and tests have been posted in the Stabilizer <a href="https://github.com/sinara-hw/Stabilizer/issues?q=is%3Aissue">hardware</a> and <a href="https://github.com/quartiq/stabilizer/issues?q=is%3Aissue">firmware</a> issue trackers.</p>
+<p>Stabilizer can be extended and coupled with a mezzanine board. One such mezzanine is the DDS upconversion/downconversion frontend Pounder. The Pounder hardware is managed via a <a href="https://github.com/sinara-hw/Pounder">separate repository</a>, again with <a href="https://github.com/sinara-hw/Pounder/wiki">wiki</a> and <a href="https://github.com/sinara-hw/Pounder/issues?q=is%3Aissue">issue tracker</a>.</p>
+<p>Stabilizer can also control downstream EEM modules, for example <a href="https://github.com/sinara-hw/Urukul">Urukul-AD9912</a>.</p>
+<h2 id="applications"><a class="header" href="#applications">Applications</a></h2>
+<p>This firmware offers a library of hardware and software functionality targeting the use of the Stabilizer hardware in various digital signal processing applications commonly occurring in Quantum Technology.
+It provides abstractions over the fast analog inputs and outputs, time stamping, Pounder DDS interfaces and a collection of tailored and optimized digital signal processing algorithms (IIR, FIR, Lockin, PLL, reciprocal PLL, Unwrapper, Lowpass, Cosine-Sine, Atan2) in the <a href="firmware/idsp/index.html"><code>idsp</code> crate</a>.
+An application, which is the compiled firmware running on the device, can compose and configure these hardware and software components to implement different use cases.
+Several applications are provided by default.</p>
+<p>The following documentation links contain the application-specific settings and telemetry
+information.</p>
+<table><thead><tr><th align="center">Application</th><th align="left">Description</th></tr></thead><tbody>
+<tr><td align="center"><a href="firmware/dual_iir/index.html"><code>dual-iir</code></a></td><td align="left">Two channel biquad IIR filter</td></tr>
+<tr><td align="center"><a href="firmware/lockin/index.html"><code>lockin</code></a></td><td align="left">Lockin amplifier support various various reference sources</td></tr>
+<tr><td align="center"><a href="firmware/dds/index.html"><code>dds</code></a></td><td align="left">Urukul-AD9912 control over MQTT</td></tr>
+<tr><td align="center"><a href="firmware/fls/index.html"><code>fls</code></a></td><td align="left">Fiber length stabilizer/Phase-Frequency Metrology and control</td></tr>
+<tr><td align="center"><a href="firmware/mpll/index.html"><code>mpll</code></a></td><td align="left">Dispersive PLL</td></tr>
+</tbody></table>
+<h2 id="library-documentation"><a class="header" href="#library-documentation">Library Documentation</a></h2>
+<p>The Stabilizer library docs contain documentation for common components used in all Stabilizer
+applications.</p>
+<p>The Stabilizer library documentation is available <a href="firmware/stabilizer/index.html">here</a>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="setup"><a class="header" href="#setup">Setup</a></h1>
+<p>The Stabilizer firmware consists of different applications tailored to different use cases.
+Only one application can run on the device at a given time.
+After receiving the Stabilizer hardware, you will need to choose, build, and flash one
+of the applications onto the device.</p>
+<h2 id="power"><a class="header" href="#power">Power</a></h2>
+<p>Power Stabilizer through <strong>exactly one</strong> of the following mechanisms.</p>
+<ol>
+<li>Via the backside 12V barrel connector</li>
+<li>Via Power-over-Ethernet using a PoE capable switch (802.3af or preferrably
+802.3at) and the RJ45 front panel port</li>
+<li>Via an EEM connection to Kasli</li>
+</ol>
+<blockquote>
+<p><strong>Note:</strong> Applying power through more than one mechanism may lead to damage.
+Ensure the two unused methods are not connected or explicitly disabled.</p>
+</blockquote>
+<h2 id="network-and-dhcp"><a class="header" href="#network-and-dhcp">Network and DHCP</a></h2>
+<p>Stabilizer supports 10Base-T or 100Base-T with Auto MDI-X.</p>
+<p>Stabilizer uses DHCP to obtain its network configuration information. Ensure there is a properly
+configured DHCP server running on the network segment that Stabilizer is connected to. If a DHCP
+server is not available and a static IP is desired, Stabilizer can be configured with a static IP
+via the USB interface. A configured <code>ip</code> of &quot;0.0.0.0&quot; will use DHCP.</p>
+<blockquote>
+<p><strong>Note:</strong> If Stabilizer is connected directly to an Ubuntu system (for example using a USB-Ethernet dongle)
+you can set the IPv4 settings of this Ethernet connection in the Ubuntu network settings to
+&quot;Shared to other computers&quot;. This will start and configure a DHCP server for this connection.</p>
+</blockquote>
+<h2 id="mqtt-broker"><a class="header" href="#mqtt-broker">MQTT Broker</a></h2>
+<p>Stabilizer requires an MQTT broker that supports MQTTv5.
+The MQTT broker is used to distribute and exchange elemetry data and to view/change application settings.
+The broker must be reachable by both the host-side applications used to
+interact with the application on Stabilizer and by the application running on Stabilizer.
+The broker must be reachable on port 1883 on that IP address - it may either be an IP address or a
+fully qualified domain name.
+Firewalls between Stabilizer and the broker may need to be configured to
+allow connections from Stabilizer to that port and IP address.</p>
+<p><a href="https://mosquitto.org/">Mosquitto</a> has been used as a MQTT broker during development,
+but any MQTTv5 broker without  authentication or encryption will likely work.</p>
+<blockquote>
+<p><strong>Note:</strong> Mosquitto version 1 only supports MQTTv3.1. If using Mosquitto, ensure version 2.0.0 or
+later is used.</p>
+</blockquote>
+<p>We recommend running Mosquitto through <a href="https://docker.com">Docker</a> to easily run it on
+Windows, Linux, and OSX. After docker has been installed, run the following command from
+the <code>stabilizer</code> repository to create a container named <code>mosquitto</code> that can be stopped
+and started easily via docker:</p>
+<pre><code class="language-bash"># Bash
+docker run -p 1883:1883 --name mosquitto -v `pwd`/mosquitto.conf:/mosquitto/config/mosquitto.conf -v /mosquitto/data -v /mosquitto/log eclipse-mosquitto:2
+
+# Powershell
+docker run -p 1883:1883 --name mosquitto -v ${pwd}/mosquitto.conf:/mosquitto/config/mosquitto.conf -v /mosquitto/data -v /mosquitto/log eclipse-mosquitto:2
+</code></pre>
+<h2 id="building"><a class="header" href="#building">Building</a></h2>
+<ol>
+<li>Get and install <a href="https://rustup.rs/">rustup</a> and use it to install a current stable Rust toolchain.
+Stabilizer tracks stable Rust. The minimum supported Rust version (MSRV) is specified in the manifest (<code>Cargo.toml</code>).</li>
+<li>Install target support with <code>rustup target add thumbv7em-none-eabihf</code></li>
+<li>Install <a href="https://github.com/rust-embedded/cargo-binutils/">cargo-binutils</a> with <code>cargo install cargo-binutils; rustup component add llvm-tools-preview</code></li>
+<li>Clone or download the firmware with <code>git clone https://github.com/quartiq/stabilizer; cd stabilizer</code></li>
+<li>Build firmware with <code>cargo build --release</code></li>
+<li>Extract the application binary (substitute <code>dual-iir</code> below with the desired application name) with <code>cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin</code></li>
+</ol>
+<h2 id="flashing"><a class="header" href="#flashing">Flashing</a></h2>
+<p>Firmware can be loaded onto stabilizer using <strong>one</strong> of the three following methods.</p>
+<blockquote>
+<p><strong>Note:</strong> Most methods below require access to the circuit board. Pulling the device from a crate
+always requires power removal as there are sensitive leads and components on both sides of the
+board that may come into contact with adjacent front panels. Every access to the board also
+requires proper ESD precautions. Never hot-plug the device or the probe.</p>
+</blockquote>
+<h3 id="st-link-virtual-mass-storage"><a class="header" href="#st-link-virtual-mass-storage">ST-Link virtual mass storage</a></h3>
+<p>If a ST-Link V2-1 or later is available this method can be used.</p>
+<p>Power down the device, remove it from the crate, and connect the
+SWD/JTAG probe as shown below to the device and to your computer.</p>
+<p><img src="assets/stabilizer-jtag.jpg" alt="JTAG Connection" /></p>
+<p>Power up the device and copy <code>dual-iir.bin</code> onto the virtual mass storage ST-Link drive
+that has appeared on your computer.
+Power down the device before removing the probe, inserting it into the crate
+and applying power again.</p>
+<h3 id="dfu-upload"><a class="header" href="#dfu-upload">DFU Upload</a></h3>
+<p>If an SWD/JTAG probe is not available, you can flash firmware using only a micro USB cable plugged
+in to the front of Stabilizer, and a DFU utility.</p>
+<blockquote>
+<p><strong>Note:</strong> If there is already newer firmware running on Stabilizer that supports the USB serial
+interface, there is no need to remove Stabilizer from the crate or disconnect any existing
+connectors/power supplies or to jumper the BOOT0 pin. Instead, open the serial port on Stabilizer
+and request it to enter DFU mode:</p>
+<pre><code class="language-bash">python -m serial &lt;serial-port&gt;
+&gt; platform dfu
+</code></pre>
+<p>After the device is in DFU mode, use the <code>dfu-util</code> command specified in the instructions below,
+and the DFU firmware update will be complete.</p>
+</blockquote>
+<ol>
+<li>Install the DFU USB tool <a href="http://dfu-util.sourceforge.net"><code>dfu-util</code></a></li>
+<li>Remove power</li>
+<li>Then carefully remove the module from the crate to gain acccess to the board</li>
+<li>Short JC2/BOOT with the jumper</li>
+<li>Connect your computer to the Micro USB connector below/left of the RJ45
+connector on the front panel</li>
+<li>Insert the module into the crate</li>
+<li>Then power it</li>
+<li>Perform the Device Firmware Upgrade (DFU) with <code>dfu-util -a 0 -s 0x08000000:leave -R -D dual-iir.bin</code></li>
+<li>To keep the device from entering the bootloader remove power,
+pull the board from the crate, remove the JC2/BOOT jumper, insert the module
+into the crate, and power it again</li>
+</ol>
+<h3 id="swdjtag-firmware-development"><a class="header" href="#swdjtag-firmware-development">SWD/JTAG Firmware Development</a></h3>
+<p>To observe logging messages or to develop and debug applications a SWD/JTAG
+probe is required. To use a compatible probe with <code>probe-run</code> connect it as
+described <a href="setup.html#st-link-virtual-mass-storage">above</a>.</p>
+<ol>
+<li>Install <a href="https://probe.rs/"><code>probe-rs</code></a></li>
+<li>Build and run firmware on the device with <code>cargo run --release --bin dual-iir</code></li>
+</ol>
+<p>When using debug (non <code>--release</code>) mode, decrease the sampling frequency significantly.
+The added error checking code and missing optimizations may lead to the application
+missing timer deadlines and panicing.</p>
+<h2 id="usb"><a class="header" href="#usb">USB</a></h2>
+<p>The USB port can be used to bootstrap Stabilizer and configure all internal settings. This is used to specify
+a fixed IP address, the MQTT broker address or when operating Stabilizer in standalone mode
+(i.e. without an ethernet connection or an MQTT broker).</p>
+<p>Connect a USB cable and open up the serial port in a serial terminal of your choice. <code>pyserial</code>
+provides a simple, easy-to-use terminal emulator:</p>
+<pre><code class="language-bash">python -m serial &lt;port&gt;
+</code></pre>
+<p>Once you have opened the port, you can use the provided menu to update any of Stabilizers runtime
+settings.</p>
+<blockquote>
+<p><strong>Note:</strong> Network settings (IP and broker) configured via USB do not take immediate effect but require a reboot.</p>
+</blockquote>
+<h2 id="mqtt-configuration"><a class="header" href="#mqtt-configuration">MQTT configuration</a></h2>
+<p>The MQTT broker address is configured via the USB port on Stabilizer's front panel.
+The address can be an IP address or a domain name. Once the broker address has been updated, power
+cycle stabilizer to have the new broker address take effect.</p>
+<h2 id="verify-mqtt-connection"><a class="header" href="#verify-mqtt-connection">Verify MQTT connection</a></h2>
+<p>Once your MQTT broker and Stabilizer are both running, verify that the application
+connects to the broker.</p>
+<p>A Stabilizer application <code>dual-iir</code> on a device with MAC address ``aa-bb-cc-00-11-22<code>is reporting its status on the</code>dt/sinara/dual-iir/aa-bb-cc-00-11-22/alive` topic.</p>
+<p>In addition to the <code>alive</code> status the application publishes <code>meta</code> information about itself on boot, and <code>telemetry</code> messages
+at regular intervals. Once you observe telemetry, Stabilizer is operational.</p>
+<p>To observe MQTT messages there are several different options. These are </p>
+<p>Always connect to the same broker that the device is connecting to
+(the one set via the serial terminal connection).</p>
+<h3 id="cli-mosquitto_sub"><a class="header" href="#cli-mosquitto_sub">CLI: mosquitto_sub</a></h3>
+<p>Tools from the <a href="https://mosquitto.org/"><code>mosquitto</code></a> project:</p>
+<pre><code class="language-bash">mosquitto_sub -t 'dt/sinara/dual-iir/+/#' -h mqtt -v
+</code></pre>
+<h3 id="tui-mqttui"><a class="header" href="#tui-mqttui">TUI: mqttui</a></h3>
+<p><a href="https://github.com/EdJoPaTo/mqttui/"><code>mqttui</code></a>:</p>
+<pre><code class="language-bash">mqttui -b mqtt://mqtt/
+</code></pre>
+<h3 id="gui-mqtt-explorer-or-mqttx"><a class="header" href="#gui-mqtt-explorer-or-mqttx">GUI: MQTT-Explorer or MQTTX</a></h3>
+<p>Download <a href="http://mqtt-explorer.com/">MQTT-Explorer</a> to observe which topics have been posted to the
+Broker.</p>
+<p><img src="assets/mqtt-explorer.png" alt="MQTT Explorer Configuration" /></p>
+<h3 id="scraping-telegraf"><a class="header" href="#scraping-telegraf">Scraping: telegraf</a></h3>
+<p>This <a href="https://influxdata.com/telegraf"><code>telegraf</code></a> configuration snippet scrapes settings, alive-ness, metadata,
+and telemetry from stabilizer/booster/thermostat/thermostat-eem applications.</p>
+<pre><code class="language-toml">[[inputs.mqtt_consumer]]
+  alias = &quot;miniconf&quot;
+  servers = [&quot;tcp://mqtt:1883&quot;]
+  topics = [
+    &quot;dt/sinara/+/+/telemetry/#&quot;,
+    &quot;dt/sinara/+/+/settings/#&quot;,
+    &quot;dt/sinara/+/+/alive&quot;,
+    &quot;dt/sinara/+/+/meta&quot;,
+  ]
+  data_format = &quot;value&quot;
+  value_field_name = &quot;value&quot;
+  data_type = &quot;string&quot;  # utf8 json
+  name_override = &quot;miniconf&quot;
+
+[[processors.starlark]]
+  alias = &quot;miniconf&quot;
+  namepass = [&quot;miniconf&quot;]
+  source = '''
+load(&quot;json.star&quot;, &quot;json&quot;)
+
+def apply(metric):
+  if metric.fields[&quot;value&quot;] == &quot;&quot;:
+    return None  # miniconf list/dump/get request, will
+  # dt/sinara/{app}/{id}/{class}[/{path}]
+  topic = metric.tags.pop(&quot;topic&quot;).split(&quot;/&quot;, 5)
+  metric.tags[&quot;id&quot;] = topic[3]
+  metric.tags[&quot;class&quot;] = topic[4]
+  metric.tags[&quot;path&quot;] = &quot;&quot;.join(topic[5:])
+  v = json.decode(metric.fields[&quot;value&quot;])
+  if topic[4] == &quot;telemetry&quot;:
+    metric.name = topic[2]
+    for k, v in flatten(&quot;&quot;, v):
+      metric.fields[k[1:]] = v
+    metric.fields.pop(&quot;value&quot;)
+  else:
+    metric.tags[&quot;app&quot;] = topic[2]
+    t = type(v)
+    if t in (&quot;float&quot;, &quot;int&quot;, &quot;bool&quot;, &quot;string&quot;):
+      metric.fields[t] = v
+      metric.fields.pop(&quot;value&quot;)
+  return metric
+
+def flatten(k, v):
+  l = []
+  t = type(v)
+  if t == &quot;list&quot;:
+    for i, vi in enumerate(v):
+      l.extend(flatten(&quot;%s_%d&quot; % (k, i), vi))
+  elif t == &quot;dict&quot;:
+    for ki, vi in v.items():
+      l.extend(flatten(&quot;%s_%s&quot; % (k, ki), vi))
+  elif t in (&quot;float&quot;, &quot;int&quot;, &quot;bool&quot;, &quot;string&quot;):
+    l.append((k, v))
+  return l
+'''
+</code></pre>
+<p>Within telegraf the mqtt telemetry data can then be routed to e.g. influxdb,
+prometheus or grafana live.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="usage"><a class="header" href="#usage">Usage</a></h1>
+<p>Stabilizer supports run-time settings configuration using MQTT or the USB port.</p>
+<p>Settings can be stored in the MQTT broker so that they are automatically applied whenever
+Stabilizer reboots and connects. This is referred to as &quot;retained&quot; settings. Broker implementations
+may optionally store these retained settings as well such that they will be reapplied between
+restarts of the MQTT broker.</p>
+<p>Stabilizer also supports storing run time settings on the device. Any configurations saved to
+stabilizer via the USB port will be automatically reapplied when Stabilizer reboots.
+MQTT settings retained on the broker or settings published after the device has connected to the broker override the settings saved on Stabilizer.</p>
+<p>Settings are specific to a device. Any settings configured for one Stabilizer will not be applied
+to another. Disambiguation of devices is done by using Stabilizer's MQTT identifier, which is
+defaulted to Stabilizer's MAC address.</p>
+<p>Settings are specific to an application. If two identical settings exist for two different
+applications, each application maintains its own independent value.</p>
+<h2 id="miniconf-installation"><a class="header" href="#miniconf-installation">Miniconf installation</a></h2>
+<p>Create a virtual python environment with <code>python -m venv --system-site-packages .venv</code> and activate it with <code>source .venv/bin/activate</code>.
+Refer to the <a href="https://docs.python.org/3/tutorial/venv.html"><code>venv</code> tutorial</a> for more information on activating the
+virtual environment. The command depends on the operating system.</p>
+<p>Next, install prerequisite packages with <code>python -m pip install py/</code>.</p>
+<p>To use the <code>miniconf</code> command line too see <code>python -m miniconf --help</code>.</p>
+<p>Miniconf also exposes a programmatic Python API, so it's possible to write automation scripting of
+Stabilizer as well.</p>
+<h2 id="settings"><a class="header" href="#settings">Settings</a></h2>
+<p>The Miniconf Python utility utilizes a unique &quot;device prefix&quot;. The device prefix is always of the
+form <code>dt/sinara/&lt;app&gt;/&lt;mac-address&gt;</code>, where <code>&lt;app&gt;</code> is the name of the application and
+<code>&lt;mac-address&gt;</code> is the MAC address of the device, formatted with delimiting dashes, and lower case letters.</p>
+<p>Settings have a <code>path</code> and a <code>value</code> being configured. The <code>value</code> parameter is JSON-encoded data
+and the <code>path</code> value is a path-like string.</p>
+<pre><code class="language-bash">python -m miniconf -b mqtt -d dt/sinara/dual-iir/+ stream='&quot;10.34.16.123:4000&quot;'
+</code></pre>
+<p>Where <code>mqtt</code> is the MQTT broker (host name or address) that matches the one used by the application
+(set using the USB terminal) and <code>10.34.16.123</code> and <code>4000</code> are the desired stream target IP and port.</p>
+<p>The prefix can be discovered as above or determined for a specific device through the USB serial terminal.</p>
+<p>Refer to the <a href="overview.html#applications">application documentation</a> for the exact settings and values exposed
+for each application.</p>
+<p>The rules for constructing <code>path</code> values are documented in <a href="https://github.com/quartiq/miniconf#settings-paths"><code>miniconf</code>'s
+documentation</a></p>
+<p>Refer to the documentation for <a href="firmware/miniconf/enum.SerdeError.html">Miniconf</a> for a
+description of the possible error codes that Miniconf may return if the settings update was
+unsuccessful.</p>
+<h2 id="telemetry"><a class="header" href="#telemetry">Telemetry</a></h2>
+<p>Stabilizer applications publish telemetry utilizes MQTT for managing run-time settings configurations as well as live telemetry
+reporting.</p>
+<p>Telemetry is defined as low rate, general health information. It is not intended for high throughput
+or efficiency. Telemetry is generally used to determine that the device is functioning nominally.</p>
+<p>Stabilizer applications publish telemetry over MQTT at a set rate. Telemetry data units are defined
+by the application. All telemetry is reported using standard JSON format.</p>
+<p>Telemetry is intended for low-bandwidth monitoring. It is not intended to transfer large amounts of
+data and uses a minimal amount of bandwidth. Telemetry is published using &quot;best effort&quot; semantics -
+individual messages may be dropped or Stabilizer may fail to publish telemetry due to internal
+buffering requirements.</p>
+<p>In its most basic form, telemetry publishes the latest ADC input voltages, DAC output voltages, and
+digital input states.</p>
+<p>Refer to the respective <a href="overview.html#applications">application documentation</a> for more information on telemetry.</p>
+<h2 id="stream"><a class="header" href="#stream">Stream</a></h2>
+<p>Stabilizer supports streaming real-time data over UDP. The stream is
+intended to be a high-bandwidth mechanism to transfer large amounts of data from Stabilizer to a
+host computer for further analysis.</p>
+<p>Streamed data is sent with &quot;best effort&quot; - it's possible that data may be lost due to
+network congestion.</p>
+<p>Refer to the the respective <a href="overview.html#applications">application documentation</a> for more information.</p>
+<p><a href="https://github.com/quartiq/stabilizer-stream"><code>stabilizer-stream</code></a> is an application that supports process
+the stream and measures power spectral density/integrated RMS in real time.</p>
+<div style="break-before: page; page-break-before: always;"></div><!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Dual IIR"><title>dual_iir - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="dual_iir" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2 id="a-hreffirmwaredual_iirindexhtmlcrate-dual_iira"><a class="header" href="#a-hreffirmwaredual_iirindexhtmlcrate-dual_iira"><a href="firmware/dual_iir/index.html#">Crate dual_iir</a></a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2 id="a-hreffirmwaredual_iirdual_iirindexhtmldual_wbriiraspan-classversion0110span"><a class="header" href="#a-hreffirmwaredual_iirdual_iirindexhtmldual_wbriiraspan-classversion0110span"><a href="firmware/dual_iir/../dual_iir/index.html">dual_<wbr>iir</a><span class="version">0.11.0</span></a></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="firmware/dual_iir/all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3 id="a-hreffirmwaredual_iirindexhtmlsectionsa"><a class="header" href="#a-hreffirmwaredual_iirindexhtmlsectionsa"><a href="firmware/dual_iir/index.html#">Sections</a></a></h3><ul class="block top-toc"><li><a href="firmware/dual_iir/index.html#dual-iir" title="Dual IIR">Dual IIR</a><ul><li><a href="firmware/dual_iir/index.html#features" title="Features">Features</a></li><li><a href="firmware/dual_iir/index.html#settings-1" title="Settings">Settings</a></li><li><a href="firmware/dual_iir/index.html#telemetry" title="Telemetry">Telemetry</a></li><li><a href="firmware/dual_iir/index.html#stream" title="Stream">Stream</a></li></ul></li></ul><h3 id="a-hreffirmwaredual_iirindexhtmlmodulescrate-itemsa"><a class="header" href="#a-hreffirmwaredual_iirindexhtmlmodulescrate-itemsa"><a href="firmware/dual_iir/index.html#modules">Crate Items</a></a></h3><ul class="block"><li><a href="firmware/dual_iir/index.html#modules" title="Modules">Modules</a></li><li><a href="firmware/dual_iir/index.html#structs" title="Structs">Structs</a></li><li><a href="firmware/dual_iir/index.html#enums" title="Enums">Enums</a></li><li><a href="firmware/dual_iir/index.html#constants" title="Constants">Constants</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><h1 id="crate-spandual_wbriirspannbspbutton-idcopy-path-titlecopy-item-path-to-clipboardcopy-item-pathbutton"><a class="header" href="#crate-spandual_wbriirspannbspbutton-idcopy-path-titlecopy-item-path-to-clipboardcopy-item-pathbutton">Crate <span>dual_<wbr>iir</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></a></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="firmware/dual_iir/../src/dual_iir/dual-iir.rs.html#1-576">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="dual-iir"><a class="doc-anchor" href="firmware/dual_iir/index.html#dual-iir">§</a>Dual IIR</h2>
+<p>The Dual IIR application exposes two configurable channels. Stabilizer samples input at a fixed
+rate, digitally filters the data, and then generates filtered output signals on the respective
+channel outputs.</p>
+<h3 id="features"><a class="doc-anchor" href="firmware/dual_iir/index.html#features">§</a>Features</h3>
+<ul>
+<li>Two indpenendent channels</li>
+<li>up to 800 kHz rate, timed sampling</li>
+<li>Run-time filter configuration</li>
+<li>Input/Output data streaming</li>
+<li>Down to 2 µs latency</li>
+<li>f32 IIR math</li>
+<li>Generic biquad (second order) IIR filter</li>
+<li>Anti-windup</li>
+<li>Derivative kick avoidance</li>
+</ul>
+<h3 id="settings-1"><a class="doc-anchor" href="firmware/dual_iir/index.html#settings-1">§</a>Settings</h3>
+<p>Refer to the <a href="firmware/dual_iir/struct.DualIir.html" title="struct dual_iir::DualIir">DualIir</a> structure for documentation of run-time configurable settings for this
+application.</p>
+<h3 id="telemetry"><a class="doc-anchor" href="firmware/dual_iir/index.html#telemetry">§</a>Telemetry</h3>
+<p>Refer to <a href="firmware/dual_iir/../stabilizer/telemetry/struct.Telemetry.html" title="struct stabilizer::telemetry::Telemetry">stabilizer::telemetry::Telemetry</a> for information about telemetry reported by this application.</p>
+<h3 id="stream"><a class="doc-anchor" href="firmware/dual_iir/index.html#stream">§</a>Stream</h3>
+<p>This application streams raw ADC and DAC data over UDP. Refer to
+<a href="firmware/dual_iir/../stream/index.html" title="mod stream">stream</a> for more information.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="firmware/dual_iir/index.html#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="firmware/dual_iir/app/index.html" title="mod dual_iir::app">app</a></dt><dd>The RTIC application module</dd></dl><h2 id="structs" class="section-header">Structs<a href="firmware/dual_iir/index.html#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="firmware/dual_iir/struct.Active.html" title="struct dual_iir::Active">Active</a></dt><dt><a class="struct" href="firmware/dual_iir/struct.BiquadRepr.html" title="struct dual_iir::BiquadRepr">Biquad<wbr>Repr</a></dt><dt><a class="struct" href="firmware/dual_iir/struct.Channel.html" title="struct dual_iir::Channel">Channel</a></dt><dd>A ADC-DAC channel</dd><dt><a class="struct" href="firmware/dual_iir/struct.DualIir.html" title="struct dual_iir::DualIir">DualIir</a></dt><dt><a class="struct" href="firmware/dual_iir/struct.Settings.html" title="struct dual_iir::Settings">Settings</a></dt></dl><h2 id="enums" class="section-header">Enums<a href="firmware/dual_iir/index.html#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="firmware/dual_iir/enum.Run.html" title="enum dual_iir::Run">Run</a></dt></dl><h2 id="constants" class="section-header">Constants<a href="firmware/dual_iir/index.html#constants" class="anchor">§</a></h2><dl class="item-table"><dt><a class="constant" href="firmware/dual_iir/constant.BATCH_SIZE.html" title="constant dual_iir::BATCH_SIZE">BATCH_<wbr>SIZE</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="firmware/dual_iir/constant.IIR_CASCADE_LENGTH.html" title="constant dual_iir::IIR_CASCADE_LENGTH">IIR_<wbr>CASCADE_<wbr>LENGTH</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="firmware/dual_iir/constant.SAMPLE_PERIOD.html" title="constant dual_iir::SAMPLE_PERIOD">SAMPLE_<wbr>PERIOD</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="firmware/dual_iir/constant.SAMPLE_TICKS.html" title="constant dual_iir::SAMPLE_TICKS">SAMPLE_<wbr>TICKS</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="firmware/dual_iir/constant.SAMPLE_TICKS_LOG2.html" title="constant dual_iir::SAMPLE_TICKS_LOG2">SAMPLE_<wbr>TICKS_<wbr>LOG2</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="firmware/dual_iir/constant.UNITS.html" title="constant dual_iir::UNITS">UNITS</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl></section></div></main></body></html><div style="break-before: page; page-break-before: always;"></div><!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Lockin"><title>lockin - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="lockin" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2 id="a-hreffirmwarelockinindexhtmlcrate-lockina"><a class="header" href="#a-hreffirmwarelockinindexhtmlcrate-lockina"><a href="firmware/lockin/index.html#">Crate lockin</a></a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2 id="a-hreffirmwarelockinlockinindexhtmllockinaspan-classversion0110span"><a class="header" href="#a-hreffirmwarelockinlockinindexhtmllockinaspan-classversion0110span"><a href="firmware/lockin/../lockin/index.html">lockin</a><span class="version">0.11.0</span></a></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="firmware/lockin/all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3 id="a-hreffirmwarelockinindexhtmlsectionsa"><a class="header" href="#a-hreffirmwarelockinindexhtmlsectionsa"><a href="firmware/lockin/index.html#">Sections</a></a></h3><ul class="block top-toc"><li><a href="firmware/lockin/index.html#lockin" title="Lockin">Lockin</a><ul><li><a href="firmware/lockin/index.html#features" title="Features">Features</a></li><li><a href="firmware/lockin/index.html#settings-1" title="Settings">Settings</a></li><li><a href="firmware/lockin/index.html#telemetry" title="Telemetry">Telemetry</a></li><li><a href="firmware/lockin/index.html#stream" title="Stream">Stream</a></li></ul></li></ul><h3 id="a-hreffirmwarelockinindexhtmlmodulescrate-itemsa"><a class="header" href="#a-hreffirmwarelockinindexhtmlmodulescrate-itemsa"><a href="firmware/lockin/index.html#modules">Crate Items</a></a></h3><ul class="block"><li><a href="firmware/lockin/index.html#modules" title="Modules">Modules</a></li><li><a href="firmware/lockin/index.html#structs" title="Structs">Structs</a></li><li><a href="firmware/lockin/index.html#enums" title="Enums">Enums</a></li><li><a href="firmware/lockin/index.html#constants" title="Constants">Constants</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><h1 id="crate-spanlockinspannbspbutton-idcopy-path-titlecopy-item-path-to-clipboardcopy-item-pathbutton"><a class="header" href="#crate-spanlockinspannbspbutton-idcopy-path-titlecopy-item-path-to-clipboardcopy-item-pathbutton">Crate <span>lockin</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></a></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="firmware/lockin/../src/lockin/lockin.rs.html#1-560">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="lockin"><a class="doc-anchor" href="firmware/lockin/index.html#lockin">§</a>Lockin</h2>
+<p>The <code>lockin</code> application implements a lock-in amplifier using either an external or internally
+generated reference.</p>
+<h3 id="features"><a class="doc-anchor" href="firmware/lockin/index.html#features">§</a>Features</h3>
+<ul>
+<li>Up to 800 kHz sampling</li>
+<li>Up to 400 kHz modulation frequency</li>
+<li>Supports internal and external reference sources:
+<ol>
+<li>Internal: Generate reference internally and output on one of the channel outputs</li>
+<li>External: Reciprocal PLL, reference input applied to DI0.</li>
+</ol>
+</li>
+<li>Adjustable PLL and locking time constants</li>
+<li>Adjustable phase offset and harmonic index</li>
+<li>Run-time configurable output modes (in-phase, quadrature, magnitude, log2 power, phase, frequency)</li>
+<li>Input/output data streamng via UDP</li>
+</ul>
+<h3 id="settings-1"><a class="doc-anchor" href="firmware/lockin/index.html#settings-1">§</a>Settings</h3>
+<p>Refer to the <a href="firmware/lockin/struct.Lockin.html" title="struct lockin::Lockin">Lockin</a> structure for documentation of run-time configurable settings
+for this application.</p>
+<h3 id="telemetry"><a class="doc-anchor" href="firmware/lockin/index.html#telemetry">§</a>Telemetry</h3>
+<p>Refer to <a href="firmware/lockin/../stabilizer/telemetry/struct.Telemetry.html" title="struct stabilizer::telemetry::Telemetry">stabilizer::telemetry::Telemetry</a> for information about telemetry reported by this application.</p>
+<h3 id="stream"><a class="doc-anchor" href="firmware/lockin/index.html#stream">§</a>Stream</h3>
+<p>This application streams raw ADC and DAC data over UDP. Refer to
+<a href="firmware/lockin/../stream/index.html" title="mod stream">stream</a> for more information.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="firmware/lockin/index.html#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="firmware/lockin/app/index.html" title="mod lockin::app">app</a></dt><dd>The RTIC application module</dd></dl><h2 id="structs" class="section-header">Structs<a href="firmware/lockin/index.html#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="firmware/lockin/struct.Lockin.html" title="struct lockin::Lockin">Lockin</a></dt><dt><a class="struct" href="firmware/lockin/struct.Settings.html" title="struct lockin::Settings">Settings</a></dt></dl><h2 id="enums" class="section-header">Enums<a href="firmware/lockin/index.html#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="firmware/lockin/enum.Conf.html" title="enum lockin::Conf">Conf</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="enum" href="firmware/lockin/enum.LockinMode.html" title="enum lockin::LockinMode">Lockin<wbr>Mode</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl><h2 id="constants" class="section-header">Constants<a href="firmware/lockin/index.html#constants" class="anchor">§</a></h2><dl class="item-table"><dt><a class="constant" href="firmware/lockin/constant.BATCH_SIZE.html" title="constant lockin::BATCH_SIZE">BATCH_<wbr>SIZE</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="firmware/lockin/constant.BATCH_SIZE_LOG2.html" title="constant lockin::BATCH_SIZE_LOG2">BATCH_<wbr>SIZE_<wbr>LOG2</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="firmware/lockin/constant.SAMPLE_TICKS.html" title="constant lockin::SAMPLE_TICKS">SAMPLE_<wbr>TICKS</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="firmware/lockin/constant.SAMPLE_TICKS_LOG2.html" title="constant lockin::SAMPLE_TICKS_LOG2">SAMPLE_<wbr>TICKS_<wbr>LOG2</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl></section></div></main></body></html><div style="break-before: page; page-break-before: always;"></div><!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Urukul as a downstream EEM on stabilizer."><title>dds - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="dds" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2 id="a-hreffirmwareddsindexhtmlcrate-ddsa"><a class="header" href="#a-hreffirmwareddsindexhtmlcrate-ddsa"><a href="firmware/dds/index.html#">Crate dds</a></a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2 id="a-hreffirmwareddsddsindexhtmlddsaspan-classversion0110span"><a class="header" href="#a-hreffirmwareddsddsindexhtmlddsaspan-classversion0110span"><a href="firmware/dds/../dds/index.html">dds</a><span class="version">0.11.0</span></a></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="firmware/dds/all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3 id="a-hreffirmwareddsindexhtmlmodulescrate-itemsa"><a class="header" href="#a-hreffirmwareddsindexhtmlmodulescrate-itemsa"><a href="firmware/dds/index.html#modules">Crate Items</a></a></h3><ul class="block"><li><a href="firmware/dds/index.html#modules" title="Modules">Modules</a></li><li><a href="firmware/dds/index.html#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><h1 id="crate-spanddsspannbspbutton-idcopy-path-titlecopy-item-path-to-clipboardcopy-item-pathbutton"><a class="header" href="#crate-spanddsspannbspbutton-idcopy-path-titlecopy-item-path-to-clipboardcopy-item-pathbutton">Crate <span>dds</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></a></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="firmware/dds/../src/dds/dds.rs.html#1-289">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Urukul as a downstream EEM on stabilizer.</p>
+<p>This requires the alternate direction EEM transceiver configuration.
+It exposes the Urukul CPLD and DDS settings via miniconf (MQTT and USB).</p>
+<p>Note that several values are not range checked and out-of-range values
+will lead to panics.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="firmware/dds/index.html#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="firmware/dds/app/index.html" title="mod dds::app">app</a></dt><dd>The RTIC application module</dd></dl><h2 id="structs" class="section-header">Structs<a href="firmware/dds/index.html#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="firmware/dds/struct.App.html" title="struct dds::App">App</a></dt><dt><a class="struct" href="firmware/dds/struct.Channel.html" title="struct dds::Channel">Channel</a></dt><dt><a class="struct" href="firmware/dds/struct.Settings.html" title="struct dds::Settings">Settings</a></dt></dl></section></div></main></body></html><div style="break-before: page; page-break-before: always;"></div><!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Patent pending: DE102021112017A1"><title>fls - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="fls" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2 id="a-hreffirmwareflsindexhtmlcrate-flsa"><a class="header" href="#a-hreffirmwareflsindexhtmlcrate-flsa"><a href="firmware/fls/index.html#">Crate fls</a></a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2 id="a-hreffirmwareflsflsindexhtmlflsaspan-classversion0110span"><a class="header" href="#a-hreffirmwareflsflsindexhtmlflsaspan-classversion0110span"><a href="firmware/fls/../fls/index.html">fls</a><span class="version">0.11.0</span></a></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="firmware/fls/all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3 id="a-hreffirmwareflsindexhtmlsectionsa"><a class="header" href="#a-hreffirmwareflsindexhtmlsectionsa"><a href="firmware/fls/index.html#">Sections</a></a></h3><ul class="block top-toc"><li><a href="firmware/fls/index.html#algorithm-description" title="Algorithm description">Algorithm description</a><ul><li><a href="firmware/fls/index.html#pll-path" title="PLL path">PLL path</a></li><li><a href="firmware/fls/index.html#signal-path" title="Signal path">Signal path</a></li></ul></li><li><a href="firmware/fls/index.html#telemetry" title="Telemetry">Telemetry</a></li><li><a href="firmware/fls/index.html#streaming" title="Streaming">Streaming</a></li></ul><h3 id="a-hreffirmwareflsindexhtmlmodulescrate-itemsa"><a class="header" href="#a-hreffirmwareflsindexhtmlmodulescrate-itemsa"><a href="firmware/fls/index.html#modules">Crate Items</a></a></h3><ul class="block"><li><a href="firmware/fls/index.html#modules" title="Modules">Modules</a></li><li><a href="firmware/fls/index.html#structs" title="Structs">Structs</a></li><li><a href="firmware/fls/index.html#constants" title="Constants">Constants</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><h1 id="crate-spanflsspannbspbutton-idcopy-path-titlecopy-item-path-to-clipboardcopy-item-pathbutton"><a class="header" href="#crate-spanflsspannbspbutton-idcopy-path-titlecopy-item-path-to-clipboardcopy-item-pathbutton">Crate <span>fls</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></a></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="firmware/fls/../src/fls/fls.rs.html#1-1306">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Patent pending: DE102021112017A1</p>
+<h2 id="algorithm-description"><a class="doc-anchor" href="firmware/fls/index.html#algorithm-description">§</a>Algorithm description</h2>
+<p>This application can be understood as a universal phase (frequency)
+signal processor. It determines the phase (we will drop frequency
+from now on as in a phase-aware system frequency is merely the
+difference between successive phases) of an RF input signal and
+emits an RF output signal with a phase that depends on the input
+phase. The transfer function between input and output phase is a
+sequence of various types of filters (analog RC, digital FIR, IIR,
+unwrapping, scaling, clipping) designed to implement either
+high-quality phase measurements or a certain constrained and
+somewhat exotic phase locked loop that is highly applicable
+to the task of stabilizing the arm length of an optical Michelson
+interferometer which in turn occurs when stabilizing the effective
+path length of an optical frequency transmission system.</p>
+<p>The sequence of processing steps is as follows. Analyzing it’s
+application in the context of optical path length stabilization including
+laser sources, optical modulators, and photodetectors optical is left as
+an exercise for the user.</p>
+<h3 id="pll-path"><a class="doc-anchor" href="firmware/fls/index.html#pll-path">§</a>PLL path</h3>
+<ul>
+<li>DDS locks its sysclk (500 MHz) to XO or external ref</li>
+<li>DDS emits SYNC signal at sysclk/4</li>
+<li>Prescaler 1/4 (in CPU)</li>
+<li>Drives CPU timer counter</li>
+<li>Counter is captured once per batch (based on CPU clock).
+See <a href="firmware/fls/../stabilizer/hardware/pounder/timestamp/index.html" title="mod stabilizer::hardware::pounder::timestamp">stabilizer::hardware::pounder::timestamp</a>.</li>
+<li>Digital PLL reconstructs SYNC frequency and phase (thus sysclk)
+w.r.t. batch and sample frequency and phase.
+This determines the relation of the CPU 8 MHz crystal (thus CPU
+clock and timers) to the DDS clock (derived from an external reference
+frequency or internal XCO). See <a href="firmware/fls/../idsp/pll/struct.PLL.html" title="struct idsp::pll::PLL">idsp::PLL</a>.</li>
+</ul>
+<h3 id="signal-path"><a class="doc-anchor" href="firmware/fls/index.html#signal-path">§</a>Signal path</h3>
+<ul>
+<li>RF signal enters Pounder at Pounder IN0</li>
+<li>Adjustable attenuation <code>demod_att</code>.</li>
+<li>30 dB gain block</li>
+<li>Mixing with DDS at <code>demod_freq</code></li>
+<li>RC lowpass and amplification to reject unwanted demodulation products and
+harmonics</li>
+<li>IF signal enters Stabilizer and is available at ADC0 for analog monitoring</li>
+<li>2x PGIA and AA filter on Stabilizer</li>
+<li>ADC digitization at 1/1.28 µs interval</li>
+<li>Data processing in batches of 8 samples</li>
+<li>Digital mixing with the reconstructed sample phase (PLL path). See <a href="firmware/fls/../idsp/lockin/struct.Lockin.html" title="struct idsp::lockin::Lockin">idsp::Lockin</a>.</li>
+<li>Lowpass filtering with a second order (12 dB/octave)
+IIR lowpass with an additional double zero at Nyquist. Adjustable corner frequency.
+See <a href="firmware/fls/../idsp/lowpass/struct.Lowpass.html" title="struct idsp::lowpass::Lowpass">idsp::Lowpass</a></li>
+<li>Full rate baseband demodulated data (quadrature only) on DAC0</li>
+<li>Lowpass filtering with a batch-size boxcar FIR filter (zeros at n/4 Nyquist)</li>
+<li>Computation of signal power and phase. See [idsp::ComplexExt].</li>
+<li>Fractional rescaling (<code>phase_scale</code>) and unwrapping of the phase with 32 bit turn range.</li>
+<li>Scaling and clamping.</li>
+<li>Filtering by a second order (biquad) IIR filter (supporting e.g. II, I, P
+action). See <a href="firmware/fls/../idsp/iir/index.html" title="mod idsp::iir">idsp::iir</a>.</li>
+<li>Clamping, output offset, and anti-windup. See <a href="firmware/fls/../idsp/iir/index.html" title="mod idsp::iir">idsp::iir</a>.</li>
+<li>Feedback onto a frequency offset of the modulation DDS at <code>mod_freq</code></li>
+<li>Additional feedback path from the phase before unwrapping onto the
+modulation DDS phase offset with an adjustable gain <code>pow_gain</code></li>
+<li>Adjustable DDS output amplitude and blanking on digital input</li>
+<li>Adjustable modulation attenuation <code>mod_att</code></li>
+<li>Modulation output at Pounder OUT0</li>
+</ul>
+<h2 id="telemetry"><a class="doc-anchor" href="firmware/fls/index.html#telemetry">§</a>Telemetry</h2>
+<p>Data is regularly published via MQTT. See <a href="firmware/fls/struct.Telemetry.html" title="struct fls::Telemetry">Telemetry</a>.</p>
+<h2 id="streaming"><a class="doc-anchor" href="firmware/fls/index.html#streaming">§</a>Streaming</h2>
+<p>Full-rate ADC and DAC data is available via configurable UDP data streaming.
+See <a href="firmware/fls/../stream/index.html" title="mod stream">stream</a>. To view and analyze noise spectra the graphical application
+<a href="https://github.com/quartiq/stabilizer-stream"><code>stabilizer-stream</code></a> can be used.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="firmware/fls/index.html#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="firmware/fls/app/index.html" title="mod fls::app">app</a></dt><dd>The RTIC application module</dd><dt><a class="mod" href="firmware/fls/biquad_update/index.html" title="mod fls::biquad_update">biquad_<wbr>update</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="mod" href="firmware/fls/phase_scale/index.html" title="mod fls::phase_scale">phase_<wbr>scale</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="mod" href="firmware/fls/validate_att/index.html" title="mod fls::validate_att">validate_<wbr>att</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl><h2 id="structs" class="section-header">Structs<a href="firmware/fls/index.html#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="firmware/fls/struct.BiquadReprTree.html" title="struct fls::BiquadReprTree">Biquad<wbr>Repr<wbr>Tree</a></dt><dt><a class="struct" href="firmware/fls/struct.ChannelSettings.html" title="struct fls::ChannelSettings">Channel<wbr>Settings</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="struct" href="firmware/fls/struct.ChannelState.html" title="struct fls::ChannelState">Channel<wbr>State</a></dt><dt><a class="struct" href="firmware/fls/struct.ChannelTelemetry.html" title="struct fls::ChannelTelemetry">Channel<wbr>Telemetry</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Channel Telemetry</dd><dt><a class="struct" href="firmware/fls/struct.CookedTelemetry.html" title="struct fls::CookedTelemetry">Cooked<wbr>Telemetry</a></dt><dd>Telemetry structure.
+This structure is published via MQTT at the <code>telemetry_interval</code> configured in
+<a href="firmware/fls/struct.Settings.html" title="struct fls::Settings">Settings</a>.
+There is no dedicated AA filtering for telemetry data (except for <code>stats</code>),
+it is just decimated by the telemetry interval. Use streaming for full
+bandwidth data.</dd><dt><a class="struct" href="firmware/fls/struct.DdsSettings.html" title="struct fls::DdsSettings">DdsSettings</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="struct" href="firmware/fls/struct.Fls.html" title="struct fls::Fls">Fls</a></dt><dd>Settings structure for the application.
+All fields in this structure are available through MQTT and can be configured at runtime.</dd><dt><a class="struct" href="firmware/fls/struct.Settings.html" title="struct fls::Settings">Settings</a></dt><dt><a class="struct" href="firmware/fls/struct.Stream.html" title="struct fls::Stream">Stream</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Stream data format.</dd><dt><a class="struct" href="firmware/fls/struct.Telemetry.html" title="struct fls::Telemetry">Telemetry</a></dt></dl><h2 id="constants" class="section-header">Constants<a href="firmware/fls/index.html#constants" class="anchor">§</a></h2><dl class="item-table"><dt><a class="constant" href="firmware/fls/constant.BATCH_SIZE.html" title="constant fls::BATCH_SIZE">BATCH_<wbr>SIZE</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>ADC/DAC Samples per batch. The <a href="firmware/fls/app/process/index.html" title="mod fls::app::process">app::process</a> routine is invoked once per batch period
+and has access to the two (both channels) filled buffers of ADC samples from the
+previous batch period and to the two to-be-filled buffers of DAC samples that will
+be emitted in the next batch period.</dd><dt><a class="constant" href="firmware/fls/constant.BATCH_SIZE_LOG2.html" title="constant fls::BATCH_SIZE_LOG2">BATCH_<wbr>SIZE_<wbr>LOG2</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="firmware/fls/constant.DDS_LSB_PER_HZ.html" title="constant fls::DDS_LSB_PER_HZ">DDS_<wbr>LSB_<wbr>PER_<wbr>HZ</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="firmware/fls/constant.F_DEMOD.html" title="constant fls::F_DEMOD">F_DEMOD</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="firmware/fls/constant.MULT_SHIFT.html" title="constant fls::MULT_SHIFT">MULT_<wbr>SHIFT</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="firmware/fls/constant.PHASE_SCALE_SHIFT.html" title="constant fls::PHASE_SCALE_SHIFT">PHASE_<wbr>SCALE_<wbr>SHIFT</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="firmware/fls/constant.SAMPLE_TICKS.html" title="constant fls::SAMPLE_TICKS">SAMPLE_<wbr>TICKS</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>ADC and DAC sample rate in timer cycles. One timer cycle at 100 MHz is 10 ns.</dd><dt><a class="constant" href="firmware/fls/constant.SAMPLE_TICKS_LOG2.html" title="constant fls::SAMPLE_TICKS_LOG2">SAMPLE_<wbr>TICKS_<wbr>LOG2</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Sample and batch period configuration.
+Note that both <code>SAMPLE_TICKS_LOG2</code> and <code>BATCH_SIZE_LOG2</code> are implicitly used in the
+lockin harmonic computation below. Do not change them without accounting for that.</dd></dl></section></div></main></body></html><div style="break-before: page; page-break-before: always;"></div><!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `mpll` crate."><title>mpll - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="mpll" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2 id="a-hreffirmwarempllindexhtmlcrate-mplla"><a class="header" href="#a-hreffirmwarempllindexhtmlcrate-mplla"><a href="firmware/mpll/index.html#">Crate mpll</a></a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2 id="a-hreffirmwarempllmpllindexhtmlmpllaspan-classversion0110span"><a class="header" href="#a-hreffirmwarempllmpllindexhtmlmpllaspan-classversion0110span"><a href="firmware/mpll/../mpll/index.html">mpll</a><span class="version">0.11.0</span></a></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="firmware/mpll/all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3 id="a-hreffirmwarempllindexhtmlmodulescrate-itemsa"><a class="header" href="#a-hreffirmwarempllindexhtmlmodulescrate-itemsa"><a href="firmware/mpll/index.html#modules">Crate Items</a></a></h3><ul class="block"><li><a href="firmware/mpll/index.html#modules" title="Modules">Modules</a></li><li><a href="firmware/mpll/index.html#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><h1 id="crate-spanmpllspannbspbutton-idcopy-path-titlecopy-item-path-to-clipboardcopy-item-pathbutton"><a class="header" href="#crate-spanmpllspannbspbutton-idcopy-path-titlecopy-item-path-to-clipboardcopy-item-pathbutton">Crate <span>mpll</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></a></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="firmware/mpll/../src/mpll/mpll.rs.html#1-371">Source</a> </span></div><h2 id="modules" class="section-header">Modules<a href="firmware/mpll/index.html#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="firmware/mpll/app/index.html" title="mod mpll::app">app</a></dt><dd>The RTIC application module</dd></dl><h2 id="structs" class="section-header">Structs<a href="firmware/mpll/index.html#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="firmware/mpll/struct.App.html" title="struct mpll::App">App</a></dt><dt><a class="struct" href="firmware/mpll/struct.Settings.html" title="struct mpll::Settings">Settings</a></dt><dt><a class="struct" href="firmware/mpll/struct.Telemetry.html" title="struct mpll::Telemetry">Telemetry</a></dt><dt><a class="struct" href="firmware/mpll/struct.TelemetryCooked.html" title="struct mpll::TelemetryCooked">Telemetry<wbr>Cooked</a></dt><dt><a class="struct" href="firmware/mpll/struct.TelemetryState.html" title="struct mpll::TelemetryState">Telemetry<wbr>State</a></dt><dd>Channel Telemetry</dd></dl></section></div></main></body></html>
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                        
+                        
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                
+                            </nav>
+
+        </div>
+
+        
+        
+        
+                <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        
+        
+                <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+        
+        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        
+                        <script type="text/javascript">
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+                
+    </body>
+</html>

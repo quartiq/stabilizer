@@ -1,0 +1,82 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Patent pending: DE102021112017A1"><title>fls - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="fls" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate fls</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../fls/index.html">fls</a><span class="version">0.11.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#algorithm-description" title="Algorithm description">Algorithm description</a><ul><li><a href="#pll-path" title="PLL path">PLL path</a></li><li><a href="#signal-path" title="Signal path">Signal path</a></li></ul></li><li><a href="#telemetry" title="Telemetry">Telemetry</a></li><li><a href="#streaming" title="Streaming">Streaming</a></li></ul><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#constants" title="Constants">Constants</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>fls</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/fls/fls.rs.html#1-1306">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Patent pending: DE102021112017A1</p>
+<h2 id="algorithm-description"><a class="doc-anchor" href="#algorithm-description">§</a>Algorithm description</h2>
+<p>This application can be understood as a universal phase (frequency)
+signal processor. It determines the phase (we will drop frequency
+from now on as in a phase-aware system frequency is merely the
+difference between successive phases) of an RF input signal and
+emits an RF output signal with a phase that depends on the input
+phase. The transfer function between input and output phase is a
+sequence of various types of filters (analog RC, digital FIR, IIR,
+unwrapping, scaling, clipping) designed to implement either
+high-quality phase measurements or a certain constrained and
+somewhat exotic phase locked loop that is highly applicable
+to the task of stabilizing the arm length of an optical Michelson
+interferometer which in turn occurs when stabilizing the effective
+path length of an optical frequency transmission system.</p>
+<p>The sequence of processing steps is as follows. Analyzing it’s
+application in the context of optical path length stabilization including
+laser sources, optical modulators, and photodetectors optical is left as
+an exercise for the user.</p>
+<h3 id="pll-path"><a class="doc-anchor" href="#pll-path">§</a>PLL path</h3>
+<ul>
+<li>DDS locks its sysclk (500 MHz) to XO or external ref</li>
+<li>DDS emits SYNC signal at sysclk/4</li>
+<li>Prescaler 1/4 (in CPU)</li>
+<li>Drives CPU timer counter</li>
+<li>Counter is captured once per batch (based on CPU clock).
+See <a href="../stabilizer/hardware/pounder/timestamp/index.html" title="mod stabilizer::hardware::pounder::timestamp">stabilizer::hardware::pounder::timestamp</a>.</li>
+<li>Digital PLL reconstructs SYNC frequency and phase (thus sysclk)
+w.r.t. batch and sample frequency and phase.
+This determines the relation of the CPU 8 MHz crystal (thus CPU
+clock and timers) to the DDS clock (derived from an external reference
+frequency or internal XCO). See <a href="../idsp/pll/struct.PLL.html" title="struct idsp::pll::PLL">idsp::PLL</a>.</li>
+</ul>
+<h3 id="signal-path"><a class="doc-anchor" href="#signal-path">§</a>Signal path</h3>
+<ul>
+<li>RF signal enters Pounder at Pounder IN0</li>
+<li>Adjustable attenuation <code>demod_att</code>.</li>
+<li>30 dB gain block</li>
+<li>Mixing with DDS at <code>demod_freq</code></li>
+<li>RC lowpass and amplification to reject unwanted demodulation products and
+harmonics</li>
+<li>IF signal enters Stabilizer and is available at ADC0 for analog monitoring</li>
+<li>2x PGIA and AA filter on Stabilizer</li>
+<li>ADC digitization at 1/1.28 µs interval</li>
+<li>Data processing in batches of 8 samples</li>
+<li>Digital mixing with the reconstructed sample phase (PLL path). See <a href="../idsp/lockin/struct.Lockin.html" title="struct idsp::lockin::Lockin">idsp::Lockin</a>.</li>
+<li>Lowpass filtering with a second order (12 dB/octave)
+IIR lowpass with an additional double zero at Nyquist. Adjustable corner frequency.
+See <a href="../idsp/lowpass/struct.Lowpass.html" title="struct idsp::lowpass::Lowpass">idsp::Lowpass</a></li>
+<li>Full rate baseband demodulated data (quadrature only) on DAC0</li>
+<li>Lowpass filtering with a batch-size boxcar FIR filter (zeros at n/4 Nyquist)</li>
+<li>Computation of signal power and phase. See [idsp::ComplexExt].</li>
+<li>Fractional rescaling (<code>phase_scale</code>) and unwrapping of the phase with 32 bit turn range.</li>
+<li>Scaling and clamping.</li>
+<li>Filtering by a second order (biquad) IIR filter (supporting e.g. II, I, P
+action). See <a href="../idsp/iir/index.html" title="mod idsp::iir">idsp::iir</a>.</li>
+<li>Clamping, output offset, and anti-windup. See <a href="../idsp/iir/index.html" title="mod idsp::iir">idsp::iir</a>.</li>
+<li>Feedback onto a frequency offset of the modulation DDS at <code>mod_freq</code></li>
+<li>Additional feedback path from the phase before unwrapping onto the
+modulation DDS phase offset with an adjustable gain <code>pow_gain</code></li>
+<li>Adjustable DDS output amplitude and blanking on digital input</li>
+<li>Adjustable modulation attenuation <code>mod_att</code></li>
+<li>Modulation output at Pounder OUT0</li>
+</ul>
+<h2 id="telemetry"><a class="doc-anchor" href="#telemetry">§</a>Telemetry</h2>
+<p>Data is regularly published via MQTT. See <a href="struct.Telemetry.html" title="struct fls::Telemetry">Telemetry</a>.</p>
+<h2 id="streaming"><a class="doc-anchor" href="#streaming">§</a>Streaming</h2>
+<p>Full-rate ADC and DAC data is available via configurable UDP data streaming.
+See <a href="../stream/index.html" title="mod stream">stream</a>. To view and analyze noise spectra the graphical application
+<a href="https://github.com/quartiq/stabilizer-stream"><code>stabilizer-stream</code></a> can be used.</p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="app/index.html" title="mod fls::app">app</a></dt><dd>The RTIC application module</dd><dt><a class="mod" href="biquad_update/index.html" title="mod fls::biquad_update">biquad_<wbr>update</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="mod" href="phase_scale/index.html" title="mod fls::phase_scale">phase_<wbr>scale</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="mod" href="validate_att/index.html" title="mod fls::validate_att">validate_<wbr>att</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.BiquadReprTree.html" title="struct fls::BiquadReprTree">Biquad<wbr>Repr<wbr>Tree</a></dt><dt><a class="struct" href="struct.ChannelSettings.html" title="struct fls::ChannelSettings">Channel<wbr>Settings</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="struct" href="struct.ChannelState.html" title="struct fls::ChannelState">Channel<wbr>State</a></dt><dt><a class="struct" href="struct.ChannelTelemetry.html" title="struct fls::ChannelTelemetry">Channel<wbr>Telemetry</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Channel Telemetry</dd><dt><a class="struct" href="struct.CookedTelemetry.html" title="struct fls::CookedTelemetry">Cooked<wbr>Telemetry</a></dt><dd>Telemetry structure.
+This structure is published via MQTT at the <code>telemetry_interval</code> configured in
+<a href="struct.Settings.html" title="struct fls::Settings">Settings</a>.
+There is no dedicated AA filtering for telemetry data (except for <code>stats</code>),
+it is just decimated by the telemetry interval. Use streaming for full
+bandwidth data.</dd><dt><a class="struct" href="struct.DdsSettings.html" title="struct fls::DdsSettings">DdsSettings</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="struct" href="struct.Fls.html" title="struct fls::Fls">Fls</a></dt><dd>Settings structure for the application.
+All fields in this structure are available through MQTT and can be configured at runtime.</dd><dt><a class="struct" href="struct.Settings.html" title="struct fls::Settings">Settings</a></dt><dt><a class="struct" href="struct.Stream.html" title="struct fls::Stream">Stream</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Stream data format.</dd><dt><a class="struct" href="struct.Telemetry.html" title="struct fls::Telemetry">Telemetry</a></dt></dl><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><dl class="item-table"><dt><a class="constant" href="constant.BATCH_SIZE.html" title="constant fls::BATCH_SIZE">BATCH_<wbr>SIZE</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>ADC/DAC Samples per batch. The <a href="app/process/index.html" title="mod fls::app::process">app::process</a> routine is invoked once per batch period
+and has access to the two (both channels) filled buffers of ADC samples from the
+previous batch period and to the two to-be-filled buffers of DAC samples that will
+be emitted in the next batch period.</dd><dt><a class="constant" href="constant.BATCH_SIZE_LOG2.html" title="constant fls::BATCH_SIZE_LOG2">BATCH_<wbr>SIZE_<wbr>LOG2</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="constant.DDS_LSB_PER_HZ.html" title="constant fls::DDS_LSB_PER_HZ">DDS_<wbr>LSB_<wbr>PER_<wbr>HZ</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="constant.F_DEMOD.html" title="constant fls::F_DEMOD">F_DEMOD</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="constant.MULT_SHIFT.html" title="constant fls::MULT_SHIFT">MULT_<wbr>SHIFT</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="constant.PHASE_SCALE_SHIFT.html" title="constant fls::PHASE_SCALE_SHIFT">PHASE_<wbr>SCALE_<wbr>SHIFT</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="constant" href="constant.SAMPLE_TICKS.html" title="constant fls::SAMPLE_TICKS">SAMPLE_<wbr>TICKS</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>ADC and DAC sample rate in timer cycles. One timer cycle at 100 MHz is 10 ns.</dd><dt><a class="constant" href="constant.SAMPLE_TICKS_LOG2.html" title="constant fls::SAMPLE_TICKS_LOG2">SAMPLE_<wbr>TICKS_<wbr>LOG2</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Sample and batch period configuration.
+Note that both <code>SAMPLE_TICKS_LOG2</code> and <code>BATCH_SIZE_LOG2</code> are implicitly used in the
+lockin harmonic computation below. Do not change them without accounting for that.</dd></dl></section></div></main></body></html>

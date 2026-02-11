@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CaptureSource1","CaptureSource2","CaptureSource3","CaptureSource4"],"struct":["Channel1","Channel1InputCapture","Channel2","Channel2InputCapture","Channel3","Channel3InputCapture","Channel4","Channel4InputCapture","Channels","UpdateEvent"]};

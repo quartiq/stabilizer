@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["coefficients","normal","pid","repr","svf","wdf"],"struct":["Biquad","BiquadClamp","DirectForm1","DirectForm1Dither","DirectForm1Wide","DirectForm2Transposed"]};

@@ -1,0 +1,214 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="miniconf: serialize/deserialize/access reflection for trees"><title>miniconf - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="miniconf" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate miniconf</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../miniconf/index.html">miniconf</a><span class="version">0.20.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#miniconf-serializedeserializeaccess-reflection-for-trees" title="miniconf: serialize/deserialize/access reflection for trees">miniconf: serialize/deserialize/access reflection for trees</a><ul><li><a href="#example" title="Example">Example</a></li><li><a href="#settings-management" title="Settings management">Settings management</a></li><li><a href="#formats" title="Formats">Formats</a></li><li><a href="#transport" title="Transport">Transport</a></li><li><a href="#derive-macros" title="Derive macros">Derive macros</a></li><li><a href="#keys-and-paths" title="Keys and paths">Keys and paths</a></li><li><a href="#limitations" title="Limitations">Limitations</a></li><li><a href="#features" title="Features">Features</a></li><li><a href="#reflection" title="Reflection">Reflection</a></li><li><a href="#functional-programming-polymorphism" title="Functional Programming, Polymorphism">Functional Programming, Polymorphism</a></li></ul></li></ul><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li><li><a href="#derives" title="Derive Macros">Derive Macros</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>miniconf</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/miniconf/lib.rs.html#1-51">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="miniconf-serializedeserializeaccess-reflection-for-trees"><a class="doc-anchor" href="#miniconf-serializedeserializeaccess-reflection-for-trees">§</a>miniconf: serialize/deserialize/access reflection for trees</h2>
+<p><a href="https://crates.io/crates/miniconf"><img src="https://img.shields.io/crates/v/miniconf.svg" alt="crates.io" /></a>
+<a href="https://docs.rs/miniconf"><img src="https://docs.rs/miniconf/badge.svg" alt="docs" /></a>
+<a href="https://matrix.to/#/#quartiq:matrix.org"><img src="https://img.shields.io/matrix/quartiq:matrix.org" alt="QUARTIQ Matrix Chat" /></a>
+<a href="https://github.com/quartiq/miniconf/actions"><img src="https://github.com/vertigo-designs/miniconf/workflows/Continuous%20Integration/badge.svg" alt="Continuous Integration" /></a></p>
+<p><code>miniconf</code> enables lightweight (<code>no_std</code>/no alloc) serialization, deserialization,
+and access within a tree of heterogeneous types by keys.</p>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<p>See below for an example showing some of the features of the <code>Tree*</code> traits.
+See also the documentation and doctests of the <a href="trait.TreeSchema.html" title="trait miniconf::TreeSchema"><code>TreeSchema</code></a> trait for a detailed description.</p>
+<p>Note that the example below focuses on JSON and slash-separated paths while in fact
+any <code>serde</code> backend (or <code>dyn Any</code> trait objects) and many different <code>Keys</code>/<code>Transcode</code>
+providers are supported.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>miniconf::{SerdeError, json_core, JsonPath, ValueError, KeyError, Tree, TreeSchema, Path, Packed, Shape, leaf};
+
+<span class="attr">#[derive(Deserialize, Serialize, Default, Tree)]
+</span><span class="kw">pub struct </span>Inner {
+    a: i32,
+    b: u16,
+}
+
+<span class="attr">#[derive(Deserialize, Serialize, Default, Tree)]
+</span><span class="kw">pub enum </span>Either {
+    <span class="attr">#[default]
+    </span>Bad,
+    Good,
+    A(i32),
+    B(Inner),
+    C([Inner; <span class="number">2</span>]),
+}
+
+<span class="attr">#[derive(Tree, Default)]
+</span><span class="kw">pub struct </span>Settings {
+    foo: bool,
+    <span class="attr">#[tree(with=leaf)]
+    </span>enum_: Either,
+    <span class="attr">#[tree(with=leaf)]
+    </span>struct_: Inner,
+    <span class="attr">#[tree(with=leaf)]
+    </span>array: [i32; <span class="number">2</span>],
+    <span class="attr">#[tree(with=leaf)]
+    </span>option: <span class="prelude-ty">Option</span>&lt;i32&gt;,
+
+    <span class="attr">#[tree(skip)]
+    #[allow(unused)]
+    </span>skipped: (),
+
+    struct_tree: Inner,
+    enum_tree: Either,
+    array_tree: [i32; <span class="number">2</span>],
+    array_tree2: [Inner; <span class="number">2</span>],
+    tuple_tree: (i32, Inner),
+    option_tree: <span class="prelude-ty">Option</span>&lt;i32&gt;,
+    option_tree2: <span class="prelude-ty">Option</span>&lt;Inner&gt;,
+    array_option_tree: [<span class="prelude-ty">Option</span>&lt;Inner&gt;; <span class="number">2</span>],
+}
+
+<span class="kw">let </span><span class="kw-2">mut </span>settings = Settings::default();
+
+<span class="comment">// Access nodes by field name
+</span>json_core::set(<span class="kw-2">&amp;mut </span>settings,<span class="string">"/foo"</span>, <span class="string">b"true"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(settings.foo, <span class="bool-val">true</span>);
+json_core::set(<span class="kw-2">&amp;mut </span>settings, <span class="string">"/enum_"</span>, <span class="string">br#""Good""#</span>)<span class="question-mark">?</span>;
+json_core::set(<span class="kw-2">&amp;mut </span>settings, <span class="string">"/struct_"</span>, <span class="string">br#"{"a": 3, "b": 3}"#</span>)<span class="question-mark">?</span>;
+json_core::set(<span class="kw-2">&amp;mut </span>settings, <span class="string">"/array"</span>, <span class="string">b"[6, 6]"</span>)<span class="question-mark">?</span>;
+json_core::set(<span class="kw-2">&amp;mut </span>settings, <span class="string">"/option"</span>, <span class="string">b"12"</span>)<span class="question-mark">?</span>;
+json_core::set(<span class="kw-2">&amp;mut </span>settings, <span class="string">"/option"</span>, <span class="string">b"null"</span>)<span class="question-mark">?</span>;
+
+<span class="comment">// Nodes inside containers
+// ... by field name in a struct
+</span>json_core::set(<span class="kw-2">&amp;mut </span>settings, <span class="string">"/struct_tree/a"</span>, <span class="string">b"4"</span>)<span class="question-mark">?</span>;
+<span class="comment">// ... or by index in an array
+</span>json_core::set(<span class="kw-2">&amp;mut </span>settings, <span class="string">"/array_tree/0"</span>, <span class="string">b"7"</span>)<span class="question-mark">?</span>;
+<span class="comment">// ... or by index and then struct field name
+</span>json_core::set(<span class="kw-2">&amp;mut </span>settings, <span class="string">"/array_tree2/0/a"</span>, <span class="string">b"11"</span>)<span class="question-mark">?</span>;
+<span class="comment">// ... or by hierarchical index
+</span>json_core::set_by_key(<span class="kw-2">&amp;mut </span>settings, [<span class="number">8</span>, <span class="number">0</span>, <span class="number">1</span>], <span class="string">b"8"</span>)<span class="question-mark">?</span>;
+<span class="comment">// ... or by packed index
+</span><span class="kw">let </span>packed: Packed = Settings::SCHEMA.transcode([<span class="number">8</span>, <span class="number">1</span>, <span class="number">0</span>]).unwrap();
+<span class="macro">assert_eq!</span>(packed.into_lsb().get(), <span class="number">0b1_1000_1_0</span>);
+json_core::set_by_key(<span class="kw-2">&amp;mut </span>settings, packed, <span class="string">b"9"</span>)<span class="question-mark">?</span>;
+<span class="comment">// ... or by JSON path
+</span>json_core::set_by_key(<span class="kw-2">&amp;mut </span>settings, JsonPath(<span class="string">".array_tree2[1].b"</span>), <span class="string">b"10"</span>)<span class="question-mark">?</span>;
+
+<span class="comment">// Hiding paths by setting an Option to `None` at runtime
+</span><span class="macro">assert_eq!</span>(json_core::set(<span class="kw-2">&amp;mut </span>settings, <span class="string">"/option_tree"</span>, <span class="string">b"13"</span>), <span class="prelude-val">Err</span>(ValueError::Absent.into()));
+settings.option_tree = <span class="prelude-val">Some</span>(<span class="number">0</span>);
+json_core::set(<span class="kw-2">&amp;mut </span>settings, <span class="string">"/option_tree"</span>, <span class="string">b"13"</span>)<span class="question-mark">?</span>;
+<span class="comment">// Hiding a path and descending into the inner `Tree`
+</span>settings.option_tree2 = <span class="prelude-val">Some</span>(Inner::default());
+json_core::set(<span class="kw-2">&amp;mut </span>settings, <span class="string">"/option_tree2/a"</span>, <span class="string">b"14"</span>)<span class="question-mark">?</span>;
+<span class="comment">// Hiding items of an array of `Tree`s
+</span>settings.array_option_tree[<span class="number">1</span>] = <span class="prelude-val">Some</span>(Inner::default());
+json_core::set(<span class="kw-2">&amp;mut </span>settings, <span class="string">"/array_option_tree/1/a"</span>, <span class="string">b"15"</span>)<span class="question-mark">?</span>;
+
+<span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0</span>; <span class="number">16</span>];
+
+<span class="comment">// Serializing nodes by path
+</span><span class="kw">let </span>len = json_core::get(<span class="kw-2">&amp;</span>settings, <span class="string">"/struct_"</span>, <span class="kw-2">&amp;mut </span>buf).unwrap();
+<span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>buf[..len], <span class="string">br#"{"a":3,"b":3}"#</span>);
+
+<span class="comment">// Tree metadata
+</span><span class="kw">const </span>MAX_DEPTH: usize = Settings::SCHEMA.shape().max_depth;
+<span class="kw">const </span>MAX_LENGTH: usize = Settings::SCHEMA.shape().max_length(<span class="string">"/"</span>);
+<span class="macro">assert!</span>(MAX_DEPTH &lt;= <span class="number">6</span>);
+<span class="macro">assert!</span>(MAX_LENGTH &lt;= <span class="number">32</span>);
+
+<span class="comment">// Iterating over all leaf paths
+</span><span class="kw">for </span>path <span class="kw">in </span>Settings::SCHEMA.nodes::&lt;Path&lt;heapless::String&lt;MAX_LENGTH&gt;, <span class="string">'/'</span>&gt;, MAX_DEPTH&gt;() {
+    <span class="kw">let </span>path = path.unwrap().<span class="number">0</span>;
+    <span class="comment">// Serialize each
+    </span><span class="kw">match </span>json_core::get(<span class="kw-2">&amp;</span>settings, <span class="kw-2">&amp;</span>path, <span class="kw-2">&amp;mut </span>buf) {
+        <span class="comment">// Full round-trip: deserialize and set again
+        </span><span class="prelude-val">Ok</span>(len) =&gt; { json_core::set(<span class="kw-2">&amp;mut </span>settings, <span class="kw-2">&amp;</span>path, <span class="kw-2">&amp;</span>buf[..len])<span class="question-mark">?</span>; }
+        <span class="comment">// Some Options are `None`, some enum variants are absent
+        </span><span class="prelude-val">Err</span>(SerdeError::Value(ValueError::Absent)) =&gt; {}
+        e =&gt; { e.unwrap(); }
+    }
+}
+</code></pre></div><h3 id="settings-management"><a class="doc-anchor" href="#settings-management">§</a>Settings management</h3>
+<p>One possible use of <code>miniconf</code> is a backend for run-time settings management in embedded devices.</p>
+<p>It was originally designed to work with JSON (<a href="https://docs.rs/serde-json-core"><code>serde_json_core</code></a>)
+payloads over MQTT (<a href="https://docs.rs/minimq"><code>minimq</code></a>) and provides a MQTT settings management
+client in the <code>miniconf_mqtt</code> crate and a Python reference implementation to interact with it.
+Miniconf is agnostic of the <code>serde</code> backend/format, key type/format, and transport/protocol.</p>
+<h3 id="formats"><a class="doc-anchor" href="#formats">§</a>Formats</h3>
+<p><code>miniconf</code> can be used with any <code>serde::Serializer</code>/<code>serde::Deserializer</code> backend, and key format.</p>
+<p>Explicit support for <code>/</code> as the path hierarchy separator and JSON (<code>serde_json_core</code>) is implemented.</p>
+<p>Support for the <code>postcard</code> wire format with any <code>postcard</code> flavor and
+any <a href="trait.Keys.html" title="trait miniconf::Keys"><code>Keys</code></a> type is implemented. Combined with the <a href="struct.Packed.html" title="struct miniconf::Packed"><code>Packed</code></a> key representation, this is a very
+space-efficient serde-by-key API.</p>
+<p>Blanket implementations are provided for all
+<code>TreeSerialize</code>+<code>TreeDeserialize</code> types for all formats.</p>
+<h3 id="transport"><a class="doc-anchor" href="#transport">§</a>Transport</h3>
+<p><code>miniconf</code> is also protocol-agnostic. Any means that can receive or emit serialized key-value data
+can be used to access nodes by path.</p>
+<p>The <code>MqttClient</code> in the <code>miniconf_mqtt</code> crate implements settings management over the <a href="https://mqtt.org">MQTT
+protocol</a> with JSON payloads. A Python reference library is provided that
+interfaces with it. This example discovers the unique prefix of an application listening to messages
+under the topic <code>quartiq/application/12345</code> and set its <code>/foo</code> setting to <code>true</code>.</p>
+<div class="example-wrap"><pre class="language-sh"><code>python -m miniconf -d quartiq/application/+ /foo=true</code></pre></div><h3 id="derive-macros"><a class="doc-anchor" href="#derive-macros">§</a>Derive macros</h3>
+<p>For structs <code>miniconf</code> offers derive macros for <a href="derive.TreeSchema.html" title="derive miniconf::TreeSchema"><code>TreeSchema</code></a>, <a href="derive.TreeSerialize.html" title="derive miniconf::TreeSerialize"><code>TreeSerialize</code></a>, <a href="derive.TreeDeserialize.html" title="derive miniconf::TreeDeserialize"><code>TreeDeserialize</code></a>, and <a href="derive.TreeAny.html" title="derive miniconf::TreeAny"><code>TreeAny</code></a>.
+The macros implements the <a href="trait.TreeSchema.html" title="trait miniconf::TreeSchema"><code>TreeSchema</code></a>, <a href="trait.TreeSerialize.html" title="trait miniconf::TreeSerialize"><code>TreeSerialize</code></a>, <a href="trait.TreeDeserialize.html" title="trait miniconf::TreeDeserialize"><code>TreeDeserialize</code></a>, and <a href="trait.TreeAny.html" title="trait miniconf::TreeAny"><code>TreeAny</code></a> traits.
+Fields/variants that form internal nodes (non-leaf) need to implement the respective <code>Tree{Key,Serialize,Deserialize,Any}</code> trait.
+Leaf fields/items need to support the respective <a href="https://docs.rs/serde/1.0.228/serde/index.html" title="mod serde"><code>serde</code></a> (and the desired <code>serde::Serializer</code>/<code>serde::Deserializer</code>
+backend) or <a href="https://doc.rust-lang.org/1.93.0/core/any/index.html" title="mod core::any"><code>core::any</code></a> trait.</p>
+<p>Structs, enums, arrays, Options, and many other containers can then be cascaded to construct more complex trees.</p>
+<p>See also the <a href="trait.TreeSchema.html" title="trait miniconf::TreeSchema"><code>TreeSchema</code></a> trait documentation for details.</p>
+<h3 id="keys-and-paths"><a class="doc-anchor" href="#keys-and-paths">§</a>Keys and paths</h3>
+<p>Lookup into the tree is done using a <a href="trait.Keys.html" title="trait miniconf::Keys"><code>Keys</code></a> implementation. A blanket implementation through <a href="trait.IntoKeys.html" title="trait miniconf::IntoKeys"><code>IntoKeys</code></a>
+is provided for <code>IntoIterator</code>s over <a href="trait.Key.html" title="trait miniconf::Key"><code>Key</code></a> items. The <a href="trait.Key.html" title="trait miniconf::Key"><code>Key</code></a> lookup capability is implemented
+for <code>usize</code> indices and <code>&amp;str</code> names.</p>
+<p>Path iteration is supported with arbitrary separator <code>char</code>s between names.</p>
+<p>Very compact hierarchical indices encodings can be obtained from the <a href="struct.Packed.html" title="struct miniconf::Packed"><code>Packed</code></a> structure.
+It implements <a href="trait.Keys.html" title="trait miniconf::Keys"><code>Keys</code></a>.</p>
+<h3 id="limitations"><a class="doc-anchor" href="#limitations">§</a>Limitations</h3>
+<ul>
+<li><code>enum</code>: The derive macros don’t support enums with record (named fields) variants or tuple variants with more than one (non-skip) field. Only unit, newtype and skipped variants are supported. Without the derive macros, any <code>enum</code> is still however usable as a <code>Leaf</code> node. Note also that netwype variants with a single inline tuple are supported.</li>
+<li>The derive macros only support flattening in non-ambiguous situations (single field structs and single variant enums, both modulo skipped fields/variants and unit variants).</li>
+</ul>
+<h3 id="features"><a class="doc-anchor" href="#features">§</a>Features</h3>
+<ul>
+<li><code>json-core</code>: Enable helper functions for serializing from and
+into json slices (using the <code>serde_json_core</code> crate).</li>
+<li><code>postcard</code>: Enable helper functions for serializing from and
+into the postcard compact binary format (using the <code>postcard</code> crate).</li>
+<li><code>derive</code>: Enable the derive macros in <code>miniconf_derive</code>. Enabled by default.</li>
+</ul>
+<h3 id="reflection"><a class="doc-anchor" href="#reflection">§</a>Reflection</h3>
+<p><code>miniconf</code> enables certain kinds of reflective access to heterogeneous trees.
+Let’s compare it to <a href="https://crates.io/crates/bevy_reflect"><code>bevy_reflect</code></a>
+which is a comprehensive and mature reflection crate:</p>
+<p><code>bevy_reflect</code> is thoroughly <code>std</code> while <code>miniconf</code> aims at <code>no_std</code>.
+<code>bevy_reflect</code> uses its <code>Reflect</code> trait to operate on and pass nodes as trait objects.
+<code>miniconf</code> uses serialized data or <code>Any</code> to access leaf nodes and pure “code” to traverse through internal nodes.
+The <code>Tree*</code> traits like <code>Reflect</code> thus give access to nodes but unlike <code>Reflect</code> they are all decidedly not object-safe
+and can not be used as trait objects. This allows <code>miniconf</code> to support non-<code>'static</code> borrowed data
+(only for <code>TreeAny</code> the leaf nodes need to be <code>'static</code>)
+while <code>bevy_reflect</code> requires <code>'static</code> for <code>Reflect</code> types.</p>
+<p><code>miniconf</code>supports at least the following reflection features mentioned in the <code>bevy_reflect</code> README:</p>
+<ul>
+<li>➕ Derive the traits: <code>miniconf</code> has <code>Tree*</code> derive macros and blanket implementations for arrays and Options.
+Leaf nodes just need some impls of <code>Serialize/Deserialize/Any</code> where desired.</li>
+<li>➕ Interact with fields using their names</li>
+<li>➖ “Patch” your types with new values: <code>miniconf</code> only supports limited changes to the tree structure at runtime
+(<code>Option</code> and custom accessors) while <code>bevy_reflect</code> has powerful dynamic typing tools.</li>
+<li>➕ Look up nested fields using “path strings”: In addition to a superset of JSON path style
+“path strings” <code>miniconf</code> supports hierarchical indices and bit-packed ordered keys.</li>
+<li>➕ Iterate over struct fields: <code>miniconf</code> Supports recursive iteration over node keys.</li>
+<li>➕ Automatically serialize and deserialize via Serde without explicit serde impls:
+<code>miniconf</code> supports automatic serializing/deserializing into key-value pairs without an explicit container serde impls.</li>
+<li>➕ Trait “reflection”: Together with <a href="https://crates.io/crates/crosstrait"><code>crosstrait</code></a> supports building the
+type registry and enables casting from <code>dyn Any</code> returned by <code>TreeAny</code> to other desired trait objects.
+Together with <a href="https://crates.io/crates/erased-serde"><code>erased-serde</code></a> it can be used to implement node serialization/deserialization
+using <code>miniconf</code>’s <code>TreeAny</code> without using <code>TreeSerialize</code>/<code>TreeDeserialize</code> similar to <code>bevy_reflect</code>.</li>
+</ul>
+<p>Some tangential crates:</p>
+<ul>
+<li><a href="https://crates.io/crates/serde-reflection"><code>serde-reflection</code></a>: extract schemata from serde impls.
+The <code>trace</code> example uses <code>serde-reflection</code> to extract a graph and schema for <code>Tree*</code>.</li>
+<li><a href="https://crates.io/crates/typetag"><code>typetag</code></a>: “derive serde for trait objects” (local traits and impls)</li>
+<li><a href="https://crates.io/crates/deflect"><code>deflect</code></a>: reflection on trait objects using adjacent DWARF debug info as the type registry</li>
+<li><a href="https://crates.io/crates/intertrait"><code>intertrait</code></a>: inspiration and source of ideas for <code>crosstrait</code></li>
+</ul>
+<h3 id="functional-programming-polymorphism"><a class="doc-anchor" href="#functional-programming-polymorphism">§</a>Functional Programming, Polymorphism</h3>
+<p>The type-heterogeneity of <code>miniconf</code> also borders on functional programming features. For that crates like the
+following may also be relevant:</p>
+<ul>
+<li><a href="https://crates.io/crates/frunk"><code>frunk</code></a></li>
+<li><a href="https://crates.io/crates/lens-rs"><code>lens-rs</code></a>/<a href="https://crates.io/crates/rovv"><code>rovv</code></a></li>
+</ul>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="deny/index.html" title="mod miniconf::deny">deny</a></dt><dd>Deny access tools.</dd><dt><a class="mod" href="json_core/index.html" title="mod miniconf::json_core">json_<wbr>core</a></dt><dd><code>TreeSerialize</code>/<code>TreeDeserialize</code> with “JSON and <code>/</code>”.</dd><dt><a class="mod" href="leaf/index.html" title="mod miniconf::leaf">leaf</a></dt><dd>Leaf implementation using serde::{Serialize, Deserialize}</dd><dt><a class="mod" href="passthrough/index.html" title="mod miniconf::passthrough">passthrough</a></dt><dd>Passthrough Tree*</dd><dt><a class="mod" href="postcard/index.html" title="mod miniconf::postcard">postcard</a></dt><dd><code>TreeSerialize</code>/<code>TreeDeserialize</code> with <code>postcard</code>.</dd><dt><a class="mod" href="str_leaf/index.html" title="mod miniconf::str_leaf">str_<wbr>leaf</a></dt><dd><code>TryFrom&lt;&amp;str&gt;</code>/<code>AsRef&lt;str&gt;</code> leaf</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Chain.html" title="struct miniconf::Chain">Chain</a></dt><dd>Concatenate two <code>Keys</code> of different types</dd><dt><a class="struct" href="struct.ExactSize.html" title="struct miniconf::ExactSize">Exact<wbr>Size</a></dt><dd>Counting wrapper for iterators with known exact size</dd><dt><a class="struct" href="struct.Homogeneous.html" title="struct miniconf::Homogeneous">Homogeneous</a></dt><dd>A representative schema item for a homogeneous array</dd><dt><a class="struct" href="struct.Indices.html" title="struct miniconf::Indices">Indices</a></dt><dd>Indices of <code>usize</code> to identify a node in a <code>TreeSchema</code></dd><dt><a class="struct" href="struct.JsonPath.html" title="struct miniconf::JsonPath">Json<wbr>Path</a></dt><dd>JSON style path notation</dd><dt><a class="struct" href="struct.JsonPathIter.html" title="struct miniconf::JsonPathIter">Json<wbr>Path<wbr>Iter</a></dt><dd>JSON style path notation iterator</dd><dt><a class="struct" href="struct.KeysIter.html" title="struct miniconf::KeysIter">Keys<wbr>Iter</a></dt><dd><a href="trait.Keys.html" title="trait miniconf::Keys"><code>Keys</code></a>/<a href="trait.IntoKeys.html" title="trait miniconf::IntoKeys"><code>IntoKeys</code></a> for Iterators of <a href="trait.Key.html" title="trait miniconf::Key"><code>Key</code></a></dd><dt><a class="struct" href="struct.Leaf.html" title="struct miniconf::Leaf">Leaf</a></dt><dd><code>Serialize</code>/<code>Deserialize</code>/<code>Any</code> leaf</dd><dt><a class="struct" href="struct.Named.html" title="struct miniconf::Named">Named</a></dt><dd>A named schema item</dd><dt><a class="struct" href="struct.NodeIter.html" title="struct miniconf::NodeIter">Node<wbr>Iter</a></dt><dd>Node iterator</dd><dt><a class="struct" href="struct.Numbered.html" title="struct miniconf::Numbered">Numbered</a></dt><dd>A numbered schema item</dd><dt><a class="struct" href="struct.Packed.html" title="struct miniconf::Packed">Packed</a></dt><dd>A bit-packed representation of multiple indices.</dd><dt><a class="struct" href="struct.Path.html" title="struct miniconf::Path">Path</a></dt><dd>Path with named keys separated by a separator char</dd><dt><a class="struct" href="struct.PathIter.html" title="struct miniconf::PathIter">Path<wbr>Iter</a></dt><dd>String split/skip wrapper, smaller/simpler than <code>.split(S).skip(1)</code></dd><dt><a class="struct" href="struct.Schema.html" title="struct miniconf::Schema">Schema</a></dt><dd>Type of a node: leaf or internal</dd><dt><a class="struct" href="struct.Shape.html" title="struct miniconf::Shape">Shape</a></dt><dd>Metadata about a <code>TreeSchema</code> namespace.</dd><dt><a class="struct" href="struct.Short.html" title="struct miniconf::Short">Short</a></dt><dd>Track leaf node encounter</dd><dt><a class="struct" href="struct.Track.html" title="struct miniconf::Track">Track</a></dt><dd>Track key depth</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.DescendError.html" title="enum miniconf::DescendError">Descend<wbr>Error</a></dt><dd>Errors that can occur while visting nodes with <a href="struct.Schema.html#method.descend" title="method miniconf::Schema::descend"><code>crate::Schema::descend</code></a>.</dd><dt><a class="enum" href="enum.Internal.html" title="enum miniconf::Internal">Internal</a></dt><dd>An internal node with children</dd><dt><a class="enum" href="enum.KeyError.html" title="enum miniconf::KeyError">KeyError</a></dt><dd>Errors that can occur when using the Tree traits.</dd><dt><a class="enum" href="enum.SerdeError.html" title="enum miniconf::SerdeError">Serde<wbr>Error</a></dt><dd>Compound errors</dd><dt><a class="enum" href="enum.ValueError.html" title="enum miniconf::ValueError">Value<wbr>Error</a></dt><dd>Errors that can occur while accessing a value.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.IntoKeys.html" title="trait miniconf::IntoKeys">Into<wbr>Keys</a></dt><dd>Be converted into a <code>Keys</code></dd><dt><a class="trait" href="trait.Key.html" title="trait miniconf::Key">Key</a></dt><dd>Convert a key into a node index given an internal node schema</dd><dt><a class="trait" href="trait.Keys.html" title="trait miniconf::Keys">Keys</a></dt><dd>Capability to yield and look up <a href="trait.Key.html" title="trait miniconf::Key"><code>Key</code></a>s</dd><dt><a class="trait" href="trait.Transcode.html" title="trait miniconf::Transcode">Transcode</a></dt><dd>Look up an <code>IntoKeys</code> in a <code>Schema</code> and transcode it.</dd><dt><a class="trait" href="trait.TreeAny.html" title="trait miniconf::TreeAny">TreeAny</a></dt><dd>Access any node by keys.</dd><dt><a class="trait" href="trait.TreeDeserialize.html" title="trait miniconf::TreeDeserialize">Tree<wbr>Deserialize</a></dt><dd>Deserialize a leaf node by its keys.</dd><dt><a class="trait" href="trait.TreeDeserializeOwned.html" title="trait miniconf::TreeDeserializeOwned">Tree<wbr>Deserialize<wbr>Owned</a></dt><dd>Shorthand for owned deserialization through <a href="trait.TreeDeserialize.html" title="trait miniconf::TreeDeserialize"><code>TreeDeserialize</code></a>.</dd><dt><a class="trait" href="trait.TreeSchema.html" title="trait miniconf::TreeSchema">Tree<wbr>Schema</a></dt><dd>Traversal, iteration of keys in a tree.</dd><dt><a class="trait" href="trait.TreeSerialize.html" title="trait miniconf::TreeSerialize">Tree<wbr>Serialize</a></dt><dd>Serialize a leaf node by its keys.</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.Meta.html" title="type miniconf::Meta">Meta</a></dt><dd>The metadata type</dd></dl><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><dl class="item-table"><dt><a class="derive" href="derive.Tree.html" title="derive miniconf::Tree">Tree</a></dt><dd>Derive the <code>TreeSchema</code>, <code>TreeSerialize</code>, <code>TreeDeserialize</code>, and <code>TreeAny</code> traits for a struct or enum.</dd><dt><a class="derive" href="derive.TreeAny.html" title="derive miniconf::TreeAny">TreeAny</a></dt><dd>Derive the <code>TreeAny</code> trait for a struct or enum.</dd><dt><a class="derive" href="derive.TreeDeserialize.html" title="derive miniconf::TreeDeserialize">Tree<wbr>Deserialize</a></dt><dd>Derive the <code>TreeDeserialize</code> trait for a struct or enum.</dd><dt><a class="derive" href="derive.TreeSchema.html" title="derive miniconf::TreeSchema">Tree<wbr>Schema</a></dt><dd>Derive the <code>TreeSchema</code> trait for a struct or enum.</dd><dt><a class="derive" href="derive.TreeSerialize.html" title="derive miniconf::TreeSerialize">Tree<wbr>Serialize</a></dt><dd>Derive the <code>TreeSerialize</code> trait for a struct or enum.</dd></dl></section></div></main></body></html>

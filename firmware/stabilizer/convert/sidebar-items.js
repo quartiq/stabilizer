@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Gain"],"fn":["att_is_valid"],"struct":["AdcCode","DacCode"]};

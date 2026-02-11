@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BATCH_SIZE","BATCH_SIZE_LOG2","SAMPLE_TICKS","SAMPLE_TICKS_LOG2"],"enum":["Conf","LockinMode"],"mod":["app"],"struct":["Lockin","Settings"]};

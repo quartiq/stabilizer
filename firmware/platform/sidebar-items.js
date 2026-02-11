@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["bootload_dfu","dfu_flag_is_set","dfu_reboot"],"struct":["ApplicationMetadata","AsmDelay","AsyncFlash","NetSettings","SerialSettingsPlatform","SettingsKey","TelemetryClient"],"trait":["AppSettings","UnlockFlash"]};

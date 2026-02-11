@@ -1,0 +1,41 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The DdsOutput is used as an output stream to the pounder DDS."><title>stabilizer::hardware::pounder::dds_output - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="stabilizer" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../../../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module dds_output</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../stabilizer/index.html">stabilizer</a><span class="version">0.11.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module dds_<wbr>output</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#design" title="Design">Design</a></li><li><a href="#limitations" title="Limitations">Limitations</a></li><li><a href="#future-improvement" title="Future Improvement">Future Improvement</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In stabilizer::<wbr>hardware::<wbr>pounder</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../../index.html">stabilizer</a>::<wbr><a href="../../index.html">hardware</a>::<wbr><a href="../index.html">pounder</a></div><h1>Module <span>dds_<wbr>output</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../../src/stabilizer/hardware/pounder/dds_output.rs.html#1-125">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The DdsOutput is used as an output stream to the pounder DDS.</p>
+<h2 id="design"><a class="doc-anchor" href="#design">§</a>Design</h2>
+<p>The DDS stream interface is a means of quickly updating pounder DDS (direct digital synthesis)
+outputs of the AD9959 DDS chip. The DDS communicates via a quad-SPI interface and a single
+IO-update output pin.</p>
+<p>In order to update the DDS interface, the frequency tuning word, amplitude control word, and
+the phase offset word for a channel can be modified to change the frequency, amplitude, or
+phase on any of the 4 available output channels. Changes do not propagate to DDS outputs until
+the IO-update pin is toggled high to activate the new configurations. This allows multiple
+channels or parameters to be updated and then effects can take place simultaneously.</p>
+<p>In this implementation, the phase, frequency, or amplitude can be updated for any single
+collection of outputs simultaneously. This is done by serializing the register writes to the
+DDS into a single buffer of data and then writing the data over QSPI to the DDS.</p>
+<p>In order to minimize software overhead, data is written directly into the QSPI output FIFO. In
+order to accomplish this most efficiently, serialized data is written as 32-bit words to
+minimize the number of bus cycles necessary to write to the peripheral FIFO. A consequence of
+this is that additional unneeded register writes may be appended to align a transfer to 32-bit
+word sizes.</p>
+<p>In order to pulse the IO-update signal, the high-resolution timer output is used. The timer is
+configured to assert the IO-update signal after a predefined delay and then de-assert the
+signal after a predefined assertion duration. This allows for the actual QSPI transfer and
+IO-update toggle to be completed asynchronously to the rest of software processing - that is,
+software can schedule the DDS updates and then continue data processing. DDS updates then take
+place in the future when the IO-update is toggled by hardware.</p>
+<h2 id="limitations"><a class="doc-anchor" href="#limitations">§</a>Limitations</h2>
+<p>The QSPI output FIFO is used as an intermediate buffer for holding pending QSPI writes. Because
+of this, the implementation only supports up to 16 serialized bytes (the QSPI FIFO is 8 32-bit
+words, or 32 bytes, wide) in a single update.</p>
+<p>There is currently no synchronization between completion of the QSPI data write and the
+IO-update signal. It is currently assumed that the QSPI transfer will always complete within a
+predefined delay (the pre-programmed IO-update timer delay).</p>
+<h2 id="future-improvement"><a class="doc-anchor" href="#future-improvement">§</a>Future Improvement</h2>
+<p>In the future, it would be possible to utilize a DMA transfer to complete the QSPI transfer.
+Once the QSPI transfer completed, this could trigger the IO-update timer to start to
+asynchronously complete IO-update automatically. This would allow for arbitrary profile sizes
+and ensure that IO-update was in-sync with the QSPI transfer.</p>
+<p>Currently, serialization is performed on each processing cycle. If there is a
+compile-time-known register update sequence needed for the application, the serialization
+process can be done once and then register values can be written into a pre-computed serialized
+buffer to avoid the software overhead of much of the serialization process.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.DdsOutput.html" title="struct stabilizer::hardware::pounder::dds_output::DdsOutput">DdsOutput</a></dt><dd>The DDS profile update stream.</dd></dl></section></div></main></body></html>

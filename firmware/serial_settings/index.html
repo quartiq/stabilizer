@@ -1,0 +1,35 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Persistent Settings Management Serial Interface"><title>serial_settings - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="serial_settings" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate serial_settings</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../serial_settings/index.html">serial_<wbr>settings</a><span class="version">0.2.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#persistent-settings-management-serial-interface" title="Persistent Settings Management Serial Interface">Persistent Settings Management Serial Interface</a><ul><li><a href="#description" title="Description">Description</a></li><li><a href="#example" title="Example">Example</a></li><li><a href="#design" title="Design">Design</a></li><li><a href="#limitations" title="Limitations">Limitations</a></li></ul></li></ul><h3><a href="#structs">Crate Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#constants" title="Constants">Constants</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>serial_<wbr>settings</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/serial_settings/lib.rs.html#1-695">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="persistent-settings-management-serial-interface"><a class="doc-anchor" href="#persistent-settings-management-serial-interface">§</a>Persistent Settings Management Serial Interface</h2><h3 id="description"><a class="doc-anchor" href="#description">§</a>Description</h3>
+<p>This crate provides a simple means to load, configure, and store device settings over a serial
+(i.e. text-based) interface. It is ideal to be used with serial ports and terminal emulators,
+and exposes a simple way to allow users to configure device operation.</p>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a>Example</h3>
+<p>Let’s assume that your settings structure looks as follows:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(miniconf::Tree, ...)]
+</span><span class="kw">struct </span>Settings {
+    broker: String,
+    id: String,
+}</code></pre></div>
+<p>A user would be displayed the following terminal interface:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code> help
+AVAILABLE ITEMS:
+  get [path]
+  set &lt;path&gt; &lt;value&gt;
+  store [path]
+  clear [path]
+  platform &lt;cmd&gt;
+  help [ &lt;command&gt; ]
+
+&gt; get
+Available settings:
+/broker: <span class="string">"test" </span>[default: <span class="string">"mqtt"</span>] [not stored]
+/id: <span class="string">"04-91-62-d2-a8-6f" </span>[default] [not stored]</code></pre></div><h3 id="design"><a class="doc-anchor" href="#design">§</a>Design</h3>
+<p>Settings are specified in a [<code>miniconf</code>] settings tree and are transferred over the
+serial interface using JSON encoding. This means that things like strings must be encased in
+quotes.</p>
+<h3 id="limitations"><a class="doc-anchor" href="#limitations">§</a>Limitations</h3>
+<p>Currently, there is a hardcoded limit of 128-bytes on the settings path. This is arbitrary and
+can be changed if needed.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.BestEffortInterface.html" title="struct serial_settings::BestEffortInterface">Best<wbr>Effort<wbr>Interface</a></dt><dd>Wrapper type for a “best effort” serial interface.</dd><dt><a class="struct" href="struct.Runner.html" title="struct serial_settings::Runner">Runner</a></dt></dl><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><dl class="item-table"><dt><a class="constant" href="constant.MAX_DEPTH.html" title="constant serial_settings::MAX_DEPTH">MAX_<wbr>DEPTH</a></dt><dd>Max settings depth</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.Platform.html" title="trait serial_settings::Platform">Platform</a></dt><dd>Platform support for serial settings.</dd><dt><a class="trait" href="trait.Settings.html" title="trait serial_settings::Settings">Settings</a></dt><dd>Specifies the API required for objects that are used as settings with the serial terminal
+interface.</dd></dl></section></div></main></body></html>

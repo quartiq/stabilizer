@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["InputFilter","Prescaler","SlaveMode","TriggerGenerator","TriggerSource"],"mod":["tim2","tim3","tim5","tim8"],"struct":["PounderTimestampTimer","SamplingTimer","ShadowSamplingTimer","TimestampTimer"]};
