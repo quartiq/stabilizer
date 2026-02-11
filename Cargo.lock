@@ -288,6 +288,7 @@ dependencies = [
 [[package]]
 name = "dsp-fixedpoint"
 version = "0.1.0"
+source = "git+https://github.com/quartiq/idsp.git#cf8a7bf1e1a05c2404dccc01c353b142911c0b36"
 dependencies = [
  "num-traits",
  "serde",
@@ -296,6 +297,7 @@ dependencies = [
 [[package]]
 name = "dsp-process"
 version = "0.1.0"
+source = "git+https://github.com/quartiq/idsp.git#cf8a7bf1e1a05c2404dccc01c353b142911c0b36"
 
 [[package]]
 name = "dyn-clone"
@@ -697,6 +699,7 @@ dependencies = [
 [[package]]
 name = "idsp"
 version = "0.20.0"
+source = "git+https://github.com/quartiq/idsp.git#cf8a7bf1e1a05c2404dccc01c353b142911c0b36"
 dependencies = [
  "bytemuck",
  "dsp-fixedpoint",

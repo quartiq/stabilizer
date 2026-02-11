@@ -171,6 +171,6 @@ lto = true
 
 [patch.crates-io]
 miniconf = { git = "https://github.com/quartiq/miniconf.git" }
-idsp = { path = "../idsp" }
-dsp-process = { path = "../idsp/dsp-process" }
-dsp-fixedpoint = { path = "../idsp/dsp-fixedpoint" }
+idsp = { git = "https://github.com/quartiq/idsp.git" }
+dsp-process = { git = "https://github.com/quartiq/idsp.git" }
+dsp-fixedpoint = { git = "https://github.com/quartiq/idsp.git" }
