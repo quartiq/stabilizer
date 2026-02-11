@@ -92,6 +92,9 @@ pub enum Format {
 
     /// Thermostat-EEM data. See `thermostat-eem` repo and application.
     ThermostatEem = 3,
+
+    /// MPLL data
+    Mpll = 4,
 }
 
 #[cfg(target_arch = "arm")]

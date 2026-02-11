@@ -122,6 +122,25 @@ class Fls:
         return self.to_mu()[:, :, :2]
 
 
+class Mpll:
+    """MPLL application stream format"""
+    format_id = 4
+
+    dtype = np.dtype([("demod", "<i4", (2,2)), ("phase", "<i4"), ("frequency", "<i4")])
+
+    def __init__(self, header, body):
+        self.header = header
+        self.body = body
+
+    def size(self):
+        """Return the data size of the frame in bytes"""
+        return len(self.body)
+
+    def to_mu(self):
+        """Return the raw data in machine units"""
+        return np.frombuffer(self.body, self.dtype)
+
+
 class Frame:
     """Stream frame constisting of a header and multiple data batches"""
 
@@ -133,6 +152,7 @@ class Frame:
         AdcDac.format_id: AdcDac,
         ThermostatEem.format_id: ThermostatEem,
         Fls.format_id: Fls,
+        Mpll.format_id: Mpll,
     }
 
     @classmethod

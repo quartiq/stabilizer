@@ -30,7 +30,8 @@
 
 use miniconf::Tree;
 
-use idsp::iir;
+use dsp_process::SplitProcess;
+use idsp::iir::{self, pid::Units};
 
 use platform::{AppSettings, NetSettings};
 use serde::{Deserialize, Serialize};
@@ -49,6 +50,12 @@ const SAMPLE_TICKS_LOG2: u8 = 7;
 const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
 const SAMPLE_PERIOD: f32 =
     SAMPLE_TICKS as f32 * stabilizer::design_parameters::TIMER_PERIOD;
+
+const UNITS: Units<f32> = Units {
+    t: SAMPLE_PERIOD,
+    x: AdcCode::VOLT_PER_LSB,
+    y: DacCode::VOLT_PER_LSB,
+};
 
 #[derive(Clone, Debug, Tree, Default)]
 #[tree(meta(doc, typename))]
@@ -85,17 +92,17 @@ pub struct BiquadRepr {
     /// Biquad parameters
     #[tree(rename="typ", typ="&str", with=miniconf::str_leaf, defer=self.repr)]
     _typ: (),
-    repr: iir::BiquadRepr<f32, f32>,
+    repr: iir::repr::BiquadRepr<f32, f32>,
 }
 
 impl Default for BiquadRepr {
     fn default() -> Self {
-        let mut i = iir::Biquad::IDENTITY;
-        i.set_min(-i16::MAX as _);
-        i.set_max(i16::MAX as _);
+        let mut i = iir::BiquadClamp::from(iir::Biquad::IDENTITY);
+        i.min = -i16::MAX as _;
+        i.max = i16::MAX as _;
         Self {
             _typ: (),
-            repr: iir::BiquadRepr::Raw(i),
+            repr: iir::repr::BiquadRepr::Raw(i),
         }
     }
 }
@@ -146,13 +153,10 @@ impl Channel {
                 .unwrap(),
             state: Default::default(),
             run: self.run,
-            biquad: self.biquad.each_ref().map(|biquad| {
-                biquad.repr.build::<f32>(
-                    SAMPLE_PERIOD,
-                    1.0,
-                    DacCode::LSB_PER_VOLT,
-                )
-            }),
+            biquad: self
+                .biquad
+                .each_ref()
+                .map(|biquad| biquad.repr.build(&UNITS)),
         })
     }
 }
@@ -189,8 +193,8 @@ impl Default for DualIir {
 #[derive(Clone, Debug)]
 pub struct Active {
     run: Run,
-    biquad: [iir::Biquad<f32>; IIR_CASCADE_LENGTH],
-    state: [[f32; 4]; IIR_CASCADE_LENGTH],
+    biquad: [iir::BiquadClamp<f32, f32>; IIR_CASCADE_LENGTH],
+    state: [iir::DirectForm1<f32>; IIR_CASCADE_LENGTH],
     source: Source,
 }
 
@@ -386,12 +390,11 @@ mod app {
                             .iter()
                             .zip(active.state.iter_mut())
                             .fold(x, |y, (ch, state)| {
-                                let filter = if active.run.run(di) {
-                                    ch
+                                if active.run.run(di) {
+                                    ch.process(state, y)
                                 } else {
-                                    &iir::Biquad::HOLD
-                                };
-                                filter.update(state, y)
+                                    iir::Biquad::<f32>::HOLD.process(state, y)
+                                }
                             });
 
                         // Note(unsafe): The filter limits must ensure that the value is in range.
@@ -474,16 +477,7 @@ mod app {
                 });
             }
             let b = settings.dual_iir.ch.each_ref().map(|ch| {
-                (
-                    ch.run,
-                    ch.biquad.each_ref().map(|b| {
-                        b.repr.build::<f32>(
-                            SAMPLE_PERIOD,
-                            1.0,
-                            DacCode::LSB_PER_VOLT,
-                        )
-                    }),
-                )
+                (ch.run, ch.biquad.each_ref().map(|b| b.repr.build(&UNITS)))
             });
             c.shared.active.lock(|active| {
                 for (a, b) in active.iter_mut().zip(b) {

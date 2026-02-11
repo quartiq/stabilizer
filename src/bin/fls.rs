@@ -77,12 +77,22 @@
 //! See [stream]. To view and analyze noise spectra the graphical application
 //! [`stabilizer-stream`](https://github.com/quartiq/stabilizer-stream) can be used.
 
+use core::num::Wrapping as W;
+
 use ad9959::Acr;
 use arbitrary_int::{u14, u24};
+use dsp_fixedpoint::{Q32, W32};
+use dsp_process::{Process, SplitProcess};
 use idsp::{
-    Accu, Complex, ComplexExt, Filter, Lockin, Lowpass, PLL, Unwrapper, iir,
+    Build, Clamp, Complex, Lockin, Lowpass, LowpassState, PLL, Unwrapper,
+    iir::{
+        Biquad, BiquadClamp, DirectForm1, DirectForm1Dither,
+        pid::{Pid, Units},
+        repr::BiquadRepr,
+    },
 };
 use miniconf::Tree;
+use num_traits::AsPrimitive;
 use platform::NetSettings;
 use serde::{Deserialize, Serialize};
 use stabilizer::{
@@ -140,12 +150,14 @@ const PHASE_SCALE_SHIFT: u32 = 12;
 const F_DEMOD: u32 = 0x5200_0000;
 
 #[derive(Clone, Debug, Tree)]
-pub struct BiquadRepr<T>
+pub struct BiquadReprTree<T, Y>
 where
-    T: idsp::Coefficient
-        + num_traits::AsPrimitive<f32>
-        + num_traits::AsPrimitive<T>,
-    f32: num_traits::AsPrimitive<T>,
+    T: 'static + Clamp + Copy,
+    Y: 'static + Copy,
+    f32: AsPrimitive<T> + AsPrimitive<Y>,
+    BiquadClamp<T, Y>: Default,
+    BiquadRepr<f32, T, Y>: Default,
+    Pid<f32>: Default + Build<BiquadClamp<T, Y>, Context = Units<f32>>,
 {
     // Order matters
     /// Biquad representation type
@@ -153,62 +165,63 @@ where
     _typ: (),
     /// Biquad parameters
     /// Biquad representation subtree access
-    repr: iir::BiquadRepr<f32, T>,
+    repr: BiquadRepr<f32, T, Y>,
     /// Update trigger. TODO: Needs explicit trigger for serial-settings
     #[tree(rename="update", with=biquad_update, defer=*self)]
     _update: (),
     /// Built raw IIR
     #[tree(skip)]
-    iir: iir::Biquad<T>,
+    iir: BiquadClamp<T, Y>,
     #[tree(skip)]
-    period: f32,
-    #[tree(skip)]
-    b_scale: f32,
-    #[tree(skip)]
-    y_scale: f32,
+    units: Units<f32>,
 }
 
 mod biquad_update {
-    use super::BiquadRepr;
+    use super::BiquadReprTree;
+    use idsp::iir::pid::Units;
+    use idsp::iir::{BiquadClamp, pid::Pid, repr::BiquadRepr};
+    use idsp::{Build, Clamp};
     use miniconf::{Keys, SerdeError, leaf};
     pub use miniconf::{
         deny::{mut_any_by_key, ref_any_by_key},
         leaf::SCHEMA,
     };
+    use num_traits::AsPrimitive;
     use serde::{Deserialize, Deserializer, Serializer};
 
-    pub fn serialize_by_key<S, T>(
-        _value: &BiquadRepr<T>,
+    pub fn serialize_by_key<S, T, Y>(
+        _value: &BiquadReprTree<T, Y>,
         keys: impl Keys,
         ser: S,
     ) -> Result<S::Ok, SerdeError<S::Error>>
     where
         S: Serializer,
-        T: idsp::Coefficient
-            + num_traits::AsPrimitive<f32>
-            + num_traits::AsPrimitive<T>,
-        f32: num_traits::AsPrimitive<T>,
+        T: 'static + Clamp + Copy,
+        Y: 'static + Copy,
+        f32: AsPrimitive<T> + AsPrimitive<Y>,
+        BiquadRepr<f32, T, Y>: Default,
+        BiquadClamp<T, Y>: Default,
+        Pid<f32>: Build<BiquadClamp<T, Y>, Context = Units<f32>>,
     {
         leaf::serialize_by_key(&(), keys, ser)
     }
 
-    pub fn deserialize_by_key<'de, D, T>(
-        value: &mut BiquadRepr<T>,
+    pub fn deserialize_by_key<'de, D, T, Y>(
+        value: &mut BiquadReprTree<T, Y>,
         keys: impl Keys,
         de: D,
     ) -> Result<(), SerdeError<D::Error>>
     where
         D: Deserializer<'de>,
-        T: idsp::Coefficient
-            + num_traits::AsPrimitive<f32>
-            + num_traits::AsPrimitive<T>,
-        f32: num_traits::AsPrimitive<T>,
+        T: 'static + Clamp + Copy,
+        Y: 'static + Copy,
+        f32: AsPrimitive<T> + AsPrimitive<Y>,
+        BiquadRepr<f32, T, Y>: Default,
+        BiquadClamp<T, Y>: Default,
+        Pid<f32>: Build<BiquadClamp<T, Y>, Context = Units<f32>>,
     {
         leaf::deserialize_by_key(&mut (), keys, de)?;
-        value.iir =
-            value
-                .repr
-                .build::<f32>(value.period, value.b_scale, value.y_scale);
+        value.iir = value.repr.build(&value.units);
         Ok(())
     }
 
@@ -225,22 +238,22 @@ mod biquad_update {
     }
 }
 
-impl<T> Default for BiquadRepr<T>
+impl<T, Y> Default for BiquadReprTree<T, Y>
 where
-    T: idsp::Coefficient
-        + num_traits::AsPrimitive<f32>
-        + num_traits::AsPrimitive<T>,
-    f32: num_traits::AsPrimitive<T>,
+    T: 'static + Clamp + Copy,
+    Y: 'static + Copy,
+    f32: AsPrimitive<T> + AsPrimitive<Y>,
+    BiquadClamp<T, Y>: Default,
+    Pid<f32>: Build<BiquadClamp<T, Y>, Context = Units<f32>>,
+    BiquadRepr<f32, T, Y>: Default,
 {
     fn default() -> Self {
         Self {
             _typ: (),
-            repr: iir::BiquadRepr::Raw(iir::Biquad::IDENTITY),
+            repr: BiquadRepr::Raw(Biquad::IDENTITY.into()),
             _update: (),
-            iir: iir::Biquad::IDENTITY,
-            period: 1.0,
-            b_scale: 1.0,
-            y_scale: 1.0,
+            iir: Biquad::IDENTITY.into(),
+            units: Default::default(),
         }
     }
 }
@@ -293,17 +306,15 @@ mod validate_att {
     ) -> Result<(), SerdeError<D::Error>> {
         let mut att = *value;
         leaf::deserialize_by_key(&mut att, keys, de)?;
-        if !stabilizer::convert::att_is_valid(att) {
-            Err(ValueError::Access("Attenuation out of range (0..=31.5 dB)")
-                .into())
-        } else {
+        if stabilizer::convert::att_is_valid(att) {
             *value = att;
             Ok(())
+        } else {
+            Err(ValueError::Access("Attenuation out of range (0..=31.5 dB)")
+                .into())
         }
     }
 }
-
-type LockinLowpass = Lowpass<2>;
 
 #[derive(Clone, Debug, Tree)]
 struct ChannelSettings {
@@ -337,8 +348,8 @@ struct ChannelSettings {
     ///
     /// # Default
     /// `lockin_k = [0x200_0000, -0x2000_0000]`
-    #[tree(with=miniconf::leaf)]
-    lockin_k: <LockinLowpass as Filter>::Config,
+    #[tree(skip)] // TODO
+    lockin_k: Lockin<Lowpass<2>>,
     /// Minimum demodulated signal power to enable feedback.
     /// Note that this is RMS and that the signal peak must not clip.
     ///
@@ -371,7 +382,7 @@ struct ChannelSettings {
     ///
     /// # Default
     /// A proportional gain=-1 filter.
-    iir: BiquadRepr<i32>,
+    iir: BiquadReprTree<Q32<29>, i32>,
     /// Phase offset feedback gain.
     /// Phase feedback is a proportional bypass of the unwrapper, the IIR
     /// (including its input and output scaling) and the frequency feedback path.
@@ -389,7 +400,7 @@ struct ChannelSettings {
     ///
     /// # Default
     /// No feedback
-    iir_amp: BiquadRepr<f32>,
+    iir_amp: BiquadReprTree<f32, f32>,
 }
 
 const DDS_LSB_PER_HZ: f32 = (1i64 << 32) as f32
@@ -397,14 +408,14 @@ const DDS_LSB_PER_HZ: f32 = (1i64 << 32) as f32
 
 impl Default for ChannelSettings {
     fn default() -> Self {
-        let mut iir_prop = iir::Biquad::IDENTITY;
-        iir_prop.ba_mut()[0] *= -1;
-        iir_prop.set_min(-0x4_0000);
-        iir_prop.set_max(0x4_0000);
-        let mut iir_amp = iir::Biquad::default();
-        iir_amp.set_u(0x3ff as _);
-        iir_amp.set_min(0.0);
-        iir_amp.set_max(0x3ff as _);
+        let mut iir_prop = BiquadClamp::from(Biquad::IDENTITY);
+        iir_prop.coeff.ba[0] *= -1;
+        iir_prop.min = -0x4_0000;
+        iir_prop.max = 0x4_0000;
+        let mut iir_amp = BiquadClamp::default();
+        iir_amp.u = 0x3ff as _;
+        iir_amp.min = 0.0;
+        iir_amp.max = 0x3ff as _;
         let mut s = Self {
             input: DdsSettings {
                 freq: F_DEMOD,
@@ -416,27 +427,32 @@ impl Default for ChannelSettings {
                 att: 6.0,
                 phase: u14::new(0),
             },
-            lockin_k: [-(i32::MIN >> 6), i32::MIN >> 2],
+            lockin_k: Lockin(Lowpass([-(i32::MIN >> 6), i32::MIN >> 2])),
             amp: u24::new(0),
             min_power: -24,
             clear: true,
             phase_scale: [[1, 16], [0, 0]],
-            iir: BiquadRepr {
-                repr: iir::BiquadRepr::Raw(iir_prop.clone()),
-                iir: iir_prop,
-                period: stabilizer::design_parameters::TIMER_PERIOD
-                    * (SAMPLE_TICKS * BATCH_SIZE as u32) as f32,
-                y_scale: DDS_LSB_PER_HZ,
+            iir: BiquadReprTree {
+                repr: BiquadRepr::Raw(iir_prop.clone()),
+                iir: iir_prop.clone(),
+                units: Units {
+                    t: stabilizer::design_parameters::TIMER_PERIOD
+                        * (SAMPLE_TICKS * BATCH_SIZE as u32) as f32,
+                    y: DDS_LSB_PER_HZ.recip(),
+                    x: 1.0,
+                },
                 ..Default::default()
             },
             pow_gain: 0,
             hold_en: false,
-            iir_amp: BiquadRepr {
-                repr: iir::BiquadRepr::Raw(iir_amp.clone()),
+            iir_amp: BiquadReprTree {
+                repr: BiquadRepr::Raw(iir_amp.clone()),
                 iir: iir_amp.clone(),
-                period: 10e-3,
-                b_scale: iir_amp.max(),
-                y_scale: iir_amp.max(),
+                units: Units {
+                    t: 10e-3,
+                    x: iir_amp.max.recip(),
+                    y: iir_amp.max.recip(),
+                },
                 ..Default::default()
             },
         };
@@ -484,9 +500,9 @@ impl ChannelSettings {
     fn update_phase_scale(&mut self) {
         // Units: [x] = turns, [y] = Hz
         // TODO: verify
-        let phase_lsb_per_turn =
-            (self.phase_scale[0][0] << (32 - self.phase_scale[0][1])) as f32;
-        self.iir.b_scale = DDS_LSB_PER_HZ / phase_lsb_per_turn;
+        self.iir.units.x =
+            ((self.phase_scale[0][0] << (32 - self.phase_scale[0][1])) as f32)
+                .recip();
     }
 }
 
@@ -523,7 +539,8 @@ pub struct Fls {
     ///
     /// # Default
     /// `/pll_k = 0x4_0000` corresponds to to a time constant of about 0.4 s.
-    pll_k: i32,
+    #[tree(with=miniconf::leaf)]
+    pll_k: W32<32>,
     /// Telemetry output period in seconds
     ///
     /// # Default
@@ -543,7 +560,7 @@ impl Default for Fls {
             ch: Default::default(),
             ext_clk: false,
             lockin_freq: 0x40,
-            pll_k: 0x4_0000,
+            pll_k: W32::new(W(0x4_0000)),
             telemetry_period: 10,
             stream: Default::default(),
         }
@@ -658,14 +675,14 @@ pub struct CookedTelemetry {
 
 #[derive(Clone, Default)]
 pub struct ChannelState {
-    lockin: Lockin<LockinLowpass>,
-    x0: i32,
-    t0: i32,
-    t: i64,
-    y: i64,
+    lockin: [LowpassState<2>; 2],
+    x0: W<i32>,
+    t0: W<i32>,
+    t: W<i64>,
+    y: W<i64>,
     unwrapper: Unwrapper<i64>,
-    iir: [i32; 5],
-    iir_amp: [f32; 4],
+    iir: DirectForm1Dither,
+    iir_amp: DirectForm1<f32>,
     hold: bool,
 }
 
@@ -690,6 +707,7 @@ mod app {
     use arbitrary_int::u10;
     use core::sync::atomic::{Ordering, fence};
     use fugit::ExtU32 as _;
+    use num_traits::ConstZero;
     use rtic_monotonics::Monotonic;
 
     use stabilizer::hardware::{
@@ -852,7 +870,7 @@ mod app {
         let timestamp = timestamper
             .latest_timestamp()
             .unwrap_or(None)
-            .map(|t| ((t as u32) << 16) as i32);
+            .map(|t| W(((t as u32) << 16) as i32));
 
         (
             c.shared.state,
@@ -863,20 +881,19 @@ mod app {
             .lock(|state, settings, dds_output, telemetry| {
                 // Reconstruct frequency and phase using a lowpass that is aware of phase and frequency
                 // wraps.
-                pll.update(timestamp, settings.pll_k);
+                let mut accu = settings.pll_k.process(pll, timestamp);
                 // TODO: implement clear
-                stream[0].pll = pll.frequency() as _;
-                stream[1].pll = pll.phase() as _;
+                stream[0].pll = accu.step.0 as _;
+                stream[1].pll = accu.state.0 as _;
                 telemetry.pll_time =
-                    telemetry.pll_time.wrapping_add(pll.frequency() as _);
+                    telemetry.pll_time.wrapping_add(pll.frequency().0 as _);
 
-                let mut demod = [Complex::<i32>::default(); BATCH_SIZE];
+                let mut demod = [Complex::<Q32<31>>::default(); BATCH_SIZE];
+                accu.state <<= BATCH_SIZE_LOG2 as usize;
+                accu.state *= W(settings.lockin_freq as i32);
+                accu.step *= W(settings.lockin_freq as i32);
                 // TODO: fixed lockin_freq, const 5/16 frequency table (80 entries), then rotate each by pll phase
-                for (d, p) in demod.iter_mut().zip(Accu::new(
-                    (pll.phase() << BATCH_SIZE_LOG2)
-                        .wrapping_mul(settings.lockin_freq as _),
-                    pll.frequency().wrapping_mul(settings.lockin_freq as _),
-                )) {
+                for (d, p) in demod.iter_mut().zip(accu) {
                     *d = Complex::from_angle(p);
                 }
 
@@ -906,14 +923,13 @@ mod app {
                                 // Demodulate the ADC sample `a0` with the sample's phase `p` and
                                 // filter it with the lowpass.
                                 // zero(s) at fs/2 (Nyquist) by lowpass
-                                let y = state.lockin.update_iq(
+                                let y = settings.lockin_k.process(
+                                    &mut state.lockin,
                                     // 3 bit headroom for coeff sum minus one bit gain for filter
-                                    (*a as i16 as i32) << 14,
-                                    *p,
-                                    &settings.lockin_k,
+                                    ((*a as i16 as i32) << 14, *p),
                                 );
                                 // Convert quadrature demodulated output to DAC data for monitoring
-                                *d = DacCode::from((y.im >> 13) as i16).0;
+                                *d = DacCode::from((y.im() >> 13) as i16).0;
                                 y
                             })
                             // Add more zeros at fs/2, fs/4, and fs/8 by rectangular window.
@@ -927,8 +943,8 @@ mod app {
                 let di =
                     [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
                 // TODO: pll.frequency()?
-                let time = pll.phase() & (-1 << PHASE_SCALE_SHIFT);
-                let dtime = time.wrapping_sub(state[0].t0) >> PHASE_SCALE_SHIFT;
+                let time = pll.phase() & W(-1 << PHASE_SCALE_SHIFT);
+                let dtime = (time - state[0].t0) >> PHASE_SCALE_SHIFT as usize;
                 state[0].t0 = time;
                 state[1].t0 = time;
 
@@ -952,8 +968,8 @@ mod app {
 
                     if settings.clear {
                         state.unwrapper = Unwrapper::default();
-                        state.t = 0;
-                        state.y = 0;
+                        state.t = W(0);
+                        state.y = W(0);
                         settings.clear = false;
                     }
 
@@ -973,42 +989,43 @@ mod app {
                         (0, stream.delta_pow)
                     } else {
                         let phase = stream.demod.arg();
-                        let dphase = phase.wrapping_sub(state.x0);
+                        let dphase = phase - state.x0;
                         state.x0 = phase;
 
                         // |dphi| > pi/2 indicates a possible undetected phase slip.
                         // Neither a necessary nor a sufficient condition though.
-                        if dphase.wrapping_add(1 << 30) < 0 {
+                        if dphase + W(1 << 30) < W::ZERO {
                             telemetry.slips = telemetry.slips.wrapping_add(1);
                         }
 
                         // Scale, offset and unwrap phase
-                        state.t = state.t.wrapping_add(
-                            dtime as i64 * settings.phase_scale[1][0] as i64,
-                        );
-                        state.y = state.y.wrapping_add(
-                            dphase as i64 * settings.phase_scale[0][0] as i64,
-                        );
-                        state.unwrapper.update(
-                            ((state.y >> settings.phase_scale[0][1]) as i32)
+                        state.t +=
+                            dtime.0 as i64 * settings.phase_scale[1][0] as i64;
+                        state.y +=
+                            dphase.0 as i64 * settings.phase_scale[0][0] as i64;
+                        state.unwrapper.process(
+                            ((state.y >> settings.phase_scale[0][1] as usize).0
+                                as i32)
                                 .wrapping_add(
-                                    (state.t >> settings.phase_scale[1][1])
+                                    (state.t
+                                        >> settings.phase_scale[1][1] as usize)
+                                        .0
                                         as i32,
                                 ),
                         );
 
-                        stream.phase = bytemuck::cast(state.unwrapper.y());
-                        telemetry.phase = state.unwrapper.y();
-                        let phase_err = state
-                            .unwrapper
-                            .y()
-                            .clamp(-i32::MAX as _, i32::MAX as _)
-                            as _;
+                        stream.phase = bytemuck::cast(state.unwrapper.y);
+                        telemetry.phase = state.unwrapper.y;
+                        let phase_err = Clamp::clamp(
+                            state.unwrapper.y,
+                            -i32::MAX as _,
+                            i32::MAX as _,
+                        ) as _;
 
                         stats.update(phase_err);
                         // TODO; unchecked_shr
                         let delta_ftw =
-                            settings.iir.iir.update(&mut state.iir, phase_err);
+                            settings.iir.iir.process(&mut state.iir, phase_err);
                         let delta_pow = ((phase_err >> 16)
                             .wrapping_mul(settings.pow_gain as _)
                             >> 16) as _;
@@ -1034,9 +1051,11 @@ mod app {
                         )),
                         Some(
                             Acr::DEFAULT
-                                .with_asf(u10::new(
-                                    telemetry.mod_amp.clamp(0, 0x3ff),
-                                ))
+                                .with_asf(u10::new(Clamp::clamp(
+                                    telemetry.mod_amp,
+                                    0,
+                                    0x3ff,
+                                )))
                                 .with_multiplier(true),
                         ),
                     );
@@ -1151,10 +1170,10 @@ mod app {
                     .zip(y.iter_mut())
                 {
                     *y = if c.hold {
-                        iir::Biquad::HOLD.update(&mut c.iir_amp, *x);
+                        Biquad::<f32>::HOLD.process(&mut c.iir_amp, *x);
                         0
                     } else {
-                        s.iir_amp.iir.update(&mut c.iir_amp, *x) as u16
+                        s.iir_amp.iir.process(&mut c.iir_amp, *x) as u16
                     };
                 }
             });
