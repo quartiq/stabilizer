@@ -43,8 +43,8 @@ members = [
 [workspace.dependencies]
 arbitrary-int = { version = "1.3.0", features = ["serde", "hint"] }
 thiserror = { version = "2.0.11", default-features = false }
-idsp = "0.20.0"
-dsp-process = "0.1.0"
+idsp = "0.21.0"
+dsp-process = "0.2.0"
 dsp-fixedpoint = "0.1.0"
 # Keep this synced with the miniconf version in py/setup.py
 miniconf = { version = "0.20", features = [
@@ -171,6 +171,3 @@ lto = true
 
 [patch.crates-io]
 miniconf = { git = "https://github.com/quartiq/miniconf.git" }
-idsp = { git = "https://github.com/quartiq/idsp.git" }
-dsp-process = { git = "https://github.com/quartiq/idsp.git" }
-dsp-fixedpoint = { git = "https://github.com/quartiq/idsp.git" }
