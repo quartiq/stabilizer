@@ -141,7 +141,7 @@ impl MpllConfig {
                 ),
                 (),
             ))),
-            iir: self.iir.build(UNITS),
+            iir: self.iir.build(&UNITS),
             amplitude: self
                 .amplitude
                 .map(|a| Q32::from_f32(a * 10.24f32.recip())),

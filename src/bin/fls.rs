@@ -84,7 +84,7 @@ use arbitrary_int::{u14, u24};
 use dsp_fixedpoint::{Q32, W32};
 use dsp_process::{Process, SplitProcess};
 use idsp::{
-    Clamp, Complex, Lockin, Lowpass, LowpassState, PLL, Unwrapper,
+    Build, Clamp, Complex, Lockin, Lowpass, LowpassState, PLL, Unwrapper,
     iir::{
         Biquad, BiquadClamp, DirectForm1, DirectForm1Dither,
         pid::{Pid, Units},
@@ -157,7 +157,7 @@ where
     f32: AsPrimitive<T> + AsPrimitive<Y>,
     BiquadClamp<T, Y>: Default,
     BiquadRepr<f32, T, Y>: Default,
-    Pid<f32>: Default + Into<BiquadClamp<T, Y>>,
+    Pid<f32>: Default + Build<BiquadClamp<T, Y>, Context = Units<f32>>,
 {
     // Order matters
     /// Biquad representation type
@@ -178,8 +178,9 @@ where
 
 mod biquad_update {
     use super::BiquadReprTree;
-    use idsp::Clamp;
+    use idsp::iir::pid::Units;
     use idsp::iir::{BiquadClamp, pid::Pid, repr::BiquadRepr};
+    use idsp::{Build, Clamp};
     use miniconf::{Keys, SerdeError, leaf};
     pub use miniconf::{
         deny::{mut_any_by_key, ref_any_by_key},
@@ -200,7 +201,7 @@ mod biquad_update {
         f32: AsPrimitive<T> + AsPrimitive<Y>,
         BiquadRepr<f32, T, Y>: Default,
         BiquadClamp<T, Y>: Default,
-        Pid<f32>: Into<BiquadClamp<T, Y>>,
+        Pid<f32>: Build<BiquadClamp<T, Y>, Context = Units<f32>>,
     {
         leaf::serialize_by_key(&(), keys, ser)
     }
@@ -217,10 +218,10 @@ mod biquad_update {
         f32: AsPrimitive<T> + AsPrimitive<Y>,
         BiquadRepr<f32, T, Y>: Default,
         BiquadClamp<T, Y>: Default,
-        Pid<f32>: Into<BiquadClamp<T, Y>>,
+        Pid<f32>: Build<BiquadClamp<T, Y>, Context = Units<f32>>,
     {
         leaf::deserialize_by_key(&mut (), keys, de)?;
-        value.iir = value.repr.build(value.units.clone());
+        value.iir = value.repr.build(&value.units);
         Ok(())
     }
 
@@ -243,7 +244,7 @@ where
     Y: 'static + Copy,
     f32: AsPrimitive<T> + AsPrimitive<Y>,
     BiquadClamp<T, Y>: Default,
-    Pid<f32>: Into<BiquadClamp<T, Y>>,
+    Pid<f32>: Build<BiquadClamp<T, Y>, Context = Units<f32>>,
     BiquadRepr<f32, T, Y>: Default,
 {
     fn default() -> Self {

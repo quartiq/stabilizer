@@ -156,7 +156,7 @@ impl Channel {
             biquad: self
                 .biquad
                 .each_ref()
-                .map(|biquad| biquad.repr.build(UNITS)),
+                .map(|biquad| biquad.repr.build(&UNITS)),
         })
     }
 }
@@ -477,7 +477,7 @@ mod app {
                 });
             }
             let b = settings.dual_iir.ch.each_ref().map(|ch| {
-                (ch.run, ch.biquad.each_ref().map(|b| b.repr.build(UNITS)))
+                (ch.run, ch.biquad.each_ref().map(|b| b.repr.build(&UNITS)))
             });
             c.shared.active.lock(|active| {
                 for (a, b) in active.iter_mut().zip(b) {
