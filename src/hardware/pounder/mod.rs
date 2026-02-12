@@ -196,7 +196,7 @@ impl QspiInterface {
 
         // Configure QSPI for infinite transaction mode using only a data phase (no instruction or
         // address).
-        let qspi_regs = unsafe { &*hal::stm32::QUADSPI::ptr() };
+        let qspi_regs = self.qspi.inner_mut();
         qspi_regs.fcr.modify(|_, w| w.ctcf().set_bit());
 
         unsafe {

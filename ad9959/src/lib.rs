@@ -521,7 +521,7 @@ impl ProfileSerializer {
     pub fn push(
         &mut self,
         channels: Channel,
-        ftw: Option<u32>,
+        ftw: Option<i32>,
         pow: Option<u14>,
         acr: Option<Acr>,
     ) {
