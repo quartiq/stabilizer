@@ -49,7 +49,7 @@ idsp = "0.21.0"
 dsp-process = "0.2.0"
 dsp-fixedpoint = "0.1.0"
 # Keep this synced with the miniconf version in py/setup.py
-miniconf = { version = "0.20", features = [
+miniconf = { version = "0.20.1", features = [
 	"json-core",
 	"derive",
 	"postcard",
@@ -170,6 +170,3 @@ codegen-units = 1
 opt-level = "s"
 debug = true
 lto = true
-
-[patch.crates-io]
-miniconf = { git = "https://github.com/quartiq/miniconf.git" }
