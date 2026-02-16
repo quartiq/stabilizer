@@ -170,3 +170,8 @@ codegen-units = 1
 opt-level = "s"
 debug = true
 lto = true
+
+[patch.crates-io]
+idsp = { path = "../idsp" }
+dsp-process = { path = "../idsp/dsp-process" }
+dsp-fixedpoint = { path = "../idsp/dsp-fixedpoint" }

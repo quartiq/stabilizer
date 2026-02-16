@@ -43,21 +43,17 @@ pub struct MpllState {
 
 impl MpllState {
     pub fn set_frequency(&mut self, f: f32) {
-        self.iir.xy[2] = (f * UNITS.y.recip()) as _;
-        self.iir.xy[3] = self.iir.xy[2];
+        self.iir.set_y((f * UNITS.y.recip()) as _);
     }
 }
 
 /// Runtime active settings
 #[derive(Debug, Clone)]
 pub struct Mpll {
-    lp: Lowpass,
+    lp: Pair<[Wdf<2, 0xad>; 2], (Wdf<2, 0xad>, Wdf<1, 0xa>), i32>,
     iir: BiquadClamp<Q32<30>, i32>,
     amplitude: [Q32<16>; 2],
 }
-
-#[derive(Debug, Clone)]
-struct Lowpass(Pair<[Wdf<2, 0xad>; 2], (Wdf<2, 0xad>, Wdf<1, 0xa>), i32>);
 
 #[derive(Debug, Clone, miniconf::Tree)]
 #[tree(meta(doc, typename))]
@@ -125,7 +121,7 @@ impl Default for MpllConfig {
 impl MpllConfig {
     pub fn build(&self) -> Mpll {
         Mpll {
-            lp: Lowpass(Pair::new((
+            lp: Pair::new((
                 (
                     (),
                     Parallel((
@@ -140,7 +136,7 @@ impl MpllConfig {
                     )),
                 ),
                 (),
-            ))),
+            )),
             iir: self.iir.build(&UNITS),
             amplitude: self
                 .amplitude
@@ -175,7 +171,7 @@ impl Mpll {
         }
         // lowpass, 1 bit gain
         for (mix, state) in mix.iter_mut().zip(state.lp.iter_mut()) {
-            self.lp.0.inplace(state, mix);
+            self.lp.inplace(state, mix);
         }
         // decimate
         let demod = [
@@ -186,7 +182,7 @@ impl Mpll {
         // need full atan2, rotation, or addtl osc to support any phase offset
         let mut phase = Wrapping(idsp::atan2(demod[0][1], demod[0][0]));
         // Delay correction
-        phase += Wrapping(-10) * Wrapping(state.iir.xy[2]);
+        phase += Wrapping(-10) * Wrapping(state.iir.y0());
         // PID
         let frequency = Wrapping(self.iir.process(&mut state.iir, phase.0));
         // modulate
