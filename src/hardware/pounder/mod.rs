@@ -468,13 +468,29 @@ impl PounderDevices {
         Ok(devices)
     }
 
+    /// Sample a auxiliary ADC channel and return the raw sample value.
+    pub fn sample_aux_adc_raw(
+        &mut self,
+        channel: Channel,
+    ) -> Result<u32, Error> {
+        match channel {
+            Channel::In0 => self.aux_adc.0.read_raw().or(Err(Error::Adc)),
+            Channel::In1 => self.aux_adc.1.read_raw().or(Err(Error::Adc)),
+            _ => return Err(Error::InvalidChannel),
+        }
+    }
+
     /// Sample one of the two auxiliary ADC channels associated with the respective RF input channel.
     pub fn sample_aux_adc(&mut self, channel: Channel) -> Result<f32, Error> {
         let adc_scale = match channel {
-            Channel::In0 => self.aux_adc.0.read_normalized().unwrap(),
-            Channel::In1 => self.aux_adc.1.read_normalized().unwrap(),
+            Channel::In0 => {
+                self.aux_adc.0.read_normalized().or(Err(Error::Adc))
+            }
+            Channel::In1 => {
+                self.aux_adc.1.read_normalized().or(Err(Error::Adc))
+            }
             _ => return Err(Error::InvalidChannel),
-        };
+        }?;
 
         // Convert analog percentage to voltage. Note that the ADC uses an external 2.048V analog
         // reference.
@@ -623,10 +639,10 @@ impl PounderDevices {
     /// The sampled voltage of the specified channel.
     fn sample_converter(&mut self, channel: Channel) -> Result<f32, Error> {
         let adc_scale = match channel {
-            Channel::In0 => self.pwr.0.read_normalized().unwrap(),
-            Channel::In1 => self.pwr.1.read_normalized().unwrap(),
+            Channel::In0 => self.pwr.0.read_normalized().or(Err(Error::Adc)),
+            Channel::In1 => self.pwr.1.read_normalized().or(Err(Error::Adc)),
             _ => return Err(Error::InvalidChannel),
-        };
+        }?;
 
         // Convert analog percentage to voltage. Note that the ADC uses an external 2.048V analog
         // reference.
