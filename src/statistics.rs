@@ -47,8 +47,7 @@ impl State {
         let mut stat = Statistics {
             mean: 0,
             var: 0,
-            max: self.max,
-            min: self.min,
+            ptp: self.max - self.min,
         };
         if self.count != 0 {
             let mean = self.m1 / self.count as i64;
@@ -62,8 +61,7 @@ impl State {
         let mut stat = ScaledStatistics {
             mean: 0.,
             std: 0.,
-            max: self.max as f32 * scale,
-            min: self.min as f32 * scale,
+            ptp: (self.max - self.min) as f32 * scale,
         };
         if self.count != 0 {
             let c = 1. / self.count as f64;
@@ -78,16 +76,14 @@ impl State {
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default, Serialize)]
 pub struct Statistics {
-    pub min: i32,
-    pub max: i32,
     pub mean: i32,
     pub var: u64,
+    pub ptp: i32,
 }
 
 #[derive(Copy, Clone, PartialEq, Debug, Default, Serialize)]
 pub struct ScaledStatistics {
-    pub min: f32,
-    pub max: f32,
     pub mean: f32,
     pub std: f32,
+    pub ptp: f32,
 }
