@@ -35,7 +35,7 @@ impl State {
         if self.count == 0 {
             self.x0 = x;
         }
-        let x64 = (x - self.x0) as i64;
+        let x64 = x.saturating_sub(self.x0) as i64;
         self.count += 1;
         self.m1 += x64;
         self.m2 += (x64 * x64) as u64;
@@ -47,11 +47,11 @@ impl State {
         let mut stat = Statistics {
             mean: 0,
             var: 0,
-            ptp: self.max - self.min,
+            ptp: self.max.saturating_sub(self.min),
         };
         if self.count != 0 {
             let mean = self.m1 / self.count as i64;
-            stat.mean = mean as i32 + self.x0;
+            stat.mean = (mean as i32).saturating_add(self.x0);
             stat.var = (self.m2 / self.count as u64) - (mean * mean) as u64;
         }
         stat
@@ -61,7 +61,7 @@ impl State {
         let mut stat = ScaledStatistics {
             mean: 0.,
             std: 0.,
-            ptp: (self.max - self.min) as f32 * scale,
+            ptp: self.max.saturating_sub(self.min) as f32 * scale,
         };
         if self.count != 0 {
             let c = 1. / self.count as f64;
