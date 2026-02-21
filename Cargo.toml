@@ -100,6 +100,7 @@ urukul = { version = "0.1.1", path = "urukul" }
 ad9912 = { version = "0.1.1", path = "ad9912" }
 bytemuck = { version = "1.21.0", features = [
 	"zeroable_maybe_uninit",
+	"min_const_generics",
 	"derive",
 ] }
 num-complex = { version = "0.4", features = [

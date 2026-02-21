@@ -163,13 +163,13 @@ impl Mpll {
                 .zip(m10.iter_mut().zip(m11))
                 .zip(state.lo[0].iter().zip(state.lo[1].iter())),
         ) {
-            // ADC encoding, mix, 1 bit loss (headroom)
+            // ADC encoding, mix, 1 bit loss, 30 bit amplitude
             *mix.0.0 = ((*x.0 as i16 as i64 * *lo.0 as i64) >> 16) as i32;
             *mix.0.1 = ((*x.0 as i16 as i64 * *lo.1 as i64) >> 16) as i32;
             *mix.1.0 = ((*x.1 as i16 as i64 * *lo.0 as i64) >> 16) as i32;
             *mix.1.1 = ((*x.1 as i16 as i64 * *lo.1 as i64) >> 16) as i32;
         }
-        // lowpass, 1 bit gain
+        // lowpass, 1 bit DC gain, 1 bit loss to 2f
         for (mix, state) in mix.iter_mut().zip(state.lp.iter_mut()) {
             self.lp.inplace(state, mix);
         }
