@@ -69,7 +69,7 @@ impl<const N: usize> FixLo<N> {
                         .cos(),
                 )
             }),
-            pi_half: (0..N).find(|i| i * f % N == N / 4).unwrap(),
+            pi_half: (0..N).find(|i| i * f % N == N / 4).unwrap_or_default(),
         }
     }
 }
@@ -185,12 +185,16 @@ impl Channel {
                     (),
                     Parallel((
                         [
-                            Wdf::quantize(&self.lowpass.0.0).unwrap(),
-                            Wdf::quantize(&self.lowpass.0.1).unwrap(),
+                            Wdf::quantize(&self.lowpass.0.0)
+                                .unwrap_or_default(),
+                            Wdf::quantize(&self.lowpass.0.1)
+                                .unwrap_or_default(),
                         ],
                         (
-                            Wdf::quantize(&self.lowpass.1.0).unwrap(),
-                            Wdf::quantize(&self.lowpass.1.1).unwrap(),
+                            Wdf::quantize(&self.lowpass.1.0)
+                                .unwrap_or_default(),
+                            Wdf::quantize(&self.lowpass.1.1)
+                                .unwrap_or_default(),
                         ),
                     )),
                 ),

@@ -81,9 +81,8 @@ use core::num::Wrapping as W;
 
 use ad9959::Acr;
 use arbitrary_int::u24;
-use dsp_fixedpoint::W32;
 use dsp_process::SplitProcess;
-use idsp::{Complex, PLL, Unwrapper};
+use idsp::{Complex, PLL, PLLState, Unwrapper};
 use miniconf::Tree;
 use platform::{AppSettings, NetSettings};
 use serde::Serialize;
@@ -129,11 +128,12 @@ pub struct Fls {
     /// Channel-specific settings.
     channel: [Channel; 2],
 
-    /// Lockin demodulation oscillator PLL bandwidth.
+    /// Lockin demodulation oscillator PLL crossover in Hz.
     /// This PLL reconstructs the DDS SYNC clock output on the CPU clock timescale.
-    ///
-    /// TODO: settle pll and lockin settings into design after confirming optimal choice
-    pll: f32,
+    pll_bw: f32,
+
+    /// PLL lead-lag pole-zero ratio
+    pll_split: f32,
 
     /// Telemetry output period in seconds.
     telemetry_period: f32,
@@ -154,7 +154,8 @@ impl Default for Fls {
         Self {
             ext_clk: false,
             channel: Default::default(),
-            pll: 2.0,
+            pll_bw: 1e-4 / 10.24e-6,
+            pll_split: 4.0,
             telemetry_period: 10.,
             stream: Default::default(),
             activate: true,
@@ -240,13 +241,13 @@ struct ChannelConfig {
 #[derive(Debug, Clone)]
 pub struct Config {
     channel: [ChannelConfig; 2],
-    pll: W32<32>,
+    pll: PLL,
 }
 
 #[derive(Default, Debug, Clone)]
 pub struct State {
     channel: [fls::ChannelState; 2],
-    pll: PLL,
+    pll: PLLState,
     pll_time: Unwrapper<i64>,
     phase: [statistics::State; 2],
     power: [statistics::State; 2],
@@ -260,7 +261,7 @@ impl Fls {
                 hold_en: c.hold_en,
                 modulate_frequency: c.modulate.frequency,
             }),
-            pll: W32::new(W(0x4_0000)), // TODO
+            pll: PLL::from_bandwidth(self.pll_bw * 10.24e-6, self.pll_split),
         }
     }
 }
@@ -520,12 +521,13 @@ mod app {
                 // in terms of the CPU clock (driving the capture).
                 // Discard double captures (overcaptures) and extrapolate.
                 // Extrapolate on no capture (undercapture).
-                let timestamp = timestamper.latest_timestamp().unwrap_or(None);
-                let mut _accu = config.pll.process(
-                    &mut state.pll,
-                    timestamp.map(|t| W((t as i32) << 16)),
-                );
-                let phase = state.pll.phase();
+                let t = if let Ok(Some(t)) = timestamper.latest_timestamp() {
+                    W((t as i32) << 16)
+                } else {
+                    log::warn!("timestamp under/over");
+                    state.pll.clamp.x0 - state.pll.frequency()
+                };
+                let phase = -config.pll.process(&mut state.pll, t);
 
                 let mut builder = dds_output.builder();
                 let hold =
