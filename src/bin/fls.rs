@@ -56,7 +56,7 @@
 //!   See [idsp::Lowpass]
 //! * Full rate baseband demodulated data (quadrature only) on DAC0
 //! * Lowpass filtering with a batch-size boxcar FIR filter (zeros at n/4 Nyquist)
-//! * Computation of signal power and phase. See [idsp::ComplexExt].
+//! * Computation of signal power and phase.
 //! * Fractional rescaling (`phase_scale`) and unwrapping of the phase with 32 bit turn range.
 //! * Scaling and clamping.
 //! * Filtering by a second order (biquad) IIR filter (supporting e.g. II, I, P
@@ -70,7 +70,7 @@
 //! * Modulation output at Pounder OUT0
 //!
 //! # Telemetry
-//! Data is regularly published via MQTT. See [Telemetry].
+//! Data is regularly published via MQTT. See [CookedTelemetry].
 //!
 //! # Streaming
 //! Full-rate ADC and DAC data is available via configurable UDP data streaming.
@@ -79,13 +79,16 @@
 
 use core::num::Wrapping as W;
 
-use ad9959::Acr;
-use arbitrary_int::u24;
-use dsp_process::SplitProcess;
+use arbitrary_int::{u10, u24};
+use core::sync::atomic::{Ordering, fence};
+use dsp_fixedpoint::P32;
+use dsp_process::{Process, SplitProcess};
 use idsp::{Complex, PLL, PLLState, Unwrapper};
 use miniconf::Tree;
-use platform::{AppSettings, NetSettings};
 use serde::Serialize;
+
+use ad9959::Acr;
+use platform::{AppSettings, NetSettings};
 use stabilizer::{convert::Gain, fls, statistics};
 
 #[derive(Clone, Debug, Tree, Default)]
@@ -130,7 +133,7 @@ pub struct Fls {
 
     /// Lockin demodulation oscillator PLL crossover in Hz.
     /// This PLL reconstructs the DDS SYNC clock output on the CPU clock timescale.
-    pll_bw: f32,
+    pll_bandwidth: f32,
 
     /// PLL lead-lag pole-zero ratio
     pll_split: f32,
@@ -144,8 +147,9 @@ pub struct Fls {
 
     /// Activate settings
     ///
-    /// If `true` each `channel` settings change immediately results
-    /// in activation.
+    /// If `true` each settings change immediately results in activation.
+    /// If `false`, activation is suppressed.
+    /// Use this to synchronize changes.
     activate: bool,
 }
 
@@ -154,7 +158,7 @@ impl Default for Fls {
         Self {
             ext_clk: false,
             channel: Default::default(),
-            pll_bw: 1e-4 / 10.24e-6,
+            pll_bandwidth: 1e-4 / 10.24e-6,
             pll_split: 4.0,
             telemetry_period: 10.,
             stream: Default::default(),
@@ -245,12 +249,50 @@ pub struct Config {
 }
 
 #[derive(Default, Debug, Clone)]
+pub struct ChannelState {
+    dsp: fls::ChannelState,
+    phase: statistics::State,
+    power: statistics::State,
+}
+
+impl ChannelState {
+    fn update(&mut self) {
+        self.phase.update(self.dsp.phase.xy.x0());
+        self.power.update(self.dsp.power.inner as _);
+    }
+
+    fn stream(&self) -> StreamChannel {
+        StreamChannel {
+            demod: self.dsp.demod,
+            phase: bytemuck::cast(self.dsp.unwrap.y),
+            delta_ftw: W(self.dsp.phase.xy.y0()),
+            aux_adc: self.dsp.amplitude.x0() as _,
+            mod_amp: (self.dsp.amplitude.y0() >> 21) as _,
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone)]
 pub struct State {
-    channel: [fls::ChannelState; 2],
+    channel: [ChannelState; 2],
     pll: PLLState,
     pll_time: Unwrapper<i64>,
-    phase: [statistics::State; 2],
-    power: [statistics::State; 2],
+}
+
+impl State {
+    fn update(&mut self) {
+        self.pll_time.process(self.pll.phase().0);
+        for c in self.channel.iter_mut() {
+            c.update();
+        }
+    }
+
+    fn stream(&self) -> Stream {
+        Stream {
+            pll: self.pll.phase(),
+            channel: self.channel.each_ref().map(|s| s.stream()),
+        }
+    }
 }
 
 impl Fls {
@@ -261,7 +303,10 @@ impl Fls {
                 hold_en: c.hold_en,
                 modulate_frequency: c.modulate.frequency,
             }),
-            pll: PLL::from_bandwidth(self.pll_bw * 10.24e-6, self.pll_split),
+            pll: PLL::from_bandwidth(
+                self.pll_bandwidth * 10.24e-6,
+                self.pll_split,
+            ),
         }
     }
 }
@@ -269,21 +314,24 @@ impl Fls {
 /// Stream data format.
 #[derive(Clone, Copy, Debug, Default, bytemuck::Zeroable, bytemuck::Pod)]
 #[repr(C)]
-pub struct Stream {
+struct Stream {
     pll: W<i32>,
-    ch: [StreamChannel; 2],
+    channel: [StreamChannel; 2],
 }
 
 #[derive(Clone, Copy, Debug, Default, bytemuck::Zeroable, bytemuck::Pod)]
 #[repr(C)]
-pub struct StreamChannel {
+struct StreamChannel {
     /// Demodulated signal.
-    pub demod: Complex<i32>,
+    demod: Complex<i32>,
     /// Current raw phase including wraps and pll correction.
-    pub phase: [u32; 2],
+    phase: [u32; 2],
     /// Current frequency tuning word added to the configured modulation
     /// offset `mod_freq`.
-    pub delta_ftw: W<i32>,
+    delta_ftw: W<i32>,
+    /// AUX ADC sample
+    aux_adc: u16,
+    mod_amp: u16,
 }
 
 /// Channel Telemetry, all undersampled and not AA filtered
@@ -347,9 +395,6 @@ fn main() {
 #[cfg(target_os = "none")]
 #[cfg_attr(target_os = "none", rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, LTDC, SDMMC]))]
 mod app {
-    use core::sync::atomic::{Ordering, fence};
-    use dsp_fixedpoint::P32;
-    use dsp_process::Process;
     use fugit::ExtU32 as _;
     use rtic_monotonics::Monotonic;
 
@@ -489,28 +534,20 @@ mod app {
 
         (c.shared.state, c.shared.config, c.shared.dds_output).lock(
             |state, config, dds_output| {
-                let demod =
-                    (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
-                        fence(Ordering::SeqCst);
-                        let demod = [
-                            config.channel[0]
-                                .dsp
-                                .demodulate::<{ fls::BATCH_SIZE }>(
-                                    &mut state.channel[0],
-                                    (**adc0).try_into().unwrap(),
-                                    (*dac0).try_into().unwrap(),
-                                ),
-                            config.channel[1]
-                                .dsp
-                                .demodulate::<{ fls::BATCH_SIZE }>(
-                                    &mut state.channel[1],
-                                    (**adc1).try_into().unwrap(),
-                                    (*dac1).try_into().unwrap(),
-                                ),
-                        ];
-                        fence(Ordering::SeqCst);
-                        demod
-                    });
+                (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
+                    fence(Ordering::SeqCst);
+                    config.channel[0].dsp.demodulate::<{ fls::BATCH_SIZE }>(
+                        &mut state.channel[0].dsp,
+                        (**adc0).try_into().unwrap(),
+                        (*dac0).try_into().unwrap(),
+                    );
+                    config.channel[1].dsp.demodulate::<{ fls::BATCH_SIZE }>(
+                        &mut state.channel[1].dsp,
+                        (**adc1).try_into().unwrap(),
+                        (*dac1).try_into().unwrap(),
+                    );
+                    fence(Ordering::SeqCst);
+                });
 
                 // A counter running at a fourth of the DDS SYNC interval is captured by
                 // the overflow of a timer synchronized to the sampling timer (locked to the
@@ -532,50 +569,31 @@ mod app {
                 let mut builder = dds_output.builder();
                 let hold =
                     [digital_inputs.0.is_high(), digital_inputs.1.is_high()];
-                for (idx, ((demod, hold), (config, state))) in
-                    [Channel::Out0, Channel::Out1].into_iter().zip(
-                        demod.into_iter().zip(hold).zip(
-                            config.channel.iter().zip(state.channel.iter_mut()),
-                        ),
+                for ((idx, hold), (config, state)) in
+                    [Channel::Out0, Channel::Out1].into_iter().zip(hold).zip(
+                        config.channel.iter().zip(state.channel.iter_mut()),
                     )
                 {
-                    state.hold = hold && config.hold_en;
-                    config.dsp.update(state, phase, demod);
+                    state.dsp.hold = hold && config.hold_en;
+                    config.dsp.update(&mut state.dsp, phase);
                     builder.push(
                         idx.into(),
                         Some(
-                            config.modulate_frequency + W(state.phase.xy.y0()),
+                            config.modulate_frequency
+                                + W(state.dsp.phase.xy.y0()),
                         ),
                         None,
-                        Some(
-                            Acr::DEFAULT
-                                .with_multiplier(true)
-                                .with_asf(state.mod_amp),
-                        ),
+                        Some(Acr::DEFAULT.with_multiplier(true).with_asf(
+                            u10::new((state.dsp.amplitude.y0() >> 21) as _),
+                        )),
                     );
                 }
                 dds_output.write(builder);
-
-                state.pll_time.process(state.pll.phase().0);
-                state.phase[0].update(state.channel[0].phase.xy.x0());
-                state.phase[1].update(state.channel[1].phase.xy.x0());
-                state.power[0].update(state.channel[0].power.inner as _);
-                state.power[1].update(state.channel[1].power.inner as _);
-
+                state.update();
                 generator.add(|buf| {
                     const N: usize = core::mem::size_of::<Stream>();
                     buf[..N].copy_from_slice(bytemuck::cast_slice(
-                        bytemuck::bytes_of(&Stream {
-                            pll: state.pll.phase(),
-                            ch: core::array::from_fn(|i| {
-                                let s = &state.channel[i];
-                                StreamChannel {
-                                    demod: demod[i],
-                                    phase: bytemuck::cast(s.unwrap.y),
-                                    delta_ftw: W(s.phase.xy.y0()),
-                                }
-                            }),
-                        }),
+                        bytemuck::bytes_of(&state.stream()),
                     ));
                     N
                 });
@@ -684,8 +702,8 @@ mod app {
                 ]
             });
             (config, state).lock(|c, s| {
-                c.channel[0].dsp.power(&mut s.channel[0], x[0]);
-                c.channel[1].dsp.power(&mut s.channel[1], x[1]);
+                c.channel[0].dsp.power(&mut s.channel[0].dsp, x[0]);
+                c.channel[1].dsp.power(&mut s.channel[1].dsp, x[1]);
             });
             Systick::delay(10.millis()).await;
         }
@@ -694,45 +712,39 @@ mod app {
     #[task(priority = 1, local=[cpu_temp_sensor], shared=[network, settings, state, pounder])]
     async fn telemetry(mut c: telemetry::Context) -> ! {
         loop {
-            let cpu_temp = c.local.cpu_temp_sensor.get_temperature().unwrap();
-            let (meas, pounder_temp) = c.shared.pounder.lock(|p| {
+            let (pll_time, channel) = c.shared.state.lock(|s| {
                 (
-                    [
-                        p.measure_power(Channel::In0).unwrap(),
-                        p.measure_power(Channel::In1).unwrap(),
-                    ],
-                    p.temperature().unwrap(),
+                    s.pll_time.y,
+                    s.channel.each_mut().map(|s| {
+                        (
+                            core::mem::take(&mut s.phase),
+                            core::mem::take(&mut s.power),
+                            ChannelTelemetry {
+                                phase_raw: s.dsp.unwrap.y,
+                                aux_adc: s.dsp.amplitude.x0() as f32
+                                    * fls::AMPLITUDE_UNITS.x,
+                                mod_amp: s.dsp.amplitude.y0() as f32
+                                    * fls::AMPLITUDE_UNITS.y,
+                                holds: s.dsp.holds,
+                                slips: s.dsp.slips,
+                                blanks: s.dsp.blanks,
+                                ..Default::default()
+                            },
+                        )
+                    }),
                 )
             });
-            let (pll_time, phase, power, mut channel) =
-                c.shared.state.lock(|s| {
-                    (
-                        s.pll_time.y,
-                        core::mem::take(&mut s.phase),
-                        core::mem::take(&mut s.power),
-                        core::array::from_fn(|i| {
-                            let s = &s.channel[i];
-                            ChannelTelemetry {
-                                phase_raw: s.unwrap.y,
-                                aux_adc: s.amplitude.x0() as f32
-                                    * fls::AMPLITUDE_UNITS.x,
-                                mod_amp: s.amplitude.y0() as f32
-                                    * fls::AMPLITUDE_UNITS.y,
-                                holds: s.holds,
-                                slips: s.slips,
-                                blanks: s.blanks,
-                                rf_power: meas[i],
-                                ..Default::default()
-                            }
-                        }),
-                    )
-                });
-            for ((phase, power), channel) in
-                phase.into_iter().zip(power).zip(channel.iter_mut())
-            {
+            let mut channel = channel.map(|(phase, power, mut channel)| {
                 channel.phase = phase.get_scaled(fls::PHASE_UNITS.x);
                 channel.power = power.get_scaled(P32::<28>::DELTA);
-            }
+                channel
+            });
+            let cpu_temp = c.local.cpu_temp_sensor.get_temperature().unwrap();
+            let pounder_temp = c.shared.pounder.lock(|p| {
+                channel[0].rf_power = p.measure_power(Channel::In0).unwrap();
+                channel[1].rf_power = p.measure_power(Channel::In0).unwrap();
+                p.temperature().unwrap()
+            });
 
             c.shared.network.lock(|net| {
                 net.telemetry.publish_telemetry(

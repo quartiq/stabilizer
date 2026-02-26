@@ -23,16 +23,18 @@ pub const UNITS: pid::Units<f32> = pid::Units {
     y: HZ_PER_LSB,
 };
 
+type LpState = (
+    (
+        Unsplit<Identity>,
+        ([WdfState<2>; 2], (WdfState<2>, WdfState<1>)),
+    ),
+    Unsplit<Add>,
+);
+
 #[derive(Debug, Clone, Default)]
 pub struct MpllState {
     /// Lowpass state
-    lp: [(
-        (
-            Unsplit<Identity>,
-            ([WdfState<2>; 2], (WdfState<2>, WdfState<1>)),
-        ),
-        Unsplit<Add>,
-    ); 4],
+    lp: [LpState; 4],
     /// PID state
     iir: DirectForm1<i32>,
     /// Current modulation phase
@@ -55,12 +57,14 @@ pub struct Mpll {
     amplitude: [Q32<16>; 2],
 }
 
+type Lp = (([f64; 2], [f64; 2]), ([f64; 2], [f64; 1]));
+
 #[derive(Debug, Clone, miniconf::Tree)]
 #[tree(meta(doc, typename))]
 pub struct MpllConfig {
     /// Lowpass filter poles (7th order wave digital filter allpass pair)
     #[tree(with=miniconf::leaf)]
-    lp: (([f64; 2], [f64; 2]), ([f64; 2], [f64; 1])),
+    lp: Lp,
     /// Filter representation
     #[tree(rename="repr", typ="&str", with=miniconf::str_leaf, defer=self.iir)]
     _repr: (), // before iir

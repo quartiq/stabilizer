@@ -1,6 +1,6 @@
 use core::num::Wrapping;
 
-use arbitrary_int::{Number, u4, u10};
+use arbitrary_int::{Number, u4};
 use dsp_fixedpoint::{P32, Q32};
 use dsp_process::{
     Add, Identity, Pair, Parallel, Process, SplitProcess, Unsplit,
@@ -69,7 +69,7 @@ impl<const N: usize> FixLo<N> {
                         .cos(),
                 )
             }),
-            pi_half: (0..N).find(|i| i * f % N == N / 4).unwrap_or_default(),
+            pi_half: (0..N).find(|i| (i * f) % N == N / 4).unwrap_or_default(),
         }
     }
 }
@@ -77,11 +77,10 @@ impl<const N: usize> FixLo<N> {
 impl<const N: usize> SplitProcess<i32, Complex<i32>, FixState> for FixLo<N> {
     fn process(&self, state: &mut FixState, x: i32) -> Complex<i32> {
         state.i = state.i.wrapping_add(1);
-        let y = Complex([
+        Complex([
             x * self.lo[state.i % N],
             x * self.lo[state.i.wrapping_sub(self.pi_half) % N],
-        ]);
-        y
+        ])
     }
 }
 
@@ -101,6 +100,8 @@ pub const AMPLITUDE_UNITS: Units<f32> = Units {
     y: 1.0 / i32::MAX as f32,
 };
 
+type Lp = (([f64; 2], [f64; 2]), ([f64; 2], [f64; 1]));
+
 #[derive(Debug, Clone, miniconf::Tree)]
 #[tree(meta(doc, typename))]
 pub struct Channel {
@@ -113,7 +114,7 @@ pub struct Channel {
 
     /// Lowpass filter poles (7th order wave digital filter allpass pair)
     #[tree(with=miniconf::leaf)]
-    lowpass: (([f64; 2], [f64; 2]), ([f64; 2], [f64; 1])),
+    lowpass: Lp,
 
     /// Minimum demodulated signal power to enable feedback (re full scale)
     min_power: f32,
@@ -207,16 +208,19 @@ impl Channel {
     }
 }
 
+type LpState = (
+    (
+        Unsplit<Identity>,
+        ([WdfState<2>; 2], (WdfState<2>, WdfState<1>)),
+    ),
+    Unsplit<Add>,
+);
+
 #[derive(Debug, Clone, Default)]
 pub struct ChannelState {
     lo: FixState,
-    lowpass: Complex<(
-        (
-            Unsplit<Identity>,
-            ([WdfState<2>; 2], (WdfState<2>, WdfState<1>)),
-        ),
-        Unsplit<Add>,
-    )>,
+    lowpass: Complex<LpState>,
+    pub demod: Complex<i32>,
     pub unwrap: Unwrapper<i64>,
     pub clamp: ClampWrap<Wrapping<i32>>,
     pub phase: DirectForm1Dither,
@@ -225,7 +229,6 @@ pub struct ChannelState {
     pub holds: Wrapping<u32>,
     pub blanks: Wrapping<u32>,
     pub slips: Wrapping<u32>,
-    pub mod_amp: u10,
     pub power: P32<28>,
 }
 
@@ -236,8 +239,9 @@ impl ChannelConfig {
         state: &mut ChannelState,
         x: &[u16; B],
         y: &mut [u16; B],
-    ) -> Complex<i32> {
-        x.iter()
+    ) {
+        state.demod = x
+            .iter()
             .zip(y.iter_mut())
             .map(|(x, y)| {
                 // bit are peak amplitude
@@ -257,17 +261,12 @@ impl ChannelConfig {
                 demod
             })
             .last()
-            .unwrap()
+            .unwrap();
     }
 
     #[inline(always)]
-    pub fn update(
-        &self,
-        state: &mut ChannelState,
-        t: Wrapping<i32>,
-        demod: Complex<i32>,
-    ) {
-        let d2 = demod.0.map(|x| x as i64 * x as i64);
+    pub fn update(&self, state: &mut ChannelState, t: Wrapping<i32>) {
+        let d2 = state.demod.0.map(|x| x as i64 * x as i64);
         // d2: 30 + 30 bit
         state.power = P32::new(((d2[0] + d2[1]) >> 32) as _);
         // power: 28 bit
@@ -283,7 +282,7 @@ impl ChannelConfig {
             state.clamp = Default::default();
             state.phase = Default::default();
         } else {
-            let phase = demod.arg();
+            let phase = state.demod.arg();
             let phase = PLL_M * phase
                 + Wrapping(self.lo.f as i32)
                     * ((t << (32 - PLL_E - N_E))
@@ -301,11 +300,10 @@ impl ChannelConfig {
     }
 
     pub fn power(&self, state: &mut ChannelState, x: u32) {
-        let y0 = if state.hold {
+        if state.hold {
             Biquad::<Q32<29>>::HOLD.process(&mut state.amplitude, x as _)
         } else {
             self.amplitude.process(&mut state.amplitude, x as _)
         };
-        state.mod_amp = u10::new((y0 >> 21) as u16);
     }
 }
