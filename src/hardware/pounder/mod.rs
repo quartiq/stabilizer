@@ -97,7 +97,7 @@ impl From<hal::xspi::QspiError> for Error {
 
 /// The numerical value (discriminant) of the Channel enum is the index in the attenuator shift
 /// register as well as the attenuator latch enable signal index on the GPIO extender.
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, strum::EnumIter)]
 #[allow(dead_code)]
 pub enum Channel {
     In0 = 0,
@@ -476,7 +476,7 @@ impl PounderDevices {
         match channel {
             Channel::In0 => self.aux_adc.0.read_raw().or(Err(Error::Adc)),
             Channel::In1 => self.aux_adc.1.read_raw().or(Err(Error::Adc)),
-            _ => return Err(Error::InvalidChannel),
+            _ => Err(Error::InvalidChannel),
         }
     }
 
@@ -562,6 +562,26 @@ impl PounderDevices {
             .map_err(|_| Error::Spi)?;
 
         Ok(())
+    }
+
+    /// Set all attemuators
+    pub fn set_attenuation_all(
+        &mut self,
+        attenuation: [f32; 4],
+    ) -> Result<[f32; 4], Error> {
+        let mut codes = [0; 4];
+        for (c, a) in codes.iter_mut().zip(attenuation) {
+            if !crate::convert::att_is_valid(a) {
+                return Err(Error::Bounds);
+            }
+            *c = !(((a * 2.0) as u8) << 2);
+        }
+        self.transfer_attenuators(&mut codes)?;
+
+        for c in Channel::iter() {
+            self.latch_attenuator(c)?;
+        }
+        Ok(codes.map(|c| (!c >> 2) as f32 / 2.0))
     }
 
     /// Set the attenuation of a single channel.
