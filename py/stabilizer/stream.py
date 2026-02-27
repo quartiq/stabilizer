@@ -37,6 +37,32 @@ def get_local_ip(remote):
         sock.close()
 
 
+class Frame:
+    """Stream frame constisting of a header and multiple data batches"""
+
+    # The magic header half-word at the start of each packet.
+    magic = 0x057B
+    header_fmt = struct.Struct("<HBBI")
+    header = namedtuple("Header", "magic format_id batches sequence")
+    parsers = {}
+
+    @classmethod
+    def register(cls, format):
+        cls.parsers[format.format_id] = format
+
+    @classmethod
+    def parse(cls, data):
+        """Parse known length frame"""
+        header = cls.header._make(cls.header_fmt.unpack_from(data))
+        if header.magic != cls.magic:
+            raise ValueError(f"Bad frame magic: {header.magic:#04x}")
+        try:
+            parser = cls.parsers[header.format_id]
+        except KeyError as exc:
+            raise ValueError(f"No parser for format: {header.format_id}") from exc
+        return parser(header, data[cls.header_fmt.size :])
+
+
 class AdcDac:
     """Stabilizer default striming data format"""
 
@@ -79,6 +105,9 @@ class AdcDac:
         ]
 
 
+Frame.register(AdcDac)
+
+
 class ThermostatEem:
     """Thermostat-EEM format"""
 
@@ -99,8 +128,12 @@ class ThermostatEem:
         )
 
 
+Frame.register(ThermostatEem)
+
+
 class Fls:
     """FLS application stream format"""
+
     format_id = 2
 
     def __init__(self, header, body):
@@ -122,11 +155,15 @@ class Fls:
         return self.to_mu()[:, :, :2]
 
 
+Frame.register(Fls)
+
+
 class Mpll:
     """MPLL application stream format"""
+
     format_id = 4
 
-    dtype = np.dtype([("demod", "<i4", (2,2)), ("phase", "<i4"), ("frequency", "<i4")])
+    dtype = np.dtype([("demod", "<i4", (2, 2)), ("phase", "<i4"), ("frequency", "<i4")])
 
     def __init__(self, header, body):
         self.header = header
@@ -141,31 +178,29 @@ class Mpll:
         return np.frombuffer(self.body, self.dtype)
 
 
-class Frame:
-    """Stream frame constisting of a header and multiple data batches"""
+Frame.register(Mpll)
 
-    # The magic header half-word at the start of each packet.
-    magic = 0x057B
-    header_fmt = struct.Struct("<HBBI")
-    header = namedtuple("Header", "magic format_id batches sequence")
-    parsers = {
-        AdcDac.format_id: AdcDac,
-        ThermostatEem.format_id: ThermostatEem,
-        Fls.format_id: Fls,
-        Mpll.format_id: Mpll,
-    }
 
-    @classmethod
-    def parse(cls, data):
-        """Parse known length frame"""
-        header = cls.header._make(cls.header_fmt.unpack_from(data))
-        if header.magic != cls.magic:
-            raise ValueError(f"Bad frame magic: {header.magic:#04x}")
-        try:
-            parser = cls.parsers[header.format_id]
-        except KeyError as exc:
-            raise ValueError(f"No parser for format: {header.format_id}") from exc
-        return parser(header, data[cls.header_fmt.size :])
+class Fls2:
+    """FLS2 application stream format"""
+
+    format_id = 5
+
+    def __init__(self, header, body):
+        self.header = header
+        self.body = body
+
+    def size(self):
+        """Return the data size of the frame in bytes"""
+        return len(self.body)
+
+    def to_mu(self):
+        """Return the raw data in machine units"""
+        data = np.frombuffer(self.body, "<i4")
+        return data
+
+
+Frame.register(Fls2)
 
 
 class Stream(asyncio.DatagramProtocol):
@@ -199,6 +234,13 @@ class Stream(asyncio.DatagramProtocol):
                 socket.IP_ADD_MEMBERSHIP,
                 multiaddr + local,
             )
+            try:
+                # OS filter
+                sock.setsockopt(
+                    socket.IPPROTO_IP, getattr(socket, "IP_MULTICAST_ALL", 49), 0
+                )
+            except OSError:
+                pass  # Windows
         sock.bind((addr, port))
         return await loop.create_datagram_endpoint(
             lambda: cls(maxsize),
