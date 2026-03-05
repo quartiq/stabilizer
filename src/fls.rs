@@ -2,16 +2,13 @@ use core::num::Wrapping;
 
 use arbitrary_int::{Number, u4};
 use dsp_fixedpoint::{P32, Q32};
-use dsp_process::{
-    Add, Identity, Pair, Parallel, Process, SplitProcess, Unsplit,
-};
+use dsp_process::{Process, SplitProcess};
 use idsp::{
     ClampWrap, Complex, Unwrapper,
     iir::{
-        Biquad, BiquadClamp, DirectForm1, DirectForm1Dither,
+        Biquad, BiquadClamp, Cascade, DirectForm1, DirectForm1Dither,
         pid::{Gains, Order, Pid, Units},
         repr::BiquadRepr,
-        wdf::{Wdf, WdfState},
     },
 };
 use num_traits::Float;
@@ -100,8 +97,6 @@ pub const AMPLITUDE_UNITS: Units<f32> = Units {
     y: 1.0 / i32::MAX as f32,
 };
 
-type Lp = (([f64; 2], [f64; 2]), ([f64; 2], [f64; 1]));
-
 #[derive(Debug, Clone, miniconf::Tree)]
 #[tree(meta(doc, typename))]
 pub struct Channel {
@@ -112,9 +107,9 @@ pub struct Channel {
     /// LO phase offsets in turns
     lo_phase: f32,
 
-    /// Lowpass filter poles (7th order wave digital filter allpass pair)
+    /// Lowpass filter (6th order biquad)
     #[tree(with=miniconf::leaf)]
-    lowpass: Lp,
+    lowpass: [[f64; 5]; 3],
 
     /// Minimum demodulated signal power to enable feedback (re full scale)
     min_power: f32,
@@ -137,16 +132,31 @@ impl Default for Channel {
         Self {
             lo_frequency: u4::new(5),
             lo_phase: 0.0,
-            lowpass: (
-                (
-                    [-0.982905335393602, 0.9991878840149784],
-                    [-0.9283527198560211, 0.9991355621411774],
-                ),
-                (
-                    [-0.9515541301687671, 0.9991654023997083],
-                    [0.9589369885243411],
-                ),
-            ),
+            // 6th order transitional Guassian to 6 dB, zeros at 1,2,3 * 5/16
+            // 3dB+13τ @22kHz, 36 dB @100kHz, gain 2
+            lowpass: [
+                [
+                    0.020708473,
+                    0.029286202,
+                    0.020708473,
+                    1.672374985,
+                    -0.707726415,
+                ],
+                [
+                    0.037786974,
+                    0.028920897,
+                    0.037786974,
+                    1.643345831,
+                    -0.747840887,
+                ],
+                [
+                    1.366993065,
+                    -2.525873828,
+                    1.366993065,
+                    1.6675967,
+                    -0.875708817,
+                ],
+            ],
             min_power: 1e-6,
             _phase_repr: (),
             phase: BiquadRepr::Pid(Pid {
@@ -170,7 +180,7 @@ impl Default for Channel {
 #[derive(Debug, Clone)]
 pub struct ChannelConfig {
     lo: FixLo<16>,
-    lowpass: Pair<[Wdf<2, 0xad>; 2], (Wdf<2, 0xad>, Wdf<1, 0xa>), i32>,
+    lowpass: Cascade<[Biquad<Q32<29>>; 3]>,
     phase: BiquadClamp<Q32<29>, i32>,
     amplitude: BiquadClamp<Q32<29>, i32>,
     min_power: P32<28>,
@@ -181,26 +191,7 @@ impl Channel {
         const { assert!(u4::MAX.value() == (1 << N_E) as u8 - 1) };
         ChannelConfig {
             lo: FixLo::new(self.lo_frequency.value() as _, self.lo_phase),
-            lowpass: Pair::new((
-                (
-                    (),
-                    Parallel((
-                        [
-                            Wdf::quantize(&self.lowpass.0.0)
-                                .unwrap_or_default(),
-                            Wdf::quantize(&self.lowpass.0.1)
-                                .unwrap_or_default(),
-                        ],
-                        (
-                            Wdf::quantize(&self.lowpass.1.0)
-                                .unwrap_or_default(),
-                            Wdf::quantize(&self.lowpass.1.1)
-                                .unwrap_or_default(),
-                        ),
-                    )),
-                ),
-                (),
-            )),
+            lowpass: Cascade(self.lowpass.each_ref().map(|c| Biquad::from(*c))),
             min_power: P32::from_f32(self.min_power),
             phase: self.phase.build(&PHASE_UNITS),
             amplitude: self.amplitude.build(&AMPLITUDE_UNITS),
@@ -208,18 +199,10 @@ impl Channel {
     }
 }
 
-type LpState = (
-    (
-        Unsplit<Identity>,
-        ([WdfState<2>; 2], (WdfState<2>, WdfState<1>)),
-    ),
-    Unsplit<Add>,
-);
-
 #[derive(Debug, Clone, Default)]
 pub struct ChannelState {
     lo: FixState,
-    lowpass: Complex<LpState>,
+    lowpass: Complex<[DirectForm1<i32>; 3]>,
     pub demod: Complex<i32>,
     pub unwrap: Unwrapper<i64>,
     pub clamp: ClampWrap<Wrapping<i32>>,
@@ -240,28 +223,26 @@ impl ChannelConfig {
         x: &[u16; B],
         y: &mut [u16; B],
     ) {
-        state.demod = x
-            .iter()
-            .zip(y.iter_mut())
-            .map(|(x, y)| {
-                // bit are peak amplitude
-                // x: 15 bit, 16 asl
-                // lo: 31 bit, 32 asr: 1 bit loss
-                let m =
-                    self.lo.process(&mut state.lo, (*x as i16 as i32) << 16);
-                // m: 29 bit 0f plus 29 bit 2f
-                // lp: 1 bit DC gain
-                let demod = Complex([
-                    self.lowpass.process(&mut state.lowpass[0], m[0]),
-                    self.lowpass.process(&mut state.lowpass[1], m[1]),
-                ]);
-                // demod: 30 bit
-                // output in phase (before CPU clock phase correction)
-                *y = ((demod.re() >> 15) as i16).wrapping_add(i16::MIN) as u16;
-                demod
-            })
-            .last()
-            .unwrap();
+        // bit are peak amplitude
+        // x: 15 bit, 16 asl
+        // lo: 31 bit, 32 asr: 1 bit loss
+        let mut m =
+            x.map(|x| self.lo.process(&mut state.lo, (x as i16 as i32) << 16));
+        // m: 29 bit 0f plus 29 bit 2f
+        // lp: 1 bit DC gain
+        let [si, sq] = state.lowpass.each_mut();
+        for (c, s) in self.lowpass.0.iter().zip(si.iter_mut().zip(sq)) {
+            for m in m.iter_mut() {
+                m[0] = c.process(s.0, m[0]);
+                m[1] = c.process(s.1, m[1]);
+            }
+            // demod: 30 bit
+        }
+        for (y, m) in y.iter_mut().zip(m) {
+            // output in phase (before CPU clock phase correction)
+            *y = ((m.re() >> 15) as i16).wrapping_add(i16::MIN) as u16;
+        }
+        state.demod = m[B - 1];
     }
 
     #[inline(always)]

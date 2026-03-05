@@ -1,13 +1,10 @@
 use core::num::Wrapping;
 
 use dsp_fixedpoint::Q32;
-use dsp_process::{
-    Add, Identity, Pair, Parallel, SplitInplace, SplitProcess, Unsplit,
-};
+use dsp_process::{SplitInplace, SplitProcess};
 use idsp::iir::{
-    BiquadClamp, DirectForm1, pid,
+    Biquad, BiquadClamp, Cascade, DirectForm, DirectForm1, pid,
     repr::BiquadRepr,
-    wdf::{Wdf, WdfState},
 };
 
 pub const BATCH_SIZE: usize = 8;
@@ -23,18 +20,10 @@ pub const UNITS: pid::Units<f32> = pid::Units {
     y: HZ_PER_LSB,
 };
 
-type LpState = (
-    (
-        Unsplit<Identity>,
-        ([WdfState<2>; 2], (WdfState<2>, WdfState<1>)),
-    ),
-    Unsplit<Add>,
-);
-
 #[derive(Debug, Clone, Default)]
 pub struct MpllState {
     /// Lowpass state
-    lp: [LpState; 4],
+    lp: [DirectForm<i32, 4>; 2],
     /// PID state
     iir: DirectForm1<i32>,
     /// Current modulation phase
@@ -52,19 +41,17 @@ impl MpllState {
 /// Runtime active settings
 #[derive(Debug, Clone)]
 pub struct Mpll {
-    lp: Pair<[Wdf<2, 0xad>; 2], (Wdf<2, 0xad>, Wdf<1, 0xa>), i32>,
+    lp: Cascade<[Biquad<Q32<29>>; 4]>,
     iir: BiquadClamp<Q32<30>, i32>,
     amplitude: [Q32<16>; 2],
 }
 
-type Lp = (([f64; 2], [f64; 2]), ([f64; 2], [f64; 1]));
-
 #[derive(Debug, Clone, miniconf::Tree)]
 #[tree(meta(doc, typename))]
 pub struct MpllConfig {
-    /// Lowpass filter poles (7th order wave digital filter allpass pair)
+    /// Lowpass filter coefficients (8th order biquad)
     #[tree(with=miniconf::leaf)]
-    lp: Lp,
+    lp: [[f64; 5]; 4],
     /// Filter representation
     #[tree(rename="repr", typ="&str", with=miniconf::str_leaf, defer=self.iir)]
     _repr: (), // before iir
@@ -79,29 +66,37 @@ pub struct MpllConfig {
 
 impl Default for MpllConfig {
     fn default() -> Self {
-        // 7th order Cheby2 as WDF-CA, -3 dB @ 0.005*1.28, -112 dB @ 0.018*1.28
-        let lp = (
-            (
-                [-0.982905335393602, 0.9991878840149784],
-                [-0.9283527198560211, 0.9991355621411774],
-            ),
-            (
-                [-0.9515541301687671, 0.9991654023997083],
-                [0.9589369885243411],
-            ),
-        );
-        // 7th order Cheby2 as WDF-CA, -3 dB @ 0.002*1.28, -112 dB @ 0.008*1.28
-        let _lp = (
-            (
-                [-0.9931253245194313, 0.9998700465308578],
-                [-0.9707043427084593, 0.9998616710293764],
-            ),
-            (
-                [-0.9803312351720791, 0.9998664477981001],
-                [0.9833717980454499],
-            ),
-        );
-
+        // 8th order Gaussian to 12dB, 3dB+153τ @3.3kHz, 108dB @20kHz, gain 2
+        let lp = [
+            [
+                7.092673331e-05 * 2.0,
+                1.418534666e-04 * 2.0,
+                7.092673331e-05 * 2.0,
+                1.971263763e+00,
+                -9.715472944e-01,
+            ],
+            [
+                2.185730264e-04,
+                4.371460527e-04,
+                2.185730264e-04,
+                1.972048940e+00,
+                -9.729234576e-01,
+            ],
+            [
+                4.830453545e-04,
+                9.660916403e-04,
+                4.830453545e-04,
+                1.975378300e+00,
+                -9.773108205e-01,
+            ],
+            [
+                7.561957464e-04,
+                1.512391493e-03,
+                7.561957464e-04,
+                1.986543883e+00,
+                -9.895690493e-01,
+            ],
+        ];
         let mut pid = pid::Pid::default();
         pid.order = pid::Order::I;
         pid.gain.value[pid::Action::P as usize] = -3e3; // Hz/turn
@@ -125,22 +120,7 @@ impl Default for MpllConfig {
 impl MpllConfig {
     pub fn build(&self) -> Mpll {
         Mpll {
-            lp: Pair::new((
-                (
-                    (),
-                    Parallel((
-                        [
-                            Wdf::quantize(&self.lp.0.0).unwrap(),
-                            Wdf::quantize(&self.lp.0.1).unwrap(),
-                        ],
-                        (
-                            Wdf::quantize(&self.lp.1.0).unwrap(),
-                            Wdf::quantize(&self.lp.1.1).unwrap(),
-                        ),
-                    )),
-                ),
-                (),
-            )),
+            lp: Cascade(self.lp.each_ref().map(|c| Biquad::from(*c))),
             iir: self.iir.build(&UNITS),
             amplitude: self
                 .amplitude
