@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["AMPLITUDE_UNITS","BATCH_SIZE","PHASE_UNITS","SAMPLE_TICKS_E"],"struct":["Channel","ChannelConfig","ChannelState"]};

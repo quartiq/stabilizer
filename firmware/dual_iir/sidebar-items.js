@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BATCH_SIZE","IIR_CASCADE_LENGTH","SAMPLE_PERIOD","SAMPLE_TICKS","SAMPLE_TICKS_LOG2","UNITS"],"enum":["Run"],"mod":["app"],"struct":["Active","BiquadRepr","Channel","DualIir","Settings"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Pair"],"mod":["coefficients","normal","pid","repr","svf","wdf"],"struct":["Biquad","BiquadClamp","Cascade","DirectForm","DirectForm1Dither","DirectForm1Wide"],"type":["DirectForm1","DirectForm2Transposed"]};

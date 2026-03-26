@@ -1,0 +1,9 @@
+(function() {
+    const implementors = Object.fromEntries([["serial_settings",[["impl&lt;T&gt; ReadReady for <a class=\"struct\" href=\"serial_settings/struct.BestEffortInterface.html\" title=\"struct serial_settings::BestEffortInterface\">BestEffortInterface</a>&lt;T&gt;<div class=\"where\">where\n    T: ReadReady,</div>",0]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":59,"fragment_lengths":[270]}
