@@ -26,7 +26,7 @@ pub const SAMPLE_TICKS_E: usize = 7;
 // t = q * (PLL_M << PLL_E)
 const PLL_M: Wrapping<i32> = Wrapping(5); // 5 ns
 const PLL_E: usize =
-    16 // PLL input align
+    16 // PLL input align ASL
     + SAMPLE_TICKS_E // sample timer divider
     + 1 // 10ns timer clock: 5 ns M, 1 E
     - 1 // 2 ns DDS sample clock
@@ -43,18 +43,18 @@ const N_E: usize = 4;
 
 /// Fixed LO LUT mixer
 #[derive(Debug, Clone)]
-struct FixLo<const N: usize> {
+struct FixMix<const N: usize> {
     lo: [Q32<32>; N],
     f: usize,
     pi_half: usize,
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct FixState {
+struct FixMixState {
     i: usize,
 }
 
-impl<const N: usize> FixLo<N> {
+impl<const N: usize> FixMix<N> {
     pub fn new(f: usize, p: f32) -> Self {
         Self {
             f,
@@ -71,8 +71,10 @@ impl<const N: usize> FixLo<N> {
     }
 }
 
-impl<const N: usize> SplitProcess<i32, Complex<i32>, FixState> for FixLo<N> {
-    fn process(&self, state: &mut FixState, x: i32) -> Complex<i32> {
+impl<const N: usize> SplitProcess<i32, Complex<i32>, FixMixState>
+    for FixMix<N>
+{
+    fn process(&self, state: &mut FixMixState, x: i32) -> Complex<i32> {
         state.i = state.i.wrapping_add(1);
         Complex([
             x * self.lo[state.i % N],
@@ -93,7 +95,7 @@ pub const PHASE_UNITS: Units<f32> = Units {
 
 pub const AMPLITUDE_UNITS: Units<f32> = Units {
     t: 10e-3,
-    x: 2.048 / (1 << 16) as f32,
+    x: 2.048 / (1 << 16) as f32, // 2.048 V per 16 bit
     y: 1.0 / i32::MAX as f32,
 };
 
@@ -116,7 +118,7 @@ pub struct Channel {
 
     /// Active filter representation
     #[tree(rename="phase_repr", typ="&str", with=miniconf::str_leaf, defer=self.phase)]
-    _phase_repr: (), // before repr
+    _phase_repr: (), // before repr for setup from iter
     /// Phase-to-frequency filter (units: Hz/turn, s)
     phase: BiquadRepr<f32, Q32<29>, i32>,
 
@@ -179,7 +181,7 @@ impl Default for Channel {
 
 #[derive(Debug, Clone)]
 pub struct ChannelConfig {
-    lo: FixLo<16>,
+    lo: FixMix<16>,
     lowpass: Cascade<[Biquad<Q32<29>>; 3]>,
     phase: BiquadClamp<Q32<29>, i32>,
     amplitude: BiquadClamp<Q32<29>, i32>,
@@ -190,7 +192,7 @@ impl Channel {
     pub fn build(&self) -> ChannelConfig {
         const { assert!(u4::MAX.value() == (1 << N_E) as u8 - 1) };
         ChannelConfig {
-            lo: FixLo::new(self.lo_frequency.value() as _, self.lo_phase),
+            lo: FixMix::new(self.lo_frequency.value() as _, self.lo_phase),
             lowpass: Cascade(self.lowpass.each_ref().map(|c| Biquad::from(*c))),
             min_power: P32::from_f32(self.min_power),
             phase: self.phase.build(&PHASE_UNITS),
@@ -201,7 +203,7 @@ impl Channel {
 
 #[derive(Debug, Clone, Default)]
 pub struct ChannelState {
-    lo: FixState,
+    lo: FixMixState,
     lowpass: Complex<[DirectForm1<i32>; 3]>,
     pub demod: Complex<i32>,
     pub unwrap: Unwrapper<i64>,
@@ -238,11 +240,11 @@ impl ChannelConfig {
             }
             // demod: 30 bit
         }
+        state.demod = m[B - 1];
         for (y, m) in y.iter_mut().zip(m) {
-            // output in phase (before CPU clock phase correction)
+            // output in phase (before CPU clock phase correction from PLL)
             *y = ((m.re() >> 15) as i16).wrapping_add(i16::MIN) as u16;
         }
-        state.demod = m[B - 1];
     }
 
     #[inline(always)]
@@ -269,8 +271,8 @@ impl ChannelConfig {
                     * ((t << (32 - PLL_E - N_E))
                         - (PLL_M << (32 - N_E)) * Wrapping(state.lo.i as i32));
             let dphase = Wrapping(state.unwrap.process(phase.0));
-            // |delta phase| > pi/2 indicates a possible undetected phase slip.
-            // Neither a necessary nor a sufficient condition though.
+            // |delta phase| > pi/2 indicates a possible undetected phase slip
+            // Neither a necessary nor a sufficient condition though
             if dphase + Wrapping(1 << 30) < Wrapping(0) {
                 state.slips += Wrapping(1);
             }
