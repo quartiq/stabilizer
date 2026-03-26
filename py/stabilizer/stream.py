@@ -47,8 +47,9 @@ class Frame:
     parsers = {}
 
     @classmethod
-    def register(cls, format):
-        cls.parsers[format.format_id] = format
+    def register(cls, fmt):
+        """Register a format"""
+        cls.parsers[fmt.format_id] = fmt
 
     @classmethod
     def parse(cls, data):
