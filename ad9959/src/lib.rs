@@ -1,5 +1,7 @@
 #![no_std]
 
+use core::num::Wrapping;
+
 use arbitrary_int::{Number, u2, u3, u4, u5, u10, u14, u24};
 use bitbybit::{bitenum, bitfield};
 use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
@@ -521,8 +523,8 @@ impl ProfileSerializer {
     pub fn push(
         &mut self,
         channels: Channel,
-        ftw: Option<u32>,
-        pow: Option<u14>,
+        ftw: Option<Wrapping<i32>>,
+        pow: Option<Wrapping<u14>>, // a-i v2: i14
         acr: Option<Acr>,
     ) {
         self.push_write(
@@ -534,10 +536,10 @@ impl ProfileSerializer {
                 .to_be_bytes(),
         );
         if let Some(ftw) = ftw {
-            self.push_write(Address::CFTW0, &ftw.to_be_bytes());
+            self.push_write(Address::CFTW0, &ftw.0.to_be_bytes());
         }
         if let Some(pow) = pow {
-            self.push_write(Address::CPOW0, &pow.value().to_be_bytes());
+            self.push_write(Address::CPOW0, &pow.0.value().to_be_bytes());
         }
         if let Some(acr) = acr {
             self.push_write(Address::ACR, &acr.raw_value().to_be_bytes());

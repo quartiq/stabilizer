@@ -55,7 +55,7 @@ impl Serialize for Target {
         &self,
         serializer: S,
     ) -> Result<S::Ok, S::Error> {
-        let mut display: String<30> = String::new();
+        let mut display: String<21> = String::new();
         write!(&mut display, "{}", self.0).unwrap();
         serializer.serialize_str(&display)
     }
@@ -95,6 +95,9 @@ pub enum Format {
 
     /// MPLL data
     Mpll = 4,
+
+    /// FLS2
+    Fls2 = 5,
 }
 
 #[cfg(target_arch = "arm")]
