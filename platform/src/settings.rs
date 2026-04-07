@@ -83,7 +83,7 @@ where
         // Loop over flash and read settings
         let mut buffer = [0u8; 512];
         for path in C::SCHEMA
-            .nodes::<Path<String<128>, '/'>, { serial_settings::MAX_DEPTH }>()
+            .nodes::<Path<String<128>>, { serial_settings::MAX_DEPTH }>()
         {
             let path = path.unwrap();
 
@@ -98,7 +98,7 @@ where
                 Err(e) => {
                     log::warn!(
                         "Failed to fetch `{}` from flash: {e:?}",
-                        path.0.as_str()
+                        path.path.as_str()
                     );
                     continue;
                 }
@@ -112,13 +112,13 @@ where
                 continue;
             }
 
-            log::info!("Loading initial `{}` from flash", path.0.as_str());
+            log::info!("Loading initial `{}` from flash", path.path.as_str());
 
             let flavor = ::postcard::de_flavors::Slice::new(value);
             if let Err(e) = postcard::set_by_key(structure, &path, flavor) {
                 log::warn!(
                     "Failed to deserialize `{}` from flash: {e:?}",
-                    path.0.as_str()
+                    path.path.as_str()
                 );
             }
         }

@@ -29,32 +29,24 @@
 
 use core::{
     iter,
-    mem::MaybeUninit,
     num::Wrapping,
     sync::atomic::{Ordering, fence},
 };
 
-use dsp_process::SplitProcess;
 use fugit::ExtU32;
-use idsp::{Accu, Complex, Lowpass, RPLL, RPLLConfig};
+use idsp::{Lowpass, RPLL, RPLLConfig};
 use miniconf::{Leaf, Tree};
 use rtic_monotonics::Monotonic;
-use serde::{Deserialize, Serialize};
 
 use stabilizer::convert::{AdcCode, DacCode, Gain};
+use stabilizer_dsp::lockin::{self, ActiveSettings, Conf, LockinMode};
 
 use platform::{AppSettings, NetSettings};
 
-// The logarithm of the number of samples in each batch process. This corresponds with 2^3 samples
-// per batch = 8 samples
-const BATCH_SIZE_LOG2: u32 = 3;
-const BATCH_SIZE: usize = 1 << BATCH_SIZE_LOG2;
-
-// The logarithm of the number of 100MHz timer ticks between each sample. This corresponds with a
-// sampling period of 2^7 = 128 ticks. At 100MHz, 10ns per tick, this corresponds to a sampling
-// period of 1.28 uS or 781.25 KHz.
-const SAMPLE_TICKS_LOG2: u32 = 7;
-const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
+const BATCH_SIZE_LOG2: u32 = lockin::BATCH_SIZE_LOG2;
+const BATCH_SIZE: usize = lockin::BATCH_SIZE;
+const SAMPLE_TICKS_LOG2: u32 = lockin::SAMPLE_TICKS_LOG2;
+const SAMPLE_TICKS: u32 = lockin::SAMPLE_TICKS;
 
 #[derive(Clone, Debug, Tree, Default)]
 #[tree(meta(doc, typename))]
@@ -83,32 +75,6 @@ impl serial_settings::Settings for Settings {
             net: NetSettings::new(self.net.mac),
         }
     }
-}
-
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-enum Conf {
-    /// Output the lockin magnitude.
-    Magnitude,
-    /// Output the phase of the lockin
-    Phase,
-    /// Output the lockin reference frequency as a sinusoid
-    ReferenceFrequency,
-    /// Output the logarithmic power of the lockin
-    LogPower,
-    /// Output the in-phase component of the lockin signal.
-    InPhase,
-    /// Output the quadrature component of the lockin signal.
-    Quadrature,
-    /// Output the lockin internal modulation frequency as a sinusoid
-    Modulation,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
-enum LockinMode {
-    /// Utilize an internally generated reference for demodulation
-    Internal,
-    /// Utilize an external modulation signal supplied to DI0
-    External,
 }
 
 #[derive(Clone, Debug, Tree)]
@@ -181,6 +147,19 @@ impl Default for Lockin {
     }
 }
 
+impl Lockin {
+    fn build(&self) -> ActiveSettings {
+        ActiveSettings {
+            lockin_mode: self.lockin_mode,
+            pll_tc: self.pll_tc.clone(),
+            lockin_k: self.lockin_k.clone(),
+            lockin_harmonic: self.lockin_harmonic,
+            lockin_phase: self.lockin_phase,
+            output_conf: self.output_conf.map(|conf| conf.0),
+        }
+    }
+}
+
 #[cfg(not(target_os = "none"))]
 fn main() {
     use miniconf::{json::to_json_value, json_schema::TreeJsonSchema};
@@ -200,7 +179,6 @@ fn main() {
 #[rtic::app(device = stabilizer::hardware::hal::stm32, peripherals = true, dispatchers=[DCMI, JPEG, SDMMC])]
 mod app {
     use super::*;
-    use core::num::Wrapping;
     use idsp::LowpassState;
     use stabilizer::{
         hardware::{
@@ -222,7 +200,7 @@ mod app {
         usb: UsbDevice,
         network: NetworkUsers<Lockin>,
         settings: Settings,
-        active_settings: Lockin,
+        active_settings: ActiveSettings,
         telemetry: TelemetryBuffer,
     }
 
@@ -271,7 +249,7 @@ mod app {
             network,
             usb: stabilizer.usb,
             telemetry: TelemetryBuffer::default(),
-            active_settings: stabilizer.settings.lockin.clone(),
+            active_settings: stabilizer.settings.lockin.build(),
             settings: stabilizer.settings,
         };
 
@@ -351,100 +329,37 @@ mod app {
         } = c.local;
 
         (active_settings, telemetry).lock(|settings, telemetry| {
-            let (reference_phase, reference_frequency) = match settings
-                .lockin_mode
-            {
-                LockinMode::External => {
-                    let timestamp =
-                        timestamper.latest_timestamp().unwrap_or(None); // Ignore data from timer capture overflows.
-                    let accu = settings
-                        .pll_tc
-                        .process(pll, timestamp.map(|t| Wrapping(t as i32)));
-                    (accu.state, (accu.step >> BATCH_SIZE_LOG2 as usize))
-                }
-                LockinMode::Internal => {
-                    // Reference phase and frequency are known.
-                    (
-                        Wrapping(1i32 << 30),
-                        Wrapping(1i32 << (32 - BATCH_SIZE_LOG2)),
-                    )
-                }
-            };
-
-            let sample_frequency =
-                reference_frequency * settings.lockin_harmonic;
-            let sample_phase = settings.lockin_phase
-                + reference_phase * settings.lockin_harmonic;
-
             (adc0, adc1, dac0, dac1).lock(|adc0, adc1, dac0, dac1| {
-                let adc_samples = [adc0, adc1];
-                let mut dac_samples = [dac0, dac1];
-
                 // Preserve instruction and data ordering w.r.t. DMA flag access.
                 fence(Ordering::SeqCst);
 
-                let output: Complex<i32> = adc_samples[0]
-                    .iter()
-                    // Zip in the LO phase.
-                    .zip(Accu::new(sample_phase, sample_frequency))
-                    // Convert to signed, MSB align the ADC sample, update the Lockin (demodulate, filter)
-                    .map(|(&sample, phase)| {
-                        let s = (sample as i16 as i32) << 16;
-                        settings.lockin_k.process(lockin, (s, phase))
-                    })
-                    // Decimate
-                    .last()
-                    .unwrap()
-                    * 2; // Full scale assuming the 2f component is gone.
-
-                // Convert to DAC data.
-                for (channel, samples) in dac_samples.iter_mut().enumerate() {
-                    for sample in samples.iter_mut() {
-                        let value = match *settings.output_conf[channel] {
-                            Conf::Magnitude => {
-                                output.norm_sqr().inner as i32 >> 16
-                            }
-                            Conf::Phase => output.arg().0 >> 16,
-                            Conf::LogPower => output.log2() << 8,
-                            Conf::ReferenceFrequency => {
-                                reference_frequency.0 >> 16
-                            }
-                            Conf::InPhase => output.re() >> 16,
-                            Conf::Quadrature => output.im() >> 16,
-
-                            Conf::Modulation => source.next().unwrap().re(),
-                        };
-
-                        *sample = DacCode::from(value as i16).0;
-                    }
-                }
+                let adc_samples: [&[u16; BATCH_SIZE]; 2] = [
+                    (**adc0).try_into().unwrap(),
+                    (**adc1).try_into().unwrap(),
+                ];
+                let mut dac_samples: [&mut [u16; BATCH_SIZE]; 2] =
+                    [(*dac0).try_into().unwrap(), (*dac1).try_into().unwrap()];
+                let telemetry_update = settings.process(
+                    pll,
+                    lockin,
+                    source,
+                    timestamper.latest_timestamp().unwrap_or(None),
+                    adc_samples,
+                    &mut dac_samples,
+                );
 
                 // Stream the data.
-                const N: usize = BATCH_SIZE * size_of::<i16>()
-                    / size_of::<MaybeUninit<u8>>();
                 generator.add(|buf| {
-                    for (data, buf) in adc_samples
-                        .iter()
-                        .chain(dac_samples.iter())
-                        .zip(buf.chunks_exact_mut(N))
-                    {
-                        let data = unsafe {
-                            core::slice::from_raw_parts(
-                                data.as_ptr() as *const MaybeUninit<u8>,
-                                N,
-                            )
-                        };
-                        buf.copy_from_slice(data)
-                    }
-                    N * 4
+                    lockin::ActiveSettings::stream(
+                        adc_samples,
+                        [dac_samples[0], dac_samples[1]],
+                        buf,
+                    )
                 });
 
                 // Update telemetry measurements.
-                telemetry.adcs =
-                    [AdcCode(adc_samples[0][0]), AdcCode(adc_samples[1][0])];
-
-                telemetry.dacs =
-                    [DacCode(dac_samples[0][0]), DacCode(dac_samples[1][0])];
+                telemetry.adcs = telemetry_update.adcs.map(AdcCode);
+                telemetry.dacs = telemetry_update.dacs.map(DacCode);
 
                 // Preserve instruction and data ordering w.r.t. DMA flag access.
                 fence(Ordering::SeqCst);
@@ -487,7 +402,7 @@ mod app {
 
             c.shared
                 .active_settings
-                .lock(|current| *current = settings.lockin.clone());
+                .lock(|current| *current = settings.lockin.build());
         });
     }
 

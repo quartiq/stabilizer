@@ -89,7 +89,8 @@ use serde::Serialize;
 
 use ad9959::Acr;
 use platform::{AppSettings, NetSettings};
-use stabilizer::{convert::Gain, fls, statistics};
+use stabilizer::{convert::Gain, statistics};
+use stabilizer_dsp::fls;
 
 #[derive(Clone, Debug, Tree, Default)]
 #[tree(meta(doc, typename))]

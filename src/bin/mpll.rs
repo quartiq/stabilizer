@@ -8,7 +8,8 @@ use miniconf::{Leaf, Tree};
 use rtic_monotonics::Monotonic;
 
 use serde::Serialize;
-use stabilizer::{convert::Gain, mpll::*, statistics};
+use stabilizer::{convert::Gain, statistics};
+use stabilizer_dsp::mpll::*;
 
 use platform::{AppSettings, NetSettings};
 

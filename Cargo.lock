@@ -806,7 +806,7 @@ dependencies = [
 [[package]]
 name = "miniconf"
 version = "0.20.1"
-source = "git+https://github.com/quartiq/miniconf.git#10d20671239630815a18d1b5b06bad129a21d243"
+source = "git+https://github.com/quartiq/miniconf.git#696455b8a58f4ff454fe0326bedd2446a20a2c9b"
 dependencies = [
  "heapless 0.8.0",
  "heapless 0.9.2",
@@ -824,7 +824,7 @@ dependencies = [
 [[package]]
 name = "miniconf_derive"
 version = "0.20.0"
-source = "git+https://github.com/quartiq/miniconf.git#10d20671239630815a18d1b5b06bad129a21d243"
+source = "git+https://github.com/quartiq/miniconf.git#696455b8a58f4ff454fe0326bedd2446a20a2c9b"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -835,7 +835,7 @@ dependencies = [
 [[package]]
 name = "miniconf_mqtt"
 version = "0.20.0"
-source = "git+https://github.com/quartiq/miniconf.git#10d20671239630815a18d1b5b06bad129a21d243"
+source = "git+https://github.com/quartiq/miniconf.git#696455b8a58f4ff454fe0326bedd2446a20a2c9b"
 dependencies = [
  "embedded-io 0.7.1",
  "heapless 0.9.2",
@@ -1574,6 +1574,7 @@ dependencies = [
  "signal_generator",
  "smoltcp-nal",
  "spin 0.10.0",
+ "stabilizer_dsp",
  "stm32h7xx-hal",
  "stream",
  "strum 0.28.0",
@@ -1582,6 +1583,21 @@ dependencies = [
  "urukul",
  "usb-device",
  "usbd-serial",
+]
+
+[[package]]
+name = "stabilizer_dsp"
+version = "0.1.0"
+dependencies = [
+ "arbitrary-int",
+ "bytemuck",
+ "dsp-fixedpoint",
+ "dsp-process",
+ "idsp",
+ "miniconf",
+ "num-traits",
+ "serde",
+ "signal_generator",
 ]
 
 [[package]]
