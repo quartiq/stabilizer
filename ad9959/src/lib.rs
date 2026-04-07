@@ -315,7 +315,7 @@ impl<I: Interface> Ad9959<I> {
     }
 
     /// Get the current system clock frequency in Hz.
-    fn system_clock_frequency(&self) -> f32 {
+    const fn system_clock_frequency(&self) -> f32 {
         (1u64 << 32) as f32 / self.ftw_per_hz
     }
 
@@ -502,7 +502,7 @@ impl ProfileSerializer {
     ///
     /// # Args
     /// * `mode` - The communication mode of the DDS.
-    pub fn new(mode: Mode) -> Self {
+    pub const fn new(mode: Mode) -> Self {
         Self {
             mode,
             index: 0,
@@ -516,9 +516,7 @@ impl ProfileSerializer {
     /// * `channels` - A set of channels to apply the configuration to.
     /// * `ftw` - If provided, indicates a frequency tuning word for the channels.
     /// * `pow` - If provided, indicates a phase offset word for the channels.
-    /// * `acr` - If provided, indicates the amplitude control register for the channels. The ACR
-    ///   should be stored in the 3 LSB of the word. Note that if amplitude scaling is to be used,
-    ///   the "Amplitude multiplier enable" bit must be set.
+    /// * `acr` - If provided, indicates the amplitude control register for the channels.
     #[inline]
     pub fn push(
         &mut self,
