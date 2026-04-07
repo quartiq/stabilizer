@@ -108,7 +108,7 @@ num-complex = { version = "0.4", features = [
 	"serde",
 ], default-features = false }
 num-traits = { version = "0.2.19", default-features = false }
-strum = { version = "0.27.1", default-features = false, features = ["derive"] }
+strum = { version = "0.28", default-features = false, features = ["derive"] }
 grounded = "0.2.0"
 signal_generator = { version = "0.1", path = "signal_generator" }
 stream = { version = "0.1", path = "stream" }
@@ -176,3 +176,6 @@ lto = true
 idsp = { git = "https://github.com/quartiq/idsp.git" }
 dsp-process = { git = "https://github.com/quartiq/idsp.git" }
 dsp-fixedpoint = { git = "https://github.com/quartiq/idsp.git" }
+miniconf = { git = "https://github.com/quartiq/miniconf.git" }
+miniconf_mqtt = { git = "https://github.com/quartiq/miniconf.git" }
+miniconf_derive = { git = "https://github.com/quartiq/miniconf.git" }
