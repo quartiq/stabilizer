@@ -742,7 +742,7 @@ mod app {
             let cpu_temp = c.local.cpu_temp_sensor.get_temperature().unwrap();
             let pounder_temp = c.shared.pounder.lock(|p| {
                 channel[0].rf_power = p.measure_power(Channel::In0).unwrap();
-                channel[1].rf_power = p.measure_power(Channel::In0).unwrap();
+                channel[1].rf_power = p.measure_power(Channel::In1).unwrap();
                 p.temperature().unwrap()
             });
 
