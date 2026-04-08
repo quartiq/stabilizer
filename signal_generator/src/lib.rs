@@ -19,7 +19,7 @@ pub enum Signal {
 }
 
 impl Signal {
-    #[inline(always)]
+    #[inline]
     fn map(&self, x: i32) -> i32 {
         match self {
             Self::Cosine => idsp::cossin(x).0,
@@ -159,7 +159,7 @@ pub enum Source {
 
 impl Iterator for Source {
     type Item = i32;
-    #[inline(always)]
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let (s, a) = match self {
             Self::SweptSine { sweep, amp } => {

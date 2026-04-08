@@ -30,14 +30,32 @@
 
 use miniconf::Tree;
 
-use platform::{AppSettings, NetSettings};
-use stabilizer::convert::{AdcCode, DacCode, Gain};
-use stabilizer_dsp::dual_iir::{self, Active, BiquadRepr, Run};
+use dsp_process::SplitProcess;
+use idsp::iir::{self, pid::Units};
 
-const BATCH_SIZE: usize = dual_iir::BATCH_SIZE;
-const SAMPLE_TICKS: u32 = dual_iir::SAMPLE_TICKS;
-const SAMPLE_PERIOD: f32 = dual_iir::SAMPLE_PERIOD;
-const IIR_CASCADE_LENGTH: usize = dual_iir::IIR_CASCADE_LENGTH;
+use platform::{AppSettings, NetSettings};
+use serde::{Deserialize, Serialize};
+use signal_generator::{self, Source};
+use stabilizer::convert::{AdcCode, DacCode, Gain};
+
+// The number of cascaded IIR biquads per channel. Select 1 or 2!
+const IIR_CASCADE_LENGTH: usize = 1;
+
+// The number of samples in each batch process
+const BATCH_SIZE: usize = 8;
+
+// The logarithm of the number of 100MHz timer ticks between each sample. With a value of 2^7 =
+// 128, there is 1.28uS per sample, corresponding to a sampling frequency of 781.25 KHz.
+const SAMPLE_TICKS_LOG2: u8 = 7;
+const SAMPLE_TICKS: u32 = 1 << SAMPLE_TICKS_LOG2;
+const SAMPLE_PERIOD: f32 =
+    SAMPLE_TICKS as f32 * stabilizer::design_parameters::TIMER_PERIOD;
+
+const UNITS: Units<f32> = Units {
+    t: SAMPLE_PERIOD,
+    x: AdcCode::VOLT_PER_LSB,
+    y: DacCode::VOLT_PER_LSB,
+};
 
 #[derive(Clone, Debug, Tree, Default)]
 #[tree(meta(doc, typename))]
@@ -68,6 +86,48 @@ impl serial_settings::Settings for Settings {
     }
 }
 
+#[derive(Clone, Debug, Tree)]
+#[tree(meta(doc, typename = "BiquadReprTree"))]
+pub struct BiquadRepr {
+    /// Biquad parameters
+    #[tree(rename="typ", typ="&str", with=miniconf::str_leaf, defer=self.repr)]
+    _typ: (),
+    repr: iir::repr::BiquadRepr<f32, f32>,
+}
+
+impl Default for BiquadRepr {
+    fn default() -> Self {
+        let mut i = iir::BiquadClamp::from(iir::Biquad::IDENTITY);
+        i.min = -i16::MAX as _;
+        i.max = i16::MAX as _;
+        Self {
+            _typ: (),
+            repr: iir::repr::BiquadRepr::Raw(i),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, Default)]
+pub enum Run {
+    #[default]
+    /// Run
+    Run,
+    /// Hold
+    Hold,
+    /// Hold controlled by corresponding digital input
+    External,
+}
+
+impl Run {
+    fn run(&self, di: bool) -> bool {
+        match self {
+            Self::Run => true,
+            Self::Hold => false,
+            Self::External => di,
+        }
+    }
+}
+
 /// A ADC-DAC channel
 #[derive(Clone, Debug, Tree, Default)]
 #[tree(meta(doc, typename))]
@@ -89,14 +149,14 @@ impl Channel {
         Ok(Active {
             source: self
                 .source
-                .build(SAMPLE_PERIOD, dual_iir::DAC_FULL_SCALE.recip())
+                .build(SAMPLE_PERIOD, DacCode::FULL_SCALE.recip())
                 .unwrap(),
             state: Default::default(),
             run: self.run,
             biquad: self
                 .biquad
                 .each_ref()
-                .map(|biquad| biquad.repr.build(&dual_iir::UNITS)),
+                .map(|biquad| biquad.repr.build(&UNITS)),
         })
     }
 }
@@ -128,6 +188,14 @@ impl Default for DualIir {
             ch: Default::default(),
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Active {
+    run: Run,
+    biquad: [iir::BiquadClamp<f32, f32>; IIR_CASCADE_LENGTH],
+    state: [iir::DirectForm1<f32>; IIR_CASCADE_LENGTH],
+    source: Source,
 }
 
 #[cfg(not(target_os = "none"))]
@@ -313,7 +381,27 @@ mod app {
                     .zip(telemetry.digital_inputs)
                     .zip(source.iter())
                 {
-                    active.process(di, adc, dac, source);
+                    for ((adc, dac), source) in
+                        adc.iter().zip(dac.iter_mut()).zip(source)
+                    {
+                        let x = f32::from(*adc as i16);
+                        let y = active
+                            .biquad
+                            .iter()
+                            .zip(active.state.iter_mut())
+                            .fold(x, |y, (ch, state)| {
+                                if active.run.run(di) {
+                                    ch.process(state, y)
+                                } else {
+                                    iir::Biquad::<f32>::HOLD.process(state, y)
+                                }
+                            });
+
+                        // Note(unsafe): The filter limits must ensure that the value is in range.
+                        // The truncation introduces 1/2 LSB distortion.
+                        let y: i16 = unsafe { y.to_int_unchecked() };
+                        *dac = DacCode::from(y.saturating_add(*source)).0;
+                    }
                 }
                 telemetry.adcs = [AdcCode(adc[0][0]), AdcCode(adc[1][0])];
                 telemetry.dacs = [DacCode(dac[0][0]), DacCode(dac[1][0])];
@@ -374,7 +462,7 @@ mod app {
                 let s = settings.dual_iir.ch.each_ref().map(|ch| {
                     let s = ch
                         .source
-                        .build(SAMPLE_PERIOD, dual_iir::DAC_FULL_SCALE.recip());
+                        .build(SAMPLE_PERIOD, DacCode::FULL_SCALE.recip());
                     if let Err(err) = &s {
                         log::error!("Failed to update source: {:?}", err);
                     }
@@ -389,12 +477,7 @@ mod app {
                 });
             }
             let b = settings.dual_iir.ch.each_ref().map(|ch| {
-                (
-                    ch.run,
-                    ch.biquad
-                        .each_ref()
-                        .map(|b| b.repr.build(&dual_iir::UNITS)),
-                )
+                (ch.run, ch.biquad.each_ref().map(|b| b.repr.build(&UNITS)))
             });
             c.shared.active.lock(|active| {
                 for (a, b) in active.iter_mut().zip(b) {

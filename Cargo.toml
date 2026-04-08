@@ -34,7 +34,6 @@ members = [
 	"ad9912",
 	"ad9959",
 	"encoded_pin",
-	"stabilizer_dsp",
 	"serial_settings",
 	"urukul",
 	"signal_generator",
@@ -75,7 +74,6 @@ idsp.workspace = true
 dsp-process.workspace = true
 dsp-fixedpoint.workspace = true
 ad9959 = { path = "ad9959", version = "0.3.0" }
-stabilizer_dsp = { version = "0.1.0", path = "stabilizer_dsp" }
 serial_settings = { version = "0.2", path = "serial_settings" }
 mcp230xx = "1.0"
 fugit = "0.3"
@@ -165,7 +163,7 @@ opt-level = 3
 [profile.release.package.stream]
 opt-level = 3
 
-[profile.release.package.stabilizer_dsp]
+[profile.release.package.stabilizer]
 opt-level = 3
 
 [profile.release]

@@ -90,7 +90,6 @@ impl DdsOutput {
     }
 
     /// Get a builder for serializing a Pounder DDS profile.
-    #[inline(always)]
     pub fn builder(&mut self) -> ProfileSerializer {
         ProfileSerializer::new(self.mode)
     }
@@ -104,7 +103,7 @@ impl DdsOutput {
     ///
     /// # Args
     /// * `profile` - The serialized DDS profile to write.
-    #[inline(always)]
+    #[inline]
     pub fn write(&mut self, mut profile: ProfileSerializer) {
         // Note(unsafe): We own the QSPI interface, so it is safe to access the registers in a raw
         // fashion.

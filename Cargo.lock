@@ -1574,7 +1574,6 @@ dependencies = [
  "signal_generator",
  "smoltcp-nal",
  "spin 0.10.0",
- "stabilizer_dsp",
  "stm32h7xx-hal",
  "stream",
  "strum 0.28.0",
@@ -1583,21 +1582,6 @@ dependencies = [
  "urukul",
  "usb-device",
  "usbd-serial",
-]
-
-[[package]]
-name = "stabilizer_dsp"
-version = "0.1.0"
-dependencies = [
- "arbitrary-int",
- "bytemuck",
- "dsp-fixedpoint",
- "dsp-process",
- "idsp",
- "miniconf",
- "num-traits",
- "serde",
- "signal_generator",
 ]
 
 [[package]]

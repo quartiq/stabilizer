@@ -31,7 +31,6 @@ impl Default for State {
 }
 
 impl State {
-    #[inline(always)]
     pub fn update(&mut self, x: i32) {
         if self.count == 0 {
             self.x0 = x;

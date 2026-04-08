@@ -517,7 +517,7 @@ impl ProfileSerializer {
     /// * `ftw` - If provided, indicates a frequency tuning word for the channels.
     /// * `pow` - If provided, indicates a phase offset word for the channels.
     /// * `acr` - If provided, indicates the amplitude control register for the channels.
-    #[inline(always)]
+    #[inline]
     pub fn push(
         &mut self,
         channels: Channel,
@@ -545,7 +545,7 @@ impl ProfileSerializer {
     }
 
     /// Add a register write to the serialization data.
-    #[inline(always)]
+    #[inline]
     fn push_write(&mut self, register: Address, value: &[u8]) {
         let data = &mut self.data[self.index..];
         data[0] = register as u8;
@@ -561,7 +561,7 @@ impl ProfileSerializer {
     ///
     /// # Returns
     /// A slice of `u32` words representing the serialized profile.
-    #[inline(always)]
+    #[inline]
     pub fn finalize(&mut self) -> &[u32] {
         // Pad the buffer to 32-bit (4 byte) alignment by adding dummy writes to CSR and LSRR.
         // In the case of 1 byte padding, this instead pads with 5 bytes as there is no
