@@ -1,0 +1,416 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Setup - Stabilizer</title>
+                
+
+        <!-- Custom HTML head -->
+        
+
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+                        <link rel="shortcut icon" href="favicon.png">
+                <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+                <link rel="stylesheet" href="css/print.css" media="print">
+        
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+                <link rel="stylesheet" href="fonts/fonts.css">
+        
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        
+            </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="setup.html" class="active"><strong aria-hidden="true">2.</strong> Setup</a></li><li class="chapter-item expanded "><a href="usage.html"><strong aria-hidden="true">3.</strong> Usage</a></li><li class="chapter-item expanded "><a href="firmware/dual_iir/index.html"><strong aria-hidden="true">4.</strong> Application: Dual-IIR</a></li><li class="chapter-item expanded "><a href="firmware/lockin/index.html"><strong aria-hidden="true">5.</strong> Application: Lockin</a></li><li class="chapter-item expanded "><a href="firmware/dds/index.html"><strong aria-hidden="true">6.</strong> Application: Urukul DDS</a></li><li class="chapter-item expanded "><a href="firmware/fls/index.html"><strong aria-hidden="true">7.</strong> Application: Fiber Length Stabilization</a></li><li class="chapter-item expanded "><a href="firmware/mpll/index.html"><strong aria-hidden="true">8.</strong> Application: Dispersive PLL</a></li></ol>            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                                                <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                                            </div>
+
+                    <h1 class="menu-title">Stabilizer</h1>
+
+                    <div class="right-buttons">
+                                                <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                                                                        <a href="https://github.com/quartiq/stabilizer" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                                                
+                    </div>
+                </div>
+
+                                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="setup"><a class="header" href="#setup">Setup</a></h1>
+<p>The Stabilizer firmware consists of different applications tailored to different use cases.
+Only one application can run on the device at a given time.
+After receiving the Stabilizer hardware, you will need to choose, build, and flash one
+of the applications onto the device.</p>
+<h2 id="power"><a class="header" href="#power">Power</a></h2>
+<p>Power Stabilizer through <strong>exactly one</strong> of the following mechanisms.</p>
+<ol>
+<li>Via the backside 12V barrel connector</li>
+<li>Via Power-over-Ethernet using a PoE capable switch (802.3af or preferrably
+802.3at) and the RJ45 front panel port</li>
+<li>Via an EEM connection to Kasli</li>
+</ol>
+<blockquote>
+<p><strong>Note:</strong> Applying power through more than one mechanism may lead to damage.
+Ensure the two unused methods are not connected or explicitly disabled.</p>
+</blockquote>
+<h2 id="network-and-dhcp"><a class="header" href="#network-and-dhcp">Network and DHCP</a></h2>
+<p>Stabilizer supports 10Base-T or 100Base-T with Auto MDI-X.</p>
+<p>Stabilizer uses DHCP to obtain its network configuration information. Ensure there is a properly
+configured DHCP server running on the network segment that Stabilizer is connected to. If a DHCP
+server is not available and a static IP is desired, Stabilizer can be configured with a static IP
+via the USB interface. A configured <code>ip</code> of &quot;0.0.0.0&quot; will use DHCP.</p>
+<blockquote>
+<p><strong>Note:</strong> If Stabilizer is connected directly to an Ubuntu system (for example using a USB-Ethernet dongle)
+you can set the IPv4 settings of this Ethernet connection in the Ubuntu network settings to
+&quot;Shared to other computers&quot;. This will start and configure a DHCP server for this connection.</p>
+</blockquote>
+<h2 id="mqtt-broker"><a class="header" href="#mqtt-broker">MQTT Broker</a></h2>
+<p>Stabilizer requires an MQTT broker that supports MQTTv5.
+The MQTT broker is used to distribute and exchange elemetry data and to view/change application settings.
+The broker must be reachable by both the host-side applications used to
+interact with the application on Stabilizer and by the application running on Stabilizer.
+The broker must be reachable on port 1883 on that IP address - it may either be an IP address or a
+fully qualified domain name.
+Firewalls between Stabilizer and the broker may need to be configured to
+allow connections from Stabilizer to that port and IP address.</p>
+<p><a href="https://mosquitto.org/">Mosquitto</a> has been used as a MQTT broker during development,
+but any MQTTv5 broker without  authentication or encryption will likely work.</p>
+<blockquote>
+<p><strong>Note:</strong> Mosquitto version 1 only supports MQTTv3.1. If using Mosquitto, ensure version 2.0.0 or
+later is used.</p>
+</blockquote>
+<p>We recommend running Mosquitto through <a href="https://docker.com">Docker</a> to easily run it on
+Windows, Linux, and OSX. After docker has been installed, run the following command from
+the <code>stabilizer</code> repository to create a container named <code>mosquitto</code> that can be stopped
+and started easily via docker:</p>
+<pre><code class="language-bash"># Bash
+docker run -p 1883:1883 --name mosquitto -v `pwd`/mosquitto.conf:/mosquitto/config/mosquitto.conf -v /mosquitto/data -v /mosquitto/log eclipse-mosquitto:2
+
+# Powershell
+docker run -p 1883:1883 --name mosquitto -v ${pwd}/mosquitto.conf:/mosquitto/config/mosquitto.conf -v /mosquitto/data -v /mosquitto/log eclipse-mosquitto:2
+</code></pre>
+<h2 id="building"><a class="header" href="#building">Building</a></h2>
+<ol>
+<li>Get and install <a href="https://rustup.rs/">rustup</a> and use it to install a current stable Rust toolchain.
+Stabilizer tracks stable Rust. The minimum supported Rust version (MSRV) is specified in the manifest (<code>Cargo.toml</code>).</li>
+<li>Install target support with <code>rustup target add thumbv7em-none-eabihf</code></li>
+<li>Install <a href="https://github.com/rust-embedded/cargo-binutils/">cargo-binutils</a> with <code>cargo install cargo-binutils; rustup component add llvm-tools-preview</code></li>
+<li>Clone or download the firmware with <code>git clone https://github.com/quartiq/stabilizer; cd stabilizer</code></li>
+<li>Build firmware with <code>cargo build --release</code></li>
+<li>Extract the application binary (substitute <code>dual-iir</code> below with the desired application name) with <code>cargo objcopy --release --bin dual-iir -- -O binary dual-iir.bin</code></li>
+</ol>
+<h2 id="flashing"><a class="header" href="#flashing">Flashing</a></h2>
+<p>Firmware can be loaded onto stabilizer using <strong>one</strong> of the three following methods.</p>
+<blockquote>
+<p><strong>Note:</strong> Most methods below require access to the circuit board. Pulling the device from a crate
+always requires power removal as there are sensitive leads and components on both sides of the
+board that may come into contact with adjacent front panels. Every access to the board also
+requires proper ESD precautions. Never hot-plug the device or the probe.</p>
+</blockquote>
+<h3 id="st-link-virtual-mass-storage"><a class="header" href="#st-link-virtual-mass-storage">ST-Link virtual mass storage</a></h3>
+<p>If a ST-Link V2-1 or later is available this method can be used.</p>
+<p>Power down the device, remove it from the crate, and connect the
+SWD/JTAG probe as shown below to the device and to your computer.</p>
+<p><img src="assets/stabilizer-jtag.jpg" alt="JTAG Connection" /></p>
+<p>Power up the device and copy <code>dual-iir.bin</code> onto the virtual mass storage ST-Link drive
+that has appeared on your computer.
+Power down the device before removing the probe, inserting it into the crate
+and applying power again.</p>
+<h3 id="dfu-upload"><a class="header" href="#dfu-upload">DFU Upload</a></h3>
+<p>If an SWD/JTAG probe is not available, you can flash firmware using only a micro USB cable plugged
+in to the front of Stabilizer, and a DFU utility.</p>
+<blockquote>
+<p><strong>Note:</strong> If there is already newer firmware running on Stabilizer that supports the USB serial
+interface, there is no need to remove Stabilizer from the crate or disconnect any existing
+connectors/power supplies or to jumper the BOOT0 pin. Instead, open the serial port on Stabilizer
+and request it to enter DFU mode:</p>
+<pre><code class="language-bash">python -m serial &lt;serial-port&gt;
+&gt; platform dfu
+</code></pre>
+<p>After the device is in DFU mode, use the <code>dfu-util</code> command specified in the instructions below,
+and the DFU firmware update will be complete.</p>
+</blockquote>
+<ol>
+<li>Install the DFU USB tool <a href="http://dfu-util.sourceforge.net"><code>dfu-util</code></a></li>
+<li>Remove power</li>
+<li>Then carefully remove the module from the crate to gain acccess to the board</li>
+<li>Short JC2/BOOT with the jumper</li>
+<li>Connect your computer to the Micro USB connector below/left of the RJ45
+connector on the front panel</li>
+<li>Insert the module into the crate</li>
+<li>Then power it</li>
+<li>Perform the Device Firmware Upgrade (DFU) with <code>dfu-util -a 0 -s 0x08000000:leave -R -D dual-iir.bin</code></li>
+<li>To keep the device from entering the bootloader remove power,
+pull the board from the crate, remove the JC2/BOOT jumper, insert the module
+into the crate, and power it again</li>
+</ol>
+<h3 id="swdjtag-firmware-development"><a class="header" href="#swdjtag-firmware-development">SWD/JTAG Firmware Development</a></h3>
+<p>To observe logging messages or to develop and debug applications a SWD/JTAG
+probe is required. To use a compatible probe with <code>probe-run</code> connect it as
+described <a href="#st-link-virtual-mass-storage">above</a>.</p>
+<ol>
+<li>Install <a href="https://probe.rs/"><code>probe-rs</code></a></li>
+<li>Build and run firmware on the device with <code>cargo run --release --bin dual-iir</code></li>
+</ol>
+<p>When using debug (non <code>--release</code>) mode, decrease the sampling frequency significantly.
+The added error checking code and missing optimizations may lead to the application
+missing timer deadlines and panicing.</p>
+<h2 id="usb"><a class="header" href="#usb">USB</a></h2>
+<p>The USB port can be used to bootstrap Stabilizer and configure all internal settings. This is used to specify
+a fixed IP address, the MQTT broker address or when operating Stabilizer in standalone mode
+(i.e. without an ethernet connection or an MQTT broker).</p>
+<p>Connect a USB cable and open up the serial port in a serial terminal of your choice. <code>pyserial</code>
+provides a simple, easy-to-use terminal emulator:</p>
+<pre><code class="language-bash">python -m serial &lt;port&gt;
+</code></pre>
+<p>Once you have opened the port, you can use the provided menu to update any of Stabilizers runtime
+settings.</p>
+<blockquote>
+<p><strong>Note:</strong> Network settings (IP and broker) configured via USB do not take immediate effect but require a reboot.</p>
+</blockquote>
+<h2 id="mqtt-configuration"><a class="header" href="#mqtt-configuration">MQTT configuration</a></h2>
+<p>The MQTT broker address is configured via the USB port on Stabilizer's front panel.
+The address can be an IP address or a domain name. Once the broker address has been updated, power
+cycle stabilizer to have the new broker address take effect.</p>
+<h2 id="verify-mqtt-connection"><a class="header" href="#verify-mqtt-connection">Verify MQTT connection</a></h2>
+<p>Once your MQTT broker and Stabilizer are both running, verify that the application
+connects to the broker.</p>
+<p>A Stabilizer application <code>dual-iir</code> on a device with MAC address ``aa-bb-cc-00-11-22<code>is reporting its status on the</code>dt/sinara/dual-iir/aa-bb-cc-00-11-22/alive` topic.</p>
+<p>In addition to the <code>alive</code> status the application publishes <code>meta</code> information about itself on boot, and <code>telemetry</code> messages
+at regular intervals. Once you observe telemetry, Stabilizer is operational.</p>
+<p>To observe MQTT messages there are several different options. These are </p>
+<p>Always connect to the same broker that the device is connecting to
+(the one set via the serial terminal connection).</p>
+<h3 id="cli-mosquitto_sub"><a class="header" href="#cli-mosquitto_sub">CLI: mosquitto_sub</a></h3>
+<p>Tools from the <a href="https://mosquitto.org/"><code>mosquitto</code></a> project:</p>
+<pre><code class="language-bash">mosquitto_sub -t 'dt/sinara/dual-iir/+/#' -h mqtt -v
+</code></pre>
+<h3 id="tui-mqttui"><a class="header" href="#tui-mqttui">TUI: mqttui</a></h3>
+<p><a href="https://github.com/EdJoPaTo/mqttui/"><code>mqttui</code></a>:</p>
+<pre><code class="language-bash">mqttui -b mqtt://mqtt/
+</code></pre>
+<h3 id="gui-mqtt-explorer-or-mqttx"><a class="header" href="#gui-mqtt-explorer-or-mqttx">GUI: MQTT-Explorer or MQTTX</a></h3>
+<p>Download <a href="http://mqtt-explorer.com/">MQTT-Explorer</a> to observe which topics have been posted to the
+Broker.</p>
+<p><img src="assets/mqtt-explorer.png" alt="MQTT Explorer Configuration" /></p>
+<h3 id="scraping-telegraf"><a class="header" href="#scraping-telegraf">Scraping: telegraf</a></h3>
+<p>This <a href="https://influxdata.com/telegraf"><code>telegraf</code></a> configuration snippet scrapes settings, alive-ness, metadata,
+and telemetry from stabilizer/booster/thermostat/thermostat-eem applications.</p>
+<pre><code class="language-toml">[[inputs.mqtt_consumer]]
+  alias = &quot;miniconf&quot;
+  servers = [&quot;tcp://mqtt:1883&quot;]
+  topics = [
+    &quot;dt/sinara/+/+/telemetry/#&quot;,
+    &quot;dt/sinara/+/+/settings/#&quot;,
+    &quot;dt/sinara/+/+/alive&quot;,
+    &quot;dt/sinara/+/+/meta&quot;,
+  ]
+  data_format = &quot;value&quot;
+  value_field_name = &quot;value&quot;
+  data_type = &quot;string&quot;  # utf8 json
+  name_override = &quot;miniconf&quot;
+
+[[processors.starlark]]
+  alias = &quot;miniconf&quot;
+  namepass = [&quot;miniconf&quot;]
+  source = '''
+load(&quot;json.star&quot;, &quot;json&quot;)
+
+def apply(metric):
+  if metric.fields[&quot;value&quot;] == &quot;&quot;:
+    return None  # miniconf list/dump/get request, will
+  # dt/sinara/{app}/{id}/{class}[/{path}]
+  topic = metric.tags.pop(&quot;topic&quot;).split(&quot;/&quot;, 5)
+  metric.tags[&quot;id&quot;] = topic[3]
+  metric.tags[&quot;class&quot;] = topic[4]
+  metric.tags[&quot;path&quot;] = &quot;&quot;.join(topic[5:])
+  v = json.decode(metric.fields[&quot;value&quot;])
+  if topic[4] == &quot;telemetry&quot;:
+    metric.name = topic[2]
+    for k, v in flatten(&quot;&quot;, v):
+      metric.fields[k[1:]] = v
+    metric.fields.pop(&quot;value&quot;)
+  else:
+    metric.tags[&quot;app&quot;] = topic[2]
+    t = type(v)
+    if t in (&quot;float&quot;, &quot;int&quot;, &quot;bool&quot;, &quot;string&quot;):
+      metric.fields[t] = v
+      metric.fields.pop(&quot;value&quot;)
+  return metric
+
+def flatten(k, v):
+  l = []
+  t = type(v)
+  if t == &quot;list&quot;:
+    for i, vi in enumerate(v):
+      l.extend(flatten(&quot;%s_%d&quot; % (k, i), vi))
+  elif t == &quot;dict&quot;:
+    for ki, vi in v.items():
+      l.extend(flatten(&quot;%s_%s&quot; % (k, ki), vi))
+  elif t in (&quot;float&quot;, &quot;int&quot;, &quot;bool&quot;, &quot;string&quot;):
+    l.append((k, v))
+  return l
+'''
+</code></pre>
+<p>Within telegraf the mqtt telemetry data can then be routed to e.g. influxdb,
+prometheus or grafana live.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                                                    <a rel="prev" href="overview.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                        
+                                                    <a rel="next" href="usage.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                                    <a rel="prev" href="overview.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                
+                                    <a rel="next" href="usage.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+                            </nav>
+
+        </div>
+
+        
+        
+        
+                <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        
+        
+                <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+        
+        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        
+        
+    </body>
+</html>
