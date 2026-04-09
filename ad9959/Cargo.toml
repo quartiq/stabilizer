@@ -10,5 +10,5 @@ description = "AD9959 4-channel DDS SPI driver"
 [dependencies]
 embedded-hal = {version = "0.2.7", features = ["unproven"]}
 bytemuck = "1.21.0"
-bitbybit = "1.3.3"
+bitbybit.workspace = true
 arbitrary-int.workspace = true

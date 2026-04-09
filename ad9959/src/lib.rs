@@ -1,5 +1,7 @@
 #![no_std]
 
+use core::num::Wrapping;
+
 use arbitrary_int::{Number, u2, u3, u4, u5, u10, u14, u24};
 use bitbybit::{bitenum, bitfield};
 use embedded_hal::{blocking::delay::DelayUs, digital::v2::OutputPin};
@@ -313,7 +315,7 @@ impl<I: Interface> Ad9959<I> {
     }
 
     /// Get the current system clock frequency in Hz.
-    fn system_clock_frequency(&self) -> f32 {
+    const fn system_clock_frequency(&self) -> f32 {
         (1u64 << 32) as f32 / self.ftw_per_hz
     }
 
@@ -500,7 +502,7 @@ impl ProfileSerializer {
     ///
     /// # Args
     /// * `mode` - The communication mode of the DDS.
-    pub fn new(mode: Mode) -> Self {
+    pub const fn new(mode: Mode) -> Self {
         Self {
             mode,
             index: 0,
@@ -514,15 +516,13 @@ impl ProfileSerializer {
     /// * `channels` - A set of channels to apply the configuration to.
     /// * `ftw` - If provided, indicates a frequency tuning word for the channels.
     /// * `pow` - If provided, indicates a phase offset word for the channels.
-    /// * `acr` - If provided, indicates the amplitude control register for the channels. The ACR
-    ///   should be stored in the 3 LSB of the word. Note that if amplitude scaling is to be used,
-    ///   the "Amplitude multiplier enable" bit must be set.
+    /// * `acr` - If provided, indicates the amplitude control register for the channels.
     #[inline]
     pub fn push(
         &mut self,
         channels: Channel,
-        ftw: Option<u32>,
-        pow: Option<u14>,
+        ftw: Option<Wrapping<i32>>,
+        pow: Option<Wrapping<u14>>, // a-i v2: i14
         acr: Option<Acr>,
     ) {
         self.push_write(
@@ -534,10 +534,10 @@ impl ProfileSerializer {
                 .to_be_bytes(),
         );
         if let Some(ftw) = ftw {
-            self.push_write(Address::CFTW0, &ftw.to_be_bytes());
+            self.push_write(Address::CFTW0, &ftw.0.to_be_bytes());
         }
         if let Some(pow) = pow {
-            self.push_write(Address::CPOW0, &pow.value().to_be_bytes());
+            self.push_write(Address::CPOW0, &pow.0.value().to_be_bytes());
         }
         if let Some(acr) = acr {
             self.push_write(Address::ACR, &acr.raw_value().to_be_bytes());

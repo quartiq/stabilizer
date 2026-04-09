@@ -11,6 +11,8 @@ use miniconf::{
 mod interface;
 pub use interface::BestEffortInterface;
 
+const SEPARATOR: char = '/';
+
 /// Specifies the API required for objects that are used as settings with the serial terminal
 /// interface.
 pub trait Settings:
@@ -86,16 +88,14 @@ impl<'a, P: Platform> Interface<'a, P> {
         settings: &mut P::Settings,
         mut func: F,
     ) where
-        F: FnMut(
-            Path<&str, '/'>,
-            &mut Self,
-            &mut P::Settings,
-            &mut P::Settings,
-        ),
+        F: FnMut(Path<&str>, &mut Self, &mut P::Settings, &mut P::Settings),
     {
         let iter = if let Some(key) = key {
-            match NodeIter::with_root(P::Settings::SCHEMA, Path::<_, '/'>(key))
-            {
+            match NodeIter::with_root(
+                P::Settings::SCHEMA,
+                Path::new(key, SEPARATOR),
+                SEPARATOR,
+            ) {
                 Ok(it) => it,
                 Err(e) => {
                     writeln!(interface, "Failed to locate `{key}`: {e}")
@@ -104,8 +104,11 @@ impl<'a, P: Platform> Interface<'a, P> {
                 }
             }
         } else {
-            NodeIter::<Path<String<128>, '/'>, MAX_DEPTH>::new(
+            NodeIter::<Path<String<128>>, MAX_DEPTH>::new(
                 P::Settings::SCHEMA,
+                Default::default(),
+                0,
+                SEPARATOR,
             )
         };
 
@@ -114,7 +117,7 @@ impl<'a, P: Platform> Interface<'a, P> {
         for key in iter {
             match key {
                 Ok(key) => func(
-                    Path(key.0.as_str()),
+                    Path::new(key.path.as_str(), SEPARATOR),
                     interface,
                     settings,
                     &mut defaults,
@@ -153,15 +156,19 @@ impl<'a, P: Platform> Interface<'a, P> {
                         return;
                     }
                     Err(e) => {
-                        writeln!(interface, "Failed to get `{}`: {e}", key.0)
-                            .unwrap();
+                        writeln!(
+                            interface,
+                            "Failed to get `{}`: {e}",
+                            key.path
+                        )
+                        .unwrap();
                         return;
                     }
                     Ok(len) => {
                         write!(
                             interface.platform.interface_mut(),
                             "{}: {}",
-                            key.0,
+                            key.path,
                             core::str::from_utf8(&interface.buffer[..len])
                                 .unwrap()
                         )
@@ -198,7 +205,7 @@ impl<'a, P: Platform> Interface<'a, P> {
                 // Get stored and compare
                 match interface
                     .platform
-                    .fetch(interface.buffer, key.0.as_bytes())
+                    .fetch(interface.buffer, key.path.as_bytes())
                 {
                     Err(e) => write!(interface, " [fetch error: {e:?}]"),
                     Ok(None) => write!(interface, " [not stored]"),
@@ -267,8 +274,12 @@ impl<'a, P: Platform> Interface<'a, P> {
                         return;
                     }
                     Err(e) => {
-                        writeln!(interface, "Failed to get {}: {e:?}", key.0)
-                            .unwrap();
+                        writeln!(
+                            interface,
+                            "Failed to get {}: {e:?}",
+                            key.path
+                        )
+                        .unwrap();
                         return;
                     }
                     Ok(slic) => yafnv::fnv1a::<u32>(slic),
@@ -281,7 +292,7 @@ impl<'a, P: Platform> Interface<'a, P> {
                     Err(SerdeError::Value(ValueError::Absent)) => {
                         log::warn!(
                             "Can't clear. Default is absent: `{}`",
-                            key.0
+                            key.path
                         );
                         None
                     }
@@ -289,7 +300,7 @@ impl<'a, P: Platform> Interface<'a, P> {
                         writeln!(
                             interface,
                             "Failed to get default `{}`: {e}",
-                            key.0
+                            key.path
                         )
                         .unwrap();
                         return;
@@ -314,15 +325,19 @@ impl<'a, P: Platform> Interface<'a, P> {
                             writeln!(
                                 interface,
                                 "Failed to set {}: {e:?}",
-                                key.0
+                                key.path
                             )
                             .unwrap();
                             return;
                         }
                         Ok(_rest) => {
                             interface.updated = true;
-                            writeln!(interface, "Cleared current `{}`", key.0)
-                                .unwrap()
+                            writeln!(
+                                interface,
+                                "Cleared current `{}`",
+                                key.path
+                            )
+                            .unwrap()
                         }
                     }
                 }
@@ -330,13 +345,13 @@ impl<'a, P: Platform> Interface<'a, P> {
                 // Check for stored
                 match interface
                     .platform
-                    .fetch(interface.buffer, key.0.as_bytes())
+                    .fetch(interface.buffer, key.path.as_bytes())
                 {
                     Err(e) => {
                         writeln!(
                             interface,
                             "Failed to fetch `{}`: {e:?}",
-                            key.0
+                            key.path
                         )
                         .unwrap();
                     }
@@ -344,16 +359,16 @@ impl<'a, P: Platform> Interface<'a, P> {
                     // Clear stored
                     Ok(Some(_stored)) => match interface
                         .platform
-                        .clear(interface.buffer, key.0.as_bytes())
+                        .clear(interface.buffer, key.path.as_bytes())
                     {
                         Ok(()) => {
-                            writeln!(interface, "Clear stored `{}`", key.0)
+                            writeln!(interface, "Clear stored `{}`", key.path)
                         }
                         Err(e) => {
                             writeln!(
                                 interface,
                                 "Failed to clear `{}` from storage: {e:?}",
-                                key.0
+                                key.path
                             )
                         }
                     }
@@ -390,14 +405,14 @@ impl<'a, P: Platform> Interface<'a, P> {
                     // Could also serialize directly into the hasher for all these checksum calcs
                     Ok(slic) => yafnv::fnv1a::<u32>(slic),
                     Err(SerdeError::Value(ValueError::Absent)) => {
-                        log::warn!("Default absent: `{}`", key.0);
+                        log::warn!("Default absent: `{}`", key.path);
                         return;
                     }
                     Err(e) => {
                         writeln!(
                             interface,
                             "Failed to get `{}` default: {e:?}",
-                            key.0
+                            key.path
                         )
                         .unwrap();
                         return;
@@ -407,7 +422,7 @@ impl<'a, P: Platform> Interface<'a, P> {
                 // Get stored value checksum
                 match interface
                     .platform
-                    .fetch(interface.buffer, key.0.as_bytes())
+                    .fetch(interface.buffer, key.path.as_bytes())
                 {
                     Ok(None) => {}
                     Ok(Some(stored)) => {
@@ -415,10 +430,13 @@ impl<'a, P: Platform> Interface<'a, P> {
                         if stored != check {
                             log::debug!(
                                 "Stored differs from default: `{}`",
-                                key.0
+                                key.path
                             );
                         } else {
-                            log::debug!("Stored matches default: `{}`", key.0);
+                            log::debug!(
+                                "Stored matches default: `{}`",
+                                key.path
+                            );
                         }
                         check = stored;
                     }
@@ -426,7 +444,7 @@ impl<'a, P: Platform> Interface<'a, P> {
                         writeln!(
                             interface,
                             "Failed to fetch `{}`: {e:?}",
-                            key.0
+                            key.path
                         )
                         .unwrap();
                     }
@@ -441,8 +459,12 @@ impl<'a, P: Platform> Interface<'a, P> {
                         return;
                     }
                     Err(e) => {
-                        writeln!(interface, "Could not get `{}`: {e}", key.0)
-                            .unwrap();
+                        writeln!(
+                            interface,
+                            "Could not get `{}`: {e}",
+                            key.path
+                        )
+                        .unwrap();
                         return;
                     }
                 };
@@ -451,7 +473,7 @@ impl<'a, P: Platform> Interface<'a, P> {
                 if yafnv::fnv1a::<u32>(value) == check && !force {
                     log::debug!(
                         "Not saving matching default/stored `{}`",
-                        key.0
+                        key.path
                     );
                     return;
                 }
@@ -459,13 +481,13 @@ impl<'a, P: Platform> Interface<'a, P> {
                 let (value, rest) = interface.buffer.split_at_mut(len);
 
                 // Store
-                match interface.platform.store(rest, key.0.as_bytes(), value) {
-                    Ok(_) => writeln!(interface, "`{}` stored", key.0),
+                match interface.platform.store(rest, key.path.as_bytes(), value) {
+                    Ok(_) => writeln!(interface, "`{}` stored", key.path),
                     Err(e) => {
                         writeln!(
                             interface,
                             "Failed to store `{}`: {e:?}",
-                            key.0
+                            key.path
                         )
                     }
                 }

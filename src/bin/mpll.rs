@@ -318,7 +318,7 @@ mod app {
     async fn telemetry(mut c: telemetry::Context) -> ! {
         loop {
             let tele = Telemetry {
-                mpll: c.shared.telemetry.lock(|t| core::mem::take(t)).into(),
+                mpll: c.shared.telemetry.lock(core::mem::take).into(),
                 cpu_temp: c
                     .local
                     .cpu_temp_sensor

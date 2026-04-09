@@ -143,18 +143,19 @@ async def main():
             f = np.absolute(g)
             gf = g * f
             b = np.array([gf * s, gf / s, -f, -1j * f])
-            b = np.linalg.pinv(np.hstack((b.real, b.imag)).T) @ -np.hstack(
-                (gf.real, gf.imag)
+            b, _res, _rank, _sing = np.linalg.lstsq(
+                np.hstack((b.real, b.imag)).T,
+                -np.hstack((gf.real, gf.imag)),
+                rcond=None,
             )
             q = b[2] + 1j * b[3]
             g1 = q / (s * b[0] + b[1] / s + 1)
             angle = np.angle(q) / (2 * np.pi)
             fmean = np.sqrt(b[1] / b[0]) / (2 * np.pi * t)
-            width = (1 - np.sqrt(4 * b[0] * b[1] + 1)) / (2 * b[0]) / (
-                2 * np.pi * t
-            ) - fmean
+            bb = 4 * b[0] * b[1]
+            width = (1 - np.sqrt(bb + 1) + np.sqrt(bb)) / (2 * np.pi * t * b[0])
             _logger.warning(
-                "ch%i IQ resonance %g V, %g kHz, %g turns, %g kHz half 1/sqrt(2) width",
+                "ch%i IQ resonance %g V, %g kHz, %g turns, %g kHz FWHM",
                 ch,
                 np.absolute(q),
                 fmean / 1e3,
@@ -168,6 +169,7 @@ async def main():
                 ax[ch, 0].semilogx(f, g.imag)
                 ax[ch, 0].semilogx(f, g1.real)
                 ax[ch, 0].semilogx(f, g1.imag)
+                ax[ch, 0].semilogx(f, np.absolute(g1))
                 ax[ch, 0].grid()
                 ax[ch, 1].plot(g.real, g.imag)
                 ax[ch, 1].plot(g1.real, g1.imag)

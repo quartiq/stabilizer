@@ -54,12 +54,12 @@
 //! buffer to avoid the software overhead of much of the serialization process.
 use log::warn;
 
-use super::{QspiInterface, hal, hrtimer::HighResTimerE};
+use super::{QspiInterface, hrtimer::HighResTimerE};
 use ad9959::{Mode, ProfileSerializer};
 
 /// The DDS profile update stream.
 pub struct DdsOutput {
-    _qspi: QspiInterface,
+    qspi: QspiInterface,
     io_update_trigger: HighResTimerE,
     mode: Mode,
 }
@@ -84,7 +84,7 @@ impl DdsOutput {
         qspi.start_stream().unwrap();
         Self {
             mode,
-            _qspi: qspi,
+            qspi,
             io_update_trigger,
         }
     }
@@ -107,7 +107,7 @@ impl DdsOutput {
     pub fn write(&mut self, mut profile: ProfileSerializer) {
         // Note(unsafe): We own the QSPI interface, so it is safe to access the registers in a raw
         // fashion.
-        let regs = unsafe { &*hal::stm32::QUADSPI::ptr() };
+        let regs = self.qspi.qspi.inner_mut();
 
         // Warn if the fifo is still at least half full.
         if regs.sr.read().flevel().bits() >= 16 {
